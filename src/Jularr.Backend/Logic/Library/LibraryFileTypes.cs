@@ -12,7 +12,7 @@ namespace Jularr.Backend.Logic.Library
     {
         private static readonly FrozenSet<string> Video = FrozenSet.Create(".mkv", ".mp4", ".m4v", ".avi", ".mov", ".wmv", ".ts", ".m2ts", ".webm", ".mpg", ".mpeg");
         private static readonly FrozenSet<string> Audio = FrozenSet.Create(".mp3", ".flac", ".m4a", ".m4b", ".ogg", ".opus", ".aac", ".wav", ".wv");
-        private static readonly FrozenSet<string> Ebook = FrozenSet.Create(".epub", ".pdf", ".mobi", ".azw3");
+        private static readonly FrozenSet<string> Ebook = FrozenSet.Create(".epub", ".pdf", ".mobi", ".azw3", ".azw", ".fb2", ".fb2.zip", ".txt", ".rtf", ".docx");
         private static readonly FrozenSet<string> Comic = FrozenSet.Create(".cbz", ".cbr", ".cb7");
         // Kept equal to the generated column StoredFiles.IsSubtitle.
         private static readonly FrozenSet<string> Subtitle = FrozenSet.Create(".srt", ".ass", ".ssa", ".vtt", ".sub", ".idx", ".sup");
@@ -55,11 +55,18 @@ namespace Jularr.Backend.Logic.Library
 
         public static bool IsSubtitle(string relativePath) => Subtitle.Contains(Path.GetExtension(relativePath).ToLowerInvariant());
 
+        // A file's extension in lower case; a zipped FictionBook keeps both parts.
+        public static string Extension(string relativePath) =>
+            relativePath.EndsWith(".fb2.zip", StringComparison.OrdinalIgnoreCase) ? ".fb2.zip" : Path.GetExtension(relativePath).ToLowerInvariant();
+
+        // The format a file's name says (EPUB, FB2, ...): its extension without the dot, a zipped FictionBook as FB2.
+        public static string FormatName(string relativePath) => Extension(relativePath).TrimStart('.').Split('.')[0].ToUpperInvariant();
+
         public static bool IsProbeable(string relativePath) => GetAssetType(relativePath) is MediaAssetType.Video or MediaAssetType.Audio;
 
         public static MediaAssetType? GetAssetType(string relativePath)
         {
-            var extension = Path.GetExtension(relativePath).ToLowerInvariant();
+            var extension = Extension(relativePath);
             if (Video.Contains(extension)) return MediaAssetType.Video;
             if (Audio.Contains(extension)) return MediaAssetType.Audio;
             if (Comic.Contains(extension)) return MediaAssetType.Comic;
@@ -75,15 +82,19 @@ namespace Jularr.Backend.Logic.Library
             ".cb7" => header.Length >= 6 && header[..6].SequenceEqual(new byte[] { 0x37, 0x7A, 0xBC, 0xAF, 0x27, 0x1C }),
             ".epub" => header.Length >= 58 && header[..4].SequenceEqual("PK\u0003\u0004"u8) && header[30..38].SequenceEqual("mimetype"u8) && header.IndexOf("application/epub+zip"u8) > 0,
             ".pdf" => header.Length >= 5 && header[..5].SequenceEqual("%PDF-"u8),
-            ".mobi" or ".azw3" => header.Length >= 68 && header[60..68].SequenceEqual("BOOKMOBI"u8),
+            ".mobi" => header.Length >= 68 && (header[60..68].SequenceEqual("BOOKMOBI"u8) || header[60..68].SequenceEqual("TEXtREAd"u8)),
+            ".azw" or ".azw3" => header.Length >= 68 && header[60..68].SequenceEqual("BOOKMOBI"u8),
+            ".fb2" => IsFictionBook(header),
+            ".rtf" => header.Length >= 5 && header[..5].SequenceEqual("{\\rtf"u8),
+            ".txt" => IsPlainText(header),
             _ => false
         };
 
-        // The check a document fails, named for its text (content_epub, content_palmdoc, ...); null when it is what its name says.
-        // An EPUB whose mimetype entry is not the first one is read from its ZIP directory; an old PalmDOC MOBI is named, since the reader cannot open it.
+        // The check a document fails, named for its text (content_epub, content_fb2, ...); null when it is what its name says.
+        // A protected Kindle book passes: it is a book, which the reader says it cannot open.
         public static async Task<string?> CheckDocumentAsync(string extension, Stream stream, CancellationToken ct)
         {
-            var header = new byte[128];
+            var header = new byte[1024];
             var read = await stream.ReadAtLeastAsync(header, header.Length, throwOnEndOfStream: false, ct);
             var format = extension.ToLowerInvariant();
             if (IsDocumentContent(format, header.AsSpan(0, read)))
@@ -91,23 +102,60 @@ namespace Jularr.Backend.Logic.Library
                 return null;
             }
 
-            if (format == ".epub" && read >= 4 && header.AsSpan(0, 4).SequenceEqual("PK\u0003\u0004"u8) && await IsEpubArchiveAsync(stream, ct))
+            // An EPUB whose mimetype entry is not the first one, a DOCX and a zipped FB2 are read from their ZIP directory.
+            if (format is ".epub" or ".docx" or ".fb2.zip" && read >= 4 && header.AsSpan(0, 4).SequenceEqual("PK\u0003\u0004"u8) && await ReadZipDirectoryAsync(stream, ct) is { } entries)
             {
-                return null;
+                var valid = format switch
+                {
+                    ".epub" => await IsEpubArchiveAsync(stream, entries, ct),
+                    ".docx" => entries.Any(entry => entry.Name == "word/document.xml"),
+                    _ => entries.Any(entry => entry.Name.EndsWith(".fb2", StringComparison.OrdinalIgnoreCase) && entry.Length > 0)
+                };
+                if (valid)
+                {
+                    return null;
+                }
             }
 
-            return format == ".mobi" && read >= 68 && header.AsSpan(60, 8).SequenceEqual("TEXtREAd"u8) ? "content_palmdoc" : "content_" + format.TrimStart('.');
+            return "content_" + (format == ".fb2.zip" ? "fb2" : format.TrimStart('.'));
         }
 
-        // A ZIP whose "mimetype" entry says application/epub+zip, or that has no such entry but a META-INF/container.xml.
-        // Only the end record, the central directory (bounded) and the small mimetype entry are read; nothing is extracted.
-        private static async Task<bool> IsEpubArchiveAsync(Stream stream, CancellationToken ct)
+        // A FictionBook is XML whose root is FictionBook, in UTF-8, a single-byte code page or UTF-16.
+        private static bool IsFictionBook(ReadOnlySpan<byte> header)
+        {
+            var text = header is [0xFF, 0xFE, ..] ? Encoding.Unicode.GetString(header[2..]) : header is [0xFE, 0xFF, ..] ? Encoding.BigEndianUnicode.GetString(header[2..]) : Encoding.Latin1.GetString(header);
+            var start = text.TrimStart('\uFEFF', '\u00EF', '\u00BB', '\u00BF', ' ', '\t', '\r', '\n');
+            return start.StartsWith('<') && text.Contains("<FictionBook", StringComparison.Ordinal);
+        }
+
+        // Text has no zero bytes and few other control characters (UTF-16 says so by its byte order mark).
+        private static bool IsPlainText(ReadOnlySpan<byte> header)
+        {
+            if (header is [0xFF, 0xFE, ..] or [0xFE, 0xFF, ..])
+            {
+                return header.Length >= 4;
+            }
+
+            var control = 0;
+            foreach (var value in header)
+            {
+                if (value == 0) return false;
+                if (value < 0x20 && value is not (0x09 or 0x0A or 0x0C or 0x0D or 0x1A)) control++;
+            }
+
+            return header.Length > 0 && control * 20 <= header.Length;
+        }
+
+        private sealed record ZipEntry(string Name, ushort Method, uint Compressed, uint Length, uint Local);
+
+        // The entries of a ZIP from its end record and its central directory (bounded); nothing is extracted. Null when it is no readable ZIP.
+        private static async Task<IReadOnlyList<ZipEntry>?> ReadZipDirectoryAsync(Stream stream, CancellationToken ct)
         {
             const int EndLength = 22;
             const int MaximumDirectoryBytes = 4 * 1024 * 1024;
             if (!stream.CanSeek || stream.Length < EndLength)
             {
-                return false;
+                return null;
             }
 
             // The end record lies within the last 64 KiB and its own bytes.
@@ -117,30 +165,27 @@ namespace Jularr.Backend.Logic.Library
             var end = tail.AsSpan().LastIndexOf("PK\u0005\u0006"u8);
             if (end < 0 || end + EndLength > tail.Length)
             {
-                return false;
+                return null;
             }
 
-            var entries = BinaryPrimitives.ReadUInt16LittleEndian(tail.AsSpan(end + 10));
+            var count = BinaryPrimitives.ReadUInt16LittleEndian(tail.AsSpan(end + 10));
             var size = BinaryPrimitives.ReadUInt32LittleEndian(tail.AsSpan(end + 12));
             var offset = BinaryPrimitives.ReadUInt32LittleEndian(tail.AsSpan(end + 16));
-            if (entries > EpubReader.MaximumEntries || size > MaximumDirectoryBytes || offset + (long)size > stream.Length)
+            if (count > EpubReader.MaximumEntries || size > MaximumDirectoryBytes || offset + (long)size > stream.Length)
             {
-                return false;
+                return null;
             }
 
             var directory = new byte[size];
             stream.Position = offset;
             await stream.ReadExactlyAsync(directory, ct);
-
-            // The entries: the mimetype's place and size, and whether a container exists.
-            var container = false;
-            (ushort Method, uint Compressed, uint Length, uint Local)? mimetype = null;
+            var entries = new List<ZipEntry>(count);
             var position = 0;
-            for (var index = 0; index < entries; index++)
+            for (var index = 0; index < count; index++)
             {
                 if (position + 46 > directory.Length || !directory.AsSpan(position, 4).SequenceEqual("PK\u0001\u0002"u8))
                 {
-                    return false;
+                    return null;
                 }
 
                 var entry = directory.AsSpan(position);
@@ -148,24 +193,22 @@ namespace Jularr.Backend.Logic.Library
                 var next = position + 46 + nameLength + BinaryPrimitives.ReadUInt16LittleEndian(entry[30..]) + BinaryPrimitives.ReadUInt16LittleEndian(entry[32..]);
                 if (next > directory.Length)
                 {
-                    return false;
+                    return null;
                 }
 
-                var name = entry.Slice(46, nameLength);
-                if (name.SequenceEqual("mimetype"u8))
-                {
-                    mimetype = (BinaryPrimitives.ReadUInt16LittleEndian(entry[10..]), BinaryPrimitives.ReadUInt32LittleEndian(entry[20..]), BinaryPrimitives.ReadUInt32LittleEndian(entry[24..]),
-                        BinaryPrimitives.ReadUInt32LittleEndian(entry[42..]));
-                }
-                else if (name.SequenceEqual("META-INF/container.xml"u8))
-                {
-                    container = true;
-                }
-
+                entries.Add(new ZipEntry(Encoding.UTF8.GetString(entry.Slice(46, nameLength)), BinaryPrimitives.ReadUInt16LittleEndian(entry[10..]),
+                    BinaryPrimitives.ReadUInt32LittleEndian(entry[20..]), BinaryPrimitives.ReadUInt32LittleEndian(entry[24..]), BinaryPrimitives.ReadUInt32LittleEndian(entry[42..])));
                 position = next;
             }
 
-            if (mimetype is not { } mime)
+            return entries;
+        }
+
+        // A ZIP whose "mimetype" entry says application/epub+zip, or that has no such entry but a META-INF/container.xml; only the small mimetype entry is read.
+        private static async Task<bool> IsEpubArchiveAsync(Stream stream, IReadOnlyList<ZipEntry> entries, CancellationToken ct)
+        {
+            var container = entries.Any(entry => entry.Name == "META-INF/container.xml");
+            if (entries.FirstOrDefault(entry => entry.Name == "mimetype") is not { } mime)
             {
                 return container;
             }

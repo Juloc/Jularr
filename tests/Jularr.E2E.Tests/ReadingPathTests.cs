@@ -396,6 +396,101 @@ namespace Jularr.E2E.Tests
             await page.Locator("[data-reader-command=fullscreen]").ClickAsync();
         }
 
+        // A FictionBook opens in the Reader through its reading copy, on a wide screen and a phone; a protected Kindle book says why it does not.
+        [TestMethod]
+        [Timeout(240_000)]
+        public async Task LocalFb2_OpensThroughItsReadingCopy_AndAProtectedKindleBookSaysWhy()
+        {
+            using var folders = new Folders("Books");
+            File.WriteAllText(Path.Combine(folders.Library, "Books", "night-train.fb2"), """
+                <?xml version="1.0" encoding="utf-8"?>
+                <FictionBook xmlns="http://www.gribuser.ru/xml/fictionbook/2.0">
+                  <description><title-info><book-title>Night Train</book-title><lang>en</lang></title-info></description>
+                  <body>
+                    <section><title><p>Chapter One</p></title>
+                      <p>The night train left at nine, and nobody on the platform looked up.</p>
+                      <p>She read <emphasis>slowly</emphasis>, one page for every station.</p>
+                    </section>
+                    <section><title><p>Chapter Two</p></title><p>At dawn the train reached the sea.</p></section>
+                  </body>
+                </FictionBook>
+                """);
+            await using var jularr = await JularrInstance.StartAsync(new Dictionary<string, string> { ["Storage:LocalPaths:0"] = folders.Library });
+            await using var session = await BrowserSession.StartAsync(jularr);
+            var page = session.Page;
+            try
+            {
+                await AddBookAsync(page, folders, "Night Train");
+                var response = await page.GotoAsync("/Read/1", new() { Timeout = 30_000 });
+                Assert.AreEqual(200, response!.Status);
+                await Assertions.Expect(page.Locator("[data-role=content]")).ToContainTextAsync("The night train left at nine", new() { Timeout = 30_000 });
+                await Assertions.Expect(page.Locator("[data-role=content] em")).ToHaveTextAsync("slowly");
+                await Evidence.SaveAsync(page, "reader-fb2-desktop");
+                await page.SetViewportSizeAsync(390, 844);
+                await page.WaitForFunctionAsync("() => document.querySelector('.reader').dataset.columns === '1'");
+                await Assertions.Expect(page.Locator("[data-role=content]")).ToContainTextAsync("The night train left at nine");
+                await Evidence.SaveAsync(page, "reader-fb2-phone");
+                await page.SetViewportSizeAsync(1280, 720);
+
+                // A Kindle book whose header says it is encrypted is imported, but the Reader says why it cannot open it.
+                File.WriteAllBytes(Path.Combine(folders.Library, "Books", "locked.azw3"), ProtectedKindleBook());
+                await IdentifyNextBookAsync(page, "Locked Book");
+                response = await page.GotoAsync("/Read/2", new() { Timeout = 30_000 });
+                Assert.AreEqual(503, response!.Status);
+                await Assertions.Expect(page.Locator(".ui-page-error")).ToContainTextAsync("This book is DRM-protected and cannot be read in Jularr.");
+                await Evidence.SaveAsync(page, "reader-drm-desktop");
+                await page.SetViewportSizeAsync(390, 844);
+                await page.GotoAsync("/Read/2");
+                await Assertions.Expect(page.Locator(".ui-page-error")).ToBeInViewportAsync();
+                await Evidence.SaveAsync(page, "reader-drm-phone");
+            }
+            catch
+            {
+                await Evidence.SaveAsync(page, "reader-fb2-failure");
+                throw;
+            }
+        }
+
+        // A Palm database whose MOBI header marks the text as encrypted.
+        private static byte[] ProtectedKindleBook()
+        {
+            // The first record: PalmDOC compression, encryption type 2 and a MOBI header; a second record of text.
+            var first = new byte[16 + 0xE8];
+            first[1] = 2;
+            first[13] = 2;
+            "MOBI"u8.CopyTo(first.AsSpan(16));
+            first[23] = 0xE8;
+
+            // The database header and its list of two records.
+            const int Header = 78 + 2 * 8 + 2;
+            var file = new byte[Header + first.Length + 10];
+            "Locked"u8.CopyTo(file);
+            "BOOKMOBI"u8.CopyTo(file.AsSpan(60));
+            file[77] = 2;
+            System.Buffers.Binary.BinaryPrimitives.WriteUInt32BigEndian(file.AsSpan(78), Header);
+            System.Buffers.Binary.BinaryPrimitives.WriteUInt32BigEndian(file.AsSpan(86), (uint)(Header + first.Length));
+            first.CopyTo(file, Header);
+            return file;
+        }
+
+        // A further book file of the library scanned and identified as its own Work.
+        private static async Task IdentifyNextBookAsync(IPage page, string title)
+        {
+            await page.GotoAsync("/Admin/Library");
+            await Steps.SubmitAsync(page, Steps.FormWith(page, "Scan Books"));
+            var deadline = DateTime.UtcNow.AddSeconds(30);
+            while (true)
+            {
+                await page.GotoAsync("/Admin/Library/Unmatched");
+                if (await page.Locator("form [name=Title]").CountAsync() > 0) break;
+                Assert.IsTrue(DateTime.UtcNow < deadline, "The book file was not scanned.");
+                await Task.Delay(500);
+            }
+
+            await page.Locator("form [name=Title]").FillAsync(title);
+            await Steps.SubmitAsync(page, Steps.FormWith(page, "Create work and identify"));
+        }
+
         internal static async Task AddBookAsync(IPage page, Folders folders, string title)
         {
             await Owner.SetUpAndSignInAsync(page);

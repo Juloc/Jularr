@@ -427,10 +427,10 @@ namespace Jularr.Backend.Tests
                 Assert.AreEqual("Unmarked", Jularr.Backend.Logic.Reading.EpubReader.Read(archive).Title);
             }
 
-            // MOBI: BOOKMOBI is taken; an old PalmDOC is named, since the reader cannot open it; PDF and comics keep their signatures.
+            // MOBI: BOOKMOBI and an old PalmDOC are taken (the reader opens both); PDF and comics keep their signatures.
             byte[] Mobi(string kind) => [.. new byte[60], .. Encoding.ASCII.GetBytes(kind), .. new byte[60]];
             Assert.IsNull(await CheckAsync(".mobi", Mobi("BOOKMOBI")));
-            Assert.AreEqual("content_palmdoc", await CheckAsync(".mobi", Mobi("TEXtREAd")));
+            Assert.IsNull(await CheckAsync(".mobi", Mobi("TEXtREAd")));
             Assert.AreEqual("content_azw3", await CheckAsync(".azw3", Mobi("TEXtREAd")));
             Assert.AreEqual("content_mobi", await CheckAsync(".mobi", Mobi("XXXXXXXX")));
             Assert.AreEqual("content_pdf", await CheckAsync(".pdf", Encoding.ASCII.GetBytes("<html>")));

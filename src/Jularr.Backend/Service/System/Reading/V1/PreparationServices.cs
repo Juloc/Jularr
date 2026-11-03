@@ -41,7 +41,7 @@ namespace Jularr.Backend.Service.System.Reading.V1
                 return new UpdateResult(false);
             }
 
-            // Each book's file as a reader would open it (its own EPUB, a current reading copy, else the PDF) without a complete prepared
+            // Each book's file as a reader would open it (its own EPUB, a current reading copy, a book read through a copy made on opening, else the PDF) without a complete prepared
             // document of this version, on storage that is not missing and not waiting for recognition; newest books first.
             var books = await Context.ExecuteBatchAsync((ctx, ct) =>
             {
@@ -70,11 +70,11 @@ namespace Jularr.Backend.Service.System.Reading.V1
                                 "ReadableStoredFiles" AS candidate
                             WHERE
                                 candidate."MediaAssetId" = asset."Id"
-                                AND candidate."RelativePath" ~* '\.(epub|pdf)$'
+                                AND candidate."RelativePath" ~* '\.(epub|pdf|fb2|fb2\.zip|txt|rtf|docx|mobi|azw|azw3)$'
                                 AND (NOT candidate."IsDerived" OR candidate."DerivedAnalyzerVersion" = @PdfAnalyzerVersion)
                             ORDER BY
                                 candidate."MissingSince" IS NULL DESC,
-                                CASE WHEN candidate."RelativePath" ~* '\.pdf$' THEN 2 WHEN candidate."IsDerived" THEN 1 ELSE 0 END,
+                                CASE WHEN candidate."RelativePath" ~* '\.pdf$' THEN 3 WHEN candidate."RelativePath" ~* '\.(fb2|fb2\.zip|txt|rtf|docx|mobi|azw|azw3)$' THEN 2 WHEN candidate."IsDerived" THEN 1 ELSE 0 END,
                                 candidate."ModifiedAt" DESC,
                                 candidate."Id"
                             LIMIT 1

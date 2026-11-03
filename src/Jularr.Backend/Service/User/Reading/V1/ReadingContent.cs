@@ -83,13 +83,54 @@ namespace Jularr.Backend.Service.User.Reading.V1
                     return await OpenPdfAsync(context, source, file, ct);
                 }
 
-                var hash = await SHA256.HashDataAsync(file, ct);
-                file.Position = 0;
+                byte[] hash;
+                Stream epub = file;
+                if (BookConversion.IsConverted(source.RelativePath))
+                {
+                    // A format the reader does not read opens through its reading copy, an EPUB made in memory; the file itself stays as it is.
+                    var bytes = new MemoryStream();
+                    var buffer = new byte[81920];
+                    int read;
+                    while ((read = await file.ReadAsync(buffer, ct)) > 0)
+                    {
+                        if (bytes.Length + read > BookConversion.MaximumSourceBytes)
+                        {
+                            throw new ServiceUnavailableException("reading_invalid_file");
+                        }
+
+                        bytes.Write(buffer, 0, read);
+                    }
+
+                    hash = SHA256.HashData(bytes.GetBuffer().AsSpan(0, (int)bytes.Length));
+                    bytes.Position = 0;
+                    try
+                    {
+                        epub = new MemoryStream(BookConversion.ToEpub(source.RelativePath, bytes));
+                    }
+                    catch (BookProtectedException)
+                    {
+                        throw new ServiceUnavailableException("reading_drm");
+                    }
+                    catch (BookCompressionException)
+                    {
+                        throw new ServiceUnavailableException("reading_kindle_compression");
+                    }
+                    catch (InvalidDataException)
+                    {
+                        throw new ServiceUnavailableException("reading_invalid_file");
+                    }
+                }
+                else
+                {
+                    hash = await SHA256.HashDataAsync(file, ct);
+                    file.Position = 0;
+                }
+
                 EpubPackage package;
                 ZipArchive archive;
                 try
                 {
-                    archive = new ZipArchive(file, ZipArchiveMode.Read, leaveOpen: true);
+                    archive = new ZipArchive(epub, ZipArchiveMode.Read, leaveOpen: true);
                     package = EpubReader.Read(archive);
                 }
                 catch (InvalidDataException)

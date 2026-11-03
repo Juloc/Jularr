@@ -37,7 +37,7 @@ namespace Jularr.Backend.Service.User.Reading.V1
 
         protected override async Task<IServiceOutput> OnExecute()
         {
-            // The newest readable EPUB or comic of the asset, else its newest PDF; a matching prepared document is reused.
+            // The newest readable EPUB or comic of the asset, else a ready reading copy of its PDF, else a book read through a reading copy made on opening (FB2, MOBI, ...), else its newest PDF; a matching prepared document is reused.
             var source = await Context.ExecuteBatchAsync((ctx, ct) =>
             {
                 var sql = new SqlStatement();
@@ -66,11 +66,11 @@ namespace Jularr.Backend.Service.User.Reading.V1
                                 "ReadableStoredFiles" AS candidate
                             WHERE
                                 candidate."MediaAssetId" = asset."Id"
-                                AND candidate."RelativePath" ~* '\.(epub|cbz|cbr|cb7|pdf)$'
+                                AND candidate."RelativePath" ~* '\.(epub|cbz|cbr|cb7|pdf|fb2|fb2\.zip|txt|rtf|docx|mobi|azw|azw3)$'
                                 AND (NOT candidate."IsDerived" OR candidate."DerivedAnalyzerVersion" = @PdfAnalyzerVersion)
                             ORDER BY
                                 candidate."MissingSince" IS NULL DESC,
-                                CASE WHEN candidate."RelativePath" ~* '\.pdf$' THEN 2 WHEN candidate."IsDerived" THEN 1 ELSE 0 END,
+                                CASE WHEN candidate."RelativePath" ~* '\.pdf$' THEN 3 WHEN candidate."RelativePath" ~* '\.(fb2|fb2\.zip|txt|rtf|docx|mobi|azw|azw3)$' THEN 2 WHEN candidate."IsDerived" THEN 1 ELSE 0 END,
                                 candidate."ModifiedAt" DESC,
                                 candidate."Id"
                             LIMIT 1
@@ -190,7 +190,7 @@ namespace Jularr.Backend.Service.User.Reading.V1
                     visible."Title" AS "Title",
                     CASE
                         WHEN bool_or(file."RelativePath" ~* '\.pdf$' AND file."MissingSince" IS NULL)
-                            AND NOT bool_or(file."RelativePath" ~* '\.(epub|cbz|cbr|cb7)$' AND file."MissingSince" IS NULL) THEN 2
+                            AND NOT bool_or(file."RelativePath" ~* '\.(epub|cbz|cbr|cb7|fb2|fb2\.zip|txt|rtf|docx|mobi|azw|azw3)$' AND file."MissingSince" IS NULL) THEN 2
                         WHEN bool_or(file."RelativePath" ~* '\.(cbz|cbr|cb7)$') AND NOT bool_or(file."RelativePath" ~* '\.epub$') THEN 4
                         ELSE 1
                     END::smallint AS "ReadingFormatTypeId",
@@ -209,7 +209,7 @@ namespace Jularr.Backend.Service.User.Reading.V1
                         AND stopped."WorkUnitId" IS NOT DISTINCT FROM asset."WorkUnitId"
                         AND stopped."ProgressPositionTypeId" = 2
                     JOIN "ReadableStoredFiles" AS file ON file."MediaAssetId" = asset."Id"
-                        AND file."RelativePath" ~* '\.(epub|cbz|cbr|cb7|pdf)$'
+                        AND file."RelativePath" ~* '\.(epub|cbz|cbr|cb7|pdf|fb2|fb2\.zip|txt|rtf|docx|mobi|azw|azw3)$'
                         AND (NOT file."IsDerived" OR file."DerivedAnalyzerVersion" = @PdfAnalyzerVersion)
                     LEFT JOIN LATERAL (
                         SELECT

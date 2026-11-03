@@ -273,7 +273,7 @@ namespace Jularr.Integrations.Logic.Storage
                     {
                         pending.Push(path);
                     }
-                    else if (entry is FileInfo file && (extensions is null || extensions.Contains(file.Extension.ToLowerInvariant())))
+                    else if (entry is FileInfo file && (extensions is null || StoragePath.HasExtension(file.Name, extensions)))
                     {
                         if (includeHidden) file.Refresh();
                         yield return new StorageFile(path, file.Length, file.LastWriteTimeUtc);
