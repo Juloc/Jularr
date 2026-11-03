@@ -47,6 +47,19 @@ namespace Jularr.Integrations.Data.Usenet
         public int Connections { get; }
     }
 
+    // What an NZB names: its files and the archive password some indexers add.
+    internal sealed class NzbContent
+    {
+        public NzbContent(IReadOnlyList<NzbFile> files, string? password)
+        {
+            Files = files;
+            Password = password;
+        }
+
+        public IReadOnlyList<NzbFile> Files { get; }
+        public string? Password { get; }
+    }
+
     internal sealed class NzbFile
     {
         public NzbFile(string fileName, IReadOnlyList<NzbSegment> segments)

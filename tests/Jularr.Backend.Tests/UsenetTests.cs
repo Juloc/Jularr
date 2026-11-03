@@ -172,7 +172,7 @@ namespace Jularr.Backend.Tests
             await using var news = new FakeNewsServer("reader", "news-secret");
             var bytes = Enumerable.Range(0, 6_000).Select(index => (byte)index).ToArray();
             news.Publish("quota.mkv", bytes, 3);
-            var files = NzbReader.Read(new MemoryStream(Encoding.UTF8.GetBytes(news.Nzb("quota.mkv"))));
+            var files = NzbReader.Read(new MemoryStream(Encoding.UTF8.GetBytes(news.Nzb("quota.mkv")))).Files;
             var server = new UsenetServer("127.0.0.1", news.Port, false, "reader", "news-secret", 3);
             var downloader = new UsenetDownloader();
 
@@ -354,17 +354,98 @@ namespace Jularr.Backend.Tests
                   </segments></file>
                 </nzb>
                 """;
-            var file = NzbReader.Read(new MemoryStream(Encoding.UTF8.GetBytes(nzb))).Single();
+            var file = NzbReader.Read(new MemoryStream(Encoding.UTF8.GetBytes(nzb))).Files.Single();
             Assert.AreEqual("evil.mkv", file.FileName);
             CollectionAssert.AreEqual(new[] { "good@example.test" }, file.Segments.Select(segment => segment.MessageId).ToArray());
         }
 
-        private static async Task<Host> CreateHostAsync(string storage, string staging, FakeIndexer indexer, int newsPort, long? maxJobBytes = null)
+        [TestMethod]
+        public void Usenet_IndexerNzb_ReadsPlainSubjectNamesAndThePassword()
         {
-            var host = await LibraryTests.CreateHostAsync(storage, settings: new Dictionary<string, string>
-                {
-                    ["Storage:LocalPaths:2"] = staging
-                },
+            // Subjects as indexers post them: plain names with a part counter, quoted obfuscated volumes.
+            var nzb = """
+                <nzb xmlns="http://www.newzbin.com/DTD/2003/nzb">
+                  <head><meta type="category">TV - DE &gt; HD</meta><meta type="password">Pa ss-word!</meta></head>
+                  <file subject="House.of.the.Dragon.S02E05.German.AC3.DL.1080p.BluRay.x265-FuN.mkv (1/0)"><segments><segment bytes="10" number="1">a@example.test</segment></segments></file>
+                  <file subject="[DKB] Bungo Stray Dogs WAN! - S02E01 [1080p][HEVC x265 10bit][Multi-Subs][F64913DD].mkv (1/0)"><segments><segment bytes="10" number="1">b@example.test</segment></segments></file>
+                  <file subject="[02/19] - &quot;FNxeAX81zGnyb3jkqEK6Mh.part01.rar&quot; yEnc  104857600 (1/100)"><segments><segment bytes="10" number="1">c@example.test</segment></segments></file>
+                  <file subject="[03/19] - Show.S01E01.mkv yEnc 104857600 (1/100)"><segments><segment bytes="10" number="1">d@example.test</segment></segments></file>
+                  <file subject=""><segments><segment bytes="10" number="1">e@example.test</segment></segments></file>
+                </nzb>
+                """;
+            var content = NzbReader.Read(new MemoryStream(Encoding.UTF8.GetBytes(nzb)));
+            CollectionAssert.AreEqual(new[]
+            {
+                "House.of.the.Dragon.S02E05.German.AC3.DL.1080p.BluRay.x265-FuN.mkv", "[DKB] Bungo Stray Dogs WAN! - S02E01 [1080p][HEVC x265 10bit][Multi-Subs][F64913DD].mkv",
+                "FNxeAX81zGnyb3jkqEK6Mh.part01.rar", "Show.S01E01.mkv", "file5"
+            }, content.Files.Select(file => file.FileName).ToArray());
+            Assert.AreEqual("Pa ss-word!", content.Password);
+
+            // A password with a line break is not usable; the placeholder stays.
+            var broken = nzb.Replace("Pa ss-word!", "Pa ss&#10;word", StringComparison.Ordinal);
+            Assert.IsNull(NzbReader.Read(new MemoryStream(Encoding.UTF8.GetBytes(broken))).Password);
+        }
+
+        [TestMethod]
+        [DataRow(false)]
+        [DataRow(true)]
+        public async Task Usenet_PlainSubjectOrProtectedArchive_ImportsTheFeature(bool passworded)
+        {
+            if (passworded && OperatingSystem.IsWindows()) Assert.Inconclusive("The stand-in 7-Zip is a shell script.");
+            using var storage = new TemporaryDirectory();
+            using var staging = new TemporaryDirectory();
+            using var tools = new TemporaryDirectory();
+            var movie = Enumerable.Range(0, 200_000).Select(index => (byte)(index * 11 % 256)).ToArray();
+            await using var news = new FakeNewsServer("reader", "news-secret");
+
+            // One release has a plain subject, the other a protected archive whose password is in the NZB head.
+            var name = passworded ? "FNxeAX81zGnyb3jkqEK6Mh.part01.rar" : Feature + ".mkv";
+            news.Publish(name, movie, 2);
+            var nzb = passworded
+                ? news.Nzb(name).Replace("<file ", "<head><meta type=\"password\">Pa ss-word!</meta></head><file ", StringComparison.Ordinal)
+                : System.Text.RegularExpressions.Regex.Replace(news.Nzb(name), "subject=\"[^\"]*\"", $"subject=\"{name} (1/0)\"");
+            var sevenZip = Path.Combine(tools.Path, "7z");
+            File.WriteAllText(sevenZip, SevenZip.Replace("$FEATURE", Feature, StringComparison.Ordinal).Replace("\r\n", "\n", StringComparison.Ordinal));
+            if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(sevenZip, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            await using var host = await CreateHostAsync(storage.Path, staging.Path, new FakeIndexer(nzb), news.Port, sevenZip: passworded ? sevenZip : null);
+            await CreateWantedMovieAsync(host);
+            await RunAsync<SearchDueWantedV1>(host);
+            for (var pass = 0; pass < 5 && await RunAsync<DownloadUsenetV1>(host); pass++)
+            {
+            }
+
+            // The feature arrives under its real name, so the import recognizes it.
+            var feature = Path.Combine(storage.Path, "1", "Movies", "Example Movie (2020)", "Example Movie (2020) [WEBDL-1080p].mkv");
+            Assert.IsTrue(File.Exists(feature), $"{await host.ScalarAsync("SELECT concat(\"ErrorKey\", ' ', \"AttentionKey\") FROM \"Operations\" WHERE \"OperationTypeId\" = 2")}");
+            CollectionAssert.AreEqual(movie, File.ReadAllBytes(feature));
+            Assert.AreEqual((short)3, await host.ScalarAsync("SELECT \"OperationStatusTypeId\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"));
+        }
+
+        // Stand-in 7-Zip: lists and unpacks only with the release's password, as a protected archive does.
+        private const string SevenZip = """
+            #!/bin/sh
+            command=$1
+            for argument
+            do
+              case "$argument" in
+                -p*) password=${argument#-p} ;;
+                -o*) output=${argument#-o} ;;
+              esac
+              archive=$argument
+            done
+            [ "$password" = "Pa ss-word!" ] || exit 2
+            case "$command" in
+              l) printf 'Path = $FEATURE.mkv\nSize = %s\n' "$(wc -c < "$archive" | tr -d ' ')" ;;
+              x) cat "$archive" > "$output/$FEATURE.mkv" ;;
+              *) exit 7 ;;
+            esac
+            """;
+
+        private static async Task<Host> CreateHostAsync(string storage, string staging, FakeIndexer indexer, int newsPort, long? maxJobBytes = null, string? sevenZip = null)
+        {
+            var settings = new Dictionary<string, string> { ["Storage:LocalPaths:2"] = staging };
+            if (sevenZip is not null) settings["Usenet:SevenZipPath"] = sevenZip;
+            var host = await LibraryTests.CreateHostAsync(storage, settings: settings,
                 services: services => services.AddHttpClient<NewznabClient>().ConfigurePrimaryHttpMessageHandler(() => indexer));
             var mountId = await LibraryTests.CreateMountAsync(host);
             await host.Fixture.RunSqlAsync("UPDATE \"StorageMounts\" SET \"IsReadOnly\" = FALSE");

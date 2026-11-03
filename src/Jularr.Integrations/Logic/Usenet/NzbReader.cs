@@ -11,6 +11,7 @@ namespace Jularr.Integrations.Logic.Usenet
     {
         public const long MaximumBytes = 32L * 1024 * 1024;
         private const int MaximumFiles = 10_000;
+        private const int MaximumPasswordLength = 512;
         private static readonly XNamespace Nzb = "http://www.newzbin.com/DTD/2003/nzb";
 
         [GeneratedRegex("^[\\x21-\\x7E]{3,250}$")]
@@ -19,7 +20,11 @@ namespace Jularr.Integrations.Logic.Usenet
         [GeneratedRegex("\"([^\"]{1,255})\"")]
         private static partial Regex QuotedName();
 
-        public static IReadOnlyList<NzbFile> Read(Stream stream)
+        // Without quotes the name stands before an optional yEnc tail and the part counter.
+        [GeneratedRegex(@"^(?:\[\d+/\d+\]\s*-\s*)?(.+?)(?:\s+yEnc(?:\s+\d+)?)?(?:\s*\(\d+/\d+\))?\s*$")]
+        private static partial Regex PlainName();
+
+        public static NzbContent Read(Stream stream)
         {
             XDocument document;
             try
@@ -51,8 +56,9 @@ namespace Jularr.Integrations.Logic.Usenet
                     continue;
                 }
 
-                // The quoted subject part is the file name; duplicates get a counter.
-                var name = SafeName(QuotedName().Match(subject) is { Success: true } quoted ? quoted.Groups[1].Value : "file" + (files.Count + 1).ToString(CultureInfo.InvariantCulture));
+                // The quoted subject part is the file name, else the plain subject; duplicates get a counter.
+                var name = SafeName(QuotedName().Match(subject) is { Success: true } quoted ? quoted.Groups[1].Value
+                    : PlainName().Match(subject.Trim()) is { Success: true } plain ? plain.Groups[1].Value : "file" + (files.Count + 1).ToString(CultureInfo.InvariantCulture));
                 var unique = name;
                 for (var attempt = 2; !names.Add(unique); attempt++)
                 {
@@ -62,7 +68,17 @@ namespace Jularr.Integrations.Logic.Usenet
                 files.Add(new NzbFile(unique, segments));
             }
 
-            return files.Count > 0 ? files : throw new UsenetException(UsenetFailure.InvalidResponse, "The NZB names no files.");
+            if (files.Count == 0)
+            {
+                throw new UsenetException(UsenetFailure.InvalidResponse, "The NZB names no files.");
+            }
+
+            // The first usable password goes to the unpacker as one argument, never through a shell.
+            var password = (document.Root?.Element(Nzb + "head")?.Elements(Nzb + "meta") ?? [])
+                .Where(meta => string.Equals((string?)meta.Attribute("type"), "password", StringComparison.OrdinalIgnoreCase))
+                .Select(meta => meta.Value.Trim())
+                .FirstOrDefault(value => value.Length is > 0 and <= MaximumPasswordLength && !value.Any(char.IsControl));
+            return new NzbContent(files, password);
         }
 
         // No folders, no control characters, no device names, no names that only hide.
