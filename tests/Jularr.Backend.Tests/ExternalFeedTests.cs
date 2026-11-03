@@ -184,7 +184,7 @@ namespace Jularr.Backend.Tests
             await using var sql = new SqlContext(host.Fixture.Database);
             var context = BatchContext(sql);
             var missing = await context.ExecuteBatchAsync((ctx, ct) => ctx.ReadMissingExternalFeedsAsync(query, ct), mode: SqlAccessMode.ReadOnly);
-            Assert.AreEqual(17, missing.Count);
+            Assert.AreEqual(20, missing.Count);
             Assert.IsTrue(missing.Where(feed => feed.Namespace.StartsWith("tmdb", StringComparison.Ordinal)).All(feed => feed.Language is not null));
             var top = new ExternalFeedData("tmdb_movie", MediaType.Movie, null, DiscoverFeedType.Top, 1, null, "en");
             var recommendations = new ExternalFeedData("tmdb_movie", MediaType.Movie, null, null, 1, "603", "en");

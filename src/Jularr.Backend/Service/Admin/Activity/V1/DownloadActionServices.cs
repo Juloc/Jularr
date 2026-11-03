@@ -249,13 +249,16 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
         private readonly TimeProvider _time;
         private readonly IDataProtector _protector;
 
-        internal RemoveActivityDownloadV1(SabnzbdClient sabnzbd, QbittorrentClient qbittorrent, DownloadStorage downloads, TimeProvider time, IDataProtectionProvider protection)
+        private readonly AcquisitionSearchSignal _searchSignal;
+
+        internal RemoveActivityDownloadV1(SabnzbdClient sabnzbd, QbittorrentClient qbittorrent, DownloadStorage downloads, TimeProvider time, IDataProtectionProvider protection, AcquisitionSearchSignal searchSignal)
         {
             _sabnzbd = sabnzbd;
             _qbittorrent = qbittorrent;
             _downloads = downloads;
             _time = time;
             _protector = protection.CreateProtector(AcquisitionConnectionInput.ProtectorPurpose);
+            _searchSignal = searchSignal;
         }
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
@@ -269,6 +272,12 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
                 ?? throw new KeyNotFoundException("The download is not in the queue.");
             await DownloadActions.RemoveAsync(Context, _sabnzbd, _qbittorrent, _downloads, _protector, _time.GetUtcNow().UtcDateTime, download, Data.BlocksRelease, CancellationToken);
             return new UpdateResult(true);
+        }
+
+        // A blocked release's target is searched now for its next release, not on the next round.
+        protected override void OnCommitted()
+        {
+            if (Data.BlocksRelease) _searchSignal.RequestSearch();
         }
     }
 
@@ -355,13 +364,16 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
         private readonly TimeProvider _time;
         private readonly IDataProtector _protector;
 
-        internal ApplyActivityDownloadsV1(SabnzbdClient sabnzbd, QbittorrentClient qbittorrent, DownloadStorage downloads, TimeProvider time, IDataProtectionProvider protection)
+        private readonly AcquisitionSearchSignal _searchSignal;
+
+        internal ApplyActivityDownloadsV1(SabnzbdClient sabnzbd, QbittorrentClient qbittorrent, DownloadStorage downloads, TimeProvider time, IDataProtectionProvider protection, AcquisitionSearchSignal searchSignal)
         {
             _sabnzbd = sabnzbd;
             _qbittorrent = qbittorrent;
             _downloads = downloads;
             _time = time;
             _protector = protection.CreateProtector(AcquisitionConnectionInput.ProtectorPurpose);
+            _searchSignal = searchSignal;
         }
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
@@ -399,6 +411,12 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
             }
 
             return new UpdateResult(true);
+        }
+
+        // A blocked release's target is searched now, not on the next round.
+        protected override void OnCommitted()
+        {
+            if (Data.DownloadBulkActionTypeId == DownloadBulkActionType.RemoveAndBlock) _searchSignal.RequestSearch();
         }
     }
 

@@ -1,3 +1,5 @@
+@use "HitArea";
+
 // The mockups' filter row: plain 11px/760 pills in the muted colour; hover lifts them onto a panel, the selection is the lavender tint
 // with the accent text and its own #dcd0ff outline. The row scrolls sideways when it does not fit.
 .navigation-tabs {
@@ -96,5 +98,16 @@
         font-size: var(--text-small);
         font-weight: 700;
         opacity: .75;
+    }
+}
+
+// On a phone a pill keeps its look and takes a tap 44px high (up to its neighbours' 5px gap sideways). The row scrolls and so clips what leaves it:
+// it carries the 7px of room above and below the pills itself (its negative margin keeps the layout).
+@media (max-width: 640px) {
+    .navigation-tabs {
+        margin-block: -7px;
+        padding-block: 7px;
+
+        &__link { @include HitArea.hit-area(8px, 14px); }
     }
 }

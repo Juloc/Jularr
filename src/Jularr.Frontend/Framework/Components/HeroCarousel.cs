@@ -8,14 +8,15 @@ namespace Jularr.Frontend.Framework
         string? DetailsHref, string Group, int Pass, bool IsContinue = false);
 
     // The page decides which titles are highlighted; this shows one at a time with arrows, a position bar and a pause.
-    // The script chooses from the slides by the device's preferences (see HeroCarousel.ts).
-    public sealed class HeroCarousel(FrontendAssets assets, IReadOnlyList<HeroSlide> slides, string preferencesKey) : IUiComponent
+    // The script chooses from the slides by the device's preferences (see HeroCarousel.ts); with none chosen the shared landscape and the empty text keep the place.
+    public sealed class HeroCarousel(FrontendAssets assets, IReadOnlyList<HeroSlide> slides, string preferencesKey, string emptyKey) : IUiComponent
     {
         public void WriteTo(TextWriter writer, HtmlEncoder encoder, UiText texts)
         {
-            if (slides.Count == 0) return;
-
-            var parts = new List<IUiComponent>();
+            var empty = new Div(new Div().Class("hero-carousel__art"), new Div(new H2(new Text(emptyKey)).Class("hero-carousel__title")).Class("hero-carousel__body"))
+                .Class("hero-carousel__slide hero-carousel__slide--empty").Attribute("data-hero-empty", "");
+            if (slides.Count > 0) empty.Attribute("hidden", "hidden");
+            var parts = new List<IUiComponent> { empty };
             for (var index = 0; index < slides.Count; index++)
             {
                 var slide = slides[index];

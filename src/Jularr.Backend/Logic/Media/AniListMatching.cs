@@ -34,10 +34,15 @@ namespace Jularr.Backend.Logic.Media
             _ => null
         };
 
-        // Where a catalog title belongs, by the formats Discover shows; other formats (specials, music videos) stay out.
+        // Episodes of their own that Discover's format filter finds; they are kept as series.
+        private static readonly HashSet<string> ExtraFormats = ["OVA", "SPECIAL", "MUSIC"];
+
+        public static bool IsExtra(string? format) => format is not null && ExtraFormats.Contains(format);
+
+        // Where a catalog title belongs, by the formats Discover shows.
         public static (MediaType Type, MediaSubtype Subtype)? CatalogType(string type, string? format) => type switch
         {
-            "ANIME" when format is not null && SeriesFormats.Contains(format) => (MediaType.Series, MediaSubtype.Anime),
+            "ANIME" when format is not null && (SeriesFormats.Contains(format) || ExtraFormats.Contains(format)) => (MediaType.Series, MediaSubtype.Anime),
             "ANIME" when format is not null && MovieFormats.Contains(format) => (MediaType.Movie, MediaSubtype.Anime),
             "MANGA" when format is not null && MangaFormats.Contains(format) => (MediaType.Book, MediaSubtype.Manga),
             "MANGA" when format is not null && NovelFormats.Contains(format) => (MediaType.Book, MediaSubtype.LightNovel),

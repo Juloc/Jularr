@@ -5,6 +5,7 @@
 @use "../../../Framework/Components/ActionMenu";
 @use "../../../Framework/Components/LayoutSwitch";
 @use "../../../Framework/Components/FactGrid";
+@use "../../../Framework/Components/HitArea";
 
 // The title's own page: the hero, one row of tabs, then the Overview's blocks or the one tab. Colours, radii and type are the shared tokens.
 .details-tabs {
@@ -42,6 +43,8 @@
         text-decoration: none;
 
         &:hover { background: var(--accent-soft); }
+
+        @include HitArea.phone-hit-area(8px, 15px, $border: 0px);
     }
 }
 

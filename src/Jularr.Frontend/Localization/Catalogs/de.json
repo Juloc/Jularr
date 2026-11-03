@@ -169,6 +169,112 @@
   "hint.acquisition.Narou.placeholder": ["https://ncode.syosetu.com", "https://ncode.syosetu.com"],
   "admin.works.source.syosetu": ["Narō", "Narō"],
   "discover.webNovel": ["Web novel", "Web-Novel"],
+  "discover.filters": ["Filters", "Filter"],
+  "discover.filter.genres": ["Genres", "Genres"],
+  "discover.filter.any": ["Any", "Alle"],
+  "discover.filter.season": ["Season", "Saison"],
+  "discover.filter.format": ["Format", "Format"],
+  "discover.filter.more": ["More", "Mehr"],
+  "discover.filter.clear": ["Clear filters", "Filter zurücksetzen"],
+  "discover.filter.status": ["Status", "Status"],
+  "discover.filter.country": ["Country", "Land"],
+  "discover.filter.language": ["Language", "Sprache"],
+  "discover.filter.source": ["Source", "Quelle"],
+  "discover.filter.streaming": ["Streaming on", "Streaming bei"],
+  "discover.filter.readable": ["Readable on", "Lesbar bei"],
+  "discover.filter.tags": ["Tags", "Tags"],
+  "discover.filter.years": ["Year range", "Jahresbereich"],
+  "discover.filter.episodes": ["Episodes", "Episoden"],
+  "discover.filter.chapters": ["Chapters", "Kapitel"],
+  "discover.filter.volumes": ["Volumes", "Bände"],
+  "discover.filter.duration": ["Duration (minutes)", "Dauer (Minuten)"],
+  "discover.filter.adult": ["Adult content", "Inhalte für Erwachsene"],
+  "discover.filter.from": ["From", "Von"],
+  "discover.filter.to": ["To", "Bis"],
+  "discover.genre.Action": ["Action", "Action"],
+  "discover.genre.Adventure": ["Adventure", "Abenteuer"],
+  "discover.genre.Comedy": ["Comedy", "Komödie"],
+  "discover.genre.Drama": ["Drama", "Drama"],
+  "discover.genre.Ecchi": ["Ecchi", "Ecchi"],
+  "discover.genre.Fantasy": ["Fantasy", "Fantasy"],
+  "discover.genre.Hentai": ["Hentai", "Hentai"],
+  "discover.genre.Horror": ["Horror", "Horror"],
+  "discover.genre.MahouShoujo": ["Mahou Shoujo", "Mahou Shoujo"],
+  "discover.genre.Mecha": ["Mecha", "Mecha"],
+  "discover.genre.Music": ["Music", "Musik"],
+  "discover.genre.Mystery": ["Mystery", "Mystery"],
+  "discover.genre.Psychological": ["Psychological", "Psychologisch"],
+  "discover.genre.Romance": ["Romance", "Romantik"],
+  "discover.genre.ScienceFiction": ["Science fiction", "Science-Fiction"],
+  "discover.genre.SliceOfLife": ["Slice of life", "Slice of Life"],
+  "discover.genre.Sports": ["Sports", "Sport"],
+  "discover.genre.Supernatural": ["Supernatural", "Übernatürlich"],
+  "discover.genre.Thriller": ["Thriller", "Thriller"],
+  "discover.genre.Animation": ["Animation", "Animation"],
+  "discover.genre.Crime": ["Crime", "Krimi"],
+  "discover.genre.Documentary": ["Documentary", "Dokumentarfilm"],
+  "discover.genre.Family": ["Family", "Familie"],
+  "discover.genre.History": ["History", "Historie"],
+  "discover.genre.TvMovie": ["TV movie", "TV-Film"],
+  "discover.genre.War": ["War", "Krieg"],
+  "discover.genre.Western": ["Western", "Western"],
+  "discover.genre.Kids": ["Kids", "Kinder"],
+  "discover.genre.News": ["News", "Nachrichten"],
+  "discover.genre.Reality": ["Reality", "Reality"],
+  "discover.genre.Soap": ["Soap", "Seifenoper"],
+  "discover.genre.Talk": ["Talk", "Talk"],
+  "discover.genre.Politics": ["Politics", "Politik"],
+  "discover.season.1": ["Winter", "Winter"],
+  "discover.season.2": ["Spring", "Frühling"],
+  "discover.season.3": ["Summer", "Sommer"],
+  "discover.season.4": ["Fall", "Herbst"],
+  "discover.status.Finished": ["Finished", "Abgeschlossen"],
+  "discover.status.Releasing": ["Releasing", "Läuft"],
+  "discover.status.NotYetReleased": ["Not yet released", "Noch nicht erschienen"],
+  "discover.status.Cancelled": ["Cancelled", "Abgebrochen"],
+  "discover.status.Hiatus": ["Hiatus", "Pausiert"],
+  "discover.source.Original": ["Original", "Original"],
+  "discover.source.Manga": ["Manga", "Manga"],
+  "discover.source.LightNovel": ["Light novel", "Light Novel"],
+  "discover.source.VisualNovel": ["Visual novel", "Visual Novel"],
+  "discover.source.VideoGame": ["Video game", "Videospiel"],
+  "discover.source.Other": ["Other", "Sonstiges"],
+  "discover.source.Novel": ["Novel", "Roman"],
+  "discover.source.Doujinshi": ["Doujinshi", "Doujinshi"],
+  "discover.source.Anime": ["Anime", "Anime"],
+  "discover.source.WebNovel": ["Web novel", "Web-Novel"],
+  "discover.source.LiveAction": ["Live action", "Realfilm"],
+  "discover.source.Game": ["Game", "Spiel"],
+  "discover.source.Comic": ["Comic", "Comic"],
+  "discover.source.MultimediaProject": ["Multimedia project", "Multimedia-Projekt"],
+  "discover.source.PictureBook": ["Picture book", "Bilderbuch"],
+  "discover.country.JP": ["Japan", "Japan"],
+  "discover.country.KR": ["South Korea (Manhwa)", "Südkorea (Manhwa)"],
+  "discover.country.CN": ["China (Manhua)", "China (Manhua)"],
+  "discover.country.TW": ["Taiwan", "Taiwan"],
+  "discover.country.US": ["United States", "USA"],
+  "discover.country.GB": ["United Kingdom", "Großbritannien"],
+  "discover.country.DE": ["Germany", "Deutschland"],
+  "discover.country.FR": ["France", "Frankreich"],
+  "discover.country.ES": ["Spain", "Spanien"],
+  "discover.country.IT": ["Italy", "Italien"],
+  "discover.country.IN": ["India", "Indien"],
+  "discover.language.ger": ["German", "Deutsch"],
+  "discover.language.eng": ["English", "Englisch"],
+  "discover.language.fre": ["French", "Französisch"],
+  "discover.language.spa": ["Spanish", "Spanisch"],
+  "discover.language.ita": ["Italian", "Italienisch"],
+  "discover.language.jpn": ["Japanese", "Japanisch"],
+  "discover.format.Tv": ["TV", "TV"],
+  "discover.format.TvShort": ["TV short", "TV Short"],
+  "discover.format.Movie": ["Movie", "Film"],
+  "discover.format.Special": ["Special", "Special"],
+  "discover.format.Ova": ["OVA", "OVA"],
+  "discover.format.Ona": ["ONA", "ONA"],
+  "discover.format.Music": ["Music", "Musik"],
+  "discover.format.Manga": ["Manga", "Manga"],
+  "discover.format.Novel": ["Light novel", "Light Novel"],
+  "discover.format.OneShot": ["One-shot", "One-Shot"],
   "provider.name.syosetu": ["Shōsetsuka ni Narō", "Shōsetsuka ni Narō"],
   "provider.hint.syosetu": ["Japanese web novels", "Japanische Web-Novels"],
   "admin.works.source.local": ["Library", "Bibliothek"],
@@ -218,7 +324,7 @@
   "activity.views": ["Download views","Download-Ansichten"],
   "activity.files.noJobs": ["No torrent downloads on this page.","Auf dieser Seite gibt es keine Torrent-Downloads."],
   "activity.files": ["Files","Dateien"],
-  "activity.unmatched": ["Files without a volume","Dateien ohne Band"],
+  "activity.unmatched": ["Files left in the download","Im Download gebliebene Dateien"],
   "activity.files.view": ["View torrent files","Torrent-Dateien anzeigen"],
   "activity.files.empty": ["No torrent files were reported.","Keine Torrent-Dateien gefunden."],
   "activity.files.unavailable": ["The torrent client's file list is currently unavailable.","Die Dateiliste des Torrent-Clients ist derzeit nicht verfügbar."],
@@ -3331,8 +3437,8 @@
    "News-Server hinzufügen"
   ],
   "nav.group.media": [
-   "Media",
-   "Medien"
+   "Works",
+   "Werke"
   ],
   "nav.group.acquisition": [
    "Arr+",
@@ -3519,8 +3625,8 @@
    "Werk"
   ],
   "admin.works.description": [
-   "Canonical media and monitoring",
-   "Kanonische Medien und Überwachung"
+   "Canonical works and monitoring",
+   "Kanonische Werke und Überwachung"
   ],
   "admin.works.title": [
    "Works",
@@ -3569,6 +3675,10 @@
   "request.create": [
    "Request this work",
    "Dieses Werk anfragen"
+  ],
+  "request.quick.failed": [
+   "The request could not be made.",
+   "Die Anfrage konnte nicht gestellt werden."
   ],
   "request.approve": [
    "Approve",
@@ -3775,8 +3885,8 @@
    "Diese Sammlung löschen? Die Titel selbst bleiben erhalten."
   ],
   "collections.addMedia": [
-   "Add media",
-   "Medien hinzufügen"
+   "Add works",
+   "Werke hinzufügen"
   ],
   "collections.find": [
    "Find in the library",
@@ -3839,8 +3949,8 @@
    "Staffeln / Struktur"
   ],
   "details.title": [
-   "Media details",
-   "Mediendetails"
+   "Work details",
+   "Werkdetails"
   ],
   "details.unavailable": [
    "Details can't be loaded right now",
@@ -3974,6 +4084,26 @@
    "Upcoming",
    "Demnächst"
   ],
+  "discover.feed.Season": [
+   "Popular this season",
+   "Beliebt diese Saison"
+  ],
+  "discover.feed.NextSeason": [
+   "Upcoming next season",
+   "Nächste Saison"
+  ],
+  "discover.feed.Popular": [
+   "All time popular",
+   "Allzeit beliebt"
+  ],
+  "discover.feed.Manhwa": [
+   "Popular manhwa",
+   "Beliebte Manhwa"
+  ],
+  "discover.feed.Top100": [
+   "Top 100",
+   "Top 100"
+  ],
   "discover.providerUnavailable": [
    "Discovery is unavailable right now; your library still works.",
    "Entdecken ist gerade nicht verfügbar; deine Bibliothek funktioniert weiterhin."
@@ -3985,6 +4115,14 @@
   "discover.empty": [
    "Nothing to show here yet.",
    "Hier gibt es noch nichts zu sehen."
+  ],
+  "discover.end": [
+   "No more titles.",
+   "Keine weiteren Titel."
+  ],
+  "discover.retry": [
+   "Try again",
+   "Erneut versuchen"
   ],
   "discover.noResults": [
    "Nothing matches this search.",
@@ -4110,37 +4248,41 @@
    "Sort",
    "Sortierung"
   ],
-  "discover.sort.ranking": [
-   "Ranking",
-   "Rangfolge"
+  "discover.sort.Trending": [
+   "Trending",
+   "Trend"
   ],
-  "discover.sort.newest": [
-   "Newest",
-   "Neueste"
+  "discover.sort.Popularity": [
+   "Popularity",
+   "Beliebtheit"
   ],
-  "discover.sort.az": [
-   "Title A–Z",
-   "Titel A–Z"
+  "discover.sort.Score": [
+   "Average score",
+   "Bewertung"
+  ],
+  "discover.sort.Favourites": [
+   "Favorites",
+   "Favoriten"
+  ],
+  "discover.sort.Added": [
+   "Date added",
+   "Neu hinzugefügt"
+  ],
+  "discover.sort.Released": [
+   "Release date",
+   "Erscheinungsdatum"
+  ],
+  "discover.sort.Title": [
+   "Title",
+   "Titel"
   ],
   "discover.hero.perType": [
    "Highlights per type",
    "Highlights pro Medientyp"
   ],
-  "discover.hero.perType.1": [
-   "1 title",
-   "1 Titel"
-  ],
-  "discover.hero.perType.2": [
-   "2 titles",
-   "2 Titel"
-  ],
-  "discover.hero.perType.3": [
-   "3 titles",
-   "3 Titel"
-  ],
-  "discover.hero.max": [
-   "Maximum highlights",
-   "Maximale Highlights"
+  "discover.hero.empty": [
+   "No highlights yet",
+   "Noch keine Highlights"
   ],
   "discover.hero.continue": [
    "Include continue",
@@ -4429,6 +4571,10 @@
   "search.global": [
    "Search movies and series",
    "Filme und Serien suchen"
+  ],
+  "search.all": [
+   "All results for “{0}”",
+   "Alle Ergebnisse für „{0}“"
   ],
   "library.scope.all": [
    "All",
@@ -8120,6 +8266,10 @@
    "Please sign in to continue.",
    "Bitte melde dich an, um fortzufahren."
   ],
+  "errors.invalid_credentials": [
+   "Wrong username or password.",
+   "Benutzername oder Passwort falsch."
+  ],
   "errors.permission_denied": [
    "You do not have permission to perform this action.",
    "Dir fehlt die Berechtigung für diese Aktion."
@@ -8173,16 +8323,16 @@
    "Manueller Import"
   ],
   "manualImport.search": [
-   "Film or series",
-   "Film oder Serie"
+   "Work",
+   "Werk"
   ],
   "manualImport.find": [
    "Search",
    "Suchen"
   ],
   "manualImport.noMatch": [
-   "No film or series of the library matches.",
-   "Kein Film und keine Serie der Bibliothek passt."
+   "No work of the library matches.",
+   "Kein Werk der Bibliothek passt."
   ],
   "manualImport.choose": [
    "Import to this",
@@ -8197,8 +8347,8 @@
    "Dateien anzeigen"
   ],
   "manualImport.noFiles": [
-   "The folder holds no video files.",
-   "Der Ordner enthält keine Videodateien."
+   "The folder holds no files of this media type.",
+   "Der Ordner enthält keine Dateien dieses Medientyps."
   ],
   "manualImport.mode": [
    "Transfer",
@@ -8229,8 +8379,8 @@
    "Importierte Dateien: {0}"
   ],
   "manualImport.list.works": [
-   "Films and series",
-   "Filme und Serien"
+   "Works",
+   "Werke"
   ],
   "manualImport.list.target": [
    "Import target",
@@ -8249,8 +8399,8 @@
    "Datei"
   ],
   "manualImport.col.series": [
-   "Film or series",
-   "Film oder Serie"
+   "Work",
+   "Werk"
   ],
   "manualImport.col.episode": [
    "Episode",
@@ -8379,6 +8529,38 @@
   "manualImport.importRest": [
    "Import the rest",
    "Rest importieren"
+  ],
+  "manualImport.col.volume": [
+   "Volume",
+   "Band"
+  ],
+  "manualImport.volume": [
+   "Volume",
+   "Band"
+  ],
+  "manualImport.chapter": [
+   "Chapter",
+   "Kapitel"
+  ],
+  "manualImport.volumeLabel": [
+   "Vol. {0}",
+   "Bd. {0}"
+  ],
+  "manualImport.chapterLabel": [
+   "Ch. {0}",
+   "Kap. {0}"
+  ],
+  "manualImport.wholeWork": [
+   "Whole work",
+   "Ganzes Werk"
+  ],
+  "manualImport.bookLanguage": [
+   "Language",
+   "Sprache"
+  ],
+  "manualImport.qualityFromFormat": [
+   "From the file format",
+   "Aus dem Dateiformat"
   ],
   "activity.importManually": [
    "Import by hand",
@@ -9099,10 +9281,6 @@
   "works.status.Unmonitored": [
    "Unmonitored",
    "Nicht überwacht"
-  ],
-  "works.filter.type": [
-   "All types",
-   "Alle Typen"
   ],
   "works.filter.monitored": [
    "Any monitoring",
@@ -9915,6 +10093,110 @@
   "admin.vpn.stopDone": [
    "Tunnel stopped",
    "Tunnel gestoppt"
+  ],
+  "admin.ai.title": [
+   "AI",
+   "KI"
+  ],
+  "admin.ai.line": [
+   "The ChatGPT account of this server",
+   "Das ChatGPT-Konto dieses Servers"
+  ],
+  "admin.ai.connected": [
+   "Connected",
+   "Verbunden"
+  ],
+  "admin.ai.pending": [
+   "Waiting for sign-in",
+   "Wartet auf Anmeldung"
+  ],
+  "admin.ai.notInstalled": [
+   "Not installed",
+   "Nicht installiert"
+  ],
+  "admin.ai.notConnected": [
+   "Not connected",
+   "Nicht verbunden"
+  ],
+  "admin.ai.notInstalledNote": [
+   "This installation has no Codex CLI.",
+   "In dieser Installation ist keine Codex-CLI enthalten."
+  ],
+  "admin.ai.version": [
+   "Version",
+   "Version"
+  ],
+  "admin.ai.signIn": [
+   "Sign-in",
+   "Anmeldung"
+  ],
+  "admin.ai.signIn.chatgpt": [
+   "ChatGPT account",
+   "ChatGPT-Konto"
+  ],
+  "admin.ai.signIn.apiKey": [
+   "API key",
+   "API-Schlüssel"
+  ],
+  "admin.ai.signIn.other": [
+   "Other",
+   "Andere"
+  ],
+  "admin.ai.openLink": [
+   "Open sign-in page",
+   "Anmeldeseite öffnen"
+  ],
+  "admin.ai.enterCode": [
+   "Enter this one-time code",
+   "Diesen Einmalcode eingeben"
+  ],
+  "admin.ai.connect": [
+   "Connect",
+   "Verbinden"
+  ],
+  "admin.ai.cancel": [
+   "Cancel login",
+   "Anmeldung abbrechen"
+  ],
+  "admin.ai.disconnect": [
+   "Disconnect",
+   "Trennen"
+  ],
+  "admin.ai.disconnectTitle": [
+   "Disconnect Codex?",
+   "Codex trennen?"
+  ],
+  "admin.ai.loginStarted": [
+   "Login started",
+   "Anmeldung gestartet"
+  ],
+  "admin.ai.cancelDone": [
+   "Login cancelled",
+   "Anmeldung abgebrochen"
+  ],
+  "admin.ai.disconnectDone": [
+   "Codex disconnected",
+   "Codex getrennt"
+  ],
+  "errors.codex_not_installed": [
+   "The Codex CLI is not available in this installation.",
+   "Die Codex-CLI ist in dieser Installation nicht verfügbar."
+  ],
+  "errors.codex_login_busy": [
+   "A Codex login is already waiting. Finish or cancel it first.",
+   "Eine Codex-Anmeldung wartet schon. Beende oder brich sie zuerst ab."
+  ],
+  "errors.codex_login_failed": [
+   "The Codex login could not be started. Try again in a minute.",
+   "Die Codex-Anmeldung konnte nicht gestartet werden. Versuche es in einer Minute erneut."
+  ],
+  "errors.codex_login_expired": [
+   "The Codex login was not finished in time. Connect again.",
+   "Die Codex-Anmeldung wurde nicht rechtzeitig beendet. Verbinde erneut."
+  ],
+  "errors.codex_logout_failed": [
+   "Codex could not remove its sign-in. Try again.",
+   "Codex konnte die Anmeldung nicht entfernen. Versuche es erneut."
   ],
   "errors.vpn_unavailable": [
    "The VPN tunnel is not connected. Nothing bound to it is sent without it.",
@@ -11283,8 +11565,8 @@
    "Usenet"
   ],
   "jobs.worker.Media": [
-   "Media",
-   "Medien"
+   "Works",
+   "Werke"
   ],
   "jobs.worker.Storage": [
    "Storage",
@@ -13032,8 +13314,8 @@
    "Systemstatus"
   ],
   "dashboard.kpi.media": [
-   "Media",
-   "Medien"
+   "Works",
+   "Werke"
   ],
   "dashboard.kpi.downloads": [
    "Downloads",
@@ -13358,6 +13640,38 @@
   "works.search": [
    "Search titles",
    "Titel suchen"
+  ],
+  "works.sort": [
+   "Sort by",
+   "Sortieren nach"
+  ],
+  "works.sort.ascending": [
+   "Ascending, turn to descending",
+   "Aufsteigend, auf absteigend umschalten"
+  ],
+  "works.sort.descending": [
+   "Descending, turn to ascending",
+   "Absteigend, auf aufsteigend umschalten"
+  ],
+  "works.footer.titles": [
+   "Titles",
+   "Titel"
+  ],
+  "works.footer.monitored": [
+   "Monitored",
+   "Überwacht"
+  ],
+  "works.footer.unmonitored": [
+   "Unmonitored",
+   "Nicht überwacht"
+  ],
+  "works.footer.files": [
+   "Files",
+   "Dateien"
+  ],
+  "works.footer.size": [
+   "Total size",
+   "Gesamtgröße"
   ],
   "works.filter.drawer": [
    "Filters",
@@ -14924,13 +15238,28 @@
    "Alle möglichen Dateinamen für den Import sind belegt. Die vorhandenen Dateien der Bibliothek wurden nicht überschrieben."
   ],
   "acquisition.outcome.import_nothing_placeable": [
-   "Nothing in the download could be placed: no file is a readable book or names a volume. The files stay for you to assign",
-   "Im Download ließ sich nichts einsortieren: Keine Datei ist ein lesbares Buch oder nennt einen Band. Die Dateien bleiben zum Zuordnen"
+   "Nothing in the download could be placed; each file says why. The files stay for you to assign",
+   "Im Download ließ sich nichts einsortieren; jede Datei sagt, warum. Die Dateien bleiben zum Zuordnen"
   ],
   "acquisition.outcome.import_unmatched_files": [
-   "The matching volumes were imported; some files name no volume of the title and stayed in the download",
-   "Die passenden Bände wurden importiert; einige Dateien nennen keinen Band des Titels und blieben im Download"
+   "The matching volumes and chapters were imported; the other files stayed in the download, each with why",
+   "Die passenden Bände und Kapitel wurden importiert; die übrigen Dateien blieben im Download, jede mit ihrem Grund"
   ],
+  "acquisition.file.extension": ["This format is not taken for this kind of title","Dieses Format wird für diese Art Titel nicht angenommen"],
+  "acquisition.file.content_epub": ["Not a valid EPUB: no mimetype entry with application/epub+zip and no META-INF/container.xml","Kein gültiges EPUB: weder ein Eintrag mimetype mit application/epub+zip noch META-INF/container.xml"],
+  "acquisition.file.content_pdf": ["Not a valid PDF: the file does not begin with %PDF-","Kein gültiges PDF: Die Datei beginnt nicht mit %PDF-"],
+  "acquisition.file.content_mobi": ["Not a valid MOBI: the header names neither BOOKMOBI nor TEXtREAd","Kein gültiges MOBI: Der Dateikopf nennt weder BOOKMOBI noch TEXtREAd"],
+  "acquisition.file.content_azw3": ["Not a valid AZW3: the header does not name BOOKMOBI","Kein gültiges AZW3: Der Dateikopf nennt nicht BOOKMOBI"],
+  "acquisition.file.content_palmdoc": ["An old PalmDOC MOBI: the reader cannot open it yet","Ein altes PalmDOC-MOBI: Der Reader kann es noch nicht öffnen"],
+  "acquisition.file.content_cbz": ["Not a valid CBZ: the file is no ZIP archive","Kein gültiges CBZ: Die Datei ist kein ZIP-Archiv"],
+  "acquisition.file.content_cbr": ["Not a valid CBR: the file is no RAR archive","Kein gültiges CBR: Die Datei ist kein RAR-Archiv"],
+  "acquisition.file.content_cb7": ["Not a valid CB7: the file is no 7-Zip archive","Kein gültiges CB7: Die Datei ist kein 7-Zip-Archiv"],
+  "acquisition.file.no_volume": ["The name carries no volume or chapter number","Der Name nennt keine Band- oder Kapitelnummer"],
+  "acquisition.file.unknown_unit": ["The number is no volume or chapter of the title","Die Nummer ist kein Band und kein Kapitel des Titels"],
+  "acquisition.file.ambiguous": ["The number could mean more than one volume or chapter","Die Nummer kann mehr als einen Band oder ein Kapitel meinen"],
+  "acquisition.file.not_storable": ["The library name made for it cannot be stored","Der dafür gebildete Name lässt sich in der Bibliothek nicht speichern"],
+  "acquisition.file.present": ["The library already holds this volume","Die Bibliothek hat diesen Band schon"],
+  "acquisition.file.unknown": ["No reason was recorded for this file","Für diese Datei wurde kein Grund festgehalten"],
   "acquisition.outcome.import_storage_full": [
    "Library space is insufficient or could not be checked",
    "Der Platz der Bibliothek reicht nicht aus oder konnte nicht geprüft werden"

@@ -28,7 +28,7 @@ namespace Jularr.E2E.Tests
                 var mount = page.Locator("form").Filter(new() { Has = page.Locator("[name=SharePath]") });
                 await mount.Locator("[name=Name]").FillAsync("Library");
                 await mount.Locator("[name=SharePath]").SelectOptionAsync(folders.Library);
-                await mount.Locator("[name=IsReadOnly][value=False]").CheckAsync();
+                await Steps.ChooseSegmentAsync(mount, "IsReadOnly", "False");
                 await Steps.SubmitAsync(page, mount);
 
                 var library = Steps.FormWith(page, "Add library path");

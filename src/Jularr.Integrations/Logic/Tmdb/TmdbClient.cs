@@ -87,6 +87,61 @@ namespace Jularr.Integrations.Logic.Tmdb
                 : [];
         }
 
+        // A discover list narrowed by Discover's filters; a rating order counts only titles with enough votes.
+        public async Task<IReadOnlyList<TmdbSearchResult>> DiscoverAsync(TmdbConnection connection, TmdbMediaKind kind, TmdbDiscoverQuery query, int page, CancellationToken ct)
+        {
+            var movie = kind == TmdbMediaKind.Movie;
+            var dateField = movie ? "primary_release_date" : "first_air_date";
+            var parameters = new List<KeyValuePair<string, string>>
+            {
+                new("page", Math.Clamp(page, 1, 500).ToString(CultureInfo.InvariantCulture)),
+                new("include_adult", query.IncludesAdult ? "true" : "false"),
+                new("sort_by", query.Sort switch
+                {
+                    TmdbDiscoverSort.Rating => "vote_average.desc",
+                    TmdbDiscoverSort.Released => dateField + ".desc",
+                    TmdbDiscoverSort.Title => movie ? "title.asc" : "name.asc",
+                    _ => "popularity.desc"
+                })
+            };
+            if (query.Sort == TmdbDiscoverSort.Rating) parameters.Add(new("vote_count.gte", "300"));
+            if (query.Sort == TmdbDiscoverSort.Released && query.YearTo is null)
+            {
+                parameters.Add(new(dateField + ".lte", DateOnly.FromDateTime(DateTime.UtcNow).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)));
+            }
+            if (query.GenreIds.Count > 0) parameters.Add(new("with_genres", string.Join(',', query.GenreIds)));
+            if (query.YearFrom is { } from) parameters.Add(new(dateField + ".gte", from.ToString(CultureInfo.InvariantCulture) + "-01-01"));
+            if (query.YearTo is { } to) parameters.Add(new(dateField + ".lte", to.ToString(CultureInfo.InvariantCulture) + "-12-31"));
+            if (query.RuntimeFrom is { } shortest) parameters.Add(new("with_runtime.gte", shortest.ToString(CultureInfo.InvariantCulture)));
+            if (query.RuntimeTo is { } longest) parameters.Add(new("with_runtime.lte", longest.ToString(CultureInfo.InvariantCulture)));
+            if (query.Country is { Length: 2 } country) parameters.Add(new("with_origin_country", country));
+            if (query.ProviderIds.Count > 0 && query.Region is { Length: 2 } region)
+            {
+                parameters.Add(new("with_watch_providers", string.Join('|', query.ProviderIds)));
+                parameters.Add(new("watch_region", region));
+                parameters.Add(new("with_watch_monetization_types", "flatrate"));
+            }
+
+            if (!movie && query.SeriesStatuses.Count > 0) parameters.Add(new("with_status", string.Join('|', query.SeriesStatuses)));
+            using var document = await ReadAsync(connection, "discover/" + (movie ? "movie" : "tv"), parameters, ct);
+            return document.RootElement.TryGetProperty("results", out var results) && results.ValueKind == JsonValueKind.Array
+                ? results.EnumerateArray().Select(item => ParseResult(kind, item)).OfType<TmdbSearchResult>().ToArray()
+                : [];
+        }
+
+        // The flat-rate services TMDB lists for a region, most watched first.
+        public async Task<IReadOnlyList<TmdbProvider>> ReadProvidersAsync(TmdbConnection connection, TmdbMediaKind kind, string region, CancellationToken ct)
+        {
+            using var document = await ReadAsync(connection, "watch/providers/" + (kind == TmdbMediaKind.Movie ? "movie" : "tv"), [new("watch_region", region)], ct);
+            return [.. Items(document.RootElement, "results")
+                .Select(item => (Id: Int(item, "provider_id"), Name: Text(item, "provider_name"),
+                    Priority: item.TryGetProperty("display_priorities", out var priorities) && priorities.ValueKind == JsonValueKind.Object && priorities.TryGetProperty(region, out var place)
+                        && place.TryGetInt32(out var rank) ? rank : int.MaxValue))
+                .Where(item => item.Id is > 0 && item.Name is not null)
+                .OrderBy(item => item.Priority)
+                .Select(item => new TmdbProvider(item.Id!.Value, item.Name!))];
+        }
+
         public async Task<IReadOnlyList<TmdbSearchResult>> ReadRecommendationsAsync(TmdbConnection connection, TmdbMediaKind kind, int id, CancellationToken ct)
         {
             using var document = await ReadAsync(connection, (kind == TmdbMediaKind.Movie ? "movie/" : "tv/") + id.ToString(CultureInfo.InvariantCulture) + "/recommendations", [], ct);
@@ -221,7 +276,7 @@ namespace Jularr.Integrations.Logic.Tmdb
             JsonDocument document;
             try
             {
-                document = await ReadAsync(connection, (movie ? "movie/" : "tv/") + id.ToString(CultureInfo.InvariantCulture), [new("append_to_response", "external_ids")], ct);
+                document = await ReadAsync(connection, (movie ? "movie/" : "tv/") + id.ToString(CultureInfo.InvariantCulture), [new("append_to_response", "external_ids,watch/providers")], ct);
             }
             catch (TmdbException exception) when (exception.Failure == TmdbFailure.NotFound)
             {
@@ -238,7 +293,17 @@ namespace Jularr.Integrations.Logic.Tmdb
                     ImagePath(Text(item, "poster_path")), ImagePath(Text(item, "backdrop_path")), Number(item, "popularity"), Number(item, "vote_average"), Int(item, "vote_count"), imdb,
                     item.TryGetProperty("adult", out var adult) && adult.ValueKind == JsonValueKind.True)
                 {
-                    TvdbId = !movie && external.ValueKind == JsonValueKind.Object && Int(external, "tvdb_id") is > 0 and var tvdb ? tvdb : null
+                    TvdbId = !movie && external.ValueKind == JsonValueKind.Object && Int(external, "tvdb_id") is > 0 and var tvdb ? tvdb : null,
+                    GenreIds = [.. Items(item, "genres").Select(genre => Int(genre, "id")).OfType<int>()],
+                    Runtime = movie ? Int(item, "runtime") : Items(item, "episode_run_time").Where(value => value.ValueKind == JsonValueKind.Number).Select(value => value.GetInt32()).FirstOrDefault() is > 0 and var each ? each : null,
+                    Episodes = movie ? null : Int(item, "number_of_episodes"),
+                    Status = Text(item, "status"),
+                    Country = Items(item, "origin_country").Where(value => value.ValueKind == JsonValueKind.String).Select(value => value.GetString()).FirstOrDefault()
+                        ?? Items(item, "production_countries").Select(country => Text(country, "iso_3166_1")).FirstOrDefault(),
+                    ProviderIds = WatchRegion(connection) is { } region && item.TryGetProperty("watch/providers", out var providers) && providers.TryGetProperty("results", out var regions)
+                        && regions.ValueKind == JsonValueKind.Object && regions.TryGetProperty(region, out var available)
+                        ? [.. Items(available, "flatrate").Select(provider => Int(provider, "provider_id")).OfType<int>().Distinct()]
+                        : []
                 };
             }
         }
@@ -353,6 +418,23 @@ namespace Jularr.Integrations.Logic.Tmdb
         private static string? Text(JsonElement element, string name) =>
             element.ValueKind == JsonValueKind.Object && element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String
                 && value.GetString()?.Trim() is { Length: > 0 } text ? text : null;
+
+        // The region of the connection's language, such as DE of de-DE.
+        public static string? Region(TmdbConnection connection) => connection.Language.Split('-') is [_, { Length: 2 } country] ? country.ToUpperInvariant() : null;
+
+        // Streaming services are listed per country: the connection's own, else the language's usual one, such as DE for de.
+        public static string? WatchRegion(TmdbConnection connection)
+        {
+            if (Region(connection) is { } region) return region;
+            try
+            {
+                return new RegionInfo(CultureInfo.CreateSpecificCulture(connection.Language).Name).TwoLetterISORegionName is { Length: 2 } country ? country : null;
+            }
+            catch (Exception exception) when (exception is CultureNotFoundException or ArgumentException)
+            {
+                return null;
+            }
+        }
 
         private static int? Int(JsonElement element, string name) =>
             element.ValueKind == JsonValueKind.Object && element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out var number)

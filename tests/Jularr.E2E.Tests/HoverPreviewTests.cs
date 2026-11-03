@@ -2,7 +2,7 @@ using Microsoft.Playwright;
 
 namespace Jularr.E2E.Tests
 {
-    // The preview of a cover: after a rest of 550 ms of the mouse the card opens a panel over the row with the description or the muted trailer; a touch device
+    // The preview of a cover: after a rest of 2 s of the mouse the card opens a panel over the row with the description or the muted trailer; a touch device
     // starts it by itself when a card lingers, unless the profile switched that off.
     [TestClass]
     public sealed class HoverPreviewTests
@@ -75,7 +75,7 @@ namespace Jularr.E2E.Tests
                 Assert.AreEqual(0, asked.Count, "a control of the card starts no preview");
                 await Assertions.Expect(panel).ToHaveCountAsync(0);
 
-                // Resting on the cover: nothing before the delay of 550 ms, then the panel with the trailer, as high as the card and 1.84 times as wide.
+                // Resting on the cover: nothing before the delay of 2 s, then the panel with the trailer, as high as the card and 1.84 times as wide.
                 await page.Mouse.MoveAsync(5, 5);
                 await film.Locator(".media-card__art").HoverAsync();
                 await page.WaitForTimeoutAsync(300);
@@ -104,7 +104,7 @@ namespace Jularr.E2E.Tests
                 await Assertions.Expect(panel.Locator(".media-card__preview-meta")).ToContainTextAsync("1h 46m");
                 await Assertions.Expect(panel.Locator(".media-card__description")).ToContainTextAsync("A film that has a trailer.");
 
-                // One muted frame, very wide and cropped; none of the provider's controls are reachable.
+                // One muted frame, as high as its window and three times as wide; none of the provider's controls are reachable.
                 var frame = panel.Locator("iframe");
                 await Assertions.Expect(frame).ToHaveCountAsync(1);
                 var source = await frame.GetAttributeAsync("src");
@@ -113,7 +113,8 @@ namespace Jularr.E2E.Tests
                 StringAssert.Contains(source, "controls=0");
                 StringAssert.Contains(source, "enablejsapi=1");
                 var frameBox = (await frame.BoundingBoxAsync())!;
-                Assert.IsTrue(frameBox.Width > crop.Width * 2 && frameBox.Height > crop.Height, "the frame is larger than its window");
+                Assert.IsTrue(frameBox.Width > crop.Width * 2, "the frame is much wider than its window");
+                Assert.AreEqual(crop.Height, frameBox.Height, 1.5f, "the frame is as high as its window");
                 await Assertions.Expect(media).ToHaveCSSAsync("overflow", "hidden");
                 await Assertions.Expect(frame).ToHaveCSSAsync("pointer-events", "none");
 
@@ -273,10 +274,15 @@ namespace Jularr.E2E.Tests
                 await page.AddInitScriptAsync("const query = window.matchMedia.bind(window); window.matchMedia = text => text.includes('hover: hover') ? query('not all') : text.includes('hover: none') || text.includes('pointer: coarse') ? query('all') : query(text);");
                 var asked = new List<(string Url, DateTime At)>();
                 page.Request += (_, request) => { if (request.Url.Contains("/MediaPreview", StringComparison.Ordinal)) asked.Add((request.Url, DateTime.UtcNow)); };
-                var loaded = DateTime.UtcNow;
                 await page.GotoAsync("/");
                 await Assertions.Expect(page.Locator("[data-autoplay-previews]")).ToHaveAttributeAsync("data-autoplay-previews", "true");
                 var panel = page.Locator(".media-card__preview");
+
+                // The highlights fill the top of a phone: the shelf comes into the middle of the screen first.
+                await page.Locator(".media-shelf", new() { Has = page.Locator(".media-card", new() { HasText = "Trailer Film" }) }).First.EvaluateAsync("shelf => shelf.scrollIntoView({ block: 'center' })");
+                await page.WaitForTimeoutAsync(300);
+                asked.Clear();
+                var loaded = DateTime.UtcNow;
 
                 // Nothing is loaded while the card has not lingered yet; then the panel opens by itself, muted, one at a time.
                 await page.WaitForTimeoutAsync(1200);

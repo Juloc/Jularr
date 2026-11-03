@@ -149,6 +149,39 @@ namespace Jularr.Integrations.Data.Tmdb
         Upcoming = 4
     }
 
+    // TMDB's orders of a discover list.
+    internal enum TmdbDiscoverSort : byte
+    {
+        Popularity = 1,
+        Rating = 2,
+        Released = 3,
+        Title = 4
+    }
+
+    // What a discover list is narrowed by; an empty choice narrows nothing. Genres must all match, the services and statuses any one.
+    internal sealed class TmdbDiscoverQuery
+    {
+        public TmdbDiscoverSort Sort { get; init; } = TmdbDiscoverSort.Popularity;
+        public IReadOnlyList<int> GenreIds { get; init; } = [];
+        // Years of the first release, both included.
+        public int? YearFrom { get; init; }
+        public int? YearTo { get; init; }
+        // Minutes, both included.
+        public int? RuntimeFrom { get; init; }
+        public int? RuntimeTo { get; init; }
+        // ISO 3166-1 alpha-2.
+        public string? Country { get; init; }
+        // Flat-rate services in the region.
+        public IReadOnlyList<int> ProviderIds { get; init; } = [];
+        public string? Region { get; init; }
+        // Series only: 0 returning, 1 planned, 2 in production, 3 ended, 4 canceled, 5 pilot.
+        public IReadOnlyList<int> SeriesStatuses { get; init; } = [];
+        public bool IncludesAdult { get; init; }
+    }
+
+    // A streaming service TMDB lists for a region.
+    internal sealed record TmdbProvider(int Id, string Name);
+
     internal enum TmdbFailure : byte
     {
         Unavailable = 1,
@@ -219,6 +252,16 @@ namespace Jularr.Integrations.Data.Tmdb
         public bool IsAdult { get; }
         // A series' link to TheTVDB.
         public int? TvdbId { get; init; }
+        public IReadOnlyList<int> GenreIds { get; init; } = [];
+        // Minutes of the film or of one episode.
+        public int? Runtime { get; init; }
+        public int? Episodes { get; init; }
+        // TMDB's own words, such as Released or Returning Series.
+        public string? Status { get; init; }
+        // ISO 3166-1 alpha-2, the first country of origin.
+        public string? Country { get; init; }
+        // The flat-rate streaming services in the connection's region.
+        public IReadOnlyList<int> ProviderIds { get; init; } = [];
     }
 
     // A language (ISO 639-1), its region (ISO 3166-1) and the texts TMDB has in it.

@@ -1,3 +1,5 @@
+@use "HitArea";
+
 // The bar answers to its own width, not the window's: the sidebar changes how much room it has.
 // It never wraps: labels go first, then the single types, leaving the all capsule and one icon per area.
 .capsule-bar {
@@ -30,7 +32,7 @@
         &::-webkit-scrollbar { display: none; }
     }
 
-    &__tools { display: flex; flex: none; align-items: center; gap: 5px; }
+    &__tools { --hit-gap-x: 3px; display: flex; flex: none; align-items: center; gap: 5px; }
 
     &__all {
         display: inline-flex;
@@ -50,6 +52,8 @@
 
         &:hover { color: var(--text); }
         &--on, &--on:hover { border-color: var(--accent); background: var(--accent); color: var(--accent-contrast); }
+
+        @include HitArea.phone-hit-area;
     }
 }
 
@@ -78,6 +82,9 @@
         font-size: var(--text-control);
         font-weight: 810;
         text-decoration: none;
+
+        // The partial mark takes ::after, so the tap overlay takes ::before; the masters sit 2px apart.
+        @include HitArea.phone-hit-area(2px, $pseudo: before, $border: 0px);
 
         &:hover, &--solo { background: var(--accent-soft); }
         &--solo { outline: 1px solid var(--accent-edge); outline-offset: -1px; }

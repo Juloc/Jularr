@@ -105,7 +105,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
 
         public async Task<IReadOnlyList<TmdbSearchResult>> ReadFeedAsync(TmdbConnection connection, MediaType mediaType, DiscoverFeedType feed, int page, CancellationToken ct)
         {
-            var region = connection.Language.Split('-') is [_, { Length: 2 } country] ? country.ToUpperInvariant() : null;
+            var region = TmdbClient.Region(connection);
             var failedKey = "metadata.feed.failed." + connection.Language;
             if (_cache.TryGetValue(failedKey, out string? failure))
             {
@@ -121,6 +121,37 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                 var translated = Translate(exception);
                 if (translated is ServiceUnavailableException unavailable) _cache.Set(failedKey, unavailable.Code, new MemoryCacheEntryOptions { AbsoluteExpirationRelativeToNow = FailureLifetime, Size = 1 });
                 throw translated;
+            }
+        }
+
+        // A discover list narrowed by Discover's filters.
+        public async Task<IReadOnlyList<TmdbSearchResult>> DiscoverAsync(TmdbConnection connection, MediaType mediaType, TmdbDiscoverQuery query, int page, CancellationToken ct)
+        {
+            try
+            {
+                return await _tmdb.DiscoverAsync(connection, Kind(mediaType), query, page, ct);
+            }
+            catch (TmdbException exception)
+            {
+                throw Translate(exception);
+            }
+        }
+
+        // The streaming services of the language's country, kept a day.
+        public async Task<IReadOnlyList<TmdbProvider>> ReadProvidersAsync(TmdbConnection connection, MediaType mediaType, CancellationToken ct)
+        {
+            if (TmdbClient.WatchRegion(connection) is not { } region) return [];
+            var key = "metadata.providers." + mediaType + "." + region;
+            if (_cache.TryGetValue(key, out IReadOnlyList<TmdbProvider>? cached)) return cached!;
+            try
+            {
+                var providers = await _tmdb.ReadProvidersAsync(connection, Kind(mediaType), region, ct);
+                _cache.Set(key, providers, new MemoryCacheEntryOptions { AbsoluteExpirationRelativeToNow = TimeSpan.FromDays(1), Size = Math.Max(1, providers.Count) });
+                return providers;
+            }
+            catch (TmdbException exception)
+            {
+                throw Translate(exception);
             }
         }
 

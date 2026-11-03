@@ -1,17 +1,40 @@
 @use "../../../Framework/Components/MediaCard";
+@use "../../../Framework/Components/CapsuleBar";
 
-.works-search-controls, .works-search-progress {
+// A library search that runs or was just asked for: one quiet line of its state, its progress and its results under the toolbar.
+.works-search-run {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 12px;
-    margin-bottom: 16px;
+    gap: 6px 12px;
+    margin-bottom: 12px;
+    font-size: var(--text-small);
 
-    form { margin: 0; }
-    progress { flex: 1 1 160px; max-width: 360px; accent-color: var(--accent); }
+    details { flex-basis: 100%; }
 }
 
-.works-search-scope { flex: 1 1 280px; margin: 0; color: var(--muted); font-size: var(--text-small); }
+.works-search-progress {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+
+    form { margin: 0; }
+    progress { flex: 1 1 120px; max-width: 240px; accent-color: var(--accent); }
+}
+
+// The figures under the list, as Sonarr's footer: labels quiet, values in the text colour.
+.works-footer {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 22px;
+    margin: 14px 4px 0;
+    font-size: var(--text-small);
+
+    &__fact { display: inline-flex; gap: 6px; }
+    &__label { color: var(--muted); }
+    &__value { font-weight: 740; }
+}
 
 // The library list on the list kit: the grid of its columns at three widths (the script builds the same from the person's choice of columns), the drawers' fields, the report and the dialogs.
 
@@ -28,6 +51,22 @@
     --list-columns: minmax(0, 1fr) minmax(138px, 190px) minmax(130px, 190px);
 
     .list-row { min-height: 112px; }
+}
+
+// The order beside the search: what it sorts by and the arrow of its direction, which points down while it descends.
+.works-sort {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+
+    &__direction .ui-icon { transition: transform var(--transition); }
+    &__direction--down .ui-icon { transform: rotate(180deg); }
+}
+
+// A phone: the search takes its own line, the order, views and filters the next.
+@media (max-width: 640px) {
+    .list-toolbar__tools { flex-wrap: wrap; row-gap: 10px; }
+    .list-toolbar__tools .search-box { flex: 1 1 100%; }
 }
 
 // The poster view: the shared grid of covers, a little apart from the toolbar.
