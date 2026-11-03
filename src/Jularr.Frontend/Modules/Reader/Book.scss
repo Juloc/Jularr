@@ -10,7 +10,9 @@
     aspect-ratio: calc(var(--reader-columns, 1) * 148 / 204); touch-action: pinch-zoom; cursor: grab;
     &:active { cursor: grabbing; }
     &[hidden] { display: none; }
-    &[data-book-columns="1"] { --columns: 1; clip-path: inset(-50px -45px -60px 0); }
+    // One page is the right sheet of the open book: it shrinks about its own middle, so it stays centred and its spine edge shows.
+    &[data-book-columns="1"] { --columns: 1; clip-path: inset(-50px -45px -60px calc((1 - var(--book-scale)) * 50%)); }
+    &[data-book-columns="1"] &__body { transform-origin: 75% 0; }
     &__camera { position: absolute; inset: 0; }
     &[data-book-direction=rtl] &__camera { transform: scaleX(-1); }
     &[data-book-direction=rtl] .reader__page-print { transform: scaleX(-1); }
