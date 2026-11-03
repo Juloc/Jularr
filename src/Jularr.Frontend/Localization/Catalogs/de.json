@@ -5154,9 +5154,113 @@
    "{0} releases from {1} sources · {2} did not answer",
    "{0} Treffer aus {1} Quellen · {2} ohne Antwort"
   ],
+  "wanted.search.filters": [
+   "Filters and sorting",
+   "Filter und Sortierung"
+  ],
+  "wanted.search.filter.language": [
+   "All languages",
+   "Alle Sprachen"
+  ],
+  "wanted.search.filter.protocol": [
+   "All protocols",
+   "Alle Protokolle"
+  ],
+  "wanted.search.protocol.Usenet": [
+   "Usenet",
+   "Usenet"
+  ],
+  "wanted.search.protocol.Torrent": [
+   "Torrent",
+   "Torrent"
+  ],
+  "wanted.search.protocol.Direct": [
+   "Direct download",
+   "Direkter Download"
+  ],
+  "wanted.search.filter.age": [
+   "Any age",
+   "Jedes Alter"
+  ],
+  "wanted.search.age.1": [
+   "Up to 1 day",
+   "Bis 1 Tag"
+  ],
+  "wanted.search.age.7": [
+   "Up to 7 days",
+   "Bis 7 Tage"
+  ],
+  "wanted.search.age.30": [
+   "Up to 30 days",
+   "Bis 30 Tage"
+  ],
+  "wanted.search.age.90": [
+   "Up to 90 days",
+   "Bis 90 Tage"
+  ],
+  "wanted.search.age.365": [
+   "Up to 1 year",
+   "Bis 1 Jahr"
+  ],
+  "wanted.search.filter.size": [
+   "Any size",
+   "Jede Größe"
+  ],
+  "wanted.search.size.0": [
+   "Under 100 MB",
+   "Unter 100 MB"
+  ],
+  "wanted.search.size.1": [
+   "100 MB to 1 GB",
+   "100 MB bis 1 GB"
+  ],
+  "wanted.search.size.2": [
+   "1 to 5 GB",
+   "1 bis 5 GB"
+  ],
+  "wanted.search.size.3": [
+   "5 to 20 GB",
+   "5 bis 20 GB"
+  ],
+  "wanted.search.size.4": [
+   "Over 20 GB",
+   "Über 20 GB"
+  ],
+  "wanted.search.sort": [
+   "Sort",
+   "Sortieren"
+  ],
+  "wanted.search.sort.source": [
+   "Sort by source",
+   "Nach Quelle"
+  ],
+  "wanted.search.sort.score": [
+   "Best score",
+   "Beste Wertung"
+  ],
+  "wanted.search.sort.newest": [
+   "Newest",
+   "Neueste"
+  ],
+  "wanted.search.sort.largest": [
+   "Largest",
+   "Größte"
+  ],
+  "wanted.search.sort.smallest": [
+   "Smallest",
+   "Kleinste"
+  ],
+  "wanted.search.filters.clear": [
+   "Clear filters",
+   "Filter zurücksetzen"
+  ],
+  "wanted.search.noMatch": [
+   "No release matches the filters.",
+   "Kein Treffer passt zu den Filtern."
+  ],
   "wanted.search.filtered": [
-   "{0} of {1} releases · {2}",
-   "{0} von {1} Treffern · {2}"
+   "{0} of {1} releases",
+   "{0} von {1} Treffern"
   ],
   "wanted.search.source.limit": [
    "Limit reached, try later",

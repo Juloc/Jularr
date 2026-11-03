@@ -65,9 +65,15 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                 return new WantedReleaseCandidateV1(evaluation.Candidate.Id, offer.Title, offer.ConnectionName, offer.SizeBytes, offer.PublishedAt?.UtcDateTime, evaluation.Score?.QualityKey,
                     evaluation.Decision switch { SelectionDecision.Eligible => ReleaseDecisionType.Eligible, SelectionDecision.ManualReview => ReleaseDecisionType.ManualReview, _ => ReleaseDecisionType.Rejected },
                     evaluation.PreferenceScore, reason.Item1, TextLimit.Cut(reason.Item2, 1000), book?.Kind, book?.VolumeStart, book?.VolumeEnd, book?.IsComplete ?? false,
-                    evaluation.Candidate.SizeMark, new BaseDataList<ReleaseScorePointV1>(points), TextLimit.Cut(string.Join(", ", ReleaseGroupLogic.Split(evaluation.Candidate.Parsed?.ReleaseGroup)) is { Length: > 0 } groups ? groups : null, 64));
+                    evaluation.Candidate.SizeMark, new BaseDataList<ReleaseScorePointV1>(points), TextLimit.Cut(string.Join(", ", ReleaseGroupLogic.Split(evaluation.Candidate.Parsed?.ReleaseGroup)) is { Length: > 0 } groups ? groups : null, 64),
+                    Protocol(offer), [.. evaluation.Candidate.Languages.Select(language => TextLimit.Cut(language, 16)!).Distinct().Take(16)]);
             }).ToArray());
         }
+
+        // The way a grab fetches the offer, as the grab itself decides the client.
+        private static ReleaseProtocol Protocol(ReleaseOffer offer) => DirectSources.IsDirectOffer(offer.Guid) ? ReleaseProtocol.Direct
+            : offer.Transport == DownloadTransport.Torrent || offer.DownloadUri?.Scheme.Equals("magnet", StringComparison.OrdinalIgnoreCase) == true
+                || offer.DownloadUri?.AbsolutePath.EndsWith(".torrent", StringComparison.OrdinalIgnoreCase) == true ? ReleaseProtocol.Torrent : ReleaseProtocol.Usenet;
     }
 
     [ServiceEndpoint("POST", "/api/v1/admin/wanted/{wantedItemId:long}/search/sources")]
