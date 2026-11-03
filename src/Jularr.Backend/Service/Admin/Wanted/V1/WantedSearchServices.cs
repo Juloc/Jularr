@@ -34,7 +34,16 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             var (target, indexers) = await Context.ExecuteBatchAsync(async (ctx, ct) =>
                 (await ctx.ReadWantedTargetAsync(Parameters.WantedItemId, ct), await ctx.ReadEnabledConnectionsAsync(AcquisitionConnectionRole.Search, ct)), CancellationToken);
 
-            // A manual search shows every candidate and keeps the automatic schedule.
+            // One source of the list can be asked on its own; a manual search shows every candidate and keeps the automatic schedule.
+            if (Data.AcquisitionConnectionId is { } connectionId)
+            {
+                indexers = _acquisition.ReadSources(target, indexers).All.Where(connection => connection.Id == connectionId).ToArray();
+                if (indexers.Count == 0)
+                {
+                    throw new DataValidationException(nameof(SearchWantedDataV1.AcquisitionConnectionId), "source_not_available");
+                }
+            }
+
             var scope = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadSearchScopeAsync(target, Data.ParentUnitNumber, Data.UnitNumber, ct), CancellationToken);
             var result = await _acquisition.SearchAsync(Context, target, indexers, SearchDepth.Normal, automatic: false, CancellationToken, scope, Data.Language);
             if (result.IndexersUnavailable)
@@ -58,6 +67,31 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                     evaluation.PreferenceScore, reason.Item1, TextLimit.Cut(reason.Item2, 1000), book?.Kind, book?.VolumeStart, book?.VolumeEnd, book?.IsComplete ?? false,
                     evaluation.Candidate.SizeMark, new BaseDataList<ReleaseScorePointV1>(points), TextLimit.Cut(string.Join(", ", ReleaseGroupLogic.Split(evaluation.Candidate.Parsed?.ReleaseGroup)) is { Length: > 0 } groups ? groups : null, 64));
             }).ToArray());
+        }
+    }
+
+    [ServiceEndpoint("POST", "/api/v1/admin/wanted/{wantedItemId:long}/search/sources")]
+    public sealed class ReadWantedSearchSourcesV1 : AdminService<WantedItemParametersV1, SearchWantedDataV1>
+    {
+        private readonly WantedAcquisition _acquisition;
+
+        internal ReadWantedSearchSourcesV1(WantedAcquisition acquisition)
+        {
+            _acquisition = acquisition;
+        }
+
+        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<BaseDataList<WantedSearchSourceV1>>()];
+        protected override ModuleRequirement GetInstanceModules(WantedItemParametersV1 parameters) => ModuleRequirement.All("Requests", "Acquisition");
+        protected override ServicePermission GetPermission(WantedItemParametersV1 parameters, Type resultType) => new("wanted.update");
+
+        protected override async Task<IServiceOutput> OnExecute()
+        {
+            // The sources a manual search asks, in the order of their priority; the search itself is one request per source.
+            var (target, connections) = await Context.ExecuteBatchAsync(async (ctx, ct) =>
+                (await ctx.ReadWantedTargetAsync(Parameters.WantedItemId, ct), await ctx.ReadEnabledConnectionsAsync(AcquisitionConnectionRole.Search, ct)), CancellationToken);
+            return new BaseDataList<WantedSearchSourceV1>(_acquisition.ReadSources(target, connections).All
+                .Select(connection => new WantedSearchSourceV1(connection.Id, connection.Name, connection.AcquisitionConnectionTypeId)).ToArray());
         }
     }
 
@@ -91,15 +125,20 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
         }
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
-        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<GrabWantedReleaseResultV1>()];
         protected override ModuleRequirement GetInstanceModules(WantedItemParametersV1 parameters) => ModuleRequirement.All("Requests", "Acquisition");
         protected override ServicePermission GetPermission(WantedItemParametersV1 parameters, Type resultType) => new("wanted.update");
 
         protected override async Task<IServiceOutput> OnExecute()
         {
-            // Only releases of the last search of this target can be taken.
-            var offer = _acquisition.FindOffer(Parameters.WantedItemId, Data.CandidateId)
-                ?? throw new DataValidationException(nameof(GrabWantedReleaseDataV1.CandidateId), "outdated_version");
+            // Only releases of the last searches of this target can be taken; a rejected one only when the person overrides the rejection.
+            var offer = _acquisition.FindOffer(Parameters.WantedItemId, Data.CandidateId, Data.OverridesRejection);
+            if (offer is null)
+            {
+                throw new DataValidationException(nameof(GrabWantedReleaseDataV1.CandidateId), !Data.OverridesRejection && _acquisition.FindOffer(Parameters.WantedItemId, Data.CandidateId, true) is not null
+                    ? "release_rejected" : "outdated_version");
+            }
+
             var (target, clients) = await Context.ExecuteBatchAsync(async (ctx, ct) =>
                 (await ctx.ReadWantedTargetAsync(Parameters.WantedItemId, ct), await ctx.ReadEnabledConnectionsAsync(AcquisitionConnectionRole.Download, ct)), CancellationToken);
             if (target.IsDownloading && target.MediaTypeId != MediaType.Series)
@@ -108,8 +147,8 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             }
 
             var quality = AcquisitionSelectionLogic.QualityKey(AcquisitionSelectionLogic.GetKind(target.MediaTypeId, target.MediaSubtypeId), offer.Title, target.PlatformIgdbId);
-            await _acquisition.GrabAsync(Context, target, offer, quality, clients, CancellationToken, Auth.AccountId);
-            return new UpdateResult(true);
+            var prioritized = await _acquisition.GrabAsync(Context, target, offer, quality, clients, CancellationToken, Auth.AccountId, startsNow: Data.StartsNow);
+            return new GrabWantedReleaseResultV1(true, prioritized);
         }
     }
 

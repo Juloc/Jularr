@@ -9,7 +9,7 @@ namespace Jularr.E2E.Tests
     {
         [TestMethod]
         [Timeout(300_000)]
-        public async Task SlowBookSource_DoesNotLoseOtherResults_AndNavigationCancelsTheNextSearch()
+        public async Task SlowBookSource_DoesNotLoseOtherResults_AndLeavingTheSearchCancelsIt()
         {
             await using var sources = await BookSources.StartAsync();
             await using var jularr = await JularrInstance.StartAsync();
@@ -26,17 +26,20 @@ namespace Jularr.E2E.Tests
                        ('Slow catalog', 3, '{{sources.Address}}/slow/');
                 """);
 
+            // The page shows the same panel; the ready source answers at once, the slow one gives up on its own and is said to have no answer, never "no releases".
             await page.GotoAsync("/Admin/Wanted/501/Search");
             var document = await page.QuerySelectorAsync("html");
-            await page.GetByRole(AriaRole.Button, new() { Name = "Start search", Exact = true }).ClickAsync();
             var result = page.GetByRole(AriaRole.Row).Filter(new() { HasText = "Ready catalog" });
             await Assertions.Expect(result).ToContainTextAsync("Pride and Prejudice", new() { Timeout = 45_000 });
-            Assert.IsTrue(await document!.EvaluateAsync<bool>("element => element.isConnected"), "The normal in-place form must display its results.");
-            await sources.FirstCancelled.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            await sources.FirstCancelled.Task.WaitAsync(TimeSpan.FromSeconds(45));
+            await Assertions.Expect(page.GetByRole(AriaRole.Button, new() { Name = "Slow catalog" })).ToContainTextAsync("No answer in time", new() { Timeout = 10_000 });
+            Assert.IsTrue(await document!.EvaluateAsync<bool>("element => element.isConnected"), "The search must not replace the page.");
             await Assertions.Expect(page.Locator("main [role=alert]")).ToHaveCountAsync(0);
+            await Assertions.Expect(page.Locator("main [data-search-empty]")).ToBeHiddenAsync();
             await Evidence.SaveAsync(page, "manual-book-search-slow-source");
 
-            await page.GetByRole(AriaRole.Button, new() { Name = "Start search", Exact = true }).ClickAsync();
+            // Searching again asks the sources again; leaving the page cancels what is still running.
+            await page.GetByRole(AriaRole.Button, new() { Name = "Search again" }).ClickAsync();
             await sources.SecondStarted.Task.WaitAsync(TimeSpan.FromSeconds(10));
             await page.GotoAsync("/Admin/Wanted/501");
             await sources.SecondCancelled.Task.WaitAsync(TimeSpan.FromSeconds(10));

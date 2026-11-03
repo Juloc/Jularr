@@ -3,8 +3,9 @@
     align-items: center;
     gap: 6px;
 
+    // As high as the styled dropdown that replaces it, so nothing shifts when the script arrives.
     &__control {
-        height: 34px;
+        height: var(--control-height);
         max-width: 150px;
         padding: 0 11px;
         border: 1px solid var(--border);
@@ -18,4 +19,5 @@
 
 }
 
-html.choice-select-ready .choice-select__apply { display: none; }
+// With script the choice is the submit; the media query holds before the first paint, so nothing shifts when the script arrives.
+@media (scripting: enabled) { .choice-select__apply { display: none; } }

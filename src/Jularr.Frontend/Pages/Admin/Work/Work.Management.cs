@@ -127,7 +127,7 @@ namespace Jularr.Frontend.Pages.Admin.Work
                     form.Hidden(data => data.UnitNumber);
                     form.Submit(Labeled("search", work.MediaTypeId == MediaType.Series ? "work.searchMonitored" : "work.search").Primary());
                 }, Address(Tab, "Automatic"), csrf, new SearchWantedDataV1()));
-                if (work.MediaTypeId is not (MediaType.Series or MediaType.Game)) actions.Add(new A(Icon("user"), new Text("work.interactive")).Class("button").Attribute("href", WantedStatus.Home(wanted.Id) + "/Search"));
+                if (work.MediaTypeId is not (MediaType.Series or MediaType.Game)) actions.Add(new A(Icon("user"), new Text("work.interactive")).Class("button").Attribute("href", WantedStatus.Search(wanted.Id)).Attribute("data-search-dialog", ""));
                 actions.Add(new Form<WorkParametersV1>(form => form.Submit(Labeled("sync", "work.refresh")), Address(Tab, "Refresh"), csrf, new WorkParametersV1(work.Id)));
                 if (work.MediaTypeId != MediaType.Game) actions.Add(new Button(Icon("pencil"), new Text("work.edit")).Attribute("data-dialog-open", "work-edit").Attribute("type", "button"));
             }
@@ -429,7 +429,7 @@ namespace Jularr.Frontend.Pages.Admin.Work
                         lead = new PostForm(Address(Tab, "Monitor"), csrf, [("isPaused", group.IsPaused == true ? "false" : "true"), ("wantedItemId", id)],
                             new SwitchButton(group.IsPaused != true, group.IsPaused == true ? "work.monitor.start" : "work.monitor.stop"));
                         icons.Add(new PostForm(Address(Tab, "Automatic"), csrf, [("wantedItemId", id)], IconSubmit("search", "work.search")));
-                        icons.Add(new A(Icon("user", 22)).Class("work-icon").Attribute("href", WantedStatus.Home(wantedId) + "/Search").TextAttribute("aria-label", "work.interactive").TextAttribute("title", "work.interactive"));
+                        icons.Add(new A(Icon("user", 22)).Class("work-icon").Attribute("href", WantedStatus.Search(wantedId)).Attribute("data-search-dialog", "").TextAttribute("aria-label", "work.interactive").TextAttribute("title", "work.interactive"));
                         if (_platformTargets.ContainsKey(wantedId)) icons.Add(IconSubmit("pencil", "work.edit").Attribute("type", "button").Attribute("data-dialog-open", "work-edit-" + id));
                     }
 
@@ -598,12 +598,14 @@ namespace Jularr.Frontend.Pages.Admin.Work
                 ? Whole(unit.Number) is { } season ? new SearchWantedDataV1(season) : null
                 : unit.ParentWorkUnitId is { } parent && seasonNumbers.TryGetValue(parent, out var number) && Whole(number) is { } seasonNumber && Whole(unit.Number) is { } episode ? new SearchWantedDataV1(seasonNumber, episode) : null;
             if (scope is null || _wanted is null) return new Span();
+            if (!automaticSearch) return new A(Icon("user", 22)).Class("work-icon").Attribute("href", WantedStatus.Search(_wanted.Id, scope.ParentUnitNumber, scope.UnitNumber)).Attribute("data-search-dialog", "")
+                .TextAttribute("aria-label", labelKey).TextAttribute("title", labelKey);
             return new Form<SearchWantedDataV1>(form =>
             {
                 form.Hidden(data => data.ParentUnitNumber);
                 form.Hidden(data => data.UnitNumber);
-                form.Content(IconSubmit(automaticSearch ? "search" : "user", labelKey));
-            }, automaticSearch ? Address(Tab, "Automatic") : WantedStatus.Home(_wanted.Id) + "/Search?handler=Search", csrf, scope);
+                form.Content(IconSubmit("search", labelKey));
+            }, Address(Tab, "Automatic"), csrf, scope);
         }
 
         private IUiComponent UnitSwitch(WorkManagementUnitV1 unit, WorkManagementV1 work, string? csrf)

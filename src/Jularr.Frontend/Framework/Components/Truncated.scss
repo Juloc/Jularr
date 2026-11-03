@@ -15,7 +15,7 @@
         display: none;
         // Fixed, so a list row or a card that cuts off its content cannot cut the tip off too; Truncated.ts puts it under the text.
         position: fixed;
-        z-index: 40;
+        z-index: var(--z-tooltip);
         top: 0;
         left: 0;
         width: max-content;

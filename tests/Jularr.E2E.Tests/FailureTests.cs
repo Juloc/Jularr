@@ -28,7 +28,6 @@ namespace Jularr.E2E.Tests
                 fakes.HoldDownloads = true;
                 fakes.Offer(Film with { File = video });
                 await Steps.OpenSearchAsync(page, FakeServices.MovieTitle);
-                await Steps.SubmitAsync(page, Steps.FormWith(page, "Start search"));
                 await Steps.GrabAsync(page, Film);
                 await jularr.RestartAsync();
 
@@ -105,7 +104,6 @@ namespace Jularr.E2E.Tests
                 fakes.FailDownloads = true;
                 fakes.Offer(Film with { File = video });
                 await Steps.OpenSearchAsync(page, FakeServices.MovieTitle);
-                await Steps.SubmitAsync(page, Steps.FormWith(page, "Start search"));
                 await Steps.GrabAsync(page, Film);
                 var failed = await WaitForFailedDownloadAsync(page);
                 fakes.FailDownloads = false;
@@ -120,14 +118,13 @@ namespace Jularr.E2E.Tests
                 await Assertions.Expect(views.Locator("a[href='/Admin/Activity/Blocked']")).ToHaveCountAsync(1);
                 await Steps.SubmitAsync(page, failed.Locator("form").Filter(new() { Has = page.GetByRole(AriaRole.Button, new() { Name = "Retry" }) }));
                 await Steps.OpenSearchAsync(page, FakeServices.MovieTitle);
-                await Steps.SubmitAsync(page, Steps.FormWith(page, "Start search"));
                 await Assertions.Expect(page.Locator("tr", new() { HasText = Film.Title })).ToContainTextAsync("Failed or blocked before");
 
                 // The retried search may take it in the background first; then the page says it is already downloading.
                 if (!fakes.Grabbed.Contains(fakes.NzbAddress(LowerFilm).ToString()))
                 {
                     await Steps.FollowAsync(page, page.Locator("tr", new() { HasText = LowerFilm.Title }).Locator("form")
-                        .Filter(new() { Has = page.GetByRole(AriaRole.Button, new() { Name = "Select and download" }) }).Locator("button[type=submit]"));
+                        .Filter(new() { Has = page.GetByRole(AriaRole.Button, new() { Name = "In queue" }) }).Locator("button[type=submit]"));
                 }
 
                 var details = await Steps.WaitForAvailableAsync(page, FakeServices.MovieTitle);
