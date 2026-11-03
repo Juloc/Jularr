@@ -78,6 +78,7 @@ namespace Jularr.Backend.Logic.Acquisition
         {
             await ctx.RequireProfileFormatsAsync(input, ct);
             var row = new AcquisitionProfileRowData(null, input.Name, input.MediaTypeId, input.MediaSubtypeId, input.IsDefault, BuildDefinition(input, null), null);
+            await ctx.KeepWantedProfilesAsync(row, ct);
             await ctx.ClearDefaultProfileAsync(row, ct);
             var sql = new SqlStatement();
             sql.Statement =
@@ -115,6 +116,7 @@ namespace Jularr.Backend.Logic.Acquisition
 
             await ctx.RequireProfileFormatsAsync(input, ct);
             var row = new AcquisitionProfileRowData(state.Id, input.Name, input.MediaTypeId, input.MediaSubtypeId, input.IsDefault, BuildDefinition(input, state.Definition), state.Version);
+            if (!state.IsDefault) await ctx.KeepWantedProfilesAsync(row, ct);
             await ctx.ClearDefaultProfileAsync(row, ct);
             var sql = new SqlStatement();
             sql.Statement =
@@ -165,6 +167,49 @@ namespace Jularr.Backend.Logic.Acquisition
                 throw new DataValidationException(nameof(data.Id), "in_use");
             }
 
+        }
+
+        private static async Task KeepWantedProfilesAsync(this LogicContext ctx, AcquisitionProfileRowData row, CancellationToken ct)
+        {
+            // A new Anime default applies to Anime added from now on: wanted Anime without a profile of its own keeps the profile it follows today.
+            if (!row.IsDefault || row.MediaSubtypeId != MediaSubtype.Anime)
+            {
+                return;
+            }
+
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                UPDATE
+                    "WantedItems" AS wanted
+                SET
+                    "AcquisitionProfileId" = current."Id",
+                    "Version" = wanted."Version" + 1,
+                    "UpdatedAt" = now()
+                FROM
+                    "Works" AS work
+                    CROSS JOIN LATERAL (
+                        SELECT
+                            candidate."Id"
+                        FROM
+                            "AcquisitionProfiles" AS candidate
+                        WHERE
+                            candidate."MediaTypeId" = work."MediaTypeId"
+                            AND candidate."IsDefault"
+                            AND (candidate."MediaSubtypeId" IS NULL OR candidate."MediaSubtypeId" = work."MediaSubtypeId")
+                            AND candidate."Id" IS DISTINCT FROM @Id::bigint
+                        ORDER BY
+                            candidate."MediaSubtypeId" IS NULL
+                        LIMIT 1
+                    ) AS current
+                WHERE
+                    work."Id" = wanted."WorkId"
+                    AND wanted."AcquisitionProfileId" IS NULL
+                    AND work."MediaTypeId" = @MediaTypeId
+                    AND work."MediaSubtypeId" = @MediaSubtypeId;
+                """;
+            sql.Parameters.Add(row);
+            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
         }
 
         private static async Task ClearDefaultProfileAsync(this LogicContext ctx, AcquisitionProfileRowData row, CancellationToken ct)

@@ -17,8 +17,9 @@ namespace Jularr.Frontend.Framework
 
         public static readonly string[] Panes = [Profiles, Formats, Sizes, Release, Groups, Tags];
 
-        public static string PaneAddress(string pane, MediaType type, string home = ProfilesAddress) =>
-            home + "?tab=" + pane + "&mediaTypeId=" + ((byte)type).ToString(CultureInfo.InvariantCulture);
+        // The subtype (Anime, Manga, Light novel) narrows the profiles of its type; the other panes are about the type.
+        public static string PaneAddress(string pane, MediaType type, string home = ProfilesAddress, MediaSubtype? subtype = null) =>
+            home + "?tab=" + pane + "&mediaTypeId=" + ((byte)type).ToString(CultureInfo.InvariantCulture) + (subtype is { } value ? "&subtype=" + value : "");
 
     }
 }
