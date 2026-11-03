@@ -16,11 +16,12 @@ namespace Jularr.Backend.Data.Admin.Translation.V1
         public int PageSize { get; }
     }
 
-    // One book the server translated (part of) into one language: every model that has, with its sections translated (earlier versions of the
-    // model count) and those still showing an earlier version, out of the book's sections with text. Models, Done and Stale go together, most done first.
+    // One book the server translated (part of) into one language: its sections with a server text for every block (from any model; earlier versions of a
+    // model count), and every model that translated some of it with its own sections done and those still showing an earlier version, out of the book's
+    // sections with text. Models, Done and Stale go together, most done first.
     public sealed class TranslatedBookV1 : BaseResponse
     {
-        public TranslatedBookV1(long documentId, long workId, string title, string? volume, string language, int sections, string[] models, int[] done, int[] stale)
+        public TranslatedBookV1(long documentId, long workId, string title, string? volume, string language, int sections, int translated, string[] models, int[] done, int[] stale)
         {
             DocumentId = documentId;
             WorkId = workId;
@@ -28,6 +29,7 @@ namespace Jularr.Backend.Data.Admin.Translation.V1
             Volume = volume;
             Language = language;
             Sections = sections;
+            Translated = translated;
             Models = models;
             Done = done;
             Stale = stale;
@@ -52,6 +54,9 @@ namespace Jularr.Backend.Data.Admin.Translation.V1
         [DataField(typeof(TranslationFields), nameof(TranslationFields.Count))]
         public int Sections { get; }
 
+        [DataField(typeof(TranslationFields), nameof(TranslationFields.Count))]
+        public int Translated { get; }
+
         // Provider-qualified model ids such as "ollama:translategemma:12b".
         [DataField(typeof(TranslationFields), nameof(TranslationFields.Models))]
         public string[] Models { get; }
@@ -62,7 +67,7 @@ namespace Jularr.Backend.Data.Admin.Translation.V1
         [DataField(typeof(TranslationFields), nameof(TranslationFields.Counts))]
         public int[] Stale { get; }
 
-        // One model covers every section, so the translated EPUB downloads.
-        public bool IsComplete() => Sections > 0 && Done.Any(done => done >= Sections);
+        // Every section is translated, so the translated EPUB downloads.
+        public bool IsComplete() => Sections > 0 && Translated >= Sections;
     }
 }

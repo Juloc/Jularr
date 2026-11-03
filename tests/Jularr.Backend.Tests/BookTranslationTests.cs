@@ -465,6 +465,50 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task TranslatedEpub_TwoModelsThatTogetherCoverTheBook_AreOffered_AndBothNamed()
+        {
+            using var storage = new TemporaryDirectory();
+            var ollama = new FakeOllama();
+            await using var host = await CreateHostAsync(storage.Path, ollama);
+            var (first, _) = await ReadingTests.CreateBooksAsync(host, storage.Path, "First Book", "Second Book");
+            var document = await ReadingTests.OpenAsync(host, first);
+            await PrepareGermanReadersAsync(host);
+            await using var scope = host.Services.CreateAsyncScope();
+            var rounds = 0;
+            while (await Translate(scope)) Assert.IsTrue(++rounds < 200, "The job never finishes.");
+
+            // The small model keeps the first section only; the second is the larger model's, chosen for every block of it.
+            await host.Fixture.RunSqlAsync($$"""
+                UPDATE "ReadingResources" SET "Path" = ':localtranslation/v4/translategemma:12b/de/00001',
+                    "Bytes" = convert_to(replace(convert_from("Bytes", 'UTF8'), '"DE ', '"ZWOELF '), 'UTF8')
+                WHERE "ReadingDocumentId" = {{document.DocumentId}} AND "Path" = ':localtranslation/v4/translategemma:4b/de/00001';
+                INSERT INTO "ReadingTranslationChoices" ("ReadingDocumentId", "SectionIndex", "Language", "BlockIndex", "Model")
+                SELECT {{document.DocumentId}}, 1, 'de', block.position - 1, 'ollama:translategemma:12b'
+                FROM "ReadingResources" AS resource
+                    CROSS JOIN LATERAL jsonb_array_elements(convert_from(resource."Bytes", 'UTF8')::jsonb -> 'Texts') WITH ORDINALITY AS block (value, position)
+                WHERE resource."ReadingDocumentId" = {{document.DocumentId}} AND resource."Path" = ':localtranslation/v4/translategemma:12b/de/00001';
+                """);
+
+            // No single model covers the book, yet every block has its translation: offered, listed complete and downloadable, naming both models.
+            CollectionAssert.AreEqual(new[] { "de" }, (await ReadingTests.OpenAsync(host, first)).TranslatedLanguages);
+            var listed = (await ReadBooksAsync(host)).Items.Single(book => book.DocumentId == document.DocumentId && book.Language == "de");
+            Assert.IsTrue(listed.IsComplete() && listed.Translated == listed.Sections && listed.Done.All(done => done < listed.Sections), string.Join(",", listed.Done));
+            CollectionAssert.AreEquivalent(new[] { "ollama:translategemma:4b", "ollama:translategemma:12b" }, listed.Models);
+            using var epub = await DownloadEpubAsync(host, document.DocumentId);
+            StringAssert.Contains(ReadingTests.Entry(epub, "OEBPS/s00000.xhtml"), ">DE ");
+            StringAssert.Contains(ReadingTests.Entry(epub, "OEBPS/s00001.xhtml"), ">ZWOELF ");
+            var package = ReadingTests.Entry(epub, "OEBPS/content.opf");
+            StringAssert.Contains(package, "ollama:translategemma:4b</dc:contributor>");
+            StringAssert.Contains(package, "ollama:translategemma:12b</dc:contributor>");
+
+            // A block with no server text at all keeps the book incomplete.
+            await host.Fixture.RunSqlAsync("DELETE FROM \"ReadingResources\" WHERE \"Path\" = ':localtranslation/v4/translategemma:12b/de/00001'");
+            Assert.AreEqual(0, (await ReadingTests.OpenAsync(host, first)).TranslatedLanguages.Length);
+            using var incomplete = await host.SendAsync(HttpMethod.Get, "/api/v1/reading/documents/" + document.DocumentId + "/ebook?language=de");
+            Assert.AreEqual(HttpStatusCode.NotFound, incomplete.StatusCode);
+        }
+
+        [TestMethod]
         public async Task Job_ASectionWithoutText_IsDoneOnceAndTheRoundsMoveOn()
         {
             using var storage = new TemporaryDirectory();

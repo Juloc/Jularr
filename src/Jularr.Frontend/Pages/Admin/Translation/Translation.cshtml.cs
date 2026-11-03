@@ -78,8 +78,7 @@ namespace Jularr.Frontend.Pages.Admin.Translation
         private ListRow BookRow(TranslatedBookV1 book)
         {
             var title = new A(new Truncated(book.Title)).Class("list-identity__title").Attribute("href", "/Admin/Works/" + book.WorkId.ToString(CultureInfo.InvariantCulture));
-            var best = book.Done.Length == 0 ? 0 : book.Done.Max();
-            var sections = string.Format(CultureInfo.CurrentCulture, texts["translation.books.sections"], best.ToString("N0", CultureInfo.CurrentCulture), book.Sections.ToString("N0", CultureInfo.CurrentCulture));
+            var sections = string.Format(CultureInfo.CurrentCulture, texts["translation.books.sections"], book.Translated.ToString("N0", CultureInfo.CurrentCulture), book.Sections.ToString("N0", CultureInfo.CurrentCulture));
             var line = book.Volume is { } volume ? texts["translation.progress.volume"] + " " + volume + " · " + sections : sections;
             var identity = new ListIdentity(new IconTile(new Icon("book", assets, 20), book.IsComplete() ? UiTone.Success : UiTone.Accent), title, new ValueText(line));
             var language = new StateChip(new ValueText(LanguageName(book.Language)), book.IsComplete() ? UiTone.Success : UiTone.Info, new Icon(book.IsComplete() ? "check" : "globe", assets, 14));

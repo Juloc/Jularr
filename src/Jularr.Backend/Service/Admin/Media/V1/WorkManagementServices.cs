@@ -11,6 +11,7 @@ using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Acquisition;
 using Jularr.Backend.Logic.Library;
 using Jularr.Backend.Service.Core;
+using Jularr.Backend.Service.User.Translation.V1;
 
 namespace Jularr.Backend.Service.Admin.Media.V1
 {
@@ -387,7 +388,8 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                                 section."ReadingDocumentId" = document."Id"
                                 AND section."Path" LIKE ':section/%'
                         ))))::integer AS "CoveragePercent",
-                        sum(length(translated."Bytes"))::bigint AS "Bytes"
+                        sum(length(translated."Bytes"))::bigint AS "Bytes",
+                        array_agg(DISTINCT split_part(translated."Path", '/', 3) ORDER BY split_part(translated."Path", '/', 3)) AS "Models"
                     FROM
                         "ReadingDocuments" AS document
                         JOIN "StoredFiles" AS file ON file."Id" = document."StoredFileId"
@@ -406,7 +408,9 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                         document."Id";
                     """;
                 sql.Parameters.Add(Parameters);
-                translations = await Context.ReadSql.ReadListAsync<WorkManagementTranslationV1>(sql, CancellationToken);
+                // The caches name Ollama's models without their provider; the page names every model by its id.
+                translations = [.. (await Context.ReadSql.ReadListAsync<WorkManagementTranslationV1>(sql, CancellationToken)).Select(item => new WorkManagementTranslationV1(item.DocumentId, item.Language,
+                    item.WorkEditionId, item.CoveragePercent, item.Bytes, [.. item.Models.Select(LocalReadingPaths.ModelId)]))];
             }
 
             // Further units of a file with several episodes

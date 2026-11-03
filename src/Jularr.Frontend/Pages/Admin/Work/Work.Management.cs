@@ -226,7 +226,8 @@ namespace Jularr.Frontend.Pages.Admin.Work
                 UnitTable(units, work, [], csrf, kind), .. Translations(work, csrf) is { } translations ? new[] { translations } : [], ColumnPicker()]).Class("work-seasons work-volumes");
         }
 
-        // What readers had machine translated of a book, language by language, with a delete that clears one language only; shown to those who may and only with translations present.
+        // What the server translated of a book, language by language, with a delete that clears one language only (every model's text) after a confirmation that
+        // names the language and the models; shown to those who may and only with translations present.
         private IUiComponent? Translations(WorkManagementV1 work, string? csrf)
         {
             if (work.Translations.Count == 0 || !texts.Can("media.manual.update", "Library", "Reading", "Translation")) return null;
@@ -236,17 +237,29 @@ namespace Jularr.Frontend.Pages.Admin.Work
             var rows = work.Translations.Select(item => (IUiComponent)new Tr(
                 new Td(new ValueText(WorkLanguages.Name(WorkLanguages.Code(item.Language)))), new Td(new ValueText(From(item))),
                 new Td(new ValueText(item.CoveragePercent.ToString(CultureInfo.InvariantCulture) + " %")), new Td(new ValueText(ByteSize.Format(item.Bytes))),
-                new Td(new Div(new PostForm(Address(Tab, "DeleteTranslation"), csrf, [("documentId", item.DocumentId.ToString(CultureInfo.InvariantCulture)), ("language", item.Language)],
-                    IconSubmit("trash", "work.translation.delete"))).Class("work-icons"))).Class("work-row")).ToArray();
+                new Td(new Div(Modal.Opener(IconSubmit("trash", "work.translation.delete").Attribute("type", "button"), TranslationDialog(item))).Class("work-icons"))).Class("work-row")).ToArray();
+            // The confirmation of each delete: what goes (the language, every model's text) and that the job translates it again.
+            var dialogs = work.Translations.Select(item => (IUiComponent)new Modal(assets, TranslationDialog(item), "work.translation.deleteTitle", [
+                new Form<DeleteTranslationDataV1>(form =>
+                {
+                    form.Content(new P(new ValueText(string.Format(CultureInfo.CurrentCulture, texts["work.translation.deleteText"], WorkLanguages.Name(WorkLanguages.Code(item.Language)),
+                        item.Models.Length == 0 ? "–" : string.Join(", ", item.Models)))).Attribute("data-translation-delete-text", item.Language));
+                    form.Hidden(data => data.Confirmed);
+                    form.Cancel();
+                    form.Submit(new Button(new Text("work.translation.delete")).Warn());
+                }, Address(Tab, "DeleteTranslation") + "&documentId=" + item.DocumentId.ToString(CultureInfo.InvariantCulture) + "&language=" + Uri.EscapeDataString(item.Language), csrf,
+                    new DeleteTranslationDataV1(true))])).ToArray();
             var table = new Div(new TableElement([new Thead(new Tr(new Th(new Text("work.col.language")).Attribute("scope", "col"), new Th(new Text("work.translations.source")).Attribute("scope", "col"),
                 new Th(new Text("work.translations.coverage")).Attribute("scope", "col"), new Th(new Text("work.col.size")).Attribute("scope", "col"), new Th(new Span()).Attribute("scope", "col"))), new Tbody([.. rows])])
                 .Class("work-table work-table--manage")).Class("work-table-wrap");
-            return new Div(
+            return new Div([
                 new Div(new Div(new H2(new Text("work.translations")), new Div(new Span(new ValueText(work.Translations.Count.ToString(CultureInfo.InvariantCulture)))).Class("work-coverage")).Class("work-season__lead"),
                     new Button(Icon("chevron-down", 22)).Class("work-season__toggle").Attribute("type", "button").Attribute("data-season-toggle", "work-translations").Attribute("aria-expanded", "false")
                         .Attribute("aria-controls", "work-translations").TextAttribute("aria-label", "work.toggleSeason")).Class("work-season__head"),
-                new Div(table).Class("work-season__panel").Attribute("id", "work-translations").Attribute("data-open", "false")).Class("work-season");
+                new Div(table).Class("work-season__panel").Attribute("id", "work-translations").Attribute("data-open", "false"), .. dialogs]).Class("work-season");
         }
+
+        private static string TranslationDialog(WorkManagementTranslationV1 item) => "work-translation-delete-" + item.DocumentId.ToString(CultureInfo.InvariantCulture) + "-" + item.Language;
 
         // An album of several discs: one accordion per disc with its tracks.
         private IUiComponent Discs(WorkManagementV1 work, WorkManagementUnitV1[] tracks, string? csrf)

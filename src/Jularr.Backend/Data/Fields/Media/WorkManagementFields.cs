@@ -36,6 +36,7 @@ namespace Jularr.Backend.Data.Fields.Media
         public static readonly StringField TranslationLanguage = new(NpgsqlDbType.Varchar) { MaximumLength = 35 };
         public static readonly IntField CoveragePercent = new() { Minimum = 0, Maximum = 100 };
         public static readonly LongField TranslationBytes = new() { Minimum = 0 };
+        public static readonly BoolField Confirmed = new();
         public static readonly StringField GameRegion = new(NpgsqlDbType.Varchar) { MaximumLength = 100, Required = false };
         public static readonly StringField GameVersion = new(NpgsqlDbType.Varchar) { MaximumLength = 100, Required = false };
     }

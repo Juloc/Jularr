@@ -263,10 +263,10 @@ namespace Jularr.Frontend.Pages.Admin.Work
             return LocalRedirect(Address(Tab));
         }
 
-        // One language of a book's machine translation goes; the file stays.
-        public async Task<IActionResult> OnPostDeleteTranslationAsync([BindRequired] long documentId, [BindRequired] string language)
+        // One language of a book's server translation goes, every model's, once the dialog confirmed it; the file stays.
+        public async Task<IActionResult> OnPostDeleteTranslationAsync([BindRequired] long documentId, [BindRequired] string language, bool confirmed)
         {
-            await deleteTranslation.ExecuteAsync<UpdateResult>(new DeleteTranslationParametersV1(documentId, language), default, HttpContext.RequestAborted);
+            await deleteTranslation.ExecuteAsync<UpdateResult>(new DeleteTranslationParametersV1(documentId, language), new DeleteTranslationDataV1(confirmed), HttpContext.RequestAborted);
             Hint("work.hint.translationDeleted");
             return LocalRedirect(Address(Tab));
         }

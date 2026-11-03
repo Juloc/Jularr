@@ -9215,6 +9215,14 @@
    "Delete translation",
    "Übersetzung löschen"
   ],
+  "work.translation.deleteTitle": [
+   "Delete this translation?",
+   "Diese Übersetzung löschen?"
+  ],
+  "work.translation.deleteText": [
+   "The server's translation into {0} is deleted for every model: {1}. The book translations job then translates it again.",
+   "Die Übersetzung des Servers in {0} wird für alle Modelle gelöscht: {1}. Danach übersetzt die Aufgabe „Buchübersetzungen“ sie neu."
+  ],
   "work.edition.readsTranslated": [
    "Reads translated",
    "Liest sich übersetzt"
@@ -16047,8 +16055,8 @@
    "Übersetzte Werke"
   ],
   "translation.books.description": [
-   "Every work the server translated, per language and model. Once one model has translated every section, the work downloads as a translated EPUB.",
-   "Jedes Werk, das der Server übersetzt hat, nach Sprache und Modell. Sobald ein Modell jeden Abschnitt übersetzt hat, gibt es das Werk als übersetztes EPUB."
+   "Every work the server translated, per language and model. Once every section is translated, the work downloads as a translated EPUB.",
+   "Jedes Werk, das der Server übersetzt hat, nach Sprache und Modell. Sobald jeder Abschnitt übersetzt ist, gibt es das Werk als übersetztes EPUB."
   ],
   "translation.books.work": [
    "Work",

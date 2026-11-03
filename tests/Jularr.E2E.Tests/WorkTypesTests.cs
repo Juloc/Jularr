@@ -158,7 +158,18 @@ namespace Jularr.E2E.Tests
 
                 // The edition in German has no file but reads translated.
                 await Assertions.Expect(page.Locator(".work-season", new() { HasText = "German" }).First).ToContainTextAsync("Reads translated");
-                await Steps.SubmitAsync(page, translations.Locator("tr.work-row form"));
+                // The trash asks first: the dialog names the language and every model whose translation goes; Cancel keeps it.
+                await translations.Locator("tr.work-row button[data-dialog-open]").ClickAsync();
+                var confirm = page.Locator("dialog.modal[open]");
+                await Assertions.Expect(confirm).ToContainTextAsync("Delete this translation?");
+                await Assertions.Expect(confirm).ToContainTextAsync("German");
+                await Assertions.Expect(confirm).ToContainTextAsync("ollama:translategemma:4b");
+                await Evidence.SaveAsync(page, "work-translation-delete-confirm");
+                await confirm.GetByRole(AriaRole.Button, new() { Name = "Cancel" }).ClickAsync();
+                await Assertions.Expect(confirm).ToHaveCountAsync(0);
+                Assert.AreEqual(1L, await jularr.ScalarAsync("SELECT count(*) FROM \"ReadingResources\" WHERE \"ReadingDocumentId\" = 820 AND \"Path\" LIKE ':localtranslation/%'"));
+                await translations.Locator("tr.work-row button[data-dialog-open]").ClickAsync();
+                await Steps.SubmitAsync(page, page.Locator("dialog.modal[open] form"));
                 await Assertions.Expect(page.Locator(".work-season", new() { HasText = "Translations" })).ToHaveCountAsync(0);
                 CollectionAssert.AreEqual(Array.Empty<string>(), browser.Problems.ToArray());
             }

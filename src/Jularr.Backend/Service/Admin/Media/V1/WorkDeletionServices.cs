@@ -107,7 +107,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
     // Clears one language of a document's server translation, every model's; the file, what readers noted and the blocks' model choices stay,
     // and the background job translates it again.
     [ServiceEndpoint("DELETE", "/api/v1/admin/library/documents/{documentId:long}/translations/{language}")]
-    public sealed class DeleteDocumentTranslationV1 : AdminService<DeleteTranslationParametersV1, NoData>
+    public sealed class DeleteDocumentTranslationV1 : AdminService<DeleteTranslationParametersV1, DeleteTranslationDataV1>
     {
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Delete;
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
@@ -116,6 +116,9 @@ namespace Jularr.Backend.Service.Admin.Media.V1
 
         protected override async Task<IServiceOutput> OnDelete()
         {
+            // Every model's translation of the language goes, so the person confirms it first.
+            if (!Data.Confirmed) throw new DataValidationException(nameof(Data.Confirmed), "required");
+
             var sql = new SqlStatement();
             sql.Statement =
                 """

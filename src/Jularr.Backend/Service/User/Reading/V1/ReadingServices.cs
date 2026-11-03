@@ -144,27 +144,35 @@ namespace Jularr.Backend.Service.User.Reading.V1
                                 page.position
                         ) AS "SmartPages",
                         ARRAY(
-                            -- A language one model translated every section with text into: each block shows this version's text or an earlier one's.
-                            SELECT DISTINCT
-                                split_part(cache."Path", '/', 4)
-                            FROM
-                                "ReadingResources" AS cache
-                                CROSS JOIN LATERAL (
-                                    SELECT convert_from(cache."Bytes", 'UTF8')::jsonb AS value
-                                ) AS stored
+                            -- A language every block with text has a server translation in, from any model (this version's text or an earlier one's).
+                            SELECT
+                                section."Language"
+                            FROM (
+                                SELECT
+                                    split_part(cache."Path", '/', 4) AS "Language",
+                                    max(jsonb_array_length(stored.value -> 'Texts')) AS "Blocks",
+                                    count(DISTINCT block.position) FILTER (
+                                        WHERE block.value <> 'null'::jsonb OR coalesce(stored.value -> 'Stale' -> 'Texts' -> (block.position::integer - 1), 'null'::jsonb) <> 'null'::jsonb
+                                    ) AS "Visible"
+                                FROM
+                                    "ReadingResources" AS cache
+                                    CROSS JOIN LATERAL (
+                                        SELECT convert_from(cache."Bytes", 'UTF8')::jsonb AS value
+                                    ) AS stored
+                                    CROSS JOIN LATERAL jsonb_array_elements(stored.value -> 'Texts') WITH ORDINALITY AS block (value, position)
+                                WHERE
+                                    cache."ReadingDocumentId" = document."Id"
+                                    AND cache."Path" ~ '^:localtranslation/v4/[^/]+/[a-z]{2,3}/[0-9]{5}$'
+                                GROUP BY
+                                    split_part(cache."Path", '/', 4),
+                                    split_part(cache."Path", '/', 5)
+                            ) AS section
                             WHERE
-                                cache."ReadingDocumentId" = document."Id"
-                                AND cache."Path" ~ '^:localtranslation/v4/[^/]+/[a-z]{2,3}/[0-9]{5}$'
-                                AND jsonb_array_length(stored.value -> 'Texts') > 0
-                                AND NOT EXISTS (
-                                    SELECT 1 FROM jsonb_array_elements(stored.value -> 'Texts') WITH ORDINALITY AS block (value, position)
-                                    WHERE block.value = 'null'::jsonb AND coalesce(stored.value -> 'Stale' -> 'Texts' -> (block.position::integer - 1), 'null'::jsonb) = 'null'::jsonb
-                                )
+                                section."Visible" >= section."Blocks"
                             GROUP BY
-                                split_part(cache."Path", '/', 4),
-                                split_part(cache."Path", '/', 3)
+                                section."Language"
                             HAVING
-                                count(*) >= (SELECT count(*) FROM jsonb_array_elements(document."Structure" -> 'Sections') AS section WHERE (section ->> 'Blocks')::int > 0)
+                                count(*) >= (SELECT count(*) FROM jsonb_array_elements(document."Structure" -> 'Sections') AS part WHERE (part ->> 'Blocks')::int > 0)
                             ORDER BY
                                 1
                         ) AS "TranslatedLanguages"
@@ -634,6 +642,13 @@ namespace Jularr.Backend.Service.User.Reading.V1
     [ServiceEndpoint("GET", "/api/v1/reading/documents/{documentId:long}/ebook")]
     public sealed class ReadReadingEbookV1 : UserService<ReadingEbookParametersV1>
     {
+        private readonly BookTranslationProgress _progress;
+
+        internal ReadReadingEbookV1(BookTranslationProgress progress)
+        {
+            _progress = progress;
+        }
+
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<ReadingEbookV1>()];
         protected override ModuleRequirement GetInstanceModules(ReadingEbookParametersV1 parameters) => ModuleRequirement.All("Library", "Reading");
         protected override ServicePermission GetPermission(ReadingEbookParametersV1 parameters, Type resultType) => new("profile.media.read");
@@ -706,7 +721,7 @@ namespace Jularr.Backend.Service.User.Reading.V1
                 choices.Parameters.Add(Parameters);
                 var chosen = await Context.ReadSql.ReadListAsync<ReadingEbookChoiceData>(choices, CancellationToken);
                 var setup = await TranslationProviders.SetupAsync(Context, CancellationToken);
-                translation = Translation(structure, sections, stored, chosen, document.Language ?? "und", setup.Model)
+                translation = Translation(structure, sections, stored, chosen, document.Language ?? "und", setup.Model, _progress.Snapshot().ModelKey)
                     ?? throw new KeyNotFoundException("The book is not translated into that language in every section.");
             }
 
@@ -717,11 +732,12 @@ namespace Jularr.Backend.Service.User.Reading.V1
             return new ReadingEbookV1(bytes, FileName(document.Title, Parameters.Language));
         }
 
-        // The server's translation as the Reader shows it: a block someone re-translated with another model in that model's text, every other block in the
-        // default model's; earlier versions of a model stand in until they are replaced. The default is the Owner's model, else the largest TranslateGemma,
-        // else any other model, whichever first covers every section. None when no model does (the Mozilla browser translation is never part of it).
+        // The server's translation, block by block: a block someone re-translated with another model in that model's text, every other block in the text of
+        // the first model of the default order that has one (the Owner's model, the model the book job translates with, the TranslateGemma models from the
+        // largest, then any other); earlier versions of a model stand in until they are replaced. None while a block has no server text at all (the Mozilla
+        // browser translation is never part of it).
         private static ReadingEbookTranslation? Translation(ReadingStructure structure, string[] sections, IReadOnlyDictionary<string, ReadingEbookResourceData> stored,
-            IReadOnlyList<ReadingEbookChoiceData> chosen, string from, string? ownerModel)
+            IReadOnlyList<ReadingEbookChoiceData> chosen, string from, string? ownerModel, string? jobModelKey)
         {
             // Every model's cache of every section, read once.
             var caches = new Dictionary<(string Key, int Section), LocalTranslationCache>();
@@ -741,35 +757,30 @@ namespace Jularr.Backend.Service.User.Reading.V1
             var owner = ownerModel is null ? null : LocalReadingPaths.ModelKey(ownerModel);
             int Rank(string key)
             {
-                if (key == owner) return -1;
+                if (key == owner) return -2;
+                if (key == jobModelKey) return -1;
                 var size = Array.IndexOf(OllamaLocalModels.Candidates, key);
                 return size >= 0 ? OllamaLocalModels.Candidates.Length - size : int.MaxValue;
             }
 
-            var candidates = caches.Keys.Select(entry => entry.Key).Distinct(StringComparer.Ordinal).OrderBy(Rank).ThenBy(key => key, StringComparer.Ordinal);
-            foreach (var key in candidates)
+            string[] order = [.. caches.Keys.Select(entry => entry.Key).Distinct(StringComparer.Ordinal).OrderBy(Rank).ThenBy(key => key, StringComparer.Ordinal)];
+            var blocks = new IReadOnlyList<string>[sections.Length];
+            var used = new Dictionary<string, int>(StringComparer.Ordinal);
+            for (var section = 0; section < sections.Length; section++)
             {
-                var blocks = new IReadOnlyList<string>[sections.Length];
-                var used = new Dictionary<string, int>(StringComparer.Ordinal);
-                var complete = true;
-                for (var section = 0; section < sections.Length && complete; section++)
+                var texts = new string[structure.Sections[section].Blocks];
+                for (var block = 0; block < texts.Length; block++)
                 {
-                    var texts = new string[structure.Sections[section].Blocks];
-                    for (var block = 0; block < texts.Length; block++)
-                    {
-                        var model = choices.TryGetValue((section, block), out var choice) && Visible(choice, section, block) is not null ? choice : key;
-                        if (Visible(model, section, block) is not { } text) { complete = false; break; }
-                        texts[block] = text;
-                        if (text.Length > 0) used[model] = used.GetValueOrDefault(model) + 1;
-                    }
-                    blocks[section] = texts;
+                    var model = choices.TryGetValue((section, block), out var choice) && Visible(choice, section, block) is not null
+                        ? choice : order.FirstOrDefault(key => Visible(key, section, block) is not null);
+                    if (model is null || Visible(model, section, block) is not { } text) return null;
+                    texts[block] = text;
+                    if (text.Length > 0) used[model] = used.GetValueOrDefault(model) + 1;
                 }
-
-                if (complete)
-                    return new ReadingEbookTranslation(from, blocks, [.. used.OrderByDescending(entry => entry.Value).ThenBy(entry => entry.Key, StringComparer.Ordinal).Select(entry => LocalReadingPaths.ModelId(entry.Key))]);
+                blocks[section] = texts;
             }
 
-            return null;
+            return new ReadingEbookTranslation(from, blocks, [.. used.OrderByDescending(entry => entry.Value).ThenBy(entry => entry.Key, StringComparer.Ordinal).Select(entry => LocalReadingPaths.ModelId(entry.Key))]);
         }
 
         // The title without characters file systems refuse, and the language of a translation.

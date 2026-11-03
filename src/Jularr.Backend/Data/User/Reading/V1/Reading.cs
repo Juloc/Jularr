@@ -129,7 +129,7 @@ namespace Jularr.Backend.Data.User.Reading.V1
         [DataField(typeof(Fields.Media.WorkFields), nameof(Fields.Media.WorkFields.OriginalLanguage))]
         public string? OriginalLanguage { get; }
 
-        // Languages one server model translated every section into (earlier versions of the model count), so the book downloads translated.
+        // Languages every block with text has a server translation in, from the models the translated EPUB mixes (earlier versions count), so the book downloads translated.
         [DataField(typeof(TranslationFields), nameof(TranslationFields.Languages))]
         public string[] TranslatedLanguages { get; }
 

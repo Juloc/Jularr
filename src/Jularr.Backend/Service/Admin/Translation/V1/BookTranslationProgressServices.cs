@@ -139,8 +139,9 @@ namespace Jularr.Backend.Service.Admin.Translation.V1
         }
     }
 
-    // The books the server translated, per language and model: how many sections each model has done and how many still show an earlier version of it.
-    // A section counts as stale while its cache keeps an earlier version's texts, or when it is from the model the job translates with in another version.
+    // The books the server translated, per language: how many sections have a server text for every block (from any model, as the translated EPUB mixes
+    // them), and per model how many sections it has done and how many still show an earlier version of it. A section counts as stale while its cache keeps
+    // an earlier version's texts, or when it is from the model the job translates with in another version.
     [ServiceEndpoint("GET", "/api/v1/admin/translation/books")]
     public sealed class ReadTranslatedBooksV1 : AdminService<TranslatedBooksParametersV1>
     {
@@ -181,6 +182,39 @@ namespace Jularr.Backend.Service.Admin.Translation.V1
                     WHERE
                         cache."Path" ~ '^:localtranslation/v4/[^/]+/[a-z]{2,3}/[0-9]{5}$'
                 ),
+                visible AS (
+                    -- A section is translated once every block has a text from some model.
+                    SELECT
+                        cache."ReadingDocumentId" AS "DocumentId",
+                        split_part(cache."Path", '/', 4) AS "Language",
+                        max(jsonb_array_length(stored.value -> 'Texts')) AS "Blocks",
+                        count(DISTINCT block.position) FILTER (
+                                        WHERE block.value <> 'null'::jsonb OR coalesce(stored.value -> 'Stale' -> 'Texts' -> (block.position::integer - 1), 'null'::jsonb) <> 'null'::jsonb
+                                    ) AS "Visible"
+                    FROM
+                        "ReadingResources" AS cache
+                        CROSS JOIN LATERAL (
+                            SELECT convert_from(cache."Bytes", 'UTF8')::jsonb AS value
+                        ) AS stored
+                        CROSS JOIN LATERAL jsonb_array_elements(stored.value -> 'Texts') WITH ORDINALITY AS block (value, position)
+                    WHERE
+                        cache."Path" ~ '^:localtranslation/v4/[^/]+/[a-z]{2,3}/[0-9]{5}$'
+                    GROUP BY
+                        cache."ReadingDocumentId",
+                        split_part(cache."Path", '/', 4),
+                        split_part(cache."Path", '/', 5)
+                ),
+                translated AS (
+                    SELECT
+                        section."DocumentId",
+                        section."Language",
+                        (count(*) FILTER (WHERE section."Visible" >= section."Blocks"))::integer AS "Translated"
+                    FROM
+                        visible AS section
+                    GROUP BY
+                        section."DocumentId",
+                        section."Language"
+                ),
                 models AS (
                     SELECT
                         cache."DocumentId",
@@ -202,6 +236,7 @@ namespace Jularr.Backend.Service.Admin.Translation.V1
                     trim_scale(unit."Number")::text AS "Volume",
                     model."Language",
                     total."Sections",
+                    coalesce(translated."Translated", 0) AS "Translated",
                     array_agg(model."Model" ORDER BY model."Done" DESC, model."Model") AS "Models",
                     array_agg(model."Done" ORDER BY model."Done" DESC, model."Model") AS "Done",
                     array_agg(model."Stale" ORDER BY model."Done" DESC, model."Model") AS "Stale"
@@ -212,6 +247,7 @@ namespace Jularr.Backend.Service.Admin.Translation.V1
                     JOIN "MediaAssets" AS asset ON asset."Id" = file."MediaAssetId"
                     JOIN "Works" AS work ON work."Id" = asset."WorkId"
                     LEFT JOIN "WorkUnits" AS unit ON unit."Id" = asset."WorkUnitId"
+                    LEFT JOIN translated ON translated."DocumentId" = model."DocumentId" AND translated."Language" = model."Language"
                     CROSS JOIN LATERAL (
                         SELECT count(*)::integer AS "Sections"
                         FROM jsonb_array_elements(document."Structure" -> 'Sections') AS section
@@ -225,7 +261,8 @@ namespace Jularr.Backend.Service.Admin.Translation.V1
                     work."CanonicalTitle",
                     unit."Number",
                     model."Language",
-                    total."Sections"
+                    total."Sections",
+                    translated."Translated"
                 ORDER BY
                     work."CanonicalTitle",
                     unit."Number" NULLS FIRST,
@@ -240,7 +277,7 @@ namespace Jularr.Backend.Service.Admin.Translation.V1
             var books = await Context.ReadSql.ReadPageAsync<TranslatedBookV1>(sql, CancellationToken);
 
             // The caches name Ollama's models without their provider; the list names every model by its id.
-            return new PageResult<TranslatedBookV1>([.. books.Items.Select(book => new TranslatedBookV1(book.DocumentId, book.WorkId, book.Title, book.Volume, book.Language, book.Sections,
+            return new PageResult<TranslatedBookV1>([.. books.Items.Select(book => new TranslatedBookV1(book.DocumentId, book.WorkId, book.Title, book.Volume, book.Language, book.Sections, book.Translated,
                 [.. book.Models.Select(LocalReadingPaths.ModelId)], book.Done, book.Stale))], Page);
         }
     }

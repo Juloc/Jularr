@@ -5,6 +5,7 @@ using Jularr.Backend.Data.Fields.Acquisition;
 using Jularr.Backend.Data.Fields.Library;
 using Jularr.Backend.Data.Fields.Media;
 using Jularr.Backend.Data.Fields.Reading;
+using Jularr.Backend.Data.Fields.Translation;
 
 namespace Jularr.Backend.Data.Admin.Media.V1
 {
@@ -203,16 +204,18 @@ namespace Jularr.Backend.Data.Admin.Media.V1
         public bool? IsRomVerified { get; }
     }
 
-    // A language the server translated a book's sections into: one document, one language, how much of it (any model), how big it is.
+    // A language the server translated a book's sections into: one document, one language, the models that translated (part of) it, how much of it
+    // (any model), how big it is.
     public sealed class WorkManagementTranslationV1 : BaseResponse
     {
-        public WorkManagementTranslationV1(long documentId, string language, long? workEditionId, int coveragePercent, long bytes)
+        public WorkManagementTranslationV1(long documentId, string language, long? workEditionId, int coveragePercent, long bytes, string[] models)
         {
             DocumentId = documentId;
             Language = language;
             WorkEditionId = workEditionId;
             CoveragePercent = coveragePercent;
             Bytes = bytes;
+            Models = models;
         }
 
         [DataField(typeof(ReadingFields), nameof(ReadingFields.DocumentId))]
@@ -230,6 +233,22 @@ namespace Jularr.Backend.Data.Admin.Media.V1
 
         [DataField(typeof(WorkManagementFields), nameof(WorkManagementFields.TranslationBytes))]
         public long Bytes { get; }
+
+        // Provider-qualified model ids such as "ollama:translategemma:12b".
+        [DataField(typeof(TranslationFields), nameof(TranslationFields.Models))]
+        public string[] Models { get; }
+    }
+
+    // A destructive delete runs only once the person confirmed it.
+    public sealed class DeleteTranslationDataV1 : BaseData
+    {
+        public DeleteTranslationDataV1(bool confirmed)
+        {
+            Confirmed = confirmed;
+        }
+
+        [DataField(typeof(WorkManagementFields), nameof(WorkManagementFields.Confirmed))]
+        public bool Confirmed { get; }
     }
 
     public sealed class DeleteTranslationParametersV1 : BaseParameters

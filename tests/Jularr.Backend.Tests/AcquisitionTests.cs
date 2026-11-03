@@ -1342,10 +1342,18 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(50, translations.CoveragePercent);
             Assert.AreEqual(20L, translations.Bytes);
             Assert.AreEqual(800L, translations.WorkEditionId);
-            using var cleared = await host.SendAsync(HttpMethod.Delete, "/api/v1/admin/library/documents/500/translations/de");
+            CollectionAssert.AreEqual(new[] { "ollama:translategemma:4b" }, translations.Models);
+
+            // Deleting every model's translation of the language is refused until it is confirmed; nothing goes before.
+            using var unconfirmed = await host.SendAsync(HttpMethod.Delete, "/api/v1/admin/library/documents/500/translations/de", new DeleteTranslationDataV1(false));
+            Assert.AreEqual(HttpStatusCode.BadRequest, unconfirmed.StatusCode);
+            using var bare = await host.SendAsync(HttpMethod.Delete, "/api/v1/admin/library/documents/500/translations/de");
+            Assert.AreNotEqual(HttpStatusCode.OK, bare.StatusCode);
+            Assert.AreEqual(6L, await host.ScalarAsync("SELECT count(*) FROM \"ReadingResources\" WHERE \"ReadingDocumentId\" = 500"));
+            using var cleared = await host.SendAsync(HttpMethod.Delete, "/api/v1/admin/library/documents/500/translations/de", new DeleteTranslationDataV1(true));
             Assert.AreEqual(HttpStatusCode.OK, cleared.StatusCode, await cleared.Content.ReadAsStringAsync());
             Assert.AreEqual(4L, await host.ScalarAsync("SELECT count(*) FROM \"ReadingResources\" WHERE \"ReadingDocumentId\" = 500"));
-            using var again = await host.SendAsync(HttpMethod.Delete, "/api/v1/admin/library/documents/500/translations/de");
+            using var again = await host.SendAsync(HttpMethod.Delete, "/api/v1/admin/library/documents/500/translations/de", new DeleteTranslationDataV1(true));
             Assert.AreEqual(HttpStatusCode.NotFound, again.StatusCode);
 
             using var games = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/works/" + gameId + "/management");
