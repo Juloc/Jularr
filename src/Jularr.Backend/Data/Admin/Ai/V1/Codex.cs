@@ -87,8 +87,11 @@ namespace Jularr.Backend.Data.Admin.Ai.V1
     }
 
     // What the signed-in account offers now: its models and the ChatGPT plan's usage windows. Available is false when Codex could not be asked (try again later).
-    public sealed class CodexCatalogV1(bool available, CodexModelV1[] models, string? plan, CodexUsageWindowV1[] windows) : BaseResponse
+    // UsedToday (UTC day) and UsedSinceStart are the tokens Jularr's own Codex translation used, counted against the Owner's limits.
+    public sealed class CodexCatalogV1(bool available, CodexModelV1[] models, string? plan, CodexUsageWindowV1[] windows, long usedToday, long usedSinceStart) : BaseResponse
     {
+        public long UsedToday { get; } = usedToday;
+        public long UsedSinceStart { get; } = usedSinceStart;
         public bool Available { get; } = available;
         public CodexModelV1[] Models { get; } = models;
         public string? Plan { get; } = plan;

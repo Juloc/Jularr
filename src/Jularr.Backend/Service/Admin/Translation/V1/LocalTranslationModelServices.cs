@@ -19,10 +19,12 @@ namespace Jularr.Backend.Service.Admin.Translation.V1
         private readonly LocalTranslationOptions _options;
         private readonly LocalTranslationDownloads _downloads;
         private readonly LocalTranslationMachines _machines;
+        private readonly CodexConnection _codex;
 
         internal ReadLocalTranslationModelsV1(OllamaLocalModels models, IOptions<LocalTranslationOptions> options, LocalTranslationDownloads downloads,
-            LocalTranslationMachines machines)
+            LocalTranslationMachines machines, CodexConnection codex)
         {
+            _codex = codex;
             _models = models;
             _options = options.Value;
             _downloads = downloads;
@@ -39,17 +41,26 @@ namespace Jularr.Backend.Service.Admin.Translation.V1
             var freeBytes = await LocalTranslationMachines.FreeBytesAsync(Context, _options.OperatorVerifiedFreeBytes, CancellationToken);
             var order = _machines.Order(setup.Machines);
             var progress = _downloads.Current();
+            var codexChoices = await CodexChoicesAsync();
             if (order.Length == 0) return new LocalTranslationModelsV1(false, OllamaLocalModels.Candidates, [], [], "Configure a local Ollama endpoint.",
-                freeBytes, progress.Model, progress.State, progress.Progress, [], progress.Machine, setup.Model, []);
+                freeBytes, progress.Model, progress.State, progress.Progress, [], progress.Machine, setup.Model, codexChoices);
             var machines = await Task.WhenAll(order.Select(StatusAsync));
             var active = machines.FirstOrDefault(machine => machine.Reachable && machine.Installed.Any(OllamaLocalModels.Supported))
                 ?? machines.FirstOrDefault(machine => machine.Reachable);
             // The default model can be any approved model a machine that answers has installed.
             string[] choices = [.. OllamaLocalModels.Candidates.Where(model => machines.Any(machine => machine.Installed.Contains(model, StringComparer.Ordinal)))
-                .Select(model => TranslationProviders.Id(OllamaTranslationProvider.ProviderKey, model))];
+                .Select(model => TranslationProviders.Id(OllamaTranslationProvider.ProviderKey, model)), .. codexChoices];
             return new LocalTranslationModelsV1(true, OllamaLocalModels.Candidates, active?.Installed ?? [], active?.Running ?? [],
                 active is null ? "Ollama is not responding correctly." : null,
                 freeBytes, progress.Model, progress.State, progress.Progress, machines, progress.Machine, setup.Model, choices);
+        }
+
+        // The Owner's ChatGPT account as a choice: only the model chosen on the AI page, and only while Codex is connected.
+        private async Task<string[]> CodexChoicesAsync()
+        {
+            if (!await _codex.IsConnectedAsync(CancellationToken)) return [];
+            var model = (await CodexSettings.ReadAsync(Context, CancellationToken)).Model ?? _codex.KnownModels.FirstOrDefault();
+            return model is null ? [] : [TranslationProviders.Id(CodexTranslationProvider.ProviderKey, model)];
         }
 
         private async Task<LocalTranslationMachineV1> StatusAsync(Uri server)
