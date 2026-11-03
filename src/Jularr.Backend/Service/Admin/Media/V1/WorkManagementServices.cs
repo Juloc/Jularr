@@ -367,7 +367,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                 groups = await Context.ReadSql.ReadListAsync<WorkManagementGroupV1>(sql, CancellationToken);
             }
 
-            // What readers had translated of the book's files
+            // What the server translated of the book's files: the sections any model has a cache of, per language
             IReadOnlyList<WorkManagementTranslationV1> translations = [];
             if (hero.MediaTypeId == MediaType.Book)
             {
@@ -376,9 +376,9 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                     """
                     SELECT
                         document."Id" AS "DocumentId",
-                        split_part(translated."Path", '/', 2) AS "Language",
+                        split_part(translated."Path", '/', 4) AS "Language",
                         version."WorkEditionId",
-                        least(100, round(100.0 * count(*) / greatest(1, (
+                        least(100, round(100.0 * count(DISTINCT split_part(translated."Path", '/', 5)) FILTER (WHERE translated."Path" ~ '/[0-9]{5}$') / greatest(1, (
                             SELECT
                                 count(*)
                             FROM
@@ -393,12 +393,13 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                         JOIN "StoredFiles" AS file ON file."Id" = document."StoredFileId"
                         JOIN "MediaAssets" AS asset ON asset."Id" = file."MediaAssetId"
                         JOIN "WorkVersions" AS version ON version."Id" = asset."WorkVersionId"
-                        JOIN "ReadingResources" AS translated ON translated."ReadingDocumentId" = document."Id" AND translated."Path" LIKE ':translation/%'
+                        JOIN "ReadingResources" AS translated ON translated."ReadingDocumentId" = document."Id"
+                            AND translated."Path" ~ '^:localtranslation/v4/[^/]+/[a-z]{2,3}/[0-9]+$'
                     WHERE
                         asset."WorkId" = @WorkId
                     GROUP BY
                         document."Id",
-                        split_part(translated."Path", '/', 2),
+                        split_part(translated."Path", '/', 4),
                         version."WorkEditionId"
                     ORDER BY
                         "Language",

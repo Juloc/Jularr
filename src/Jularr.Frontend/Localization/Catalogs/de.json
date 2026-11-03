@@ -9719,10 +9719,6 @@
    "This PDF holds scanned pages without text; it opens as its original pages.",
    "Dieses PDF enthält gescannte Seiten ohne Text; es öffnet sich als die Originalseiten."
   ],
-  "errors.reading_translation_incomplete": [
-   "This book is not translated into that language in every section yet.",
-   "Dieses Buch ist noch nicht in jedem Abschnitt in diese Sprache übersetzt."
-  ],
   "errors.reading_pdf_recognizing": [
    "The scanned pages are being turned into text; until then the book opens as its original pages.",
    "Die gescannten Seiten werden gerade in Text umgewandelt; bis dahin öffnet sich das Buch als Originalseiten."
@@ -15996,6 +15992,50 @@
   "translation.tab.setup": [
    "Setup",
    "Einrichtung"
+  ],
+  "translation.tab.books": [
+   "Translated works",
+   "Übersetzte Werke"
+  ],
+  "translation.books.title": [
+   "Translated works",
+   "Übersetzte Werke"
+  ],
+  "translation.books.description": [
+   "Every work the server translated, per language and model. Once one model has translated every section, the work downloads as a translated EPUB.",
+   "Jedes Werk, das der Server übersetzt hat, nach Sprache und Modell. Sobald ein Modell jeden Abschnitt übersetzt hat, gibt es das Werk als übersetztes EPUB."
+  ],
+  "translation.books.work": [
+   "Work",
+   "Werk"
+  ],
+  "translation.books.language": [
+   "Language",
+   "Sprache"
+  ],
+  "translation.books.models": [
+   "Models",
+   "Modelle"
+  ],
+  "translation.books.sections": [
+   "{0} of {1} sections",
+   "{0} von {1} Abschnitten"
+  ],
+  "translation.books.stale": [
+   "{0} in an earlier version",
+   "{0} in älterer Version"
+  ],
+  "translation.books.download": [
+   "Download EPUB",
+   "EPUB laden"
+  ],
+  "translation.books.incomplete": [
+   "Not complete yet",
+   "Noch nicht fertig"
+  ],
+  "translation.books.empty": [
+   "The server has not translated any work yet.",
+   "Der Server hat noch kein Werk übersetzt."
   ],
   "translation.setup.machinesHelp": [
    "The computers that translate, in this order: the first one that answers with a model translates, the next takes over when it drops out. One address per line.",

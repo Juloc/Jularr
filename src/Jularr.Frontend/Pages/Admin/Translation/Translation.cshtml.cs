@@ -10,24 +10,30 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Jularr.Frontend.Pages.Admin.Translation
 {
-    public sealed class TranslationModelPage(ReadLocalTranslationModelsV1 read, ReadBookTranslationProgressV1 readProgress, PullLocalTranslationModelV1 pull,
+    public sealed class TranslationModelPage(ReadLocalTranslationModelsV1 read, ReadBookTranslationProgressV1 readProgress, ReadTranslatedBooksV1 readBooks, PullLocalTranslationModelV1 pull,
         BenchmarkLocalTranslationModelV1 benchmark, SaveTranslationMachinesV1 saveMachines, SaveTranslationFreeBytesV1 saveFreeBytes, SaveTranslationModelV1 saveModel,
-        IAntiforgery antiforgery, UiText texts) : JularrPage
+        IAntiforgery antiforgery, FrontendAssets assets, UiText texts) : JularrPage
     {
         private const string Home = "/Admin/Instance/Translation";
         private LocalTranslationModelsV1? _models;
         private BookTranslationProgressV1? _progress;
+        private PageResult<TranslatedBookV1>? _books;
         private LocalTranslationBenchmarkV1? _benchmark;
         private TranslationMachinesDataV1? _machines;
         private TranslationFreeBytesDataV1? _freeBytes;
         private TranslationModelDataV1? _model;
 
-        // Two tabs: how far the translation is, and what it needs (computers, models, space).
+        // Three tabs: how far the translation is, the translated works with their EPUBs, and what it needs (computers, models, space).
         [BindProperty(SupportsGet = true, Name = "tab")]
         public string? Tab { get; set; }
 
+        [BindProperty(SupportsGet = true)]
+        public int PageNumber { get; set; } = 1;
+
         private bool Setup => string.Equals(Tab, "setup", StringComparison.OrdinalIgnoreCase);
+        private bool Books => string.Equals(Tab, "books", StringComparison.OrdinalIgnoreCase);
         private const string SetupAddress = Home + "?tab=setup";
+        private const string BooksAddress = Home + "?tab=books";
 
         protected override void Define(Page page)
         {
@@ -37,8 +43,10 @@ namespace Jularr.Frontend.Pages.Admin.Translation
             page.Asset("Pages/Admin/Translation/Translation.entry.ts");
             page.Content.Add(new P(new Text("translation.local.description")));
             if (_models is null) return;
-            page.Content.Add(new NavigationTabs([new NavigationTab("translation.tab.progress", Home, !Setup), new NavigationTab("translation.tab.setup", SetupAddress, Setup)], "translation.local.title"));
+            page.Content.Add(new NavigationTabs([new NavigationTab("translation.tab.progress", Home, !Setup && !Books), new NavigationTab("translation.tab.books", BooksAddress, Books),
+                new NavigationTab("translation.tab.setup", SetupAddress, Setup)], "translation.local.title"));
             if (Setup) DefineSetup(page, _models);
+            else if (Books && _books is { } books) DefineBooks(page, books);
             else DefineProgress(page, _models);
             if (FormError is not null) page.Content.Add(new P(new Text(FormError.ResourceKey)).Attribute("role", "alert"));
         }
@@ -54,6 +62,45 @@ namespace Jularr.Frontend.Pages.Admin.Translation
                     new A(new Text(preparing == "ready" ? "translation.tab.setup" : "translation.local.prepare.fix")).Attribute("href", SetupAddress))).Class("feature-card")
                 .Attribute("data-translation-prepare", preparing).Attribute("role", "status"));
             if (_progress is not null) page.Content.Add(TranslationProgressView.Full(_progress, texts));
+        }
+
+        // The works the server translated, one row per book and language: each model with its sections, the sections still in an earlier version
+        // of the model, and the translated EPUB once one model covers every section.
+        private void DefineBooks(Page page, PageResult<TranslatedBookV1> books)
+        {
+            page.Content.Add(new P(new Text("translation.books.description")));
+            var columns = new List<ListColumn> { new("translation.books.work", ListRole.Main), new("translation.books.language", ListRole.Status), new("translation.books.models", ListRole.Data),
+                new("common.actions", ListRole.Actions) };
+            var empty = new Div(new IconTile(new Icon("book", assets, 22), UiTone.Neutral), new P(new Text("translation.books.empty")));
+            page.Content.Add(new ListPanel("translation.books.title", columns, [.. books.Items.Select(BookRow)], empty).Modifier("translation-books").Paged());
+        }
+
+        private ListRow BookRow(TranslatedBookV1 book)
+        {
+            var title = new A(new Truncated(book.Title)).Class("list-identity__title").Attribute("href", "/Admin/Works/" + book.WorkId.ToString(CultureInfo.InvariantCulture));
+            var best = book.Done.Length == 0 ? 0 : book.Done.Max();
+            var sections = string.Format(CultureInfo.CurrentCulture, texts["translation.books.sections"], best.ToString("N0", CultureInfo.CurrentCulture), book.Sections.ToString("N0", CultureInfo.CurrentCulture));
+            var line = book.Volume is { } volume ? texts["translation.progress.volume"] + " " + volume + " · " + sections : sections;
+            var identity = new ListIdentity(new IconTile(new Icon("book", assets, 20), book.IsComplete() ? UiTone.Success : UiTone.Accent), title, new ValueText(line));
+            var language = new StateChip(new ValueText(LanguageName(book.Language)), book.IsComplete() ? UiTone.Success : UiTone.Info, new Icon(book.IsComplete() ? "check" : "globe", assets, 14));
+
+            // Each model on its own line: its sections, and those an earlier version of it still shows.
+            var models = new Div([.. book.Models.Select((model, index) => (IUiComponent)new Span(new ValueText(model + " · "
+                + string.Format(CultureInfo.CurrentCulture, texts["translation.books.sections"], book.Done[index].ToString("N0", CultureInfo.CurrentCulture), book.Sections.ToString("N0", CultureInfo.CurrentCulture))
+                + (book.Stale[index] > 0 ? " · " + string.Format(CultureInfo.CurrentCulture, texts["translation.books.stale"], book.Stale[index].ToString("N0", CultureInfo.CurrentCulture)) : ""))).Class("list-value"))])
+                .Class("translation-books__models");
+            IUiComponent download = book.IsComplete()
+                ? new A(new Icon("download", assets, 16), new Span(new Text("translation.books.download"))).Class("button")
+                    .Attribute("href", "/api/v1/reading/documents/" + book.DocumentId.ToString(CultureInfo.InvariantCulture) + "/ebook?language=" + Uri.EscapeDataString(book.Language))
+                    .Attribute("download", "").Attribute("data-translated-epub", book.Language)
+                : new Span(new Text("translation.books.incomplete")).Class("list-value list-value--dim");
+            return new ListRow([identity, language, models, new Div(download).Class("list-actions")], [models]);
+        }
+
+        private static string LanguageName(string code)
+        {
+            try { return CultureInfo.GetCultureInfo(code).DisplayName; }
+            catch (CultureNotFoundException) { return code; }
         }
 
         // The computers in their order with their models, the free space, the speed test and the browser's own cache.
@@ -225,7 +272,8 @@ namespace Jularr.Frontend.Pages.Admin.Translation
         protected override async Task LoadDataAsync()
         {
             _models = await read.ExecuteAsync<LocalTranslationModelsV1>(cancellationToken: HttpContext.RequestAborted);
-            if (!Setup) _progress = await readProgress.ExecuteAsync<BookTranslationProgressV1>(cancellationToken: HttpContext.RequestAborted);
+            if (Books) _books = await readBooks.ExecuteAsync<PageResult<TranslatedBookV1>>(new TranslatedBooksParametersV1(Math.Max(1, PageNumber)), HttpContext.RequestAborted);
+            else if (!Setup) _progress = await readProgress.ExecuteAsync<BookTranslationProgressV1>(cancellationToken: HttpContext.RequestAborted);
         }
     }
 }

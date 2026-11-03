@@ -9,7 +9,7 @@ namespace Jularr.E2E.Tests
     [TestClass]
     public sealed class PhoneTapTargetsTests
     {
-        private const string Extent = """
+        internal const string Extent = """
             control => {
                 control.scrollIntoView({ block: 'center', inline: 'center' });
                 const box = control.getBoundingClientRect();

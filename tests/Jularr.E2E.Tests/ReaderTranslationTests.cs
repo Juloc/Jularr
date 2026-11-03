@@ -119,21 +119,25 @@ namespace Jularr.E2E.Tests
             public Uri Address { get; }
             public int Generations => Volatile.Read(ref _generations);
 
-            private FakeOllama(int port)
+            // Echoing answers every block with "DE " and its own text, which passes the translation checks; otherwise every answer is "Kapitel Eins".
+            private readonly bool _echo;
+
+            private FakeOllama(int port, bool echo)
             {
                 Address = new Uri("http://127.0.0.1:" + port + "/");
+                _echo = echo;
                 _listener.Prefixes.Add(Address.ToString());
                 _listener.Start();
                 _running = ServeAsync();
             }
 
-            public static FakeOllama Start()
+            public static FakeOllama Start(bool echo = false)
             {
                 using var socket = new TcpListener(IPAddress.Loopback, 0);
                 socket.Start();
                 var port = ((IPEndPoint)socket.LocalEndpoint).Port;
                 socket.Stop();
-                return new FakeOllama(port);
+                return new FakeOllama(port, echo);
             }
 
             private async Task ServeAsync()
@@ -156,7 +160,14 @@ namespace Jularr.E2E.Tests
                         else if (path == "/api/generate")
                         {
                             Interlocked.Increment(ref _generations);
-                            body = """{"response":"Kapitel Eins","eval_count":10,"eval_duration":1000000000}""";
+                            var answer = "Kapitel Eins";
+                            if (_echo)
+                            {
+                                using var input = await System.Text.Json.JsonDocument.ParseAsync(context.Request.InputStream);
+                                var prompt = input.RootElement.GetProperty("prompt").GetString()!;
+                                answer = "DE " + prompt[(prompt.LastIndexOf('\n') + 1)..];
+                            }
+                            body = System.Text.Json.JsonSerializer.Serialize(new { response = answer, eval_count = 10, eval_duration = 1000000000 });
                         }
                         else
                         {

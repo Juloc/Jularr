@@ -1327,14 +1327,14 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(true, (await reread.Content.ReadFromJsonAsync<WorkManagementV1>())!.Groups[1].IsPaused);
             Assert.IsNull(bookPage.Files.Single().IsRomVerified);
 
-            // What readers had machine translated of the book: a language, its coverage and size; an administrator clears one language.
+            // What the server translated of the book: a language, its coverage and size; an administrator clears one language.
             await host.Fixture.RunSqlAsync($"""
                 UPDATE "InstanceModules" SET "IsEnabled" = TRUE WHERE "Key" IN ('Reading', 'Translation');
                 INSERT INTO "ReadingDocuments" ("Id", "StoredFileId", "SourceSizeBytes", "SourceModifiedAt", "ContentHash", "AnalyzerVersion", "ReadingFormatTypeId", "Structure", "TotalCharacters")
                 SELECT 500, file."Id", 100, now(), decode(repeat('ab', 32), 'hex'), 1, 1, '[]', 0 FROM "StoredFiles" AS file WHERE file."RelativePath" = 'Novel/Novel.epub';
                 INSERT INTO "ReadingResources" ("ReadingDocumentId", "Path", "MediaType", "Bytes")
                 SELECT 500, item."Path", 'text/html', convert_to('0123456789', 'UTF8')
-                FROM (VALUES (':section/00000'), (':section/00001'), (':section/00002'), (':section/00003'), (':translation/de/00000'), (':translation/de/00001')) AS item ("Path");
+                FROM (VALUES (':section/00000'), (':section/00001'), (':section/00002'), (':section/00003'), (':localtranslation/v4/translategemma:4b/de/00000'), (':localtranslation/v4/translategemma:4b/de/00001')) AS item ("Path");
                 """);
             using var translated = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/works/" + bookId + "/management");
             var translations = (await translated.Content.ReadFromJsonAsync<WorkManagementV1>())!.Translations.Single();

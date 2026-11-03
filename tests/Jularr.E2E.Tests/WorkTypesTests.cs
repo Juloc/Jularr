@@ -148,7 +148,7 @@ namespace Jularr.E2E.Tests
                     VALUES (820, 820, 100, now(), decode(repeat('cd', 32), 'hex'), 1, 1, '[]', 0);
                     INSERT INTO "ReadingResources" ("ReadingDocumentId", "Path", "MediaType", "Bytes")
                     SELECT 820, item."Path", 'text/html', convert_to('0123456789', 'UTF8')
-                    FROM (VALUES (':section/00000'), (':section/00001'), (':translation/de/00000')) AS item ("Path");
+                    FROM (VALUES (':section/00000'), (':section/00001'), (':localtranslation/v4/translategemma:4b/de/00000')) AS item ("Path");
                     """);
                 await page.GotoAsync("/Admin/Works/" + book);
                 var translations = page.Locator(".work-season", new() { HasText = "Translations" });

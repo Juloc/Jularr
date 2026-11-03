@@ -70,7 +70,7 @@ namespace Jularr.Backend.Tests
 
             using var before = await host.SendAsync(HttpMethod.Get, baseUrl + "?sourceLanguage=en");
             Assert.AreEqual(HttpStatusCode.OK, before.StatusCode, await before.Content.ReadAsStringAsync());
-            CollectionAssert.AreEqual(Array.Empty<string>(), JsonSerializer.Deserialize<string[]>((await before.Content.ReadFromJsonAsync<ReadingTranslationV1>())!.Blocks));
+            CollectionAssert.AreEqual(Array.Empty<string>(), JsonSerializer.Deserialize<string[]>((await before.Content.ReadFromJsonAsync<LocalReadingTranslationV1>(JsonSerializerOptions.Web))!.Blocks));
 
             using var generated = await host.SendAsync(HttpMethod.Post, request, new LocalReadingBlockDataV1("en"));
             Assert.AreEqual(HttpStatusCode.OK, generated.StatusCode, await generated.Content.ReadAsStringAsync());
@@ -82,7 +82,7 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(1, ollama.GenerationCount, "The cached block should not be regenerated.");
             using var shared = await host.SendAsync(HttpMethod.Get, baseUrl + "?sourceLanguage=en");
             Assert.AreEqual(HttpStatusCode.OK, shared.StatusCode, await shared.Content.ReadAsStringAsync());
-            Assert.AreEqual("Kapitel Eins", JsonSerializer.Deserialize<string[]>((await shared.Content.ReadFromJsonAsync<ReadingTranslationV1>())!.Blocks)![0]);
+            Assert.AreEqual("Kapitel Eins", JsonSerializer.Deserialize<string[]>((await shared.Content.ReadFromJsonAsync<LocalReadingTranslationV1>(JsonSerializerOptions.Web))!.Blocks)![0]);
 
             using var reopened = await host.SendAsync(HttpMethod.Post, "/api/v1/reading/assets/" + first + "/open");
             Assert.AreEqual(HttpStatusCode.OK, reopened.StatusCode);

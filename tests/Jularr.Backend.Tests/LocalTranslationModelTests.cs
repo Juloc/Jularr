@@ -148,14 +148,17 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
-        public void ProviderPaths_KeepModelsAndTargetsSeparateFromBergamot()
+        public void ProviderPaths_KeepModelsAndTargetsSeparate()
         {
             var first = LocalReadingPaths.Cache(12, "de", "ollama:translategemma:4b");
             var second = LocalReadingPaths.Cache(12, "de", "ollama:translategemma:12b");
             Assert.AreNotEqual(first, second);
             Assert.AreNotEqual(first, LocalReadingPaths.Cache(12, "id", "ollama:translategemma:4b"));
-            Assert.AreNotEqual(first, Jularr.Backend.Logic.Reading.ReadingTranslations.Path(12, "de"));
-            Assert.IsFalse(first.StartsWith(":translation/", StringComparison.Ordinal), "Local drafts cannot be counted as finished languages.");
+            Assert.IsFalse(first.StartsWith(":translation/", StringComparison.Ordinal), "Removed Mozilla rows used that prefix; migration 0041 deletes it.");
+
+            // A cache key names its model id again.
+            Assert.AreEqual("ollama:translategemma:4b", LocalReadingPaths.ModelId(LocalReadingPaths.ModelKey("ollama:translategemma:4b")));
+            Assert.AreEqual("codex:gpt-5", LocalReadingPaths.ModelId(LocalReadingPaths.ModelKey("codex:gpt-5")));
 
             // Ollama keeps the cache keys of before provider-qualified ids, so nothing is translated again; another provider's key is its whole id.
             Assert.AreEqual(":localtranslation/v4/translategemma:4b/de/00012", first);

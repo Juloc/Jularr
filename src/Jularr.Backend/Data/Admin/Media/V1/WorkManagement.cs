@@ -203,7 +203,7 @@ namespace Jularr.Backend.Data.Admin.Media.V1
         public bool? IsRomVerified { get; }
     }
 
-    // A language a book's sections were machine translated into while it was read: one document, one language, how much of it, how big it is.
+    // A language the server translated a book's sections into: one document, one language, how much of it (any model), how big it is.
     public sealed class WorkManagementTranslationV1 : BaseResponse
     {
         public WorkManagementTranslationV1(long documentId, string language, long? workEditionId, int coveragePercent, long bytes)

@@ -1,3 +1,4 @@
+@use '../../Framework/Components/HitArea';
 @use './Book';
 @use './Figures';
 @use './SmartPages';
@@ -228,6 +229,8 @@
     &__settings-group > .ui-form { padding-bottom: 14px; }
     &__panel p { margin: 0; font-size: 12px; }
     &__choices { display: flex; flex-wrap: wrap; gap: 8px; }
+    // On a phone each choice and download takes a full tap, up to the 8px between them.
+    &__choices > .button { @include HitArea.phone-hit-area(8px, 8px); }
     &__choices [aria-pressed=true] { background: var(--accent-soft); color: var(--accent-text); }
     &__bookmarks { display: grid; gap: 10px; &[hidden] { display: none; } h3 { margin: 0; font-size: 13px; } }
     &__notes { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }

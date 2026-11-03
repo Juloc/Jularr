@@ -10,7 +10,8 @@ using Jularr.Backend.Data.Logic.Reading;
 
 namespace Jularr.Backend.Logic.Reading
 {
-    // A prepared book as an EPUB 3 from the reader's cache: its sections, pictures and contents; with a translation its blocks carry the translated text.
+    // A prepared book as an EPUB 3 from the reader's cache: its sections, pictures and contents; with a translation its blocks carry the translated text,
+    // and a last page names the models and how many paragraphs kept their original.
     internal static class ReadingEbook
     {
         private static readonly HtmlParser Parser = new();
@@ -28,16 +29,26 @@ namespace Jularr.Backend.Logic.Reading
 
             var language = Escape(book.Language);
             var sections = new List<string>();
+            var kept = 0;
             for (var index = 0; index < book.Sections.Count; index++)
             {
                 var href = SectionHref(index);
                 sections.Add(href);
-                files.Add((href, Encoding.UTF8.GetBytes(Page(book.Title, language, Section(book.Sections[index], book.Translations?[index], images)))));
+                files.Add((href, Encoding.UTF8.GetBytes(Page(book.Title, language, Section(book.Sections[index], book.Translation?.Blocks[index], images, ref kept)))));
             }
 
-            var toc = book.Toc.Count > 0
+            var toc = (book.Toc.Count > 0
                 ? book.Toc.Where(entry => entry.Section < sections.Count).Select(entry => (entry.Title, SectionHref(entry.Section) + (entry.Anchor is null ? "" : "#" + entry.Anchor)))
-                : sections.Select((href, index) => (book.SectionTitles[index] ?? (index + 1).ToString(CultureInfo.InvariantCulture), href));
+                : sections.Select((href, index) => (book.SectionTitles[index] ?? (index + 1).ToString(CultureInfo.InvariantCulture), href))).ToList();
+
+            // A translation ends with what made it: the models, and the paragraphs that kept their original because no translation passed the checks.
+            if (book.Translation is { } translation)
+            {
+                sections.Add(ColophonHref);
+                files.Add((ColophonHref, Encoding.UTF8.GetBytes(Page(ColophonTitle, "en", Colophon(translation, book.Language, kept)))));
+                toc.Add((ColophonTitle, ColophonHref));
+            }
+
             var nav = "<nav xmlns:epub=\"http://www.idpf.org/2007/ops\" epub:type=\"toc\" id=\"toc\"><ol>"
                 + string.Concat(toc.Select(entry => "<li><a href=\"" + Escape(entry.Item2) + "\">" + Escape(entry.Item1) + "</a></li>")) + "</ol></nav>";
 
@@ -55,7 +66,9 @@ namespace Jularr.Backend.Logic.Reading
             var package = "<?xml version=\"1.0\" encoding=\"utf-8\"?><package xmlns=\"http://www.idpf.org/2007/opf\" version=\"3.0\" unique-identifier=\"id\" xml:lang=\"" + language + "\">"
                 + "<metadata xmlns:dc=\"http://purl.org/dc/elements/1.1/\"><dc:identifier id=\"id\">" + Escape(book.Identifier) + "</dc:identifier><dc:title>" + Escape(book.Title)
                 + "</dc:title><dc:language>" + language + "</dc:language><meta property=\"dcterms:modified\">" + book.Modified.ToUniversalTime().ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", CultureInfo.InvariantCulture)
-                + "</meta>" + (book.TranslatedFrom is { } source ? "<dc:description>Machine-translated from " + Escape(source) + " by Jularr.</dc:description>" : "") + "</metadata>"
+                + "</meta>" + (book.Translation is { } machine ? "<dc:description>Machine-translated from " + Escape(machine.From) + " by Jularr with " + Escape(string.Join(", ", machine.Models)) + ".</dc:description>"
+                    + string.Concat(machine.Models.Select((model, index) => "<dc:contributor id=\"model" + index.ToString(CultureInfo.InvariantCulture) + "\">" + Escape(model)
+                        + "</dc:contributor><meta refines=\"#model" + index.ToString(CultureInfo.InvariantCulture) + "\" property=\"role\" scheme=\"marc:relators\">trl</meta>")) : "") + "</metadata>"
                 + "<manifest>" + manifest + "</manifest><spine" + (book.IsRightToLeft ? " page-progression-direction=\"rtl\"" : "") + ">"
                 + string.Concat(sections.Select((_, index) => "<itemref idref=\"s" + index.ToString("D5", CultureInfo.InvariantCulture) + "\"/>")) + "</spine></package>";
 
@@ -84,8 +97,25 @@ namespace Jularr.Backend.Logic.Reading
 
         private static string SectionHref(int index) => "s" + index.ToString("D5", CultureInfo.InvariantCulture) + ".xhtml";
 
+        private const string ColophonHref = "colophon.xhtml";
+        private const string ColophonTitle = "About this translation";
+
+        // The book's last page in a translation: from which language by which models, and how many paragraphs stayed in the original.
+        private static string Colophon(ReadingEbookTranslation translation, string language, int kept) =>
+            "<section epub:type=\"colophon\"><h1>" + ColophonTitle + "</h1><p>Machine-translated by Jularr from " + Escape(LanguageName(translation.From)) + " into " + Escape(LanguageName(language))
+            + ".</p><p>Models:</p><ul>" + string.Concat(translation.Models.Select(model => "<li>" + Escape(model) + "</li>")) + "</ul><p>"
+            + (kept == 0 ? "Every paragraph is translated." : kept.ToString(CultureInfo.InvariantCulture) + (kept == 1 ? " paragraph keeps" : " paragraphs keep")
+                + " the original text because no translation of it passed the checks.") + "</p></section>";
+
+        private static string LanguageName(string code)
+        {
+            try { return CultureInfo.GetCultureInfo(code).EnglishName + " (" + code + ")"; }
+            catch (CultureNotFoundException) { return code; }
+        }
+
         // Reader links and pictures point into the EPUB; a translated block keeps its element and takes the translated text, like in the reader.
-        private static string Section(string html, IReadOnlyList<string>? translation, IReadOnlyDictionary<string, (string Href, string MediaType)> images)
+        // A block whose text is still its original (no translation passed the checks) keeps its markup and counts as kept.
+        private static string Section(string html, IReadOnlyList<string>? translation, IReadOnlyDictionary<string, (string Href, string MediaType)> images, ref int kept)
         {
             var document = Parser.ParseDocument("<!doctype html><html><body>" + html + "</body></html>");
             var body = document.Body!;
@@ -94,10 +124,14 @@ namespace Jularr.Backend.Logic.Reading
                 var blocks = body.QuerySelectorAll("[data-b]").ToArray();
                 for (var index = 0; index < blocks.Length && index < translation.Count; index++)
                 {
-                    if (translation[index].Length > 0 && blocks[index].QuerySelector("[data-b]") is null)
+                    if (translation[index].Length == 0 || blocks[index].QuerySelector("[data-b]") is not null) continue;
+                    if (translation[index] == ReadingHtml.TranslationText(blocks[index]))
                     {
-                        blocks[index].TextContent = translation[index];
+                        if (translation[index].Any(char.IsLetter)) kept++;
+                        continue;
                     }
+
+                    blocks[index].TextContent = translation[index];
                 }
             }
 
@@ -161,8 +195,12 @@ namespace Jularr.Backend.Logic.Reading
         }
     }
 
-    // Sections are the prepared reader HTML in order; translations, when given, hold one text per block for every section.
-    internal sealed record ReadingEbookContent(long DocumentId, string Identifier, string Title, string Language, string? TranslatedFrom, DateTime Modified, bool IsRightToLeft,
-        IReadOnlyList<string> Sections, IReadOnlyList<string?> SectionTitles, IReadOnlyList<IReadOnlyList<string>>? Translations, IReadOnlyList<ReadingStructureEntry> Toc,
+    // Sections are the prepared reader HTML in order; a translation, when given, holds one text per block for every section.
+    internal sealed record ReadingEbookContent(long DocumentId, string Identifier, string Title, string Language, DateTime Modified, bool IsRightToLeft,
+        IReadOnlyList<string> Sections, IReadOnlyList<string?> SectionTitles, ReadingEbookTranslation? Translation, IReadOnlyList<ReadingStructureEntry> Toc,
         IReadOnlyList<ReadingEbookResourceData> Images);
+
+    // The server's translation from the language From: one text per block of every section (empty keeps the block as it is) and the model ids that wrote
+    // them, the most used first.
+    internal sealed record ReadingEbookTranslation(string From, IReadOnlyList<IReadOnlyList<string>> Blocks, IReadOnlyList<string> Models);
 }
