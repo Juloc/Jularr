@@ -123,4 +123,10 @@ namespace Jularr.Backend.Data.Admin.Ai.V1
         public CodexDayV1[] Days { get; } = days;
         public DateTimeOffset? PlanLimitedUntil { get; } = planLimitedUntil;
     }
+
+    // The model id ("codex:<model>") the Owner can re-translate a chapter or book with by hand; null when Codex is not connected or no model is known.
+    public sealed class CodexRetranslationV1(string? model) : BaseResponse
+    {
+        public string? Model { get; } = model;
+    }
 }

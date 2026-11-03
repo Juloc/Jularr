@@ -70,4 +70,26 @@ namespace Jularr.Backend.Data.User.Translation.V1
     {
         public string Text { get; } = text;
     }
+
+    public sealed class LocalReadingSectionModelParametersV1(long documentId, int sectionIndex, string language, string model) : BaseParameters
+    {
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.DocumentId))]
+        public long DocumentId { get; } = documentId;
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.SectionIndex))]
+        public int SectionIndex { get; } = sectionIndex;
+
+        [DataField(typeof(TranslationFields), nameof(TranslationFields.Language))]
+        public string Language { get; } = language;
+
+        [DataField(typeof(TranslationFields), nameof(TranslationFields.Name))]
+        public string Model { get; } = model;
+    }
+
+    // Translated is the number of blocks that now show the new translation; Kept those whose answer did not pass the checks and stay as they were.
+    public sealed class LocalReadingRetranslationV1(int translated, int kept) : BaseResponse
+    {
+        public int Translated { get; } = translated;
+        public int Kept { get; } = kept;
+    }
 }

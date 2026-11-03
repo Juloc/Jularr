@@ -14090,6 +14090,38 @@
    "No translation engine is available right now. You can still read this book in its original language.",
    "Derzeit ist keine Übersetzungs-Engine verfügbar. Du kannst das Buch weiterhin in seiner Originalsprache lesen."
   ],
+  "reader.codex.title": [
+   "Codex (Owner)",
+   "Codex (Besitzer)"
+  ],
+  "reader.codex.chapter": [
+   "Re-translate this chapter",
+   "Dieses Kapitel neu übersetzen"
+  ],
+  "reader.codex.book": [
+   "Re-translate the whole book",
+   "Das ganze Buch neu übersetzen"
+  ],
+  "reader.codex.stop": [
+   "Stop",
+   "Anhalten"
+  ],
+  "reader.codex.progress": [
+   "Chapter {0} of {1} with Codex …",
+   "Kapitel {0} von {1} mit Codex …"
+  ],
+  "reader.codex.done": [
+   "Done: {0} blocks translated with Codex.",
+   "Fertig: {0} Blöcke mit Codex übersetzt."
+  ],
+  "reader.codex.failed": [
+   "{0} chapters could not be translated; Codex may be unavailable or its limit is reached.",
+   "{0} Kapitel konnten nicht übersetzt werden; Codex ist vielleicht nicht erreichbar oder sein Limit ist erreicht."
+  ],
+  "reader.codex.pick": [
+   "Choose a language first.",
+   "Wähle zuerst eine Sprache."
+  ],
   "reader.language.configure": [
    "Open profile settings",
    "Profileinstellungen öffnen"

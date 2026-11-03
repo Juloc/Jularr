@@ -62,7 +62,7 @@ namespace Jularr.Backend.Service.User.Translation.V1
         // Adds translated blocks to a section's cache under the document's row lock, so the Reader and the background job never
         // lose each other's blocks; a block already translated stays. Never called while a model runs.
         public static async Task<string?[]> StoreAsync(LogicContext ctx, long documentId, string path, string html, string sourceLanguage,
-            string digest, int count, IReadOnlyDictionary<int, string> blocks, CancellationToken ct)
+            string digest, int count, IReadOnlyDictionary<int, string> blocks, CancellationToken ct, bool replace = false)
         {
             var lockSql = new SqlStatement();
             lockSql.Statement =
@@ -81,7 +81,7 @@ namespace Jularr.Backend.Service.User.Translation.V1
             var changed = count == 0 && (existing is null || Parse(existing.Cache, html, sourceLanguage, null, 0)?.ModelDigest != digest);
             foreach (var (index, value) in blocks)
             {
-                if (!string.IsNullOrWhiteSpace(texts[index])) continue;
+                if (!replace && !string.IsNullOrWhiteSpace(texts[index])) continue;
                 texts[index] = value;
                 changed = true;
             }
