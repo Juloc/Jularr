@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using Jularr.Backend.Data.Admin.Ai.V1;
 using Jularr.Backend.Data.Common;
@@ -14,6 +16,7 @@ namespace Jularr.Backend.Service.Core
         private static readonly TimeSpan CodeTimeout = TimeSpan.FromSeconds(15);
         private static readonly TimeSpan CatalogAge = TimeSpan.FromMinutes(1);
         private static readonly TimeSpan CatalogRetry = TimeSpan.FromSeconds(30);
+        private static readonly TimeSpan ConnectedAge = TimeSpan.FromSeconds(30);
         private readonly CodexCli _cli;
         private readonly object _gate = new();
         private CodexDeviceLogin? _login;
@@ -22,6 +25,14 @@ namespace Jularr.Backend.Service.Core
         private CodexCatalog? _catalog;
         private DateTimeOffset _catalogAt;
         private DateTimeOffset _catalogFailedAt;
+        private string[] _knownModels = [];
+        private bool _warming;
+        private bool _connected;
+        private DateTimeOffset _connectedAt;
+        private DateOnly _usageDay;
+        private long _usedToday;
+        private long _usedSinceStart;
+        private bool _usageLoaded;
 
         internal CodexConnection(CodexCli cli)
         {
@@ -66,6 +77,7 @@ namespace Jularr.Backend.Service.Core
                 lock (_gate)
                 {
                     _catalog = catalog;
+                    _knownModels = [.. catalog.Models.Select(model => model.Id)];
                     _catalogAt = DateTimeOffset.UtcNow;
                     _catalogFailedAt = default;
                 }
@@ -83,6 +95,138 @@ namespace Jularr.Backend.Service.Core
                 return null;
             }
         }
+
+        // The model ids the account offered when last asked (kept after the cache ran out); empty until it was asked once.
+        internal string[] KnownModels
+        {
+            get
+            {
+                lock (_gate)
+                {
+                    return _knownModels;
+                }
+            }
+        }
+
+        // Asks for the models in the background when the list is empty or old, so a model id the Owner saved is known to the translation without a page visit.
+        internal void WarmModels()
+        {
+            lock (_gate)
+            {
+                if (_warming || _knownModels.Length > 0 && DateTimeOffset.UtcNow - _catalogAt < TimeSpan.FromMinutes(10)) return;
+                _warming = true;
+            }
+
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await ReadCatalogAsync(default);
+                }
+                finally
+                {
+                    lock (_gate)
+                    {
+                        _warming = false;
+                    }
+                }
+            });
+        }
+
+        // Whether a sign-in is stored; asked from the CLI at most every thirty seconds.
+        internal async Task<bool> IsConnectedAsync(CancellationToken ct)
+        {
+            lock (_gate)
+            {
+                if (DateTimeOffset.UtcNow - _connectedAt < ConnectedAge) return _connected;
+            }
+
+            var connected = (await _cli.ReadStatusAsync(ct)).Connected;
+            lock (_gate)
+            {
+                _connected = connected;
+                _connectedAt = DateTimeOffset.UtcNow;
+            }
+
+            return connected;
+        }
+
+        // The tokens Codex used today (UTC) and since Jularr started; the daily count survives a restart.
+        internal (long Today, long SinceStart) Usage()
+        {
+            lock (_gate)
+            {
+                LoadUsage();
+                return (_usedToday, _usedSinceStart);
+            }
+        }
+
+        // True when a limit above 0 is used up.
+        internal bool LimitReached(long dailyTokens, long runTokens)
+        {
+            var (today, sinceStart) = Usage();
+            return dailyTokens > 0 && today >= dailyTokens || runTokens > 0 && sinceStart >= runTokens;
+        }
+
+        // One prompt to the chosen model; its tokens are counted against the limits whether or not the answer is used.
+        internal async Task<string> ExecAsync(string model, string? effort, string prompt, CancellationToken ct)
+        {
+            if (!CodexSettings.IsModelName(model) || effort is not null && !CodexSettings.IsEffortName(effort)) throw new InvalidDataException("Codex model or effort is not valid.");
+            try
+            {
+                var answer = await _cli.ExecAsync(model, effort, prompt, ct);
+                Record(answer.Tokens);
+                return answer.Text;
+            }
+            catch (ProviderUnavailableException)
+            {
+                throw new InvalidDataException("Codex is not available.");
+            }
+        }
+
+        private void Record(long tokens)
+        {
+            if (tokens <= 0) return;
+            lock (_gate)
+            {
+                LoadUsage();
+                _usedToday += tokens;
+                _usedSinceStart += tokens;
+                try
+                {
+                    File.WriteAllText(UsagePath(), JsonSerializer.Serialize(new UsageFile(_usageDay.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), _usedToday)));
+                }
+                catch (IOException)
+                {
+                }
+            }
+        }
+
+        // Called inside the lock: today's count from the file, or a new day.
+        private void LoadUsage()
+        {
+            var today = DateOnly.FromDateTime(DateTime.UtcNow);
+            if (_usageLoaded && _usageDay == today) return;
+            _usageDay = today;
+            _usedToday = 0;
+            _usageLoaded = true;
+            try
+            {
+                var file = JsonSerializer.Deserialize<UsageFile>(File.ReadAllText(UsagePath()));
+                if (file is not null && file.Day == today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)) _usedToday = Math.Max(0, file.Tokens);
+            }
+            catch (Exception exception) when (exception is IOException or JsonException or UnauthorizedAccessException)
+            {
+            }
+        }
+
+        private string UsagePath()
+        {
+            Directory.CreateDirectory(_cli.HomePath);
+            return Path.Combine(_cli.HomePath, "jularr-usage.json");
+        }
+
+        private sealed record UsageFile(string Day, long Tokens);
 
         public async Task<CodexConnectionV1> StartLoginAsync(CancellationToken ct)
         {
@@ -153,6 +297,7 @@ namespace Jularr.Backend.Service.Core
             lock (_gate)
             {
                 _catalog = null;
+                _connectedAt = default;
             }
 
             if (!await _cli.LogoutAsync(ct)) throw new ServiceUnavailableException("codex_logout_failed");
@@ -177,6 +322,7 @@ namespace Jularr.Backend.Service.Core
                 if (!ReferenceEquals(_login, login)) return;
                 _catalog = null;
                 _catalogFailedAt = default;
+                _connectedAt = default;
                 _login = null;
                 _code = null;
                 _errorKey = errorKey;

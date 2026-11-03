@@ -51,7 +51,10 @@ namespace Jularr.Backend.Service.Core
         public static async Task<TranslationSetupV1> SetupAsync(LogicContext ctx, CancellationToken ct) =>
             await ctx.ReadSql.ReadOptionalAsync<TranslationSetupV1>(new SqlStatement
             {
-                Statement = """SELECT "TranslationMachines" AS "Machines", "TranslationModel" AS "Model" FROM "InstanceSettings" WHERE "Id" = 1;"""
+                Statement = """
+                    SELECT "TranslationMachines" AS "Machines", "TranslationModel" AS "Model", "CodexEffort" AS "CodexEffort", "CodexFallbackModel" AS "CodexFallbackModel",
+                        "CodexDailyTokens" AS "CodexDailyTokens", "CodexRunTokens" AS "CodexRunTokens" FROM "InstanceSettings" WHERE "Id" = 1;
+                    """
             }, ct) ?? new TranslationSetupV1([], null);
 
         // The provider and model of an id "<provider>:<model>"; null for an unknown provider or a model it does not offer.
