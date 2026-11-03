@@ -250,7 +250,7 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
-        public async Task Job_WithACodexDefaultModel_TranslatesThroughTheSeam_AndStopsAtTheDailyLimit()
+        public async Task Job_WithACodexDefaultModel_TranslatesASectionInOneRequest_AndStopsAtTheDailyLimit()
         {
             using var storage = new TemporaryDirectory();
             using var codex = new CodexTranslationTests.Folder();
@@ -265,19 +265,22 @@ namespace Jularr.Backend.Tests
             await ReadAsync(host, first, "s0/b0", "1 hour");
             await using var scope = host.Services.CreateAsyncScope();
 
-            // The account's models are known once it was asked; the Owner's default model names Codex, and 400 tokens a day are allowed (150 per block).
+            // The account's models are known once it was asked; the Owner's default model names Codex, and 100 tokens a day are allowed (a request costs 150).
             await scope.ServiceProvider.GetRequiredService<CodexConnection>().ReadCatalogAsync(default);
-            await host.Fixture.RunSqlAsync("UPDATE \"InstanceSettings\" SET \"TranslationModel\" = 'codex:gpt-test', \"CodexDailyTokens\" = 400 WHERE \"Id\" = 1");
+            await host.Fixture.RunSqlAsync("UPDATE \"InstanceSettings\" SET \"TranslationModel\" = 'codex:gpt-test', \"CodexDailyTokens\" = 100 WHERE \"Id\" = 1");
 
+            // The section's blocks go to Codex in one request; every block is translated, and the book's other sections wait: the day's tokens are used up.
             Assert.IsTrue(await Translate(scope));
             Assert.AreEqual(0, ollama.GenerationCount);
+            Assert.AreEqual(1, File.ReadAllLines(Path.Combine(codex.Home, "asked")).Length, "one request for the section");
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"ReadingResources\" WHERE \"Path\" = ':localtranslation/v4/codex:gpt-test/de/00000' AND \"ReadingDocumentId\" = " + document.DocumentId));
-            var (today, _) = scope.ServiceProvider.GetRequiredService<CodexConnection>().Usage();
-            Assert.IsTrue(today >= 400, "the limit stopped the round after the block that passed it: " + today);
+            var texts = await host.ScalarAsync("SELECT convert_from(\"Bytes\", 'UTF8')::jsonb -> 'Texts' FROM \"ReadingResources\" WHERE \"Path\" = ':localtranslation/v4/codex:gpt-test/de/00000' AND \"ReadingDocumentId\" = " + document.DocumentId);
+            StringAssert.Contains(Convert.ToString(texts, System.Globalization.CultureInfo.InvariantCulture), "Translated by gpt-test:");
+            Assert.AreEqual(150L, scope.ServiceProvider.GetRequiredService<CodexConnection>().Usage().Today);
 
             // Used up: nothing more is asked, and nothing falls back to Ollama by itself.
             Assert.IsFalse(await Translate(scope));
-            Assert.AreEqual(today, scope.ServiceProvider.GetRequiredService<CodexConnection>().Usage().Today);
+            Assert.AreEqual(1, File.ReadAllLines(Path.Combine(codex.Home, "asked")).Length);
             Assert.AreEqual(0, ollama.GenerationCount);
         }
 

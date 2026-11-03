@@ -33,9 +33,42 @@ async function poll(): Promise<void> {
     window.setTimeout(() => { void poll(); }, Interval);
 }
 
-// An action swaps the card in place, so the setup also runs after a region swap; one loop at a time.
+// Requests to Codex that run: the activity card is asked for again every three seconds while one runs, and swapped in place.
+let watching = false;
+
+async function watchActivity(): Promise<void> {
+    const current = document.querySelector<HTMLElement>("#codex-activity[data-codex-busy]");
+    if (!current?.isConnected) {
+        watching = false;
+        return;
+    }
+
+    if (!document.hidden) {
+        try {
+            const response = await fetch(location.pathname + "?handler=Activity", { credentials: "same-origin", cache: "no-store" });
+            if (response.ok) {
+                const template = document.createElement("template");
+                template.innerHTML = (await response.text()).trim();
+                const next = template.content.firstElementChild;
+                if (next?.id === "codex-activity") current.replaceWith(next);
+            }
+        } catch {
+            // The next round tries again.
+        }
+    }
+
+    window.setTimeout(() => { void watchActivity(); }, Interval);
+}
+
+// An action swaps the card in place, so the setup also runs after a region swap; one loop of each kind at a time.
 onPage(import.meta.url, () => {
-    if (polling || !document.querySelector("#codex-card[data-codex-pending]")) return;
-    polling = true;
-    window.setTimeout(() => { void poll(); }, Interval);
+    if (!polling && document.querySelector("#codex-card[data-codex-pending]")) {
+        polling = true;
+        window.setTimeout(() => { void poll(); }, Interval);
+    }
+
+    if (!watching && document.querySelector("#codex-activity[data-codex-busy]")) {
+        watching = true;
+        window.setTimeout(() => { void watchActivity(); }, Interval);
+    }
 }, { partial: true });

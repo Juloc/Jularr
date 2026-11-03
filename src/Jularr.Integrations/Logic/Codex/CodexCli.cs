@@ -89,6 +89,7 @@ namespace Jularr.Integrations.Logic.Codex
                     await process.WaitForExitAsync(timeout.Token);
                     var events = await lines;
                     await errors;
+                    if (PlanLimitOf(events) is { } limit) throw limit;
                     if (process.ExitCode != 0 || !File.Exists(output)) throw new InvalidDataException("Codex did not answer.");
                     var text = (await File.ReadAllTextAsync(output, timeout.Token)).Trim();
                     if (text.Length == 0) throw new InvalidDataException("Codex answered with nothing.");
@@ -119,6 +120,38 @@ namespace Jularr.Integrations.Logic.Codex
                 }
             }
         }
+
+        // The events of a turn the account's usage limit stopped (`turn.failed`: "You've hit your usage limit ... try again at Nov 4th, 2026 7:41 AM."), else null.
+        internal static CodexPlanLimitException? PlanLimitOf(string events)
+        {
+            foreach (var line in events.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                try
+                {
+                    using var document = JsonDocument.Parse(line);
+                    var root = document.RootElement;
+                    if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty("type", out var type) || type.GetString() is not ("turn.failed" or "error")) continue;
+                    var message = root.TryGetProperty("message", out var text) && text.ValueKind == JsonValueKind.String ? text.GetString()
+                        : root.TryGetProperty("error", out var error) && error.ValueKind == JsonValueKind.Object && error.TryGetProperty("message", out var inner) && inner.ValueKind == JsonValueKind.String ? inner.GetString() : null;
+                    if (message is null || !message.Contains("usage limit", StringComparison.OrdinalIgnoreCase)) continue;
+                    var until = TryAgainPattern().Match(message);
+                    var cleaned = until.Success ? OrdinalPattern().Replace(until.Groups[1].Value.Trim().TrimEnd('.'), "$1") : null;
+                    return new CodexPlanLimitException(cleaned is not null && DateTime.TryParseExact(cleaned, ["MMM d, yyyy h:mm tt", "MMMM d, yyyy h:mm tt"], System.Globalization.CultureInfo.InvariantCulture,
+                        System.Globalization.DateTimeStyles.AssumeLocal | System.Globalization.DateTimeStyles.AdjustToUniversal, out var parsed) ? new DateTimeOffset(parsed, TimeSpan.Zero) : null);
+                }
+                catch (JsonException)
+                {
+                }
+            }
+
+            return null;
+        }
+
+        [GeneratedRegex(@"try again at ([^\r\n]+)", RegexOptions.IgnoreCase)]
+        private static partial Regex TryAgainPattern();
+
+        [GeneratedRegex(@"(\d)(?:st|nd|rd|th)\b")]
+        private static partial Regex OrdinalPattern();
 
         // The usage of the turn that ended (`turn.completed`): input plus output tokens; 0 when the events do not carry it.
         internal static long TokensOf(string events)

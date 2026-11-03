@@ -115,6 +115,25 @@ namespace Jularr.Backend.Service.Admin.Ai.V1
         }
     }
 
+    // What Jularr's Codex translation is doing and has done: the running and last requests, the tokens per day, and a plan limit that rests it.
+    [ServiceEndpoint("GET", "/api/v1/admin/ai/codex/activity")]
+    public sealed class ReadCodexActivityV1 : AdminService<CodexConnectionParametersV1>
+    {
+        private readonly CodexConnection _connection;
+
+        internal ReadCodexActivityV1(CodexConnection connection)
+        {
+            _connection = connection;
+        }
+
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<CodexActivityV1>()];
+        protected override ModuleRequirement GetInstanceModules(CodexConnectionParametersV1 parameters) => ModuleRequirement.None;
+        protected override ServicePermission GetPermission(CodexConnectionParametersV1 parameters, Type resultType) => new("instance.settings.read");
+
+        protected override Task<IServiceOutput> OnRead() =>
+            Task.FromResult<IServiceOutput>(new CodexActivityV1(_connection.Requests(), [.. _connection.History().Select(day => new CodexDayV1(day.Day, day.Tokens))], _connection.PlanLimitedUntil));
+    }
+
     [ServiceEndpoint("GET", "/api/v1/admin/ai/codex/settings")]
     public sealed class ReadCodexSettingsV1 : AdminService<CodexConnectionParametersV1>
     {
