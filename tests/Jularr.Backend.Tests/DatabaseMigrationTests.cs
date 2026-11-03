@@ -265,7 +265,7 @@ namespace Jularr.Backend.Tests
             var cs = TestPostgres.ResolveConnectionString(nameof(TranslationVariants_UpgradeKeepsTheAutomaticModel_AndAddsAnEmptyChoiceTable));
             var options = Backup(folder.Path, out _);
             var tools = Tools(cs, FakeDump(folder.Path, true), null);
-            await new DatabaseBaseline(cs, migrations: DatabaseBaseline.Migrations.Where(migration => migration.Version < 36).ToArray()).StartAsync(CancellationToken.None);
+            await new DatabaseBaseline(cs, migrations: DatabaseBaseline.Migrations.Where(migration => migration.Version < 39).ToArray()).StartAsync(CancellationToken.None);
             await new DatabaseBaseline(cs, options, tools).StartAsync(CancellationToken.None);
 
             // No default model: the largest installed TranslateGemma translates as before; a model id names its provider.
@@ -274,7 +274,7 @@ namespace Jularr.Backend.Tests
             await ExecuteAsync(cs, """UPDATE "InstanceSettings" SET "TranslationModel" = 'ollama:translategemma:12b' WHERE "Id" = 1""");
             await Assert.ThrowsExactlyAsync<PostgresException>(() => ExecuteAsync(cs, """UPDATE "InstanceSettings" SET "TranslationModel" = 'translategemma' WHERE "Id" = 1"""));
             await Assert.ThrowsExactlyAsync<PostgresException>(() => ExecuteAsync(cs, """UPDATE "InstanceSettings" SET "TranslationModel" = 'ollama:a/b' WHERE "Id" = 1"""));
-            Assert.AreEqual(36, await ScalarAsync(cs, """SELECT "Version" FROM "DatabaseSchemaVersions" WHERE "Name" = '0036_translation_variants'"""));
+            Assert.AreEqual(39, await ScalarAsync(cs, """SELECT "Version" FROM "DatabaseSchemaVersions" WHERE "Name" = '0039_translation_variants'"""));
         }
 
         [TestMethod]
