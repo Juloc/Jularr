@@ -9,12 +9,21 @@ namespace Jularr.Backend.Data.Admin.Wanted.V1
 {
     public sealed class ReadWantedParametersV1 : BaseParameters
     {
-        public ReadWantedParametersV1(int page = 1, int pageSize = 25, WantedViewType wantedViewTypeId = WantedViewType.All)
+        public ReadWantedParametersV1(int page = 1, int pageSize = 25, WantedViewType wantedViewTypeId = WantedViewType.All, MediaType[]? mediaTypeIds = null, MediaSubtype[]? mediaSubtypeIds = null)
         {
             Page = page;
             PageSize = pageSize;
             WantedViewTypeId = wantedViewTypeId;
+            MediaTypeIds = mediaTypeIds ?? [];
+            MediaSubtypeIds = mediaSubtypeIds ?? [];
         }
+
+        // A type lists its titles without subtype and a subtype lists that subtype across types; none of either lists all.
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeIds))]
+        public MediaType[] MediaTypeIds { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaSubtypeIds))]
+        public MediaSubtype[] MediaSubtypeIds { get; }
 
         public int Page { get; }
         public int PageSize { get; }
