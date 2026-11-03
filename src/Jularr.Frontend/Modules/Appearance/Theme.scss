@@ -64,6 +64,18 @@
     --shadow-overlay: 0 11px 30px #0004;
     // What lies behind a dialog or a drawer: dark enough that the page does not show through, blurred by the dialogs themselves.
     --scrim: #16122599;
+    // Stacking: the page's layers, lowest first. Inside a component small local numbers (1-7) stay below all of them.
+    // Bars that stay in view in the content (floating pill, continue bar, sticky toolbars); menus, lists and tips opened from the content;
+    // the shell (header with its search, sidebar) and the minimized player; the phone menu; drawers and panels that are no dialog;
+    // hints after an action; tips of clipped texts; the skip link and full-page artwork. Dialogs and popovers use the browser's top layer.
+    --z-sticky: 10;
+    --z-dropdown: 20;
+    --z-shell: 30;
+    --z-menu: 40;
+    --z-drawer: 50;
+    --z-toast: 60;
+    --z-tooltip: 70;
+    --z-top: 100;
     // Shared colours for overlays on artwork, in both themes.
     --artwork-foreground: #fff;
     --artwork-shade: #120c22;

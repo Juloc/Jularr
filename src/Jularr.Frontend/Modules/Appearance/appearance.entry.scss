@@ -23,7 +23,7 @@
 // The sign-in pages' two round buttons (AppearanceDock.cs): the design and the brightness, bottom right.
 .appearance-dock {
     position: fixed;
-    z-index: 5;
+    z-index: var(--z-sticky);
     right: 23px;
     bottom: 22px;
     display: flex;

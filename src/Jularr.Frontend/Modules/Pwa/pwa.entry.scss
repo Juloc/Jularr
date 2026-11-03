@@ -2,7 +2,7 @@
     position: fixed;
     inset-inline: max(12px, env(safe-area-inset-left)) max(12px, env(safe-area-inset-right));
     bottom: max(12px, calc(8px + env(safe-area-inset-bottom)));
-    z-index: 70;
+    z-index: var(--z-toast);
     display: flex;
     align-items: center;
     justify-content: center;
