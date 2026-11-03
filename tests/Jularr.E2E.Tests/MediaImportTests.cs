@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.RegularExpressions;
 using Microsoft.Playwright;
 
 namespace Jularr.E2E.Tests
@@ -77,6 +78,90 @@ namespace Jularr.E2E.Tests
         private static Task FlipAsync(ILocator input) => input.Locator("xpath=ancestor::label[1]").ClickAsync();
 
         private static FilePayload Payload(string name, string text, string type = "application/json") => new() { Name = name, MimeType = type, Buffer = Encoding.UTF8.GetBytes(text) };
+
+        // The media-type bar narrows the preview: rows of a type left out are hidden and not chosen, the count and select all follow the visible rows,
+        // and a refreshed preview keeps the narrowing.
+        [TestMethod]
+        [Timeout(300_000)]
+        public async Task TypeBar_NarrowsThePreviewAndWhatIsChosen()
+        {
+            using var folders = new Folders("Movies");
+            await using var fakes = await FakeServices.StartAsync(folders.Downloads);
+            await using var jularr = await JularrInstance.StartAsync(new Dictionary<string, string>
+            {
+                ["Providers:Tmdb"] = fakes.Tmdb3.ToString(),
+                ["Providers:Tvdb"] = fakes.Tvdb4.ToString(),
+                ["Providers:Images:artworks.thetvdb.com"] = fakes.Images.ToString(),
+                ["Providers:OpenLibrary"] = fakes.OpenLibrary.ToString(),
+                ["Providers:MusicBrainz"] = fakes.MusicBrainz.ToString(),
+                ["Storage:LocalPaths:0"] = folders.Library
+            });
+            await using var session = await BrowserSession.StartAsync(jularr);
+            var page = session.Page;
+
+            try
+            {
+                await Owner.SetUpAndSignInAsync(page);
+                await Steps.SetTmdbKeyAsync(page);
+                await page.GotoAsync("/Admin/Import");
+                await page.Locator("input[type=file]").SetInputFilesAsync(Payload("list.json", List));
+                await Steps.SubmitAsync(page, Steps.FormWith(page, "Preview import"));
+
+                var rows = page.Locator("main table tbody tr");
+                var bar = page.Locator(".media-import__types .capsule-bar");
+                var count = page.Locator("[data-import-count]");
+                await Assertions.Expect(rows).ToHaveCountAsync(6);
+                await Assertions.Expect(count).ToHaveTextAsync("3 of 4 selected");
+                await Evidence.SaveAsync(page, "media-import-types-all");
+
+                // Only music: one row, chosen and counted; the others, a duplicate or an entry that could not be read among them, are hidden and not chosen, so they are not imported.
+                await bar.GetByRole(AriaRole.Link, new() { Name = "Music", Exact = true }).ClickAsync();
+                await Assertions.Expect(page).ToHaveURLAsync(new Regex("/Admin/Import$"));
+                await Assertions.Expect(rows.Locator("visible=true")).ToHaveCountAsync(1);
+                await Assertions.Expect(rows.Nth(3)).ToBeVisibleAsync();
+                await Assertions.Expect(rows.Nth(0)).ToBeHiddenAsync();
+                await Assertions.Expect(count).ToHaveTextAsync("1 of 1 selected");
+                await Assertions.Expect(rows.Nth(0).Locator("input[name='Choices[0].Include'][type=checkbox]")).Not.ToBeCheckedAsync();
+                await Assertions.Expect(bar.GetByRole(AriaRole.Link, new() { Name = "Music", Exact = true })).ToHaveAttributeAsync("aria-current", "true");
+                await Evidence.SaveAsync(page, "media-import-types-music");
+                await page.SetViewportSizeAsync(375, 812);
+                await Assertions.Expect(rows.Nth(0)).ToBeHiddenAsync();
+                await Assertions.Expect(rows.Nth(3)).ToBeVisibleAsync();
+                await Evidence.SaveAsync(page, "media-import-types-music-phone");
+                await page.SetViewportSizeAsync(1280, 900);
+
+                // An updated preview keeps the narrowing.
+                await Steps.FollowAsync(page, page.Locator("[data-import-refresh]"));
+                await Assertions.Expect(page.Locator("[data-import-types] input[name=type]")).ToHaveValueAsync("music");
+                await Assertions.Expect(bar.GetByRole(AriaRole.Link, new() { Name = "Music", Exact = true })).ToHaveAttributeAsync("aria-current", "true");
+                await Assertions.Expect(rows.Locator("visible=true")).ToHaveCountAsync(1);
+                await Assertions.Expect(count).ToHaveTextAsync("1 of 1 selected");
+
+                // The movies join: their rows are there again (unchosen, as the updated preview had them), and the count follows.
+                await bar.GetByRole(AriaRole.Link, new() { Name = "Movies", Exact = true }).ClickAsync();
+                await Assertions.Expect(bar.GetByRole(AriaRole.Link, new() { Name = "Movies", Exact = true })).ToHaveAttributeAsync("aria-current", "true");
+                await Assertions.Expect(rows.Locator("visible=true")).ToHaveCountAsync(4);
+                await Assertions.Expect(rows.Nth(0)).ToBeVisibleAsync();
+                await Assertions.Expect(rows.Nth(5)).ToBeVisibleAsync();
+                await Assertions.Expect(rows.Nth(2)).ToBeHiddenAsync();
+                await Assertions.Expect(count).ToHaveTextAsync("1 of 2 selected");
+
+                // Select all reaches only what is shown; the rows left out stay unchosen.
+                var all = page.Locator("[data-import-all]");
+                await FlipAsync(all);
+                await Assertions.Expect(count).ToHaveTextAsync("2 of 2 selected");
+                await bar.GetByRole(AriaRole.Link, new() { Name = "All", Exact = true }).ClickAsync();
+                await Assertions.Expect(rows.Locator("visible=true")).ToHaveCountAsync(6);
+                await Assertions.Expect(count).ToHaveTextAsync("2 of 4 selected");
+                await Assertions.Expect(rows.Nth(2).Locator("input[name='Choices[2].Include'][type=checkbox]")).Not.ToBeCheckedAsync();
+                CollectionAssert.AreEqual(Array.Empty<string>(), session.Problems.ToArray());
+            }
+            catch (Exception exception) when (exception is not AssertInconclusiveException)
+            {
+                await Evidence.SaveAsync(page, "failure-media-import-types");
+                throw;
+            }
+        }
 
         [TestMethod]
         [Timeout(300_000)]

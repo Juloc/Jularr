@@ -21,6 +21,7 @@ namespace Jularr.Frontend.Pages.Admin.MediaImport
         private MediaImportPreviewV1? _preview;
         private MediaImportResultV1? _result;
         private Dictionary<int, MediaImportChoiceV1> _posted = [];
+        private string[] _types = [];
 
         protected override void Define(Page page)
         {
@@ -169,6 +170,13 @@ namespace Jularr.Frontend.Pages.Admin.MediaImport
             content.Add(new Div(new Form<MediaImportDataV1>(form =>
             {
                 form.Hidden(item => item.Json);
+                if (TypeScopes(rows) is { Count: > 1 } scopes)
+                {
+                    var types = new ScopeSelection(_types, scopes);
+                    form.Content(new Div(TypeBar(types), Hidden("type", types.Parameter(types.ChosenSlugs) ?? "")).Class("media-import__types ui-field--wide")
+                        .Attribute("data-import-types", "").Attribute("data-listed", string.Join(',', types.ListedSlugs)));
+                }
+
                 form.Section("import.behavior", behavior =>
                 {
                     behavior.Select(item => item.Action, "import.action", ActionOptions());
@@ -229,6 +237,20 @@ namespace Jularr.Frontend.Pages.Admin.MediaImport
                 form.Submit(apply);
             }, Address + "?handler=Preview", csrf, new MediaImportDataV1(null, listing.Json, action, defaults), FormError)).Class("media-import__preview"));
         }
+
+        // The media types the list holds, in the order of the bar.
+        private static List<LibraryScope> TypeScopes(IEnumerable<MediaImportRowV1> rows)
+        {
+            var present = rows.Select(RowType).Where(slug => slug is not null).ToHashSet();
+            return [.. LibraryScopes.All.Where(scope => present.Contains(scope.Slug))];
+        }
+
+        // A row of its own type, also a duplicate or an entry that could not be read; a type the bar does not know has no capsule.
+        private static string? RowType(MediaImportRowV1 row) => MediaAreas.Keys.FirstOrDefault(key => string.Equals(key.Value, row.TypeKey, StringComparison.OrdinalIgnoreCase)).Key;
+
+        // The links hold the selection after the click; the script keeps the rows and the bar in step, so the list is not read again.
+        private IUiComponent TypeBar(ScopeSelection types) =>
+            new MediaTypeBar(assets, types.ListedSlugs, types.ChosenSlugs, "library.scope.", chosen => "#type=" + string.Join(',', chosen));
 
         private void Result(List<IUiComponent> content, MediaImportResultV1 result, string csrf)
         {
@@ -315,7 +337,9 @@ namespace Jularr.Frontend.Pages.Admin.MediaImport
         private IUiComponent IncludeCell(MediaImportRowV1 row)
         {
             var name = "Choices[" + row.Index.ToString(CultureInfo.InvariantCulture) + "].";
-            var parts = new List<IUiComponent> { Hidden(name + "Index", row.Index.ToString(CultureInfo.InvariantCulture)) };
+            var index = Hidden(name + "Index", row.Index.ToString(CultureInfo.InvariantCulture));
+            if (RowType(row) is { } type) index.Attribute("data-import-type", type);
+            var parts = new List<IUiComponent> { index };
             if (CanInclude(row))
             {
                 var include = new Toggle("import.row.include", row.IsIncluded);
@@ -496,22 +520,34 @@ namespace Jularr.Frontend.Pages.Admin.MediaImport
             return Content(writer.ToString(), "text/html; charset=utf-8");
         }
 
+        // The bar as it stands for a selection, for the script to swap in after a click.
+        public IActionResult OnGetTypeBar(string? listed, string? type)
+        {
+            if (!texts.CanImportMedia()) return Forbid();
+            var scopes = new ScopeSelection(listed?.Split(',') ?? [], (IReadOnlyList<LibraryScope>?)null);
+            var types = new ScopeSelection(type?.Split(',') ?? [], [.. LibraryScopes.All.Where(scope => scopes.Picked.Contains(scope.Slug))]);
+            using var writer = new StringWriter(CultureInfo.CurrentCulture);
+            TypeBar(types).WriteTo(writer, HtmlEncoder.Default, texts);
+            return Content(writer.ToString(), "text/html; charset=utf-8");
+        }
+
         public IActionResult OnGetExample()
         {
             if (!texts.CanImportMedia()) return Forbid();
             return File(Encoding.UTF8.GetBytes(MediaImportExample.Json), "application/json; charset=utf-8", MediaImportExample.FileName);
         }
 
-        public async Task<IActionResult> OnPostPreviewAsync(IFormFile? file, string? json, MediaImportActionType? action, List<DefaultRow>? defaults, List<ChoiceRow>? choices)
+        public async Task<IActionResult> OnPostPreviewAsync(IFormFile? file, string? json, MediaImportActionType? action, List<DefaultRow>? defaults, List<ChoiceRow>? choices, string? type = null)
         {
             Read(file, json, action, defaults, choices);
+            _types = type?.Split(',') ?? [];
             _preview = await preview.ExecuteAsync<MediaImportPreviewV1>(_input!, HttpContext.RequestAborted);
             PreparePage();
             return Page();
         }
 
         // Stream provider/identity search stages as the preview is prepared. The final HTML form stays unchanged.
-        public async Task<IActionResult> OnPostPreviewStreamAsync(IFormFile? file, string? json, MediaImportActionType? action, List<DefaultRow>? defaults, List<ChoiceRow>? choices)
+        public async Task<IActionResult> OnPostPreviewStreamAsync(IFormFile? file, string? json, MediaImportActionType? action, List<DefaultRow>? defaults, List<ChoiceRow>? choices, string? type = null)
         {
             if (!texts.CanImportMedia()) return Forbid();
             Read(file, json, action, defaults, choices);
