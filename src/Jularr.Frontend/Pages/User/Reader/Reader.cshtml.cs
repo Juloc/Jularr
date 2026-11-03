@@ -169,7 +169,8 @@ namespace Jularr.Frontend.Pages.User.Reader
                 : new Div([.. new[] { "original" }.Concat(_languages).Select(code => new Button(new ValueText(LanguageName(code))).Class("button")
                     .Attribute("data-language-choice", code).Attribute("aria-pressed", code == Chosen(document) ? "true" : "false")),
                     new P(new Text("reader.translation.provider.original")).Attribute("data-translation-provider", "")
-                        .Attribute("role", "status")]).Class("reader__panel reader__choices")
+                        .Attribute("role", "status"),
+                    .. _localTranslationModel is null ? Array.Empty<IUiComponent>() : [Retranslation()]]).Class("reader__panel reader__choices")
                     .Attribute("data-panel", "language").Attribute("hidden", "hidden").Attribute("aria-label", texts["reader.language"]);
 
             var bottom = new Div(Seek(false), new Div(
@@ -391,6 +392,24 @@ namespace Jularr.Frontend.Pages.User.Reader
 
             return frame;
         }
+
+        // Re-translating with another model, for every reader of the book: the models a machine has now (the script asks for them once the panel
+        // opens, an admin-only provider's only for administrators), then what to re-translate. It shows only while the server's translation does.
+        private IUiComponent Retranslation() => new Div(
+                new P(new Text("reader.retranslate.title")).Class("reader__retranslate-title"),
+                new Div().Class("reader__choices").Attribute("data-role", "retranslate-models").Attribute("role", "group").Attribute("aria-label", texts["reader.retranslate.model"]),
+                new Div(
+                    new Button(new Text("reader.retranslate.paragraph")).Class("button").Attribute("data-retranslate", "block"),
+                    new Button(new Text("reader.retranslate.section")).Class("button").Attribute("data-retranslate", "section"),
+                    new Button(new Text("reader.retranslate.book")).Class("button").Attribute("data-retranslate", "book")
+                ).Class("reader__choices"),
+                new P().Class("reader__retranslate-status").Attribute("data-role", "retranslate-status").Attribute("role", "status"))
+            .Class("reader__retranslate").Attribute("data-role", "retranslate").Attribute("hidden", "hidden")
+            .Attribute("data-models-url", "/api/v1/translation/local/models")
+            .TextAttribute("data-paragraph-label", "reader.retranslate.paragraphModel")
+            .TextAttribute("data-done-label", "reader.retranslate.done")
+            .TextAttribute("data-book-label", "reader.retranslate.bookQueued")
+            .TextAttribute("data-failed-label", "reader.retranslate.failed");
 
         // The languages the book can be read in; the choice is kept for the profile.
         private IUiComponent Languages(ReadingDocumentV1 document) => _languages.Length == 0

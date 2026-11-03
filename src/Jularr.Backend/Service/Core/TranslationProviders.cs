@@ -19,6 +19,12 @@ namespace Jularr.Backend.Service.Core
         // The models this provider may translate with, without the provider part; never containing '/'.
         IReadOnlyList<string> Models { get; }
 
+        // Only an administrator may choose its models in the Reader (the Owner's default model translates for everyone).
+        bool IsAdminOnly { get; }
+
+        // The models a machine translates with now, without the provider part; asking is metadata work and bounded in time.
+        Task<IReadOnlyList<string>> AvailableAsync(TranslationSetupV1 setup, CancellationToken ct);
+
         // The machine that translates now with this model, or with the provider's preferred installed one when no model is named (null when the
         // provider only translates when asked by name); null when none answers.
         Task<TranslationMachine?> ChooseAsync(TranslationSetupV1 setup, string? model, CancellationToken ct);
@@ -80,6 +86,23 @@ namespace Jularr.Backend.Service.Core
                 if (await provider.ChooseAsync(setup, null, ct) is { } machine) return machine;
             return null;
         }
+
+        // Whether the caller may choose this model in the Reader: any profile a model of an ordinary provider and the Owner's default model,
+        // only an administrator the other models of an admin-only provider.
+        public bool MayChoose(string id, TranslationSetupV1 setup, bool isAdmin) =>
+            Find(id) is var (provider, _) && (!provider.IsAdminOnly || isAdmin || string.Equals(id, setup.Model, StringComparison.Ordinal));
+
+        // The model ids the caller may choose now, in the providers' order; an admin-only provider is not even asked for anyone else.
+        public async Task<string[]> AvailableAsync(TranslationSetupV1 setup, bool isAdmin, CancellationToken ct)
+        {
+            var models = new List<string>();
+            foreach (var provider in _providers)
+            {
+                if (provider.IsAdminOnly && !isAdmin) continue;
+                models.AddRange((await provider.AvailableAsync(setup, ct)).Select(model => Id(provider.Key, model)));
+            }
+            return [.. models.Distinct(StringComparer.Ordinal)];
+        }
     }
 
     // The Ollama machines of the Owner's order through the same seam; the models and their checks stay those of OllamaLocalModels.
@@ -89,9 +112,16 @@ namespace Jularr.Backend.Service.Core
 
         public string Key => ProviderKey;
         public IReadOnlyList<string> Models => OllamaLocalModels.Candidates;
+        public bool IsAdminOnly => false;
 
         public async Task<TranslationMachine?> ChooseAsync(TranslationSetupV1 setup, string? model, CancellationToken ct) =>
             await machines.ChooseAsync(setup.Machines, ct, model) is var (server, chosen) ? new TranslationMachine(this, chosen, server) : null;
+
+        public async Task<IReadOnlyList<string>> AvailableAsync(TranslationSetupV1 setup, CancellationToken ct)
+        {
+            var installed = await machines.InstalledAsync(setup.Machines, ct);
+            return [.. OllamaLocalModels.Candidates.Where(model => installed.Contains(model, StringComparer.Ordinal))];
+        }
 
         public Task<string> DigestAsync(TranslationMachine machine, CancellationToken ct) => models.DigestAsync(machine.Address, machine.Model, ct);
 

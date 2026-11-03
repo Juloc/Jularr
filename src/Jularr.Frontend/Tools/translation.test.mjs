@@ -372,3 +372,70 @@ test('Smart Pages use the same window, the page in view first, through the same 
     await browser.fill('de', view, [0, 1, 2], () => true, () => assert.fail('nothing is translated twice'));
     assert.deepEqual(worker.given, ['five a', 'five b', 'six b']);
 });
+
+test('a server model is named without the local provider, a re-translation asks for the paragraph or the blocks with text', () => {
+    assert.equal(exports.modelName('ollama:translategemma:12b'), 'translategemma:12b');
+    assert.equal(exports.modelName('codex:gpt-5'), 'codex · gpt-5');
+    assert.deepEqual(Array.from(exports.retranslated('block', 1, ['a', 'b', ''])), [1]);
+    assert.deepEqual(Array.from(exports.retranslated('block', 2, ['a', 'b', ''])), []);
+    assert.deepEqual(Array.from(exports.retranslated('section', 0, ['a', '', 'c'])), [0, 2]);
+    assert.deepEqual(Array.from(exports.retranslated('book', 0, ['a', '', 'c'])), [0, 2]);
+});
+
+test('re-translating a paragraph keeps the choice first, the earlier text until the new one is there, and marks the model', async () => {
+    const blocks = ['First', 'Second', 'Third'].map(text => {
+        let markup = text;
+        return {
+            dataset: {},
+            get innerHTML() { return markup; },
+            set innerHTML(next) { markup = next; },
+            get innerText() { return markup; },
+            set textContent(next) { markup = next; },
+            querySelector: () => null,
+            querySelectorAll: () => []
+        };
+    });
+    const asked = [];
+    let release;
+    const waiting = new Promise(resolve => { release = resolve; });
+    const fetchStub = async (url, options) => {
+        asked.push((options?.method ?? 'GET') + ' ' + url + (options?.body ? ' ' + options.body : ''));
+        if (url.startsWith('/local/de/ollama%3Atranslategemma%3A4b?'))
+            return { ok: true, json: async () => ({ blocks: JSON.stringify(['Erstens', 'Zweitens', 'Drittens']), models: ['ollama:translategemma:4b', 'ollama:translategemma:4b', 'ollama:translategemma:4b'] }) };
+        if (url === '/local/de/ollama%3Atranslategemma%3A12b/choices') return { ok: true, json: async () => ({ success: true }) };
+        if (url === '/local/de/ollama%3Atranslategemma%3A12b/blocks/1') {
+            await waiting;
+            return { ok: true, json: async () => ({ text: 'Als Zweites' }) };
+        }
+        throw new Error('Unexpected fetch: ' + url);
+    };
+    const localExports = {};
+    runInNewContext(script, { exports: localExports, fetch: fetchStub, ...lifetime });
+    const reader = {
+        dataset: { language: 'en', translationEngine: 'gemma', localModel: 'ollama:translategemma:4b', localTranslationUrl: '/local/', antiforgery: 'token' },
+        querySelector: () => null
+    };
+    const content = { querySelectorAll: () => blocks, innerText: 'He said that the door was open and the house was full of the night, and it was quiet.' };
+    const translation = localExports.translator(reader, content, () => { throw new Error('No worker is needed'); });
+    await translation.choose('de');
+    assert.equal(translation.showsServer(), true);
+    assert.equal(translation.modelAt(blocks[1]), 'ollama:translategemma:4b');
+
+    const progress = [];
+    const running = translation.retranslate('ollama:translategemma:12b', 'block', blocks[1], (done, total) => progress.push(done + '/' + total));
+    await new Promise(resolve => setTimeout(resolve, 5));
+    assert.equal(blocks[1].innerText, 'Zweitens', 'the earlier text stays until the new one is there');
+    release();
+    assert.equal(await running, true);
+    assert.deepEqual(blocks.map(block => block.innerText), ['Erstens', 'Als Zweites', 'Drittens']);
+    assert.equal(blocks[1].dataset.translationModel, 'ollama:translategemma:12b');
+    assert.equal(blocks[0].dataset.translationModel, undefined);
+    assert.equal(translation.modelAt(blocks[1]), 'ollama:translategemma:12b');
+    assert.deepEqual(progress, ['0/1', '1/1']);
+    assert.ok(asked.includes('PUT /local/de/ollama%3Atranslategemma%3A12b/choices {"scope":1,"blockIndex":1}'), asked.join('\n'));
+
+    // Back to the original: the mark goes with the translation.
+    await translation.choose('');
+    assert.equal(blocks[1].dataset.translationModel, undefined);
+    assert.equal(translation.showsServer(), false);
+});

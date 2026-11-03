@@ -132,6 +132,24 @@ export function languageOf(tag: string | undefined, text: string): Language | un
     return best;
 }
 
+// A server model as the Reader names it: the model alone for the local Ollama machines ("translategemma:12b"), else with its provider ("codex · gpt-5").
+export function modelName(id: string): string {
+    const separator = id.indexOf(":");
+    if (separator <= 0) return id;
+    const provider = id.slice(0, separator);
+    return provider === "ollama" ? id.slice(separator + 1) : provider + " · " + id.slice(separator + 1);
+}
+
+// What a re-translation covers, as the server numbers it.
+export type RetranslationScope = "block" | "section" | "book";
+export const ScopeIds: Record<RetranslationScope, number> = { block: 1, section: 2, book: 3 };
+
+// The blocks a re-translation asks the model for now: the one paragraph, else every block of the section that has text of its own.
+export function retranslated(scope: RetranslationScope, index: number, list: string[]): number[] {
+    if (scope === "block") return list[index]?.trim() ? [index] : [];
+    return list.flatMap((text, i) => text.trim() ? [i] : []);
+}
+
 // The models of a route are its steps: one, or into English and out of it.
 export function steps(source: Language, target: Language): [string, string][] {
     return source === Bridge || target === Bridge ? [[source, target]] : [[source, Bridge], [Bridge, target]];
@@ -275,11 +293,15 @@ export function translator(reader: HTMLElement, content: HTMLElement, createWork
     const status = reader.querySelector<HTMLElement>("[data-role=translation-status]");
     const source = languageOf(reader.dataset.language, content.innerText.slice(0, 20_000));
     const browser = browserTranslator(reader, source, createWorker);
+    // A chapter opened in place ends this reader; a re-translation still running stops with it (the background job finishes the chosen blocks).
+    const lifetime = readerLifetime();
     let current: Language | "" = "";
     let revision = 0;
     let runs = 0;
     // Once Mozilla stepped in, each page turn moves its window along.
     let emergency: (() => void) | undefined;
+    // The server's text in view: the model each block's text is from, and the blocks re-translated here, which the default model's work never overwrites.
+    let shown: { result: string[]; bridge: boolean[]; models: (string | null)[]; chosen: Set<number> } | undefined;
 
     function say(text: string | undefined) {
         if (!status) return;
@@ -287,9 +309,28 @@ export function translator(reader: HTMLElement, content: HTMLElement, createWork
         status.textContent = text ?? "";
     }
 
+    // The blocks marked as another model's text.
+    const labeled = new Set<HTMLElement>();
+
     function restore() {
         for (const [block, html] of originals) block.innerHTML = html;
+        for (const block of labeled) delete block.dataset.translationModel;
+        labeled.clear();
+        shown = undefined;
         delete reader.dataset.translated;
+    }
+
+    // A block from another model than the chapter's own carries its model, shown as a quiet line beside it; the language panel names it.
+    function label() {
+        if (!shown) return;
+        const own = reader.dataset.localModel;
+        shown.models.forEach((model, index) => {
+            const block = blocks[index];
+            if (model && model !== own) {
+                block.dataset.translationModel = model;
+                labeled.add(block);
+            } else if (labeled.delete(block)) delete block.dataset.translationModel;
+        });
     }
 
     // Leaf blocks carry their text; a block holding others keeps its own.
@@ -322,16 +363,23 @@ export function translator(reader: HTMLElement, content: HTMLElement, createWork
         const url = prefix + encodeURIComponent(target) + "/" + encodeURIComponent(model);
         const set = blockSet(prefix, target, texts());
         const { list, result, bridge } = set;
+        const models: (string | null)[] = list.map(() => null);
+        const chosen = new Set<number>();
         const cached = await fetch(url + "?sourceLanguage=" + encodeURIComponent(source), { credentials: "same-origin" });
         if (cached.ok) {
-            const data = await cached.json() as { blocks: string };
+            const data = await cached.json() as { blocks: string; models?: (string | null)[] };
             const saved = JSON.parse(data.blocks) as string[];
             if (Array.isArray(saved) && saved.length === result.length) saved.forEach((text, i) => {
-                if (typeof text === "string") result[i] = text;
+                if (typeof text === "string") {
+                    result[i] = text;
+                    models[i] = data.models?.[i] ?? model;
+                }
             });
         }
         if (!alive()) return;
+        shown = { result, bridge, models, chosen };
         show(result);
+        label();
 
         // What the browser translated earlier stands in for the blocks the server has not done yet; the server's text replaces it as soon as it arrives.
         if (await recall(set)) {
@@ -356,9 +404,12 @@ export function translator(reader: HTMLElement, content: HTMLElement, createWork
             const translated = await response.json() as { text: string };
             if (!alive()) return;
             if (!translated.text?.trim()) throw new Error("Local model returned an empty block.");
-            result[index] = translated.text;
-            bridge[index] = false;
             completed++;
+            // A block re-translated meanwhile keeps the chosen model's text.
+            if (chosen.has(index)) continue;
+            result[index] = translated.text;
+            models[index] = model;
+            bridge[index] = false;
             show(result);
 
             // A server that cannot keep up: Mozilla translates the page in view and the three after it while the server goes on; its text replaces Mozilla's.
@@ -441,5 +492,57 @@ export function translator(reader: HTMLElement, content: HTMLElement, createWork
         }
     }
 
-    return { choose, moved: () => emergency?.() };
+    // The leaf block a place in the text belongs to: the block itself, else the first block inside it.
+    function leaf(place: HTMLElement | undefined): number | undefined {
+        const block = place && (originals.has(place) ? place : Array.from(place.querySelectorAll<HTMLElement>("[data-b]")).find(inner => originals.has(inner)));
+        return block ? positions.get(block) : undefined;
+    }
+
+    // Re-translates with another server model, for every reader of the book: the choice is kept first, then the paragraph or the section's blocks
+    // are asked for one after the other (the whole book's other sections follow in the background job). Each block keeps its earlier text until
+    // its new one is there. `progress` gets the blocks done and their number; false when the model could not translate.
+    async function retranslate(model: string, scope: RetranslationScope, place: HTMLElement | undefined, progress: (done: number, total: number) => void): Promise<boolean> {
+        const prefix = reader.dataset.localTranslationUrl;
+        const target = current;
+        const view = shown;
+        const index = leaf(place) ?? (scope === "block" ? -1 : 0);
+        if (!prefix || !source || !target || !view || index < 0 || reader.dataset.translationEngine !== "gemma") return false;
+        const url = prefix + encodeURIComponent(target) + "/" + encodeURIComponent(model);
+        const headers = { "Content-Type": "application/json", RequestVerificationToken: reader.dataset.antiforgery! };
+        const choice = await fetch(url + "/choices", {
+            method: "PUT", credentials: "same-origin", headers,
+            body: JSON.stringify({ scope: ScopeIds[scope], blockIndex: scope === "block" ? index : null })
+        });
+        if (!choice.ok) return false;
+
+        const alive = () => !lifetime.aborted && current === target && shown === view;
+        const wanted = retranslated(scope, index, texts());
+        let done = 0;
+        progress(done, wanted.length);
+        for (const block of wanted) {
+            if (!alive()) return true;
+            const response = await fetch(url + "/blocks/" + block, { method: "POST", credentials: "same-origin", headers, body: JSON.stringify({ sourceLanguage: source }) });
+            if (!response.ok) return false;
+            const translated = await response.json() as { text: string };
+            if (!alive()) return true;
+            if (translated.text?.trim()) {
+                view.chosen.add(block);
+                view.result[block] = translated.text;
+                view.bridge[block] = false;
+                view.models[block] = model;
+                show(view.result);
+                label();
+            }
+            progress(++done, wanted.length);
+        }
+        return true;
+    }
+
+    // The model the text of the block at this place is from; undefined while no server translation shows.
+    const modelAt = (place: HTMLElement | undefined): string | null | undefined => {
+        const index = leaf(place);
+        return shown && index !== undefined ? shown.models[index] : undefined;
+    };
+
+    return { choose, moved: () => emergency?.(), retranslate, modelAt, showsServer: () => shown !== undefined && reader.dataset.translationEngine === "gemma" };
 }

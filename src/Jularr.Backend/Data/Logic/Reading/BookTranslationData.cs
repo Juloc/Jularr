@@ -77,6 +77,47 @@ namespace Jularr.Backend.Data.Logic.Reading
         public string Model { get; }
     }
 
+    // A re-translation with a model for every reader of the book: one block (both indices), every block of a section (no block) or of the whole
+    // book (neither).
+    internal sealed class ReadingTranslationChoiceWriteData : BaseData
+    {
+        public ReadingTranslationChoiceWriteData(long documentId, int? sectionIndex, int? blockIndex, string language, string model)
+        {
+            DocumentId = documentId;
+            SectionIndex = sectionIndex;
+            BlockIndex = blockIndex;
+            Language = language;
+            Model = model;
+        }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.DocumentId))]
+        public long DocumentId { get; }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.SectionIndex), false)]
+        public int? SectionIndex { get; }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.BlockIndex), false)]
+        public int? BlockIndex { get; }
+
+        [DataField(typeof(TranslationFields), nameof(TranslationFields.Language))]
+        public string Language { get; }
+
+        [DataField(typeof(TranslationFields), nameof(TranslationFields.Name))]
+        public string Model { get; }
+    }
+
+    // A model id someone re-translated passages with.
+    internal sealed class ReadingTranslationChosenModelData : BaseData
+    {
+        public ReadingTranslationChosenModelData(string chosenModel)
+        {
+            ChosenModel = chosenModel;
+        }
+
+        [DataField(typeof(TranslationFields), nameof(TranslationFields.Name))]
+        public string ChosenModel { get; }
+    }
+
     // One model's cached translation of a section.
     internal sealed class ReadingTranslationCacheData : BaseData
     {

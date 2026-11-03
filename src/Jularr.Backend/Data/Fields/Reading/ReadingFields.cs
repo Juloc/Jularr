@@ -59,6 +59,7 @@ namespace Jularr.Backend.Data.Fields.Reading
         public static readonly EnumField ReadingViewTypeId = new(typeof(ReadingView));
         public static readonly IntField PageNumber = new() { Minimum = 1, Maximum = 100_000 };
         public static readonly IntField BlockIndex = new() { Minimum = 0 };
+        public static readonly EnumField TranslationScopeId = new(typeof(ReadingTranslationScope));
         public static readonly StringField RecognizedReason = new(NpgsqlDbType.Varchar) { MaximumLength = 24, AllowBlank = false };
         public static readonly DecimalField Quality = new() { Minimum = 0, Maximum = 1, Scale = 3 };
         public static readonly StringField RecognizedLines = new() { AllowBlank = false };

@@ -1,4 +1,5 @@
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Enums.Reading;
 using Jularr.Backend.Data.Fields.Reading;
 using Jularr.Backend.Data.Fields.Translation;
 
@@ -69,5 +70,41 @@ namespace Jularr.Backend.Data.User.Translation.V1
     public sealed class LocalReadingBlockV1(string text) : BaseResponse
     {
         public string Text { get; } = text;
+    }
+
+    public sealed class ReaderTranslationModelsParametersV1 : BaseParameters
+    {
+    }
+
+    // The provider-qualified model ids the caller may re-translate with now; an admin-only provider's models only for an administrator.
+    public sealed class ReaderTranslationModelsV1(string[] models) : BaseResponse
+    {
+        [DataField(typeof(TranslationFields), nameof(TranslationFields.Models))]
+        public string[] Models { get; } = models;
+    }
+
+    public sealed class LocalReadingChoiceParametersV1(long documentId, int sectionIndex, string language, string model) : BaseParameters
+    {
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.DocumentId))]
+        public long DocumentId { get; } = documentId;
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.SectionIndex))]
+        public int SectionIndex { get; } = sectionIndex;
+
+        [DataField(typeof(TranslationFields), nameof(TranslationFields.Language))]
+        public string Language { get; } = language;
+
+        [DataField(typeof(TranslationFields), nameof(TranslationFields.Name))]
+        public string Model { get; } = model;
+    }
+
+    // A re-translation with the model: one block of the section (BlockIndex), the whole section, or every section of the book.
+    public sealed class LocalReadingChoiceDataV1(ReadingTranslationScope scope, int? blockIndex) : BaseData
+    {
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.TranslationScopeId))]
+        public ReadingTranslationScope Scope { get; } = scope;
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.BlockIndex), false)]
+        public int? BlockIndex { get; } = blockIndex;
     }
 }

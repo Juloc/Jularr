@@ -1551,6 +1551,42 @@
    "Translating",
    "Wird übersetzt"
   ],
+  "reader.retranslate.title": [
+   "Translate again with another model",
+   "Mit einem anderen Modell neu übersetzen"
+  ],
+  "reader.retranslate.model": [
+   "Model",
+   "Modell"
+  ],
+  "reader.retranslate.paragraph": [
+   "Paragraph",
+   "Absatz"
+  ],
+  "reader.retranslate.section": [
+   "Chapter",
+   "Kapitel"
+  ],
+  "reader.retranslate.book": [
+   "Whole book",
+   "Ganzes Buch"
+  ],
+  "reader.retranslate.paragraphModel": [
+   "Paragraph at the top of the page: {0}",
+   "Absatz oben auf der Seite: {0}"
+  ],
+  "reader.retranslate.done": [
+   "Translated again with {0}.",
+   "Neu übersetzt mit {0}."
+  ],
+  "reader.retranslate.bookQueued": [
+   "The rest of the book follows in the background; each passage changes when it is ready.",
+   "Der Rest des Buchs folgt im Hintergrund; jede Stelle wechselt, sobald sie fertig ist."
+  ],
+  "reader.retranslate.failed": [
+   "This model cannot translate right now; the earlier text stays.",
+   "Dieses Modell kann gerade nicht übersetzen; der bisherige Text bleibt."
+  ],
   "reader.translation.browserUnsupported": [
    "Mozilla has no models for this language; the server keeps translating",
    "Mozilla hat keine Modelle für diese Sprache; der Server übersetzt weiter"
