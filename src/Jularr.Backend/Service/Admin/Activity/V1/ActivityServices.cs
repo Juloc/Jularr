@@ -56,7 +56,7 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
                         AND operation."AttentionUrl" IS NULL AS "CanRetryImport",
                     operation."OperationStatusTypeId" IN (1, 2) AND operation."AttentionKey" IS NOT NULL AS "IsWaiting",
                     operation."OperationTypeId" = 2 AND operation."OperationStatusTypeId" IN (1, 2) AND operation."AttentionProposal" -> 'Source' IS NOT NULL
-                        AND coalesce(work."MediaTypeId" IN (1, 2), FALSE) AS "CanImportManually",
+                        AND coalesce(work."MediaTypeId" IN (1, 2, 3), FALSE) AS "CanImportManually",
                     connection."Id" AS "AcquisitionConnectionId",
                     CASE
                         WHEN connection."AcquisitionConnectionTypeId" = 6 THEN 1

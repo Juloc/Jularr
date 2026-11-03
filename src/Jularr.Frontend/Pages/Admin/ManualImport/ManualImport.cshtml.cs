@@ -18,7 +18,7 @@ using Microsoft.AspNetCore.WebUtilities;
 
 namespace Jularr.Frontend.Pages.Admin.ManualImport
 {
-    // A folder of any storage, or a download that waits for a person, imported by hand: choose the film or series, check what each file is, match the ones that are not clear, import the chosen.
+    // A folder of any storage, or a download that waits for a person, imported by hand: choose the film, series or book, check what each file is, match the ones that are not clear, import the chosen.
     public sealed class ManualImportModel(FindManualImportWorksV1 find, ReadManualImportWorkV1 readWork, ReadManualImportFilesV1 readFiles, PreviewManualImportV1 preview, RunManualImportV1 run,
         ReadManualImportDownloadV1 readDownload, RunManualImportDownloadV1 runDownload, ReadStorageMountsV1 mounts, ReadStorageMountV1 mount, ReadStorageDirectoriesV1 directories, ReadStorageLocalPathsV1 localPaths,
         IAntiforgery antiforgery, UiText texts, FrontendAssets assets) : JularrPage
@@ -177,10 +177,11 @@ namespace Jularr.Frontend.Pages.Admin.ManualImport
             if (FormError is not null) parts.Add(new P(ErrorText.Of(FormError)).Class("ui-page-error").Attribute("role", "alert"));
             if (_notice is not null) parts.Add(new P(new Text(_notice)).Class("ui-page-error").Attribute("role", "alert"));
             parts.Add(Tools());
-            var showsEpisode = _lines.Any(line => line.MediaType == MediaType.Series);
+            var showsEpisode = _lines.Any(line => line.MediaType is MediaType.Series or MediaType.Book);
             var columns = new List<ListColumn>
             {
-                new("manualImport.col.file", ListRole.Main), new("table.status", ListRole.Status), new("manualImport.col.series", ListRole.Data, 2), new("manualImport.col.episode"),
+                new("manualImport.col.file", ListRole.Main), new("table.status", ListRole.Status), new("manualImport.col.series", ListRole.Data, 2),
+                new(_lines.All(line => line.MediaType == MediaType.Book) ? "manualImport.col.volume" : "manualImport.col.episode"),
                 new("manualImport.col.quality", ListRole.Data, 1), new("manualImport.col.language", ListRole.Data, 2), new("manualImport.col.size", ListRole.Data, 1), new("common.actions", ListRole.Actions)
             };
             parts.Add(new ListPanel("manualImport.list.files", columns, [.. _lines.Select((line, index) => LineRow(line, index, showsEpisode))]).Modifier("manual-import-files"));
@@ -233,11 +234,18 @@ namespace Jularr.Frontend.Pages.Admin.ManualImport
                 Hidden(name + "SubtitleLanguages", string.Join(',', choice.SubtitleLanguages))
             };
             var folder = Path.GetDirectoryName(choice.Path.Replace('/', Path.DirectorySeparatorChar))?.Replace(Path.DirectorySeparatorChar, '/') ?? "";
-            var sub = line.TargetName is { } target ? new Truncated("→ " + target) : new Truncated(folder.Length > 0 ? folder : "/");
-            var identity = new ListIdentity(new IconTile(Glyph("play", 18), UiTone.Accent), new Truncated(Path.GetFileName(choice.Path)), sub);
+            // A file the import left out says why until a person chooses it.
+            var sub = line.File.UnplacedReason is { } reason && !choice.Imports ? new Truncated(FileReason(reason))
+                : line.TargetName is { } target ? new Truncated("→ " + target) : new Truncated(folder.Length > 0 ? folder : "/");
+            var identity = new ListIdentity(new IconTile(Glyph(TypeIcon(line.MediaType), 18), UiTone.Accent), new Truncated(Path.GetFileName(choice.Path)), sub);
             var main = new Div(new Div([select, Hidden(name + "Imports", "false"), .. state]).Class("manual-import__select"), identity).Class("manual-import__main");
 
-            var episode = line.MediaType == MediaType.Series ? EpisodeLabel(choice.Season, choice.Episode) : "–";
+            var episode = line.MediaType switch
+            {
+                MediaType.Series => EpisodeLabel(choice.Season, choice.Episode),
+                MediaType.Book => VolumeLabel(choice.Season, choice.Episode),
+                _ => "–"
+            };
             var quality = choice.QualityKey ?? line.File.QualityKey ?? "–";
             var language = LanguageText(choice.AudioLanguages, choice.SubtitleLanguages, line.File.Languages);
             var size = ByteSize.Format(line.File.SizeBytes);
@@ -245,6 +253,7 @@ namespace Jularr.Frontend.Pages.Admin.ManualImport
                 .Attribute("value", "match:" + index.ToString(CultureInfo.InvariantCulture)).Attribute("formnovalidate", "formnovalidate");
             var caption = new List<IUiComponent> { ListPanel.Fact("manualImport.col.series", new ValueText(line.WorkTitle)) };
             if (showsEpisode && line.MediaType == MediaType.Series) caption.Add(ListPanel.Fact("manualImport.col.episode", new ValueText(episode)));
+            if (showsEpisode && line.MediaType == MediaType.Book) caption.Add(ListPanel.Fact("manualImport.col.volume", new ValueText(episode)));
             caption.Add(ListPanel.Fact("manualImport.col.quality", new ValueText(quality)));
             caption.Add(ListPanel.Fact("manualImport.col.language", new ValueText(language)));
             caption.Add(ListPanel.Fact("manualImport.col.size", new ValueText(size)));
@@ -266,22 +275,27 @@ namespace Jularr.Frontend.Pages.Admin.ManualImport
             : handled && !chosen ? new StateChip(new Text("manualImport.state.imported"), UiTone.Success, Glyph("check", 14))
             : chosen ? new StateChip(new Text("manualImport.state.ready"), UiTone.Success, Glyph("check", 14)) : new StateChip(new Text("manualImport.state.left"), UiTone.Neutral, Glyph("close", 14));
 
-        // What one file is: its film or series, the numbers and the quality; searched, chosen, applied, all on the server.
+        // What one file is: its film, series or book, the numbers, the quality and the languages; searched, chosen, applied, all on the server. A book's file is matched among books, a video among films and series.
         private IUiComponent MatchDialog(FileLine line, int index)
         {
             var current = new SelectOption(line.WantedItemId.ToString(CultureInfo.InvariantCulture), line.WorkTitle);
             var choices = new List<SelectOption> { current };
-            var types = new Dictionary<long, MediaType> { [line.WantedItemId] = line.MediaType };
-            foreach (var work in _candidates ?? new BaseDataList<ManualImportWorkV1>([]))
+            var isBook = line.MediaType == MediaType.Book;
+            var types = new Dictionary<long, (MediaType Type, MediaSubtype? Subtype)> { [line.WantedItemId] = (line.MediaType, line.MediaSubtype) };
+            foreach (var work in (_candidates ?? new BaseDataList<ManualImportWorkV1>([])).Where(work => (work.MediaTypeId == MediaType.Book) == isBook))
             {
-                if (types.TryAdd(work.WantedItemId, work.MediaTypeId)) choices.Add(new SelectOption(work.WantedItemId.ToString(CultureInfo.InvariantCulture), WithYear(work.CanonicalTitle, work.ReleaseYear) + " · " + texts[MediaTypeLabel.Key(work.MediaTypeId, work.MediaSubtypeId)]));
+                if (types.TryAdd(work.WantedItemId, (work.MediaTypeId, work.MediaSubtypeId))) choices.Add(new SelectOption(work.WantedItemId.ToString(CultureInfo.InvariantCulture), WithYear(work.CanonicalTitle, work.ReleaseYear) + " · " + texts[MediaTypeLabel.Key(work.MediaTypeId, work.MediaSubtypeId)]));
             }
 
-            if (_matchedWork is { } kept && types.TryAdd(kept.WantedItemId, kept.MediaTypeId)) choices.Add(new SelectOption(kept.WantedItemId.ToString(CultureInfo.InvariantCulture), WithYear(kept.CanonicalTitle, kept.ReleaseYear)));
+            if (_matchedWork is { } kept && (kept.MediaTypeId == MediaType.Book) == isBook && types.TryAdd(kept.WantedItemId, (kept.MediaTypeId, kept.MediaSubtypeId)))
+            {
+                choices.Add(new SelectOption(kept.WantedItemId.ToString(CultureInfo.InvariantCulture), WithYear(kept.CanonicalTitle, kept.ReleaseYear)));
+            }
+
             var chosen = MatchedWantedItemId ?? line.WantedItemId;
-            var type = types.GetValueOrDefault(chosen, line.MediaType);
-            var qualities = new List<SelectOption> { new("", texts["manualImport.qualityFromName"]) };
-            qualities.AddRange(ProfileQualities.For(type, null).Select(key => new SelectOption(key, key)));
+            var (type, subtype) = types.GetValueOrDefault(chosen, (line.MediaType, line.MediaSubtype));
+            var qualities = new List<SelectOption> { new("", texts[isBook ? "manualImport.qualityFromFormat" : "manualImport.qualityFromName"]) };
+            qualities.AddRange(ProfileQualities.For(type, subtype).Select(key => new SelectOption(key, key)));
             var data = new ManualImportMatchV1(MatchQuery, chosen, MatchedSeason ?? line.Choice.Season, MatchedEpisode ?? line.Choice.Episode, MatchedQualityKey ?? line.Choice.QualityKey,
                 MatchedAudioLanguages ?? [], MatchedSubtitleLanguages ?? []);
             var languages = FileLanguages.Known.Select(language => new SelectOption(language.Three, WorkLanguages.Name(language.Two))).ToArray();
@@ -290,15 +304,28 @@ namespace Jularr.Frontend.Pages.Admin.ManualImport
                 fields.Content(new Div(new Strong(new Truncated(Path.GetFileName(line.Choice.Path)))).Class("manual-import__file ui-field--wide"));
                 fields.Text(item => item.MatchQuery, "manualImport.matchQuery", "off", NoHelp);
                 fields.Select(item => item.MatchedWantedItemId, "manualImport.search", choices, NoHelp);
-                if (types.Values.Contains(MediaType.Series))
+                if (isBook)
+                {
+                    // A volume, a manga's chapter (with its volume, else the one the Work gives it), or neither for the whole Work.
+                    fields.Number(item => item.MatchedSeason, "manualImport.volume", NoHelp);
+                    if (types.Values.Any(value => value.Subtype == MediaSubtype.Manga)) fields.Number(item => item.MatchedEpisode, "manualImport.chapter", NoHelp);
+                }
+                else if (types.Values.Any(value => value.Type == MediaType.Series))
                 {
                     fields.Number(item => item.MatchedSeason, "manualImport.season", NoHelp);
                     fields.Number(item => item.MatchedEpisode, "manualImport.episode", NoHelp);
                 }
 
                 fields.Select(item => item.MatchedQualityKey, "manualImport.quality", qualities, NoHelp);
-                fields.Choices(item => item.MatchedAudioLanguages, "manualImport.audioLanguages", languages, NoHelp);
-                fields.Choices(item => item.MatchedSubtitleLanguages, "manualImport.subtitleLanguages", languages, NoHelp);
+                if (isBook)
+                {
+                    fields.Choices(item => item.MatchedAudioLanguages, "manualImport.bookLanguage", languages, NoHelp);
+                }
+                else
+                {
+                    fields.Choices(item => item.MatchedAudioLanguages, "manualImport.audioLanguages", languages, NoHelp);
+                    fields.Choices(item => item.MatchedSubtitleLanguages, "manualImport.subtitleLanguages", languages, NoHelp);
+                }
                 fields.Cancel();
                 fields.Action(new Button(Glyph("search", 14), new Text("manualImport.find")).Soft().Attribute("name", "Intent").Attribute("value", "searchMatch").Attribute("formnovalidate", "formnovalidate"));
                 fields.Action(new Button(Glyph("check", 14), new Text("manualImport.apply")).Primary().Attribute("name", "Intent").Attribute("value", "applyMatch"));
@@ -320,7 +347,7 @@ namespace Jularr.Frontend.Pages.Admin.ManualImport
             {
                 lines.TryGetValue(file.Path, out var line);
                 var language = LanguageText(file.AudioLanguages, file.SubtitleLanguages, line?.File.Languages);
-                var identity = new ListIdentity(new IconTile(Glyph("play", 18), file.FailureKey is null ? UiTone.Success : UiTone.Danger), new Truncated(Path.GetFileName(file.Path)),
+                var identity = new ListIdentity(new IconTile(Glyph(TypeIcon(line?.MediaType ?? _work!.MediaTypeId), 18), file.FailureKey is null ? UiTone.Success : UiTone.Danger), new Truncated(Path.GetFileName(file.Path)),
                     new Truncated(file.FailureKey is null && line?.TargetName is { } target ? "→ " + target : file.Path));
                 var reason = file.FailureKey is { } key ? texts.Has("acquisition.outcome." + key) ? texts["acquisition.outcome." + key] : "" : "";
                 var chip = file.FailureKey is null ? new StateChip(new Text("manualImport.state.imported"), UiTone.Success, Glyph("check", 14))
@@ -357,6 +384,16 @@ namespace Jularr.Frontend.Pages.Admin.ManualImport
 
         private static string EpisodeLabel(int? season, int? episode) =>
             season is { } s && episode is { } e ? "S" + s.ToString("00", CultureInfo.InvariantCulture) + "E" + e.ToString("00", CultureInfo.InvariantCulture) : "–";
+
+        // A book's file is a volume, a manga chapter (with its volume when known) or the whole Work.
+        private string VolumeLabel(int? volume, int? chapter)
+        {
+            string Numbered(string key, int number) => string.Format(CultureInfo.CurrentCulture, texts[key], number.ToString("00", CultureInfo.InvariantCulture));
+            return chapter is { } c ? (volume is { } v ? Numbered("manualImport.volumeLabel", v) + " · " : "") + Numbered("manualImport.chapterLabel", c)
+                : volume is { } only ? Numbered("manualImport.volumeLabel", only) : texts["manualImport.wholeWork"];
+        }
+
+        private string FileReason(string reason) => texts[texts.Has("acquisition.file." + reason) ? "acquisition.file." + reason : "acquisition.file.unknown"];
 
         private static string WithYear(string title, int? year) => title + (year is { } value ? " (" + value.ToString(CultureInfo.InvariantCulture) + ")" : "");
 
@@ -431,11 +468,21 @@ namespace Jularr.Frontend.Pages.Admin.ManualImport
         {
             var current = _lines[index];
             var target = MatchedWantedItemId ?? current.WantedItemId;
-            var type = target == current.WantedItemId ? current.MediaType : (await readWork.ExecuteAsync<ManualImportWorkV1>(new ManualImportParametersV1(target), ct)).MediaTypeId;
+            var (type, subtype) = (current.MediaType, current.MediaSubtype);
+            if (target != current.WantedItemId)
+            {
+                var work = await readWork.ExecuteAsync<ManualImportWorkV1>(new ManualImportParametersV1(target), ct);
+                (type, subtype) = (work.MediaTypeId, work.MediaSubtypeId);
+            }
+
+            // A series' file takes its season and episode; a book's its volume, and a manga's also its chapter.
             var isSeries = type == MediaType.Series;
-            var quality = string.IsNullOrWhiteSpace(MatchedQualityKey) || !ProfileQualities.For(type, null).Contains(MatchedQualityKey) ? null : MatchedQualityKey;
-            var changed = new FileRow(current.Choice.Path, true, isSeries ? MatchedSeason : null, isSeries ? MatchedEpisode : null, target == _work!.WantedItemId ? null : target, quality,
-                string.Join(',', MatchedAudioLanguages ?? []), string.Join(',', MatchedSubtitleLanguages ?? []));
+            var isBook = type == MediaType.Book;
+            var season = isSeries || isBook ? MatchedSeason : null;
+            var episode = isSeries || isBook && subtype == MediaSubtype.Manga ? MatchedEpisode : null;
+            var quality = string.IsNullOrWhiteSpace(MatchedQualityKey) || !ProfileQualities.For(type, subtype).Contains(MatchedQualityKey) ? null : MatchedQualityKey;
+            var changed = new FileRow(current.Choice.Path, true, season, episode, target == _work!.WantedItemId ? null : target, quality,
+                string.Join(',', MatchedAudioLanguages ?? []), isBook ? "" : string.Join(',', MatchedSubtitleLanguages ?? []));
             Files = [.. _lines.Select((line, position) => position == index ? changed : ToRow(line.Choice))];
             _lines = await BuildLinesAsync(ct);
             _matching = null;
@@ -508,14 +555,16 @@ namespace Jularr.Frontend.Pages.Admin.ManualImport
         {
             var posted = (Files ?? []).Where(row => row.Path is not null).GroupBy(row => row.Path!, StringComparer.Ordinal).ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
             var isMovie = _work!.MediaTypeId == MediaType.Movie;
+            var isBook = _work.MediaTypeId == MediaType.Book;
 
-            // A film takes its largest video; a series every file whose name already says which episode it is.
+            // A film takes its largest video; a series every file whose name already says which episode it is; a book every file the import itself would place.
             // A file of a waiting download that was imported already is not chosen again.
             var open = _files.Where(file => !file.IsHandled).ToArray();
             var largest = open.Length == 0 ? null : open.MaxBy(file => file.SizeBytes)!.Path;
+            bool Proposed(ManualImportFileV1 file) => isMovie ? file.Path == largest : isBook ? file.TargetName is not null && file.UnplacedReason is null : file.Season is not null && file.Episode is not null;
             var choices = _files.Select(file => posted.TryGetValue(file.Path, out var row) ? new ManualImportChoiceV1(file.Path, row.Imports, row.Season, row.Episode, row.WantedItemId, BlankToNull(row.QualityKey),
                     Codes(row.AudioLanguages), Codes(row.SubtitleLanguages))
-                : new ManualImportChoiceV1(file.Path, !file.IsHandled && (isMovie ? file.Path == largest : file.Season is not null && file.Episode is not null), file.Season, file.Episode)).ToList();
+                : new ManualImportChoiceV1(file.Path, !file.IsHandled && Proposed(file), file.Season, file.Episode)).ToList();
 
             // Until a person changed something the folder's own proposals are the names.
             Dictionary<string, ManualImportNameV1> names = [];
@@ -526,8 +575,8 @@ namespace Jularr.Frontend.Pages.Admin.ManualImport
             }
 
             return [.. _files.Zip(choices, (file, choice) => names.TryGetValue(file.Path, out var name)
-                ? new FileLine(file, choice, name.WantedItemId, name.WorkTitle, name.MediaTypeId, name.TargetName)
-                : new FileLine(file, choice, _work.WantedItemId, WithYear(_work.CanonicalTitle, _work.ReleaseYear), _work.MediaTypeId, file.TargetName))];
+                ? new FileLine(file, choice, name.WantedItemId, name.WorkTitle, name.MediaTypeId, name.TargetName, name.MediaSubtypeId)
+                : new FileLine(file, choice, _work.WantedItemId, WithYear(_work.CanonicalTitle, _work.ReleaseYear), _work.MediaTypeId, file.TargetName, _work.MediaSubtypeId))];
         }
 
         private static string? BlankToNull(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
@@ -549,7 +598,7 @@ namespace Jularr.Frontend.Pages.Admin.ManualImport
         // What the form sends of one file.
         public sealed record FileRow(string? Path, bool Imports, int? Season, int? Episode, long? WantedItemId, string? QualityKey, string? AudioLanguages = null, string? SubtitleLanguages = null);
 
-        // A file with what a person chose for it and the film or series that choice leads to.
-        private sealed record FileLine(ManualImportFileV1 File, ManualImportChoiceV1 Choice, long WantedItemId, string WorkTitle, MediaType MediaType, string? TargetName);
+        // A file with what a person chose for it and the film, series or book that choice leads to.
+        private sealed record FileLine(ManualImportFileV1 File, ManualImportChoiceV1 Choice, long WantedItemId, string WorkTitle, MediaType MediaType, string? TargetName, MediaSubtype? MediaSubtype);
     }
 }

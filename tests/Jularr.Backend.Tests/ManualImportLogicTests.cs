@@ -65,12 +65,12 @@ namespace Jularr.Backend.Tests
             var files = Files("Pack/a.mkv", "Pack/b.mkv", "Pack/Sample/sample.mkv", "Pack/Extras/making-of.mkv", "Pack/readme.nfo");
 
             // Samples, extras and other files do not hold a download back.
-            Assert.IsFalse(ManualImportLogic.CompletesDownload(files, ["Pack/a.mkv"], false));
-            Assert.IsTrue(ManualImportLogic.CompletesDownload(files, ["Pack/a.mkv", "Pack/b.mkv"], false));
-            Assert.IsTrue(ManualImportLogic.CompletesDownload(files, [], true));
+            Assert.IsFalse(ManualImportLogic.CompletesDownload(MediaType.Series, files, ["Pack/a.mkv"], false));
+            Assert.IsTrue(ManualImportLogic.CompletesDownload(MediaType.Series, files, ["Pack/a.mkv", "Pack/b.mkv"], false));
+            Assert.IsTrue(ManualImportLogic.CompletesDownload(MediaType.Series, files, [], true));
 
             // What a move took from the folder is gone from it and cannot hold the download back either.
-            Assert.IsTrue(ManualImportLogic.CompletesDownload(Files("Pack/b.mkv"), ["Pack/a.mkv", "Pack/b.mkv"], false));
+            Assert.IsTrue(ManualImportLogic.CompletesDownload(MediaType.Series, Files("Pack/b.mkv"), ["Pack/a.mkv", "Pack/b.mkv"], false));
         }
 
         [TestMethod]
@@ -111,6 +111,40 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual("ger", tracks[1].GetProperty("Language").GetString());
             Assert.AreEqual("eng", tracks[2].GetProperty("Language").GetString());
             Assert.IsFalse(tracks[0].TryGetProperty("Language", out _));
+        }
+
+        // A manga's files are proposed as the import recognises them, the rest is left for a person, who sets a volume, a chapter or the whole Work; names follow the import's own rules.
+        [TestMethod]
+        public void Book_ProposesWhatTheImportRecognises_AndPlacesTheVolumeChapterOrWorkAPersonSets()
+        {
+            TargetUnit[] volumes = [new(1, null, 1, false), new(2, null, 2, false)];
+            TargetUnit[] chapters = [new(12, 2, 12, false)];
+            var files = Files("Pack/Example Manga v01.cbz", "Pack/Example Manga Chapter 12.cbz", "Pack/Example Manga Extras German.cbz", "Pack/cover.jpg");
+            var proposals = ManualImportLogic.Propose(MediaType.Book, MediaSubtype.Manga, "Example Manga", 2019, files, NamingPatternTests.DefaultSet, volumes, null, chapters);
+
+            // The cover is no document; the volume and the chapter (with its volume) are recognised and named, the extra is not, and its name says German.
+            CollectionAssert.AreEqual(new[] { "Pack/Example Manga Chapter 12.cbz", "Pack/Example Manga Extras German.cbz", "Pack/Example Manga v01.cbz" }, proposals.Select(file => file.Path).ToArray());
+            var volume = proposals.Single(file => file.Path.EndsWith("v01.cbz", StringComparison.Ordinal));
+            Assert.AreEqual((1, (int?)null, "CBZ", "Example Manga/Example Manga v01.cbz"), (volume.Season, volume.Episode, volume.QualityKey, volume.TargetName));
+            var chapter = proposals.Single(file => file.Path.EndsWith("Chapter 12.cbz", StringComparison.Ordinal));
+            Assert.AreEqual(((int?)2, (int?)12, "Example Manga/Example Manga v02 c012.cbz"), (chapter.Season, chapter.Episode, chapter.TargetName));
+            var extra = proposals.Single(file => file.Path.Contains("Extras", StringComparison.Ordinal));
+            Assert.AreEqual(((int?)null, (int?)null, (string?)null, "DE"), (extra.Season, extra.Episode, extra.TargetName, extra.Languages));
+
+            // A person sets the extra as volume 2, a chapter without its volume takes the Work's, and nothing at all is the whole Work; a chapter of a book that is no manga is never placed.
+            var placed = ImportPlacementLogic.PlanChosen(MediaType.Book, MediaSubtype.Manga, "Example Manga", 2019, files,
+                [("Pack/Example Manga Extras German.cbz", 2, null), ("Pack/Example Manga Chapter 12.cbz", null, 12), ("Pack/Example Manga v01.cbz", null, null)], NamingPatternTests.DefaultSet, volumes, chapters: chapters);
+            Assert.AreEqual("Volume 2 in : Example Manga/Example Manga v02 | Chapter 12 in 2: Example Manga/Example Manga v02 c012 |   in : Example Manga/Example Manga",
+                string.Join(" | ", placed.Select(placement => placement.WorkUnitTypeId + " " + placement.UnitNumber + " in " + placement.ParentUnitNumber + ": " + placement.TargetStem)));
+            Assert.HasCount(0, ImportPlacementLogic.PlanChosen(MediaType.Book, null, "Pride and Prejudice", 1813, Files("Book.epub"), [("Book.epub", null, 3)], NamingPatternTests.DefaultSet, []));
+
+            // A plain book is named in its author's folder with its format as its quality; the download waits for every document, not for its cover.
+            var book = ImportPlacementLogic.PlanChosen(MediaType.Book, null, "Pride and Prejudice", 1813, Files("In/Book.epub"), [("In/Book.epub", null, null)], NamingPatternTests.DefaultSet, [],
+                new Dictionary<string, string> { ["In/Book.epub"] = "EPUB" }, new NamingValues("Pride and Prejudice", 1813, null, null, null, null, null, null, 1) { Author = "Jane Austen" }).Single();
+            Assert.AreEqual(("Jane Austen/Pride and Prejudice (1813)/Pride and Prejudice", ".epub", (WorkUnitType?)null), (book.TargetStem, book.Extension, book.WorkUnitTypeId));
+            Assert.AreEqual("EPUB", ManualImportLogic.QualityOf(MediaType.Book, null, "In/Book.epub"));
+            Assert.IsFalse(ManualImportLogic.CompletesDownload(MediaType.Book, files, ["Pack/Example Manga v01.cbz", "Pack/Example Manga Chapter 12.cbz"], false));
+            Assert.IsTrue(ManualImportLogic.CompletesDownload(MediaType.Book, files, ["Pack/Example Manga v01.cbz", "Pack/Example Manga Chapter 12.cbz", "Pack/Example Manga Extras German.cbz"], false));
         }
 
         [TestMethod]

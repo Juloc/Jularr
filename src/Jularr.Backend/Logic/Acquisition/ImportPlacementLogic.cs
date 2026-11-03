@@ -114,14 +114,22 @@ namespace Jularr.Backend.Logic.Acquisition
             return placements;
         }
 
-        // The videos a person chose, each as the film or as the episode they say; every file is named by its own release facts, with the quality the person gave instead of its name's, and subtitles named like it follow.
+        // The files a person chose, each as the film, the episode, or the book's volume or chapter they say; every file is named by its own release facts, with the quality the person gave instead of its name's,
+        // and subtitles named like a video follow it. A book's Season is its volume and Episode a manga's chapter, whose volume is the Season or else the one the Work gives the chapter.
         public static IReadOnlyList<ImportPlacementData> PlanChosen(MediaType mediaType, MediaSubtype? subtype, string title, int? year, IReadOnlyList<StorageFile> files,
-            IReadOnlyList<(string Path, int? Season, int? Episode)> choices, NamingSet patterns, IReadOnlyList<TargetUnit> episodes, IReadOnlyDictionary<string, string>? qualities = null, NamingValues? known = null)
+            IReadOnlyList<(string Path, int? Season, int? Episode)> choices, NamingSet patterns, IReadOnlyList<TargetUnit> episodes, IReadOnlyDictionary<string, string>? qualities = null, NamingValues? known = null,
+            IReadOnlyList<TargetUnit>? chapters = null)
         {
             var placements = new List<ImportPlacementData>();
             var isMovie = mediaType == MediaType.Movie;
             foreach (var (path, season, episode) in choices)
             {
+                if (mediaType == MediaType.Book)
+                {
+                    PlaceChosenBook(placements, subtype, title, year, files, path, season, episode, patterns, qualities?.GetValueOrDefault(path), known, chapters ?? []);
+                    continue;
+                }
+
                 if (files.FirstOrDefault(file => file.RelativePath == path && LibraryFileTypes.GetAssetType(file.RelativePath) == MediaAssetType.Video) is not { } video)
                 {
                     continue;
@@ -153,6 +161,39 @@ namespace Jularr.Backend.Logic.Acquisition
             }
 
             return placements;
+        }
+
+        // One document as the volume, the manga chapter or the whole Work a person says it is, named like the import names it; a chapter of a book that is no manga is no placement.
+        private static void PlaceChosenBook(List<ImportPlacementData> placements, MediaSubtype? subtype, string title, int? year, IReadOnlyList<StorageFile> files, string path, int? volume, int? chapter,
+            NamingSet patterns, string? quality, NamingValues? known, IReadOnlyList<TargetUnit> chapters)
+        {
+            if (files.FirstOrDefault(file => file.RelativePath == path && LibraryFileTypes.GetAssetType(file.RelativePath) is MediaAssetType.Ebook or MediaAssetType.Comic) is not { } document
+                || chapter is not null && subtype != MediaSubtype.Manga)
+            {
+                return;
+            }
+
+            var pattern = patterns.Pattern(MediaType.Book, subtype);
+            var values = Values(MediaType.Book, subtype, title, year, document, patterns, known) with { Quality = quality };
+            if (chapter is { } number)
+            {
+                var parent = volume ?? chapters.FirstOrDefault(unit => unit.Number == number)?.ParentNumber;
+                AddGroup(placements, files, document, NamingPattern.Apply(pattern, values with { Volume = parent }) + " c" + number.ToString("000", CultureInfo.InvariantCulture), WorkUnitType.Chapter, number, parent);
+            }
+            else if (volume is { } volumeNumber)
+            {
+                // A pattern without a volume still keeps the volumes apart.
+                if (!pattern.Contains("{Volume", StringComparison.OrdinalIgnoreCase))
+                {
+                    pattern += " {Volume Label:00}";
+                }
+
+                AddGroup(placements, files, document, NamingPattern.Apply(pattern, values with { Volume = volumeNumber }), WorkUnitType.Volume, volumeNumber, null);
+            }
+            else
+            {
+                AddGroup(placements, files, document, NamingPattern.Apply(pattern, values), null, null, null);
+            }
         }
 
         // One file per ebook format, the largest; the author names the folder. A light novel's pack of numbered volumes places one file per volume and format on its unit instead;

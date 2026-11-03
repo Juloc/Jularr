@@ -4,6 +4,7 @@ using System.Text;
 using Jularr.Backend.Service.Core;
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Acquisition.V1;
+using Jularr.Backend.Data.Admin.Activity.V1;
 using Jularr.Backend.Data.Admin.Instance.V1;
 using Jularr.Backend.Data.Admin.Media.V1;
 using Jularr.Backend.Data.Admin.Wanted.V1;
@@ -11,6 +12,7 @@ using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.User.Discover.V1;
 using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Enums.Media;
+using Jularr.Backend.Data.Enums.Storage;
 using Jularr.Backend.Data.Logic.Acquisition;
 using Jularr.Backend.Data.System.Acquisition.V1;
 using Jularr.Backend.Logic.Acquisition;
@@ -349,7 +351,7 @@ namespace Jularr.Backend.Tests
                 CollectionAssert.AreEqual(new[] { "Mushoku Tensei - Baka-Tsuki Side Stories.epub", "Mushoku Tensei - Baka-Tsuki Volume 27.epub" },
                     waiting.UnmatchedFiles!.Select(Path.GetFileName).ToArray());
                 CollectionAssert.AreEqual(new[] { "no_volume", "unknown_unit" }, waiting.UnmatchedFileReasons);
-                Assert.IsFalse(waiting.CanImportManually);
+                Assert.IsTrue(waiting.CanImportManually);
             }
 
             // Read again, the pack brings no second copy of a volume and still names the same files.
@@ -361,6 +363,150 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual("import_unmatched_files", await host.ScalarAsync("SELECT \"AttentionKey\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"));
             Assert.AreEqual(27, Directory.EnumerateFiles(folder).Count(), "The download keeps every file.");
             Assert.AreEqual(1, sources.Grabbed.Count);
+
+            // By hand: the volumes the import placed show as imported, the two others wait unnamed with the format as their quality.
+            string extra;
+            using (var read = await host.SendAsync(HttpMethod.Post, $"/api/v1/admin/activity/{operationId}/manual-import/files"))
+            {
+                Assert.AreEqual(HttpStatusCode.OK, read.StatusCode, await read.Content.ReadAsStringAsync());
+                var files = (await read.Content.ReadFromJsonAsync<ManualImportDownloadV1>())!.Files;
+                Assert.AreEqual(27, files.Count);
+                var open = files.Where(file => !file.IsHandled).ToArray();
+                CollectionAssert.AreEqual(new[] { "Mushoku Tensei - Baka-Tsuki Side Stories.epub", "Mushoku Tensei - Baka-Tsuki Volume 27.epub" }, open.Select(file => Path.GetFileName(file.Path)).Order(StringComparer.Ordinal).ToArray());
+                Assert.IsTrue(open.All(file => file.TargetName is null && file.Season is null && file.QualityKey == "EPUB"));
+                extra = open.Single(file => file.Path.EndsWith("Volume 27.epub", StringComparison.Ordinal)).Path;
+            }
+
+            // The file beyond the edition is its last volume, in English; the download keeps waiting for the side stories.
+            using (var assigned = await host.SendAsync(HttpMethod.Post, $"/api/v1/admin/activity/{operationId}/manual-import",
+                new RunManualImportDownloadDataV1(ImportTransferMode.Link, new BaseDataList<ManualImportChoiceV1>([new ManualImportChoiceV1(extra, true, 26, null, audioLanguages: ["eng"])]))))
+            {
+                Assert.AreEqual(HttpStatusCode.OK, assigned.StatusCode, await assigned.Content.ReadAsStringAsync());
+                var result = (await assigned.Content.ReadFromJsonAsync<ManualImportResultV1>())!;
+                Assert.AreEqual((1, false), (result.Imported, result.FinishedDownload));
+            }
+
+            var last = Named.Replace(" v01", " v26", StringComparison.Ordinal) + ".epub";
+            Assert.IsTrue(File.Exists(Path.Combine(novels, last)), string.Join(", ", Directory.EnumerateFiles(novels, "*.epub", SearchOption.AllDirectories).Select(Path.GetFileName)));
+            Assert.AreEqual(26L, await host.ScalarAsync(Volumes.Replace("BETWEEN 1 AND 25", "BETWEEN 1 AND 26", StringComparison.Ordinal)));
+            Assert.AreEqual(("EPUB", "eng"), ((string)(await host.ScalarAsync($"SELECT \"QualityKey\" FROM \"StoredFiles\" WHERE \"RelativePath\" = '{last}'"))!,
+                (string)(await host.ScalarAsync($"SELECT array_to_string(\"ChosenAudioLanguages\", ',') FROM \"StoredFiles\" WHERE \"RelativePath\" = '{last}'"))!));
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"ActivityEvents\" WHERE \"ActivityEventTypeId\" = 7 AND \"AccountId\" IS NOT NULL"));
+            Assert.AreEqual("import_unmatched_files", await host.ScalarAsync("SELECT \"AttentionKey\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"));
+
+            // Finished without the side stories, the download leaves the queue; SABnzbd keeps the job, since not every file was placed.
+            using (var finished = await host.SendAsync(HttpMethod.Post, $"/api/v1/admin/activity/{operationId}/manual-import",
+                new RunManualImportDownloadDataV1(ImportTransferMode.Link, new BaseDataList<ManualImportChoiceV1>([]), true)))
+            {
+                Assert.AreEqual(HttpStatusCode.OK, finished.StatusCode, await finished.Content.ReadAsStringAsync());
+                Assert.IsTrue((await finished.Content.ReadFromJsonAsync<ManualImportResultV1>())!.FinishedDownload);
+            }
+
+            Assert.AreEqual((short)3, await host.ScalarAsync($"SELECT \"OperationStatusTypeId\" FROM \"Operations\" WHERE \"Id\" = {operationId}"));
+            Assert.AreEqual(0, sources.Commands.Count);
+            Assert.AreEqual(27, Directory.EnumerateFiles(folder).Count(), "A hardlinked import leaves the download as it was.");
+        }
+
+        // A manga download nothing of which can be placed is rejected: SABnzbd deletes the job with its files, the release is blocked with its reason and date, and the next release is searched at once.
+        [TestMethod]
+        public async Task Manga_RejectedDownload_IsBlockedDeletedInSabnzbdAndTheNextReleaseIsSearchedAtOnce()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            var sources = new FakeMangaSources
+            {
+                Rss = """
+                    <rss><channel>
+                      <item><title>Example Manga v01 (2019) (Digital) (Group)</title><guid>first</guid><link>https://indexer.example.test/getnzb/first</link><size>200000000</size></item>
+                      <item><title>Example Manga v01 (2019) (Digital) (Other)</title><guid>second</guid><link>https://indexer.example.test/getnzb/second</link><size>190000000</size></item>
+                    </channel></rss>
+                    """
+            };
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, sources);
+            using var imported = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works/metadata", new ImportMetadataWorkDataV1(MediaType.Book, "101", MediaSubtype.Manga, "anilist"));
+            Assert.AreEqual(HttpStatusCode.OK, imported.StatusCode, await imported.Content.ReadAsStringAsync());
+            var work = (await imported.Content.ReadFromJsonAsync<WorkDetailsV1>())!;
+            await host.Fixture.RunSqlAsync($"""
+                INSERT INTO "AcquisitionRequests" ("Id", "WorkId", "RequestedByProfileId", "RequestedByAccountId", "UiLocaleId", "AcquisitionRequestStatusTypeId", "DecidedByAccountId", "DecidedAt")
+                VALUES (700, {work.Id}, 202, 42, 1, 2, 41, now());
+                INSERT INTO "WantedItems" ("Id", "WorkId") VALUES (800, {work.Id});
+                INSERT INTO "RequestTargets" ("AcquisitionRequestId", "WantedItemId") VALUES (700, 800);
+                UPDATE "WorkUnits" SET "IsMonitored" = ("Number" = 1) WHERE "WorkId" = {work.Id};
+                """);
+
+            // The volume arrives, but its file is no comic: nothing can be placed and the download waits.
+            await RunAsync<SearchDueWantedV1>(host);
+            Assert.HasCount(1, sources.Grabbed);
+            var folder = Directory.CreateDirectory(Path.Combine(downloads.Path, "Example Manga v01")).FullName;
+            File.WriteAllText(Path.Combine(folder, "Example Manga v01.cbz"), "<html>not a comic</html>");
+            sources.History = """{"history":{"slots":[{"nzo_id":"SABnzbd_nzo_1","name":"Example Manga v01","status":"Completed","storage":"/downloads/Example Manga v01"}]}}""";
+            await RunAsync<MonitorDownloadsV1>(host);
+            Assert.AreEqual("import_nothing_placeable", await host.ScalarAsync("SELECT \"AttentionKey\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"));
+            var operationId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"))!;
+
+            // Rejected: SABnzbd deletes the job and its files first, the release is blocked with why and when, and the target is due at once.
+            var signal = host.Services.GetRequiredService<AcquisitionSearchSignal>();
+            signal.TakeRequest();
+            using var rejected = await host.SendAsync(HttpMethod.Post, $"/api/v1/admin/activity/{operationId}/remove", new RemoveActivityDownloadDataV1(true));
+            Assert.AreEqual(HttpStatusCode.OK, rejected.StatusCode, await rejected.Content.ReadAsStringAsync());
+            CollectionAssert.AreEqual(new[] { "queue:delete:SABnzbd_nzo_1:1", "history:delete:SABnzbd_nzo_1:1" }, sources.Commands);
+            Assert.AreEqual(((short)4, "download_removed", true), ((short)(await host.ScalarAsync("SELECT \"AcquisitionReleaseStatusTypeId\" FROM \"AcquisitionReleases\""))!,
+                (string)(await host.ScalarAsync("SELECT \"ReasonKey\" FROM \"AcquisitionReleases\""))!, (bool)(await host.ScalarAsync("SELECT \"UpdatedAt\" >= \"CreatedAt\" FROM \"AcquisitionReleases\""))!));
+            Assert.AreEqual(1L, await host.ScalarAsync($"SELECT count(*) FROM \"ActivityEvents\" WHERE \"ActivityEventTypeId\" = 8 AND \"ReasonKey\" = 'download_removed'"));
+            Assert.AreEqual(true, await host.ScalarAsync("SELECT \"NextSearchAt\" <= now() FROM \"WantedItems\" WHERE \"Id\" = 800"));
+            Assert.IsTrue(signal.TakeRequest(), "The search is woken at once instead of on its next round.");
+
+            // The search that follows takes the other release, never the rejected one again.
+            await RunAsync<SearchDueWantedV1>(host);
+            Assert.HasCount(2, sources.Grabbed);
+            Assert.AreNotEqual(sources.Grabbed[0], sources.Grabbed[1]);
+        }
+
+        // A book from any folder is imported by hand: its file is proposed with its format and language, placed under the import's own name, linked or moved; only an administrator may do it.
+        [TestMethod]
+        [DataRow(ImportTransferMode.Link)]
+        [DataRow(ImportTransferMode.Move)]
+        public async Task Book_FromAnyFolder_IsImportedByHandLinkedOrMoved(ImportTransferMode mode)
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, new FakeMangaSources());
+            using var imported = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works/metadata", new ImportMetadataWorkDataV1(MediaType.Book, "OL9W"));
+            Assert.AreEqual(HttpStatusCode.OK, imported.StatusCode, await imported.Content.ReadAsStringAsync());
+            var work = (await imported.Content.ReadFromJsonAsync<WorkDetailsV1>())!;
+            await host.Fixture.RunSqlAsync($"INSERT INTO \"WantedItems\" (\"Id\", \"WorkId\", \"NextSearchAt\") VALUES (800, {work.Id}, now() + interval '3 days');");
+            var folder = Path.Combine(storage.Path, "1", "Incoming", "Release");
+            Directory.CreateDirectory(folder);
+            File.WriteAllBytes(Path.Combine(folder, "Example Manga German.epub"), ReadingTests.BuildEpub("Example Manga"));
+            File.WriteAllBytes(Path.Combine(folder, "cover.jpg"), new byte[16]);
+
+            // The book is found among the works and its folder read: the cover is no book, the epub is proposed with its format, its language and its name.
+            using var found = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/activity/manual-import/works?query=Example");
+            Assert.AreEqual(HttpStatusCode.OK, found.StatusCode, await found.Content.ReadAsStringAsync());
+            Assert.AreEqual((800L, MediaType.Book), (await found.Content.ReadFromJsonAsync<BaseDataList<ManualImportWorkV1>>())!.Select(item => (item.WantedItemId, item.MediaTypeId)).Single());
+            using var read = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/manual-import/800/files", new ReadManualImportDataV1(1, "Incoming/Release"));
+            Assert.AreEqual(HttpStatusCode.OK, read.StatusCode, await read.Content.ReadAsStringAsync());
+            var file = (await read.Content.ReadFromJsonAsync<ManualImportFolderV1>())!.Files.Single();
+            Assert.AreEqual(("Example Manga German.epub", "EPUB", "DE"), (file.Path, file.QualityKey, file.Languages));
+            StringAssert.StartsWith(file.TargetName!, "Mika Example/Example Manga (2019)");
+
+            // Placed as the person chose, in German; only a move takes the source.
+            using var placed = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/manual-import/800/import",
+                new RunManualImportDataV1(1, "Incoming/Release", mode, new BaseDataList<ManualImportChoiceV1>([new ManualImportChoiceV1(file.Path, true, null, null, audioLanguages: ["ger"])])));
+            Assert.AreEqual(HttpStatusCode.OK, placed.StatusCode, await placed.Content.ReadAsStringAsync());
+            Assert.AreEqual(1, (await placed.Content.ReadFromJsonAsync<ManualImportResultV1>())!.Imported);
+            Assert.IsTrue(File.Exists(Path.Combine(storage.Path, "1", "Books", file.TargetName!)), file.TargetName);
+            Assert.AreEqual(mode != ImportTransferMode.Move, File.Exists(Path.Combine(folder, file.Path)));
+            Assert.IsTrue(File.Exists(Path.Combine(folder, "cover.jpg")));
+            Assert.AreEqual(1L, await host.ScalarAsync($"SELECT count(*) FROM \"MediaAssets\" WHERE \"WorkId\" = {work.Id}"));
+            Assert.AreEqual(("EPUB", "ger"), ((string)(await host.ScalarAsync("SELECT \"QualityKey\" FROM \"StoredFiles\" WHERE \"MediaAssetId\" IS NOT NULL"))!,
+                (string)(await host.ScalarAsync("SELECT array_to_string(\"ChosenAudioLanguages\", ',') FROM \"StoredFiles\" WHERE \"MediaAssetId\" IS NOT NULL"))!));
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"ActivityEvents\" WHERE \"ActivityEventTypeId\" = 7 AND \"AccountId\" IS NOT NULL"));
+
+            // A person without the right to manage downloads may neither read nor import.
+            await host.Fixture.RunSqlAsync("UPDATE \"Accounts\" SET \"AccountRoleTypeId\" = 3 WHERE \"Id\" = 41");
+            using var denied = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/manual-import/800/files", new ReadManualImportDataV1(1, "Incoming/Release"));
+            Assert.AreEqual(HttpStatusCode.Forbidden, denied.StatusCode);
         }
 
         private static byte[] Archive(string header, int length) => [.. Encoding.Latin1.GetBytes(header), .. new byte[length - header.Length]];
@@ -432,6 +578,9 @@ namespace Jularr.Backend.Tests
             public string? Rss { get; set; }
 
             public List<string> Grabbed { get; } = [];
+
+            // What SABnzbd was told to delete: mode, name, job and whether its files go too.
+            public List<string> Commands { get; } = [];
             public string History { get; set; } = """{"history":{"slots":[]}}""";
 
             protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
@@ -474,6 +623,9 @@ namespace Jularr.Backend.Tests
                             case "addurl":
                                 Grabbed.Add(form["name"]!);
                                 return Json($$"""{"status":true,"nzo_ids":["SABnzbd_nzo_{{Grabbed.Count}}"]}""");
+                            case "queue" or "history" when form["name"] is "delete":
+                                Commands.Add($"{form["mode"]}:{form["name"]}:{form["value"]}:{form["del_files"]}");
+                                return Json("""{"status":true}""");
                             case "queue":
                                 return Json("""{"queue":{"paused":false,"slots":[]}}""");
                             case "history":
