@@ -33,12 +33,6 @@ namespace Jularr.Backend.Service.Core
         private static readonly TimeSpan Answer = TimeSpan.FromSeconds(3);
         private readonly ConcurrentDictionary<Uri, DateTimeOffset> _resting = new();
 
-        public static async Task<string[]> SavedAsync(LogicContext ctx, CancellationToken ct) =>
-            (await ctx.ReadSql.ReadOptionalAsync<TranslationMachinesV1>(new SqlStatement
-            {
-                Statement = """SELECT "TranslationMachines" AS "Machines" FROM "InstanceSettings" WHERE "Id" = 1;"""
-            }, ct))?.Machines ?? [];
-
         // The free space the Owner typed on the translation page, else the configured value; 0 means no model download is allowed.
         public static async Task<long> FreeBytesAsync(LogicContext ctx, long configured, CancellationToken ct)
         {

@@ -11,7 +11,8 @@ using Microsoft.AspNetCore.Mvc;
 namespace Jularr.Frontend.Pages.Admin.Translation
 {
     public sealed class TranslationModelPage(ReadLocalTranslationModelsV1 read, ReadBookTranslationProgressV1 readProgress, PullLocalTranslationModelV1 pull,
-        BenchmarkLocalTranslationModelV1 benchmark, SaveTranslationMachinesV1 saveMachines, SaveTranslationFreeBytesV1 saveFreeBytes, IAntiforgery antiforgery, UiText texts) : JularrPage
+        BenchmarkLocalTranslationModelV1 benchmark, SaveTranslationMachinesV1 saveMachines, SaveTranslationFreeBytesV1 saveFreeBytes, SaveTranslationModelV1 saveModel,
+        IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         private const string Home = "/Admin/Instance/Translation";
         private LocalTranslationModelsV1? _models;
@@ -19,6 +20,7 @@ namespace Jularr.Frontend.Pages.Admin.Translation
         private LocalTranslationBenchmarkV1? _benchmark;
         private TranslationMachinesDataV1? _machines;
         private TranslationFreeBytesDataV1? _freeBytes;
+        private TranslationModelDataV1? _model;
 
         // Two tabs: how far the translation is, and what it needs (computers, models, space).
         [BindProperty(SupportsGet = true, Name = "tab")]
@@ -91,6 +93,17 @@ namespace Jularr.Frontend.Pages.Admin.Translation
                 }
                 page.Content.Add(new Div([.. parts]).Class("feature-card").Attribute("data-translation-machine", machine.Address));
             }
+
+            // The default model of every server translation, among the installed ones; automatic is the largest installed TranslateGemma.
+            // A saved model that no machine has now stays listed, so the choice is not lost silently.
+            var choices = models.Choices.Concat(models.DefaultModel is { } saved && !models.Choices.Contains(saved, StringComparer.Ordinal) ? [saved] : Array.Empty<string>());
+            page.Content.Add(new Form<TranslationModelDataV1>(form =>
+            {
+                form.Select(item => item.Model, "translation.local.defaultModel",
+                    [new SelectOption("", texts["translation.local.defaultModel.automatic"]), .. choices.Select(choice => new SelectOption(choice, choice))],
+                    new FieldHelp(Info: "translation.local.defaultModelHint"));
+                form.Save();
+            }, Home + "?handler=Model", csrf, _model ?? new TranslationModelDataV1(models.DefaultModel), _model is null ? null : FormError));
 
             // The queue belongs to Jularr and remains visible even when Ollama is offline.
             // Polling updates only this status; a finished download reloads the model actions.
@@ -189,6 +202,14 @@ namespace Jularr.Frontend.Pages.Admin.Translation
             _machines = new TranslationMachinesDataV1((machines ?? "").Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries));
             Tab = "setup";
             await saveMachines.ExecuteAsync<UpdateResult>(new LocalTranslationModelsParametersV1(), _machines, HttpContext.RequestAborted);
+            return LocalRedirect(SetupAddress);
+        }
+
+        public async Task<IActionResult> OnPostModelAsync(string? model)
+        {
+            _model = new TranslationModelDataV1(model);
+            Tab = "setup";
+            await saveModel.ExecuteAsync<UpdateResult>(new LocalTranslationModelsParametersV1(), _model, HttpContext.RequestAborted);
             return LocalRedirect(SetupAddress);
         }
 

@@ -10,6 +10,9 @@ namespace Jularr.Backend.Service.Core.Localization
         [
             new("errors.invalid_data", "Please check the supplied values."),
             new("errors.translation_local_busy", "The local translation model is busy."),
+            new("errors.validation.codex_model_invalid", "Enter a model name as Codex lists it, such as gpt-5.4."),
+            new("errors.validation.codex_effort_invalid", "Choose one of the efforts the model offers."),
+            new("errors.validation.codex_run_over_daily", "The limit per run cannot be higher than the daily limit."),
             new("errors.validation.translation_machine_invalid", "Enter Ollama machines by their address in the private network, such as 192.168.1.20 or 192.168.1.20:11434."),
             new("errors.translation_local_not_installed", "Install the selected model on the private server first."),
             new("errors.translation_local_unavailable", "The local translation server is unavailable."),
@@ -83,6 +86,8 @@ namespace Jularr.Backend.Service.Core.Localization
             new("errors.reading_pdf_recognizing", "The scanned pages are being turned into text; until then the book opens as its original pages."),
             new("errors.ocr_unavailable", "The text recognition models cannot be fetched right now."),
             new("errors.reading_unsupported", "This comic needs 7-Zip, which is not configured on the server."),
+            new("errors.reading_drm", "This book is DRM-protected and cannot be read in Jularr."),
+            new("errors.reading_kindle_compression", "This Kindle book uses HUFF/CDIC compression, which Jularr cannot read yet."),
             new("errors.health_degraded", "A service did not answer the last health check. The Dashboard shows which one."),
             new("errors.plex_unavailable", "The Plex server could not be reached."),
             new("errors.plex_authentication_failed", "The Plex server rejected the token."),

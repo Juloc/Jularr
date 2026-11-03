@@ -804,7 +804,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
 
                     allSourceFiles = found;
                     var extensions = LibraryFileTypes.GetImportExtensions(download.MediaTypeId, download.MediaSubtypeId);
-                    files = extensions is null ? found : found.Where(file => extensions.Contains(Path.GetExtension(file.RelativePath).ToLowerInvariant())).ToArray();
+                    files = extensions is null ? found : found.Where(file => StoragePath.HasExtension(file.RelativePath, extensions)).ToArray();
                 }
             }
             catch (Exception exception) when (exception is NasMountException or IOException or UnauthorizedAccessException)

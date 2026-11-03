@@ -174,7 +174,7 @@ namespace Jularr.Backend.Logic.Library
                     }
 
                     var group = subtitles[file.Id].Select(subtitle => (File: subtitle, Suffix: subtitle.RelativePath[current.Length..])).Where(subtitle => !subtitle.Suffix.Contains('/'))
-                        .Prepend((File: file, Suffix: Path.GetExtension(file.RelativePath))).ToArray();
+                        .Prepend((File: file, Suffix: file.RelativePath[current.Length..])).ToArray();
                     var stem = Enumerable.Range(1, 99).Select(attempt => LibraryNaming.Alternative(target, attempt))
                         .FirstOrDefault(candidate => group.All(item => !taken.Contains(candidate + item.Suffix) && LibraryNaming.IsStorable(candidate + item.Suffix)));
                     if (stem is null)
@@ -249,7 +249,7 @@ namespace Jularr.Backend.Logic.Library
                 Language = file.Language, Disc = file.DiscNumber, DiscCount = file.DiscCount, Platform = file.Platform ?? (file.MediaTypeId == MediaType.Game ? "Unknown" : null),
                 Region = file.MediaTypeId == MediaType.Game ? GameFileName.Facts(file.ReleaseName ?? file.RelativePath).Region : null,
                 GameVersion = file.MediaTypeId == MediaType.Game ? GameFileName.Facts(file.ReleaseName ?? file.RelativePath).Version : null,
-                Format = Path.GetExtension(file.RelativePath).TrimStart('.').ToUpperInvariant(),
+                Format = LibraryFileTypes.FormatName(file.RelativePath),
                 Rules = patterns.Rules(file.MediaTypeId),
                 AirDate = file.UnitReleasedOn,
                 ProviderIds = JsonSerializer.Deserialize<Dictionary<string, string>>(file.ProviderIds),
@@ -328,7 +328,7 @@ namespace Jularr.Backend.Logic.Library
         private static IEnumerable<string> Folders(string relativePath) =>
             Enumerable.Range(0, relativePath.Length).Where(index => relativePath[index] == '/').Select(index => relativePath[..(index + 1)]).Prepend("");
 
-        private static string Stem(string relativePath) => relativePath[..^Path.GetExtension(relativePath).Length];
+        private static string Stem(string relativePath) => relativePath[..^LibraryFileTypes.Extension(relativePath).Length];
 
         [GeneratedRegex(@" \[([^\[\]]+)\](?: \(\d+\))?$")]
         private static partial Regex QualityTag();

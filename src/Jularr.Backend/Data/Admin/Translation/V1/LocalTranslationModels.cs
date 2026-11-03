@@ -24,11 +24,22 @@ namespace Jularr.Backend.Data.Admin.Translation.V1
         public int Machine { get; } = machine;
     }
 
-    // The Ollama machines in the Owner's order; empty means the configured endpoint alone.
-    public sealed class TranslationMachinesV1(string[] machines) : BaseResponse
+    // What every server translation starts from: the Ollama machines in the Owner's order (empty means the configured endpoint alone) and the
+    // Owner's default model as a provider-qualified id (none keeps the largest installed TranslateGemma).
+    public sealed class TranslationSetupV1(string[] machines, string? model) : BaseResponse
     {
         [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.TranslationMachines))]
         public string[] Machines { get; } = machines;
+
+        [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.TranslationModel))]
+        public string? Model { get; } = model;
+    }
+
+    // The Owner's default model, a provider-qualified id such as "ollama:translategemma:12b"; none keeps the largest installed TranslateGemma.
+    public sealed class TranslationModelDataV1(string? model) : BaseData
+    {
+        [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.TranslationModel))]
+        public string? Model { get; } = model;
     }
 
     public sealed class TranslationMachinesDataV1(string[] machines) : BaseData
@@ -60,9 +71,12 @@ namespace Jularr.Backend.Data.Admin.Translation.V1
     }
 
     // Installed and Running are those of the machine that translates now (the first in the order that answers); Machines lists every one.
+    // DefaultModel is the Owner's choice (none: automatic); Choices are the provider-qualified ids of the models installed on a machine that answers.
     public sealed class LocalTranslationModelsV1(bool configured, string[] approved, string[] installed, string[] running, string? problem, long verifiedFreeBytes, string downloadModel, string downloadState, int downloadProgress,
-        LocalTranslationMachineV1[] machines, string downloadMachine) : BaseResponse
+        LocalTranslationMachineV1[] machines, string downloadMachine, string? defaultModel, string[] choices) : BaseResponse
     {
+        public string? DefaultModel { get; } = defaultModel;
+        public string[] Choices { get; } = choices;
         public LocalTranslationMachineV1[] Machines { get; } = machines;
         public string DownloadMachine { get; } = downloadMachine;
         public bool Configured { get; } = configured;
