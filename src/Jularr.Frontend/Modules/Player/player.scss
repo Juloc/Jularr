@@ -348,9 +348,10 @@
 @media (max-width: 620px), (max-height: 600px) {
     .player__settings, .player__chapters { position-area: none; inset: 12px; margin: 0; width: calc(100vw - 24px); height: calc(100dvh - 24px); max-height: none; }
     .player__settings-pane { grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); }
-    // The live facts of Info change while it is open; closer rows leave room for one that wraps.
+    // The live facts of Info change while it is open and paths are long: on a small screen each stays on one line (Copy takes them in full), so the pane keeps its size.
     .player__info { gap: 4px; }
     .player__facts { row-gap: 0; }
+    .player__facts dd { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
     html:has(.player__settings:popover-open, .player__chapters:popover-open) { overflow: hidden; }
 }
 
