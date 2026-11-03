@@ -112,6 +112,14 @@ namespace Jularr.Backend.Tests
             using var listed = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/works/matches");
             var reviews = (await listed.Content.ReadFromJsonAsync<PageResult<IdentityReviewV1>>())!;
             CollectionAssert.AreEquivalent(new[] { 7, 8 }, reviews.Items.Single(review => review.WorkId == 20).CandidateIds);
+
+            // The list narrows to the types asked for: the anime subtype lists it, a type without subtype and other types do not.
+            using var animeOnly = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/works/matches?mediaSubtypeIds=Anime");
+            Assert.AreEqual(20L, (await animeOnly.Content.ReadFromJsonAsync<PageResult<IdentityReviewV1>>())!.Items.Single().WorkId);
+            using var seriesOnly = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/works/matches?mediaTypeIds=Series");
+            Assert.AreEqual(0, (await seriesOnly.Content.ReadFromJsonAsync<PageResult<IdentityReviewV1>>())!.Items.Count);
+            using var books = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/works/matches?mediaTypeIds=Book&mediaSubtypeIds=Anime");
+            Assert.AreEqual(1, (await books.Content.ReadFromJsonAsync<PageResult<IdentityReviewV1>>())!.Items.Count);
             using var empty = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works/20/matches", new ResolveIdentityReviewDataV1(null));
             Assert.AreEqual(HttpStatusCode.BadRequest, empty.StatusCode);
             using var decided = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works/10/matches", new ResolveIdentityReviewDataV1(null, true));
