@@ -22,12 +22,13 @@ namespace Jularr.Frontend.Pages.User.Requests
         private PageResult<RequestDetailsV1>? _requests;
         private IReadOnlyList<ProfileMediaV1> _media = [];
         private IReadOnlyList<RequestStepV1> _steps = [];
+        private ScopeSelection? _scopes;
 
         [BindProperty(SupportsGet = true, Name = "state")]
         public RequestListFilterType State { get; set; } = RequestListFilterType.All;
 
         [BindProperty(SupportsGet = true, Name = "type")]
-        public string? TypeSlug { get; set; }
+        public string[] Types { get; set; } = [];
 
         [BindProperty(SupportsGet = true, Name = "sort")]
         public RequestSortType Sort { get; set; } = RequestSortType.Newest;
@@ -43,6 +44,8 @@ namespace Jularr.Frontend.Pages.User.Requests
 
         private bool Cards => Layout == "cards";
 
+        private ScopeSelection Scopes => _scopes ??= new ScopeSelection(Types, _media);
+
         protected override void Define(Page page)
         {
             page.Title("requests.title");
@@ -54,15 +57,15 @@ namespace Jularr.Frontend.Pages.User.Requests
             page.Asset("Framework/Components/InfiniteList.entry.ts");
             if (_requests is not { } requests) return;
 
-            var scope = LibraryScopes.Find(TypeSlug);
-            page.Content.Add(new Div(Tabs(), new Div(TypeMenu(scope), SortMenu(), Layouts()).Class("requests-tools")).Class("requests-bar"));
+            page.Content.Add(new Div(Tabs(), new Div(SortMenu(), Layouts()).Class("requests-tools")).Class("requests-bar"));
+            page.Content.Add(new MediaTypeBar(assets, Scopes.ListedSlugs, Scopes.ChosenSlugs, "library.scope.", types => Address(types: types)));
 
             // Active-profile requests only.
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
             if (requests.Items.Count == 0)
             {
-                var filtered = State != RequestListFilterType.All || scope.Slug != "all";
-                page.Content.Add(new Div(new P(new Text("request.empty")), filtered ? new A(new Text("requests.reset")).Class("button button--compact").Attribute("href", Address(RequestListFilterType.All, "all")) : new Span())
+                var filtered = State != RequestListFilterType.All || !Scopes.IsAll;
+                page.Content.Add(new Div(new P(new Text("request.empty")), filtered ? new A(new Text("requests.reset")).Class("button button--compact").Attribute("href", Address(RequestListFilterType.All, [])) : new Span())
                     .Class("requests-empty"));
             }
             else
@@ -78,9 +81,6 @@ namespace Jularr.Frontend.Pages.User.Requests
 
         // The one row of tabs: how far the requests are.
         private NavigationTabs Tabs() => new([.. Enum.GetValues<RequestListFilterType>().Select(state => new NavigationTab("requests.filter." + state, Address(state), state == State))], "requests.filter", "requests");
-
-        private IUiComponent TypeMenu(LibraryScope current) => Menu("filter", "discover.mediaTypes", "library.scope." + current.Slug,
-            [.. LibraryScopes.Listed(_media).Select(scope => new MenuItem("library.scope." + scope.Slug, Address(type: scope.Slug), scope.Slug == current.Slug))]);
 
         private IUiComponent SortMenu() => Menu("swap", "library.sort", "requests.sort." + Sort,
             [.. Enum.GetValues<RequestSortType>().Select(sort => new MenuItem("requests.sort." + sort, Address(sort: sort), sort == Sort))]);
@@ -232,8 +232,9 @@ namespace Jularr.Frontend.Pages.User.Requests
             var profileId = (await authentication.ExecuteAsync<AuthenticationResultV1>(cancellationToken: HttpContext.RequestAborted)).ProfileId
                 ?? throw new UnauthorizedAccessException("An active profile is required.");
             _media = await readMedia.ExecuteAsync<BaseDataList<ProfileMediaV1>>(new ReadProfileParametersV1(profileId), HttpContext.RequestAborted);
-            var scope = LibraryScopes.Find(TypeSlug);
-            _requests = await read.ExecuteAsync<PageResult<RequestDetailsV1>>(new ReadRequestsParametersV1(Math.Max(1, PageNumber), 48, State, Sort, scope.Type, scope.Subtype), HttpContext.RequestAborted);
+            _scopes = null;
+            var (types, subtypes) = Scopes.Filter();
+            _requests = await read.ExecuteAsync<PageResult<RequestDetailsV1>>(new ReadRequestsParametersV1(Math.Max(1, PageNumber), 48, State, Sort, types, subtypes), HttpContext.RequestAborted);
             if (RequestId is { } selected && _requests.Items.Any(item => item.Id == selected))
             {
                 _steps = await readSteps.ExecuteAsync<BaseDataList<RequestStepV1>>(new RequestParametersV1(selected), HttpContext.RequestAborted);
@@ -241,13 +242,12 @@ namespace Jularr.Frontend.Pages.User.Requests
         }
 
         // The page's own address with what was chosen; defaults stay out of it.
-        private string Address(RequestListFilterType? state = null, string? type = null, RequestSortType? sort = null, string? layout = null, int page = 1, long? request = null, string? handler = null)
+        private string Address(RequestListFilterType? state = null, IReadOnlyList<string>? types = null, RequestSortType? sort = null, string? layout = null, int page = 1, long? request = null, string? handler = null)
         {
             var query = new List<string>();
             if (handler is not null) query.Add("handler=" + handler);
             if ((state ?? State) != RequestListFilterType.All) query.Add("state=" + (state ?? State));
-            var scope = type ?? LibraryScopes.Find(TypeSlug).Slug;
-            if (scope != "all") query.Add("type=" + scope);
+            if (Scopes.Parameter(types ?? Scopes.Picked) is { } chosen) query.Add("type=" + Uri.EscapeDataString(chosen).Replace("%2C", ","));
             if ((sort ?? Sort) != RequestSortType.Newest) query.Add("sort=" + (sort ?? Sort));
             if ((layout ?? Layout) == "cards") query.Add("view=cards");
             if (page > 1) query.Add("p=" + page.ToString(CultureInfo.InvariantCulture));

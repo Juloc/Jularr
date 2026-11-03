@@ -2526,7 +2526,6 @@ namespace Jularr.Frontend.Localization
             new("calendar.area.read", "Read"),
             new("calendar.area.hear", "Hear"),
             new("calendar.area.play", "Play"),
-            new("calendar.areaState", "{0}: {1} of {2} selected"),
             new("calendar.customize", "Customize view"),
             new("calendar.filter", "Filter"),
             new("calendar.apply", "Apply"),
