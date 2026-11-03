@@ -16,6 +16,9 @@ namespace Jularr.E2E.Tests
             try
             {
                 await Owner.SetUpAndSignInAsync(page);
+
+                // The keyless catalogs are kept off the internet in these tests; switched off, they are no service of this instance.
+                await jularr.RunSqlAsync("""UPDATE "Providers" SET "IsEnabled" = FALSE WHERE "ProtectedSecret" IS NULL;""");
                 await page.GotoAsync("/Admin");
 
                 // Four figures, and only the services that are set up: here the database alone.
