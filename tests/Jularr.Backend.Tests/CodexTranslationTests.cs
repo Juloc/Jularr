@@ -1,4 +1,5 @@
 using Jularr.Backend.Data.Admin.Translation.V1;
+using Jularr.Backend.Logic.Playback;
 using Jularr.Backend.Service.Core;
 using Jularr.Integrations.Logic.Codex;
 
@@ -41,6 +42,7 @@ namespace Jularr.Backend.Tests
                 fi
                 case "$prompt" in
                   *'[[1]]'*) printf '%s\n' "$prompt" | awk -v m="$model" '/^\[\[[0-9]+\]\]$/ { print; getline; print "Translated by " m ": " $0; print "" }' > "$out" ;;
+                  *'[1] '*) printf '%s\n' "$prompt" | grep '^\[[0-9]*\] ' | sed "s/^\(\[[0-9]*\]\) /\1 Translated by $model: /" > "$out" ;;
                   *) printf 'Translated by %s: %s' "$model" "$(printf '%s' "$prompt" | tail -n 1)" > "$out" ;;
                 esac
                 printf '{"type":"turn.completed","usage":{"input_tokens":100,"cached_input_tokens":5,"output_tokens":50}}\n' ;;
@@ -159,6 +161,20 @@ namespace Jularr.Backend.Tests
             // The answer's parts by their numbers: a missing or empty part is null, order and extra lines do not matter.
             CollectionAssert.AreEqual(new string?[] { "A", null, "C\nmore" }, CodexTranslationProvider.Numbered("[[1]]\nA\n\n[[3]]\nC\nmore\n[[2]]\n\n", 3));
             CollectionAssert.AreEqual(new string?[] { "A", "B" }, CodexTranslationProvider.Numbered("noise\n[[2]]\nB\n[[1]]\nA\n[[9]]\nignored", 2));
+        }
+
+        [TestMethod]
+        public async Task Provider_TranslatesNumberedSubtitleCues_SoTheSubtitleParserAcceptsThem()
+        {
+            using var folder = new Folder();
+            folder.SignIn();
+            using var connection = folder.Connection();
+            var provider = new CodexTranslationProvider(connection, TimeProvider.System);
+            var machine = (await provider.ChooseAsync(new TranslationSetupV1([], null), "gpt-test", default))!;
+
+            var answer = await provider.TranslateAsync(machine, "en", "de", "[1] Hello.\n[2] Bye.", default);
+
+            CollectionAssert.AreEqual(new[] { "Translated by gpt-test: Hello.", "Translated by gpt-test: Bye." }, SubtitleTranslationLogic.ParseBatch(answer, 2));
         }
 
         [TestMethod]
