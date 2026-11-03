@@ -74,7 +74,7 @@ h3 { font-size: 13px; font-weight: 780; line-height: 1.35; }
 }
 .skip-link {
     position: fixed;
-    z-index: 100;
+    z-index: var(--z-top);
     top: -80px;
     left: 12px;
     padding: 12px;

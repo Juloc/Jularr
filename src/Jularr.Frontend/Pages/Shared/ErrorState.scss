@@ -50,7 +50,7 @@ html[data-skin="original"] {
     .error-state {
         position: fixed;
         inset: 0;
-        z-index: 200;
+        z-index: var(--z-top);
         min-height: 0;
         padding: 0;
         background: var(--background);

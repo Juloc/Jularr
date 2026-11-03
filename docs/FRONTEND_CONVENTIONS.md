@@ -337,6 +337,11 @@ See [Frontend UX decisions](FRONTEND_UX.md) for design tokens, layout, page iden
   with `&__element` and `&--modifier`; reuse the same style for equivalent controls.
 - Keep CSS minimal: reuse inherited rules, avoid equivalent duplicated declarations
   and fix the owning style instead of stacking compensating overrides.
+- Layers use the z tokens of [Theme.scss](../src/Jularr.Frontend/Modules/Appearance/Theme.scss), lowest first: `--z-sticky` (floating pill,
+  continue bar, sticky toolbars), `--z-dropdown` (menus, lists and tips opened from the content), `--z-shell` (header, sidebar, minimized
+  player), `--z-menu` (phone menu), `--z-drawer` (drawers and panels that are no dialog), `--z-toast`, `--z-tooltip`, `--z-top`. Inside a
+  component only small local numbers (1-7); dialogs and popovers use the top layer. A container that is a layer of its own and holds a menu
+  lifts itself to `--z-dropdown` while the menu is open (`:has(details[open])`), so what follows it never covers the menu.
 - All catalog/Continue cards use the same canonical `MediaCard` (the UiDesigner MediaCard, owner decision 20 Oct): a small
   portrait cover of 133-150 px (a card to continue 176 px) with softly rounded corners, local availability top left as a tag,
   the heart top right, then the linked title and one line of facts: `year · type · rating` (what is unknown is left out; the rating
