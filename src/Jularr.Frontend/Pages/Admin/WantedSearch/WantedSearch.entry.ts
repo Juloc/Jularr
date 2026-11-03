@@ -1,3 +1,4 @@
+import { placement } from "../../../Framework/Components/Dropdown";
 import { inserted, onPage } from "../../../Modules/Navigation/PageSwap";
 
 // The manual search of a target. Every source is asked on its own request, all at once; each answer replaces the skeleton of its source with the releases
@@ -16,15 +17,34 @@ const rowsOf = (panel: HTMLElement) => Array.from(panel.querySelectorAll<HTMLEle
 const menu = (panel: HTMLElement, name: string) => panel.querySelector<HTMLSelectElement>(`select[data-filter="${name}"]`);
 const sizeRanges: [number, number][] = [[0, 1e8], [1e8, 1e9], [1e9, 5e9], [5e9, 2e10], [2e10, Infinity]];
 
+// Lower case without accents, so "Amélie" is found by "amelie".
+const plain = (text: string) => text.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
+
+const multi = (panel: HTMLElement) => panel.querySelector<HTMLElement>("[data-multi=quality]");
+const checked = (panel: HTMLElement) => Array.from(multi(panel)?.querySelectorAll<HTMLInputElement>("input:checked") ?? []).map(box => box.value);
+
 function criteria(panel: HTMLElement) {
+    const typed = panel.querySelector<HTMLInputElement>("input[data-filter=title]")?.value ?? "";
     return { source: panel.dataset.filter ?? "", language: menu(panel, "language")?.value ?? "", protocol: menu(panel, "protocol")?.value ?? "",
-        age: menu(panel, "age")?.value ?? "", size: menu(panel, "size")?.value ?? "" };
+        age: menu(panel, "age")?.value ?? "", size: menu(panel, "size")?.value ?? "", decision: menu(panel, "decision")?.value ?? "",
+        words: plain(typed).split(/\s+/).filter(Boolean), qualities: checked(panel) };
 }
+
+// Whether any filter is set (the order is not one).
+const narrowed = (wanted: ReturnType<typeof criteria>) => Object.values(wanted).some(value => Array.isArray(value) ? value.length > 0 : Boolean(value));
 
 function matches(row: HTMLElement, wanted: ReturnType<typeof criteria>): boolean {
     if (wanted.source && row.dataset.source !== wanted.source) return false;
     if (wanted.protocol && row.dataset.protocol !== wanted.protocol) return false;
+    if (wanted.decision && row.dataset.decision !== wanted.decision) return false;
     if (wanted.language && !(row.dataset.languages ?? "").split(";").some(pair => pair.split("=")[0] === wanted.language)) return false;
+
+    // A release without a quality is "Unknown" (the empty value).
+    if (wanted.qualities.length && !wanted.qualities.includes(row.dataset.quality ?? "")) return false;
+    if (wanted.words.length) {
+        const title = plain(row.dataset.title ?? "");
+        if (!wanted.words.every(word => title.includes(word))) return false;
+    }
 
     // A release without a date or a size cannot be shown to fit a limit on it.
     if (wanted.age) {
@@ -56,6 +76,35 @@ function listLanguages(panel: HTMLElement): void {
     const chosen = select.value;
     select.replaceChildren(select.options[0], ...next.map(([code, name]) => Object.assign(document.createElement("option"), { value: code, textContent: name })));
     select.value = next.some(([code]) => code === chosen) ? chosen : "";
+}
+
+// The quality list holds what the loaded releases carry, each with a checkbox; the checked ones stay checked, and the button tells how many are.
+function listQualities(panel: HTMLElement): void {
+    const root = multi(panel);
+    const popup = root?.querySelector<HTMLElement>("[data-multi-popup]");
+    const button = root?.querySelector<HTMLButtonElement>("[data-multi-button]");
+    if (!root || !popup || !button) return;
+    if (!button.popoverTargetElement) button.popoverTargetElement = popup;
+    const found = Array.from(new Set(rowsOf(panel).map(row => row.dataset.quality ?? ""))).sort((first, second) => !first ? 1 : !second ? -1 : first.localeCompare(second));
+    const listed = Array.from(popup.querySelectorAll<HTMLInputElement>("input")).map(box => box.value);
+    const chosen = new Set(checked(panel));
+    if (listed.join("|") !== found.join("|")) {
+        popup.replaceChildren(...found.map(quality => {
+            const box = Object.assign(document.createElement("input"), { type: "checkbox", value: quality, checked: chosen.has(quality) });
+            const label = document.createElement("label");
+            label.className = "search-multi__option";
+            label.append(box, Object.assign(document.createElement("span"), { textContent: quality || root.dataset.unknown }));
+            return label;
+        }));
+    }
+
+    const count = checked(panel).length;
+    const name = count === 1 ? checked(panel)[0] || root.dataset.unknown : fill(root.dataset.some, count);
+    const value = button.querySelector<HTMLElement>(".ui-dropdown__value");
+    if (value) {
+        value.textContent = count ? name! : root.dataset.all ?? "";
+        value.classList.toggle("ui-dropdown__value--empty", count === 0);
+    }
 }
 
 // Rows move only when their order differs, so a focused button of a release keeps its focus while other sources answer.
@@ -98,11 +147,12 @@ function arrange(panel: HTMLElement): void {
 // Orders the loaded releases, hides those the filters leave out, and tells the numbers: the status line, the notices and the clear button.
 function apply(panel: HTMLElement): void {
     listLanguages(panel);
+    listQualities(panel);
     arrange(panel);
     const wanted = criteria(panel);
     const rows = rowsOf(panel);
     rows.forEach(row => { row.hidden = !matches(row, wanted); });
-    const filtered = Object.values(wanted).some(Boolean);
+    const filtered = narrowed(wanted);
     const clear = panel.querySelector<HTMLButtonElement>("[data-filters-clear]");
     if (clear) clear.disabled = !filtered;
 
@@ -269,9 +319,39 @@ document.addEventListener("click", event => {
 });
 
 // The filters and the order are the selects of the panel; the button clears the filters and the chosen chip.
-document.addEventListener("change", event => {
+const filtersChanged = (event: Event) => {
     const panel = event.target instanceof Element && event.target.closest(".search-filters") ? event.target.closest<HTMLElement>("[data-search-panel]") : null;
     if (panel) apply(panel);
+};
+
+document.addEventListener("change", filtersChanged);
+document.addEventListener("input", event => { if (event.target instanceof HTMLInputElement && event.target.type === "search") filtersChanged(event); });
+
+// The popup of the qualities opens under its button like a list of the dropdowns; it closes when the focus leaves it.
+document.addEventListener("beforetoggle", event => {
+    const popup = event.target instanceof HTMLElement && event.target.matches("[data-multi-popup]") ? event.target : null;
+    const button = popup?.parentElement?.querySelector<HTMLElement>("[data-multi-button]");
+    if (!popup || !button || (event as ToggleEvent).newState !== "open") return;
+    const placed = placement(button.getBoundingClientRect(), window.innerHeight, window.innerWidth, popup.scrollHeight);
+    popup.style.setProperty("--dropdown-top", `${placed.top}px`);
+    popup.style.setProperty("--dropdown-left", `${placed.left}px`);
+    popup.style.setProperty("--dropdown-width", `${placed.width}px`);
+    popup.style.setProperty("--dropdown-max-height", `${placed.maxHeight}px`);
+    popup.classList.toggle("ui-dropdown__popup--above", placed.above);
+}, true);
+
+document.addEventListener("toggle", event => {
+    const popup = event.target instanceof HTMLElement && event.target.matches("[data-multi-popup]") ? event.target : null;
+    if (!popup) return;
+    const open = (event as ToggleEvent).newState === "open";
+    popup.parentElement?.querySelector("[data-multi-button]")?.setAttribute("aria-expanded", String(open));
+    if (open) popup.querySelector<HTMLInputElement>("input")?.focus({ preventScroll: true });
+}, true);
+
+document.addEventListener("focusout", event => {
+    const popup = event.target instanceof Element ? event.target.closest<HTMLElement>("[data-multi-popup]") : null;
+    const next = event.relatedTarget;
+    if (popup?.matches(":popover-open") && next instanceof Node && !popup.contains(next) && next !== popup.parentElement?.querySelector("[data-multi-button]")) popup.hidePopover();
 });
 
 document.addEventListener("click", event => {
@@ -281,10 +361,13 @@ document.addEventListener("click", event => {
     if (!clear || !panel) return;
     panel.dataset.filter = "";
     chips(panel).forEach(chip => chip.setAttribute("aria-pressed", "false"));
-    ["language", "protocol", "age", "size"].forEach(name => {
+    ["language", "protocol", "age", "size", "decision"].forEach(name => {
         const select = menu(panel, name);
         if (select && select.value !== "") { select.value = ""; select.dispatchEvent(new Event("change", { bubbles: true })); }
     });
+    const title = panel.querySelector<HTMLInputElement>("input[data-filter=title]");
+    if (title) title.value = "";
+    multi(panel)?.querySelectorAll<HTMLInputElement>("input:checked").forEach(box => { box.checked = false; });
     apply(panel);
 });
 

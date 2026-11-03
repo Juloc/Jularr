@@ -64,6 +64,63 @@ namespace Jularr.Backend.Data.Logic.Reading
         public bool IsCached { get; }
     }
 
+    // The DjVu file behind a prepared document, whether it is still the version the document was made of, and a page already drawn.
+    internal sealed class ReadingPageSourceData : BaseData
+    {
+        public ReadingPageSourceData(long documentId, string relativePath, string rootRelativePath, long storageMountId, int sectionCount, bool isCurrent, byte[]? bytes, string? mediaType)
+        {
+            DocumentId = documentId;
+            RelativePath = relativePath;
+            RootRelativePath = rootRelativePath;
+            StorageMountId = storageMountId;
+            SectionCount = sectionCount;
+            IsCurrent = isCurrent;
+            Bytes = bytes;
+            MediaType = mediaType;
+        }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.DocumentId))]
+        public long DocumentId { get; }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.RelativePath))]
+        public string RelativePath { get; }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.RelativePath))]
+        public string RootRelativePath { get; }
+
+        [DataField(typeof(StorageMountFields), nameof(StorageMountFields.Id))]
+        public long StorageMountId { get; }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.SectionCount))]
+        public int SectionCount { get; }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.IsCached))]
+        public bool IsCurrent { get; }
+
+        [JsonIgnore]
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.Bytes), false)]
+        public byte[]? Bytes { get; }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.MediaType), false)]
+        public string? MediaType { get; }
+    }
+
+    // The cached pages of a document among the given paths.
+    internal sealed class ReadingResourcePathsData : BaseData
+    {
+        public ReadingResourcePathsData(long documentId, string[] paths)
+        {
+            DocumentId = documentId;
+            Paths = paths;
+        }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.DocumentId))]
+        public long DocumentId { get; }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.Paths))]
+        public string[] Paths { get; }
+    }
+
     internal sealed class ReadingSourceLookupData : BaseData
     {
         public ReadingSourceLookupData(long mediaAssetId, int analyzerVersion, int comicAnalyzerVersion, int pdfAnalyzerVersion)
@@ -537,8 +594,9 @@ namespace Jularr.Backend.Data.Logic.Reading
     internal sealed class ReadingStructure
     {
         public ReadingStructure(ReadingStructureSection[] sections, ReadingStructureEntry[] toc, bool recommended = true, string? reason = null, int[]? originalPages = null,
-            ReadingStructureSection[]? smartPages = null)
+            ReadingStructureSection[]? smartPages = null, bool rendersPages = false)
         {
+            RendersPages = rendersPages;
             Sections = sections;
             Toc = toc;
             Recommended = recommended;
@@ -559,6 +617,9 @@ namespace Jularr.Backend.Data.Logic.Reading
 
         // A scanned PDF's pages set anew in their own layout (Smart Pages), in page order; each covers one page.
         public ReadingStructureSection[] SmartPages { get; }
+
+        // A book whose pages are drawn when they are first shown (DjVu); its sections are its pages, without content until then.
+        public bool RendersPages { get; }
     }
 
     internal sealed class ReadingStructureSection

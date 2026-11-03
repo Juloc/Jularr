@@ -70,6 +70,28 @@ namespace Jularr.Backend.Service.Core
             return null;
         }
 
+        // Every model the machines that answer now have installed, asked together; a machine that does not answer rests.
+        public async Task<string[]> InstalledAsync(string[] saved, CancellationToken ct)
+        {
+            var awake = Order(saved).Where(server => !(_resting.TryGetValue(server, out var until) && until > time.GetUtcNow()));
+            var answers = await Task.WhenAll(awake.Select(async server =>
+            {
+                try
+                {
+                    using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                    timeout.CancelAfter(Answer);
+                    return await models.InstalledAsync(server, timeout.Token);
+                }
+                catch (Exception exception) when (exception is HttpRequestException or JsonException or InvalidDataException
+                    || exception is OperationCanceledException && !ct.IsCancellationRequested)
+                {
+                    Fail(server);
+                    return [];
+                }
+            }));
+            return [.. answers.SelectMany(installed => installed).Distinct(StringComparer.Ordinal)];
+        }
+
         // A machine that did not answer or failed a block rests; the next in the order takes its work.
         public void Fail(Uri server) => _resting[server] = time.GetUtcNow() + Rest;
     }

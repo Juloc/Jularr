@@ -54,7 +54,8 @@ smoke (build once + critical tests + frontend tests, ~5 min)
   `tests/ci-durations.json`. A class with no measurement weighs as the median class. Changing a
   shard count means editing that kind's matrix entries (`1/N` ... `N/N`); the self-check in `smoke`
   fails when a list is incomplete. Backend shard 4 also runs the three real-tool tests (FFmpeg,
-  cjxl) and is planned lighter (`--reserve 4=150`).
+  cjxl) and is planned lighter (`--reserve 4=150`). Every backend and browser shard and the PR gate install
+  `djvulibre-bin` and set `JULARR_TEST_DJVULIBRE=/usr/bin`, so the DjVu tests draw with the real ddjvu.
 - The PR gate (`Backend`) uses the same build and shard script: `prepare` runs the smoke methods and the
   selection, `backend (1/2)` and `backend (2/2)` split the selected classes, `test` is the required check.
 

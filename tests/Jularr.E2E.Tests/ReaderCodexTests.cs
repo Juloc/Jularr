@@ -2,7 +2,7 @@ using Microsoft.Playwright;
 
 namespace Jularr.E2E.Tests
 {
-    // The Owner re-translates a chapter by hand with Codex from the Reader while Ollama stays the default; the AI page then lists the request.
+    // The Owner re-translates a chapter and the book with Codex from the Reader's one re-translation while Ollama stays the default; the AI page then lists the requests.
     [TestClass]
     public sealed class ReaderCodexTests
     {
@@ -43,21 +43,40 @@ namespace Jularr.E2E.Tests
                 await page.Locator("[data-language-choice=de]").ClickAsync();
                 await Assertions.Expect(page.Locator("[data-role=content]")).ToContainTextAsync("Kapitel Eins", new() { Timeout = 60_000 });
                 await page.WaitForFunctionAsync("() => document.querySelector('.reader')?.dataset.translationState === 'ready'", null, new() { Timeout = 120_000 });
-                var tools = page.Locator("[data-codex-retranslate]");
-                await Assertions.Expect(tools).ToBeVisibleAsync();
-                await page.ScreenshotAsync(new() { Path = Path.Combine(Path.GetTempPath(), "reader-codex-desktop.png") });
+                // The Reader's one re-translation offers Codex beside Ollama; its paragraph, chapter and book stay the same three choices.
+                var area = page.Locator("[data-role=retranslate]");
+                var status = area.Locator("[data-role=retranslate-status]");
+                await Assertions.Expect(area).ToBeVisibleAsync();
+                await Assertions.Expect(area.Locator("[data-retranslate-model]")).ToHaveCountAsync(2);
+                await area.Locator("[data-retranslate-model='codex:gpt-one']").ClickAsync();
+                await Assertions.Expect(area.Locator("[data-retranslate-model='codex:gpt-one']")).ToHaveAttributeAsync("aria-pressed", "true");
+                await Evidence.SaveAsync(page, "reader-retranslate-codex-menu-desktop");
 
                 // This chapter with Codex: one request for the passage, then the page shows Codex's text.
-                await tools.GetByRole(AriaRole.Button, new() { Name = "Re-translate this chapter" }).ClickAsync();
-                await Assertions.Expect(tools.Locator("[data-codex-status]")).ToContainTextAsync("Done:", new() { Timeout = 60_000 });
+                await area.Locator("[data-retranslate=section]").ClickAsync();
+                await Assertions.Expect(status).ToContainTextAsync("Done:", new() { Timeout = 60_000 });
                 await Assertions.Expect(page.Locator("[data-role=content]")).ToContainTextAsync("Codex gpt-one:", new() { Timeout = 60_000 });
+                await page.WaitForFunctionAsync("() => document.querySelector('.reader')?.dataset.translationState === 'ready'", null, new() { Timeout = 120_000 });
+                await Assertions.Expect(page.Locator("[data-role=content] [data-translation-model='codex:gpt-one']").First).ToBeVisibleAsync();
                 Assert.AreEqual("codex:gpt-one", await jularr.ScalarAsync("SELECT DISTINCT \"Model\" FROM \"ReadingTranslationChoices\" LIMIT 1") as string);
 
-                // The whole book: every chapter in turn; both are recorded for every reader.
-                await page.Locator("[data-action=language]").ClickAsync();
-                await page.Locator("[data-codex-retranslate]").GetByRole(AriaRole.Button, new() { Name = "Re-translate the whole book" }).ClickAsync();
-                await Assertions.Expect(page.Locator("[data-codex-status]")).ToContainTextAsync("Done:", new() { Timeout = 90_000 });
+                // On a phone the same panel holds both models; then the whole book: every chapter in turn, both recorded for every reader.
+                await page.SetViewportSizeAsync(390, 844);
+                await page.WaitForTimeoutAsync(350);
+                var tool = page.Locator(".reader__top [data-action=language]");
+                if (!await tool.IsVisibleAsync())
+                {
+                    await page.Locator("[data-action=more]").ClickAsync();
+                    tool = page.Locator("[data-panel=more] [data-overflow-for=language]");
+                }
+                await tool.ClickAsync();
+                await Assertions.Expect(area).ToBeVisibleAsync();
+                await area.Locator("[data-retranslate-model='codex:gpt-one']").ClickAsync();
+                await Evidence.SaveAsync(page, "reader-retranslate-codex-menu-phone");
+                await area.Locator("[data-retranslate=book]").ClickAsync();
+                await Assertions.Expect(status).ToContainTextAsync("Done:", new() { Timeout = 90_000 });
                 Assert.AreEqual(2L, await jularr.ScalarAsync("SELECT count(DISTINCT \"SectionIndex\") FROM \"ReadingTranslationChoices\""));
+                await page.SetViewportSizeAsync(1280, 720);
 
                 // The AI page lists what Codex did, with its cost.
                 await page.GotoAsync("/Admin/Ai");

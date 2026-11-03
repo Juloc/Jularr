@@ -1,4 +1,5 @@
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Enums.Reading;
 using Jularr.Backend.Data.Fields.Reading;
 using Jularr.Backend.Data.Fields.Translation;
 
@@ -71,6 +72,23 @@ namespace Jularr.Backend.Data.User.Translation.V1
         public string Text { get; } = text;
     }
 
+    public sealed class ReaderTranslationModelsParametersV1 : BaseParameters
+    {
+    }
+
+    // The models the caller may re-translate with now; an admin-only provider's models only with the admin-only right.
+    public sealed class ReaderTranslationModelsV1(ReaderTranslationModelV1[] models) : BaseResponse
+    {
+        public ReaderTranslationModelV1[] Models { get; } = models;
+    }
+
+    // A provider-qualified model id; Passages when the Reader re-translates a chapter with it in whole-passage requests (Codex) rather than block by block.
+    public sealed class ReaderTranslationModelV1(string id, bool passages)
+    {
+        public string Id { get; } = id;
+        public bool Passages { get; } = passages;
+    }
+
     public sealed class LocalReadingSectionModelParametersV1(long documentId, int sectionIndex, string language, string model) : BaseParameters
     {
         [DataField(typeof(ReadingFields), nameof(ReadingFields.DocumentId))]
@@ -84,6 +102,16 @@ namespace Jularr.Backend.Data.User.Translation.V1
 
         [DataField(typeof(TranslationFields), nameof(TranslationFields.Name))]
         public string Model { get; } = model;
+    }
+
+    // A re-translation with the model: one block of the section (BlockIndex), the whole section, or every section of the book.
+    public sealed class LocalReadingChoiceDataV1(ReadingTranslationScope scope, int? blockIndex) : BaseData
+    {
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.TranslationScopeId))]
+        public ReadingTranslationScope Scope { get; } = scope;
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.BlockIndex), false)]
+        public int? BlockIndex { get; } = blockIndex;
     }
 
     // Translated is the number of blocks that now show the new translation; Kept those whose answer did not pass the checks and stay as they were.

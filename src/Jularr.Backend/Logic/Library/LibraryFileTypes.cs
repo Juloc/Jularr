@@ -12,7 +12,7 @@ namespace Jularr.Backend.Logic.Library
     {
         private static readonly FrozenSet<string> Video = FrozenSet.Create(".mkv", ".mp4", ".m4v", ".avi", ".mov", ".wmv", ".ts", ".m2ts", ".webm", ".mpg", ".mpeg");
         private static readonly FrozenSet<string> Audio = FrozenSet.Create(".mp3", ".flac", ".m4a", ".m4b", ".ogg", ".opus", ".aac", ".wav", ".wv");
-        private static readonly FrozenSet<string> Ebook = FrozenSet.Create(".epub", ".pdf", ".mobi", ".azw3", ".azw", ".fb2", ".fb2.zip", ".txt", ".rtf", ".docx");
+        private static readonly FrozenSet<string> Ebook = FrozenSet.Create(".epub", ".pdf", ".mobi", ".azw3", ".azw", ".fb2", ".fb2.zip", ".txt", ".rtf", ".docx", ".djvu", ".djv");
         private static readonly FrozenSet<string> Comic = FrozenSet.Create(".cbz", ".cbr", ".cb7");
         // Kept equal to the generated column StoredFiles.IsSubtitle.
         private static readonly FrozenSet<string> Subtitle = FrozenSet.Create(".srt", ".ass", ".ssa", ".vtt", ".sub", ".idx", ".sup");
@@ -87,6 +87,7 @@ namespace Jularr.Backend.Logic.Library
             ".fb2" => IsFictionBook(header),
             ".rtf" => header.Length >= 5 && header[..5].SequenceEqual("{\\rtf"u8),
             ".txt" => IsPlainText(header),
+            ".djvu" or ".djv" => IsDjvu(header),
             _ => false
         };
 
@@ -117,8 +118,12 @@ namespace Jularr.Backend.Logic.Library
                 }
             }
 
-            return "content_" + (format == ".fb2.zip" ? "fb2" : format.TrimStart('.'));
+            return "content_" + format switch { ".fb2.zip" => "fb2", ".djv" => "djvu", _ => format.TrimStart('.') };
         }
+
+        // A DjVu document is an IFF file: "AT&T", then a FORM chunk of one page (DJVU) or of several (DJVM).
+        private static bool IsDjvu(ReadOnlySpan<byte> header) =>
+            header.Length >= 16 && header[..8].SequenceEqual("AT&TFORM"u8) && (header[12..16].SequenceEqual("DJVU"u8) || header[12..16].SequenceEqual("DJVM"u8));
 
         // A FictionBook is XML whose root is FictionBook, in UTF-8, a single-byte code page or UTF-16.
         private static bool IsFictionBook(ReadOnlySpan<byte> header)

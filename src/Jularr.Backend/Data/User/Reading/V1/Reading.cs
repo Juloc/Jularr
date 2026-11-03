@@ -63,8 +63,10 @@ namespace Jularr.Backend.Data.User.Reading.V1
     public sealed class ReadingDocumentV1 : BaseResponse
     {
         public ReadingDocumentV1(long documentId, long workId, string title, ReadingFormatType readingFormatTypeId, int sectionCount, bool isCached, string? locator, decimal? progression,
-            bool isRightToLeft, string? language, string? readingLanguage = null, string? originalLanguage = null, string[]? translatedLanguages = null, bool isRecommended = true, int originalPages = 0, string? revision = null, int[]? smartPages = null)
+            bool isRightToLeft, string? language, string? readingLanguage = null, string? originalLanguage = null, string[]? translatedLanguages = null, bool isRecommended = true, int originalPages = 0, string? revision = null, int[]? smartPages = null,
+            bool rendersPages = false)
         {
+            RendersPages = rendersPages;
             SmartPages = smartPages ?? [];
             IsRecommended = isRecommended;
             OriginalPages = originalPages;
@@ -142,6 +144,10 @@ namespace Jularr.Backend.Data.User.Reading.V1
         // The scanned pages set anew in their own layout (Smart Pages), in their order: the first is reading unit 100000, the next 100001.
         [DataField(typeof(ReadingFields), nameof(ReadingFields.SmartPages))]
         public int[] SmartPages { get; }
+
+        // The pages are drawn when they are first shown (a DjVu book), so the reader asks for them through RenderReadingPageV1.
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.RendersPages))]
+        public bool RendersPages { get; }
     }
 
     public sealed class ReadingTocEntryV1 : BaseResponse

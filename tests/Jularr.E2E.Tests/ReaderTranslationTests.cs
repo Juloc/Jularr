@@ -109,6 +109,85 @@ namespace Jularr.E2E.Tests
             await Assertions.Expect(page.Locator("[data-role=content]")).ToContainTextAsync("Kapitel Eins", new() { Timeout = 60_000 });
         }
 
+        [TestMethod]
+        [Timeout(180_000)]
+        public async Task AnotherModel_RetranslatesTheParagraph_ForEveryReader_AndNamesItsModel()
+        {
+            using var folders = new Folders("Books");
+            Steps.WriteEpub(Path.Combine(folders.Library, "Books", "retranslation-reader.epub"), "Retranslation Reader", "Local fixture", paragraphsPerChapter: 4);
+            await using var ollama = FakeOllama.Start(larger: true);
+            await using var jularr = await JularrInstance.StartAsync(new Dictionary<string, string>
+            {
+                ["Storage:LocalPaths:0"] = folders.Library,
+                ["LocalTranslation:Endpoint"] = ollama.Address.ToString(),
+                ["HTTPS_PROXY"] = "http://127.0.0.1:9"
+            });
+            await using var session = await BrowserSession.StartAsync(jularr);
+            var page = session.Page;
+            await ReadingPathTests.AddBookAsync(page, folders, "Retranslation Reader");
+            await jularr.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'Translation'");
+            await jularr.RunSqlAsync("UPDATE \"InstanceSettings\" SET \"TranslationModel\" = 'ollama:translategemma:4b' WHERE \"Id\" = 1");
+
+            // The book in German, with the Owner's default model; the re-translation shows only while the server's translation does.
+            Assert.AreEqual(200, (await page.GotoAsync("/Read/1"))!.Status);
+            await page.Locator("[data-action=language]").ClickAsync();
+            var area = page.Locator("[data-role=retranslate]");
+            await page.Locator("[data-language-choice=original]").ClickAsync();
+            await Assertions.Expect(area).ToBeHiddenAsync();
+            await page.Locator("[data-language-choice=de]").ClickAsync();
+            await Assertions.Expect(page.Locator("[data-role=content]")).ToContainTextAsync("Kapitel Eins", new() { Timeout = 60_000 });
+            await page.WaitForFunctionAsync("() => document.querySelector('.reader')?.dataset.translationState === 'ready'", null, new() { Timeout = 120_000 });
+            await Assertions.Expect(page.Locator("[data-role=content] [data-translation-model]")).ToHaveCountAsync(0);
+
+            // The language panel offers the other model and names the model of the paragraph at the top of the page.
+            await Assertions.Expect(area).ToBeVisibleAsync();
+            await Assertions.Expect(area.Locator("[data-retranslate-model='ollama:translategemma:12b']")).ToHaveAttributeAsync("aria-pressed", "true");
+            await Assertions.Expect(area.Locator("[data-role=retranslate-status]")).ToContainTextAsync("translategemma:4b");
+            await Evidence.SaveAsync(page, "reader-retranslate-menu-desktop");
+
+            // The paragraph alone takes the larger model's text and names it; the others keep theirs.
+            await area.Locator("[data-retranslate=block]").ClickAsync();
+            try
+            {
+                await Assertions.Expect(page.Locator("[data-role=content]")).ToContainTextAsync("Erstes Kapitel", new() { Timeout = 60_000 });
+            }
+            catch
+            {
+                Evidence.Log("[reader-retranslate] browser problems: " + string.Join(" | ", session.Problems));
+                await Evidence.SaveAsync(page, "reader-retranslate-failed");
+                throw;
+            }
+            await Assertions.Expect(area.Locator("[data-role=retranslate-status]")).ToContainTextAsync("translategemma:12b");
+            await Assertions.Expect(page.Locator("[data-role=content] [data-translation-model='ollama:translategemma:12b']")).ToHaveCountAsync(1);
+            await Assertions.Expect(page.Locator("[data-role=content]")).ToContainTextAsync("Kapitel Eins");
+            await Evidence.SaveAsync(page, "reader-retranslate-result-desktop");
+
+            // Kept on the server for every reader: on a phone the reopened book shows it again, and the menu fits the narrow screen.
+            await page.SetViewportSizeAsync(390, 844);
+            Assert.AreEqual(200, (await page.ReloadAsync())!.Status);
+            await page.WaitForFunctionAsync("() => document.querySelector('.reader')?.dataset.translationState === 'ready'", null, new() { Timeout = 120_000 });
+            await Assertions.Expect(page.Locator("[data-role=content] [data-translation-model='ollama:translategemma:12b']")).ToHaveCountAsync(1);
+            await Assertions.Expect(page.Locator("[data-role=content]")).ToContainTextAsync("Erstes Kapitel");
+            await Evidence.SaveAsync(page, "reader-retranslate-result-phone");
+            var tool = page.Locator(".reader__top [data-action=language]");
+            if (!await tool.IsVisibleAsync())
+            {
+                await page.Locator("[data-action=more]").ClickAsync();
+                tool = page.Locator("[data-panel=more] [data-overflow-for=language]");
+            }
+            await tool.ClickAsync();
+            await Assertions.Expect(area).ToBeVisibleAsync();
+            var box = await page.Locator("[data-panel=language]").BoundingBoxAsync();
+            Assert.IsNotNull(box);
+            Assert.IsTrue(box.X >= 0 && box.X + box.Width <= 390, "The language panel fits the phone: " + box.X + " + " + box.Width);
+            foreach (var button in await area.Locator("button:visible").AllAsync())
+            {
+                var size = await button.BoundingBoxAsync();
+                Assert.IsTrue(size is { Height: >= 32 } && size.X + size.Width <= 390, "A re-translation button fits the phone.");
+            }
+            await Evidence.SaveAsync(page, "reader-retranslate-menu-phone");
+        }
+
         // A private loopback Ollama fixture: the test executes the real Reader UI,
         // HTTP API, profile permissions and cache without pulling a multi-GB model.
         internal sealed class FakeOllama : IAsyncDisposable
@@ -116,14 +195,17 @@ namespace Jularr.E2E.Tests
             private readonly HttpListener _listener = new();
             private readonly Task _running;
             private int _generations;
+            // A second, larger model answers "Erstes Kapitel" for every block.
+            private readonly bool _larger;
             public Uri Address { get; }
             public int Generations => Volatile.Read(ref _generations);
 
             // Echoing answers every block with "DE " and its own text, which passes the translation checks; otherwise every answer is "Kapitel Eins".
             private readonly bool _echo;
 
-            private FakeOllama(int port, bool echo)
+            private FakeOllama(int port, bool larger, bool echo)
             {
+                _larger = larger;
                 Address = new Uri("http://127.0.0.1:" + port + "/");
                 _echo = echo;
                 _listener.Prefixes.Add(Address.ToString());
@@ -131,13 +213,13 @@ namespace Jularr.E2E.Tests
                 _running = ServeAsync();
             }
 
-            public static FakeOllama Start(bool echo = false)
+            public static FakeOllama Start(bool larger = false, bool echo = false)
             {
                 using var socket = new TcpListener(IPAddress.Loopback, 0);
                 socket.Start();
                 var port = ((IPEndPoint)socket.LocalEndpoint).Port;
                 socket.Stop();
-                return new FakeOllama(port, echo);
+                return new FakeOllama(port, larger, echo);
             }
 
             private async Task ServeAsync()
@@ -154,17 +236,20 @@ namespace Jularr.E2E.Tests
                         var path = context.Request.Url!.AbsolutePath;
                         string body;
                         if (path == "/api/tags")
-                            body = """{"models":[{"name":"translategemma:4b","digest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}]}""";
+                            body = _larger
+                                ? """{"models":[{"name":"translategemma:4b","digest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},{"name":"translategemma:12b","digest":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"}]}"""
+                                : """{"models":[{"name":"translategemma:4b","digest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}]}""";
                         else if (path == "/api/ps")
                             body = """{"models":[]}""";
                         else if (path == "/api/generate")
                         {
                             Interlocked.Increment(ref _generations);
-                            var answer = "Kapitel Eins";
+                            using var reader = new StreamReader(context.Request.InputStream, Encoding.UTF8);
+                            var request = await reader.ReadToEndAsync();
+                            var answer = request.Contains("\"translategemma:12b\"", StringComparison.Ordinal) ? "Erstes Kapitel" : "Kapitel Eins";
                             if (_echo)
                             {
-                                using var input = await System.Text.Json.JsonDocument.ParseAsync(context.Request.InputStream);
-                                var prompt = input.RootElement.GetProperty("prompt").GetString()!;
+                                var prompt = System.Text.Json.JsonDocument.Parse(request).RootElement.GetProperty("prompt").GetString()!;
                                 answer = "DE " + prompt[(prompt.LastIndexOf('\n') + 1)..];
                             }
                             body = System.Text.Json.JsonSerializer.Serialize(new { response = answer, eval_count = 10, eval_duration = 1000000000 });

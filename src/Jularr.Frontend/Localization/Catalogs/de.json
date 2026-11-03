@@ -1551,6 +1551,42 @@
    "Translating",
    "Wird übersetzt"
   ],
+  "reader.retranslate.title": [
+   "Translate again with another model",
+   "Mit einem anderen Modell neu übersetzen"
+  ],
+  "reader.retranslate.model": [
+   "Model",
+   "Modell"
+  ],
+  "reader.retranslate.paragraph": [
+   "Paragraph",
+   "Absatz"
+  ],
+  "reader.retranslate.section": [
+   "Chapter",
+   "Kapitel"
+  ],
+  "reader.retranslate.book": [
+   "Whole book",
+   "Ganzes Buch"
+  ],
+  "reader.retranslate.paragraphModel": [
+   "Paragraph at the top of the page: {0}",
+   "Absatz oben auf der Seite: {0}"
+  ],
+  "reader.retranslate.done": [
+   "Translated again with {0}.",
+   "Neu übersetzt mit {0}."
+  ],
+  "reader.retranslate.bookQueued": [
+   "The rest of the book follows in the background; each passage changes when it is ready.",
+   "Der Rest des Buchs folgt im Hintergrund; jede Stelle wechselt, sobald sie fertig ist."
+  ],
+  "reader.retranslate.failed": [
+   "This model cannot translate right now; the earlier text stays.",
+   "Dieses Modell kann gerade nicht übersetzen; der bisherige Text bleibt."
+  ],
   "reader.translation.browserUnsupported": [
    "Mozilla has no models for this language; the server keeps translating",
    "Mozilla hat keine Modelle für diese Sprache; der Server übersetzt weiter"
@@ -5268,6 +5304,26 @@
   "wanted.search.sort.smallest": [
    "Smallest",
    "Kleinste"
+  ],
+  "wanted.search.filter.title": [
+   "Search in title",
+   "Im Titel suchen"
+  ],
+  "wanted.search.filter.quality": [
+   "All qualities",
+   "Alle Qualitäten"
+  ],
+  "wanted.search.quality.some": [
+   "{0} qualities",
+   "{0} Qualitäten"
+  ],
+  "wanted.search.quality.unknown": [
+   "Unknown",
+   "Unbekannt"
+  ],
+  "wanted.search.filter.decision": [
+   "All decisions",
+   "Alle Entscheidungen"
   ],
   "wanted.search.filters.clear": [
    "Clear filters",
@@ -9731,6 +9787,10 @@
    "This comic needs 7-Zip, which is not configured on the server.",
    "Dieser Comic braucht 7-Zip, das auf dem Server nicht eingerichtet ist."
   ],
+  "errors.reading_djvu_unavailable": [
+   "This book is a DjVu file. The server needs DjVuLibre (ddjvu and djvused) to show its pages.",
+   "Dieses Buch ist eine DjVu-Datei. Der Server braucht DjVuLibre (ddjvu und djvused), um die Seiten zu zeigen."
+  ],
   "errors.reading_drm": [
    "This book is DRM-protected and cannot be read in Jularr.",
    "Dieses Buch ist mit DRM geschützt und lässt sich in Jularr nicht lesen."
@@ -14190,18 +14250,6 @@
    "No translation engine is available right now. You can still read this book in its original language.",
    "Derzeit ist keine Übersetzungs-Engine verfügbar. Du kannst das Buch weiterhin in seiner Originalsprache lesen."
   ],
-  "reader.codex.title": [
-   "Codex (Owner)",
-   "Codex (Besitzer)"
-  ],
-  "reader.codex.chapter": [
-   "Re-translate this chapter",
-   "Dieses Kapitel neu übersetzen"
-  ],
-  "reader.codex.book": [
-   "Re-translate the whole book",
-   "Das ganze Buch neu übersetzen"
-  ],
   "reader.codex.stop": [
    "Stop",
    "Anhalten"
@@ -14217,10 +14265,6 @@
   "reader.codex.failed": [
    "{0} chapters could not be translated; Codex may be unavailable or its limit is reached.",
    "{0} Kapitel konnten nicht übersetzt werden; Codex ist vielleicht nicht erreichbar oder sein Limit ist erreicht."
-  ],
-  "reader.codex.pick": [
-   "Choose a language first.",
-   "Wähle zuerst eine Sprache."
   ],
   "reader.language.configure": [
    "Open profile settings",
@@ -15640,6 +15684,7 @@
   "acquisition.file.content_txt": ["Not a valid TXT: the file holds binary data, not text","Kein gültiges TXT: Die Datei enthält Binärdaten statt Text"],
   "acquisition.file.content_rtf": ["Not a valid RTF: the file does not start like an RTF document","Kein gültiges RTF: Die Datei beginnt nicht wie ein RTF-Dokument"],
   "acquisition.file.content_docx": ["Not a valid DOCX: no ZIP archive with word/document.xml","Kein gültiges DOCX: kein ZIP-Archiv mit word/document.xml"],
+  "acquisition.file.content_djvu": ["Not a valid DjVu: the file does not start with AT&TFORM and DJVU or DJVM","Kein gültiges DjVu: Die Datei beginnt nicht mit AT&TFORM und DJVU oder DJVM"],
   "acquisition.file.content_cbz": ["Not a valid CBZ: the file is no ZIP archive","Kein gültiges CBZ: Die Datei ist kein ZIP-Archiv"],
   "acquisition.file.content_cbr": ["Not a valid CBR: the file is no RAR archive","Kein gültiges CBR: Die Datei ist kein RAR-Archiv"],
   "acquisition.file.content_cb7": ["Not a valid CB7: the file is no 7-Zip archive","Kein gültiges CB7: Die Datei ist kein 7-Zip-Archiv"],

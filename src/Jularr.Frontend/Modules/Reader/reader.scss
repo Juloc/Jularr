@@ -232,6 +232,13 @@
     // On a phone each choice and download takes a full tap, up to the 8px between them.
     &__choices > .button { @include HitArea.phone-hit-area(8px, 8px); }
     &__choices [aria-pressed=true] { background: var(--accent-soft); color: var(--accent-text); }
+    // Translating again with another model: its own row below the languages. A paragraph from another model than the chapter's own is underlined
+    // faintly: nothing fits beside it (the page margins lie outside the clipped column box), a decoration changes no line, and the book view's
+    // printed pages carry it (PagePrint copies text-decoration).
+    &__retranslate { display: grid; flex-basis: 100%; gap: 8px; padding-top: 12px; border-top: 1px solid var(--border); &[hidden], [hidden] { display: none; } }
+    &__panel &__retranslate-title { font-weight: 650; }
+    &__panel &__retranslate-status { color: var(--muted); overflow-wrap: anywhere; &:empty { display: none; } }
+    &__content [data-translation-model] { text-decoration: underline dotted 1px color-mix(in srgb, currentColor 45%, transparent); text-underline-offset: .2em; }
     &__bookmarks { display: grid; gap: 10px; &[hidden] { display: none; } h3 { margin: 0; font-size: 13px; } }
     &__notes { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
     &__note { display: grid; gap: 4px; > .button { justify-self: start; } }
@@ -279,14 +286,4 @@
             &[data-chrome=hidden] :is(.reader__top, .reader__footer) { visibility: hidden; pointer-events: none; }
         }
     }
-}
-
-// The Owner's re-translation with Codex: its Stop button waits hidden until a run starts, and the title sits apart from the language choices.
-.reader__codex {
-    display: grid;
-    gap: 8px;
-    margin-top: 8px;
-
-    .reader__panel-title { margin: 0; color: var(--muted); font-weight: 650; }
-    [hidden] { display: none; }
 }
