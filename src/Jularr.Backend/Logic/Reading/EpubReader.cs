@@ -1,4 +1,5 @@
 using System.IO.Compression;
+using System.Text;
 using System.Xml;
 using System.Xml.Linq;
 using AngleSharp.Html.Parser;
@@ -12,6 +13,9 @@ namespace Jularr.Backend.Logic.Reading
         public const int MaximumEntries = 10_000;
         public const long MaximumEntryBytes = 64L * 1024 * 1024;
         public const long MaximumTotalBytes = 512L * 1024 * 1024;
+
+        // Deeper XML is no book; nesting this deep makes building the document slow.
+        public const int MaximumDepth = 256;
 
         private static readonly XNamespace Container = "urn:oasis:names:tc:opendocument:xmlns:container";
         private static readonly XNamespace Opf = "http://www.idpf.org/2007/opf";
@@ -197,17 +201,38 @@ namespace Jularr.Backend.Logic.Reading
 
         private static XDocument ReadXml(ZipArchive archive, string path)
         {
-            // No DTDs, no external entities.
             var entry = archive.GetEntry(path) ?? throw new InvalidDataException("The EPUB is incomplete.");
-            using var stream = entry.Open();
-            using var reader = XmlReader.Create(stream, new XmlReaderSettings { DtdProcessing = DtdProcessing.Ignore, XmlResolver = null, MaxCharactersInDocument = MaximumEntryBytes });
+            if (entry.Length > MaximumEntryBytes)
+            {
+                throw new InvalidDataException("The EPUB exceeds the size limits.");
+            }
+
+            return LoadXml(ReadBytes(entry), MaximumEntryBytes);
+        }
+
+        // XML without DTDs or external entities, bounded in size and depth; a first pass checks the depth, since deep nesting makes building the document slow.
+        public static XDocument LoadXml(byte[] bytes, long maximumCharacters)
+        {
+            var settings = new XmlReaderSettings { DtdProcessing = DtdProcessing.Ignore, XmlResolver = null, MaxCharactersInDocument = maximumCharacters, MaxCharactersFromEntities = 1024 };
             try
             {
+                using (var check = XmlReader.Create(new MemoryStream(bytes, false), settings))
+                {
+                    while (check.Read())
+                    {
+                        if (check.Depth > MaximumDepth)
+                        {
+                            throw new InvalidDataException("The XML nests too deeply.");
+                        }
+                    }
+                }
+
+                using var reader = XmlReader.Create(new MemoryStream(bytes, false), settings);
                 return XDocument.Load(reader);
             }
-            catch (XmlException exception)
+            catch (Exception exception) when (exception is XmlException or ArgumentException or NotSupportedException or DecoderFallbackException)
             {
-                throw new InvalidDataException("The EPUB contains invalid XML.", exception);
+                throw new InvalidDataException("The XML cannot be read.", exception);
             }
         }
 

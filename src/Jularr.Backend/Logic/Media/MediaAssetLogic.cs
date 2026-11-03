@@ -315,6 +315,6 @@ namespace Jularr.Backend.Logic.Media
             return ctx.ReadRequiredAsync<StoredFileLockData>(sql, ct);
         }
 
-        private static string Stem(string relativePath) => relativePath[..^Path.GetExtension(relativePath).Length];
+        private static string Stem(string relativePath) => relativePath[..^LibraryFileTypes.Extension(relativePath).Length];
     }
 }

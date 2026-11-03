@@ -38,6 +38,13 @@ namespace Jularr.Integrations.Logic.Storage
             return index < 0 ? "" : checkedPath[..index];
         }
 
+        // A file name ends in one of the extensions (lower case with the dot); a double one such as ".fb2.zip" counts as well.
+        public static bool HasExtension(string name, IReadOnlySet<string> extensions)
+        {
+            var last = Path.GetExtension(name).ToLowerInvariant();
+            return extensions.Contains(last) || last.Length > 0 && extensions.Contains(Path.GetExtension(name[..^last.Length]).ToLowerInvariant() + last);
+        }
+
         public static string Name(string path)
         {
             var checkedPath = Check(path);
