@@ -37,7 +37,8 @@ namespace Jularr.Backend.Service.User.Reading.V1
 
         protected override async Task<IServiceOutput> OnExecute()
         {
-            // The newest readable EPUB or comic of the asset, else a ready reading copy of its PDF, else a book read through a reading copy made on opening (FB2, MOBI, ...), else its newest PDF; a matching prepared document is reused.
+            // The newest readable EPUB or comic of the asset, else a ready reading copy of its PDF, else a book read through a reading copy made on opening (FB2, MOBI, ...), else its newest PDF,
+            // else its DjVu pages; a matching prepared document is reused.
             var source = await Context.ExecuteBatchAsync((ctx, ct) =>
             {
                 var sql = new SqlStatement();
@@ -66,11 +67,12 @@ namespace Jularr.Backend.Service.User.Reading.V1
                                 "ReadableStoredFiles" AS candidate
                             WHERE
                                 candidate."MediaAssetId" = asset."Id"
-                                AND candidate."RelativePath" ~* '\.(epub|cbz|cbr|cb7|pdf|fb2|fb2\.zip|txt|rtf|docx|mobi|azw|azw3)$'
+                                AND candidate."RelativePath" ~* '\.(epub|cbz|cbr|cb7|pdf|fb2|fb2\.zip|txt|rtf|docx|mobi|azw|azw3|djvu|djv)$'
                                 AND (NOT candidate."IsDerived" OR candidate."DerivedAnalyzerVersion" = @PdfAnalyzerVersion)
                             ORDER BY
                                 candidate."MissingSince" IS NULL DESC,
-                                CASE WHEN candidate."RelativePath" ~* '\.pdf$' THEN 3 WHEN candidate."RelativePath" ~* '\.(fb2|fb2\.zip|txt|rtf|docx|mobi|azw|azw3)$' THEN 2 WHEN candidate."IsDerived" THEN 1 ELSE 0 END,
+                                CASE WHEN candidate."RelativePath" ~* '\.(djvu|djv)$' THEN 4 WHEN candidate."RelativePath" ~* '\.pdf$' THEN 3
+                                    WHEN candidate."RelativePath" ~* '\.(fb2|fb2\.zip|txt|rtf|docx|mobi|azw|azw3)$' THEN 2 WHEN candidate."IsDerived" THEN 1 ELSE 0 END,
                                 candidate."ModifiedAt" DESC,
                                 candidate."Id"
                             LIMIT 1
@@ -130,6 +132,7 @@ namespace Jularr.Backend.Service.User.Reading.V1
                         work."OriginalLanguage",
                         coalesce((document."Structure" ->> 'Recommended')::boolean, TRUE) AS "IsRecommended",
                         coalesce(jsonb_array_length(document."Structure" -> 'OriginalPages'), 0) AS "OriginalPages",
+                        coalesce((document."Structure" ->> 'RendersPages')::boolean, FALSE) AS "RendersPages",
                         ARRAY(
                             SELECT
                                 (page.value ->> 'PageFrom')::integer
@@ -192,6 +195,7 @@ namespace Jularr.Backend.Service.User.Reading.V1
                         WHEN bool_or(file."RelativePath" ~* '\.pdf$' AND file."MissingSince" IS NULL)
                             AND NOT bool_or(file."RelativePath" ~* '\.(epub|cbz|cbr|cb7|fb2|fb2\.zip|txt|rtf|docx|mobi|azw|azw3)$' AND file."MissingSince" IS NULL) THEN 2
                         WHEN bool_or(file."RelativePath" ~* '\.(cbz|cbr|cb7)$') AND NOT bool_or(file."RelativePath" ~* '\.epub$') THEN 4
+                        WHEN bool_or(file."RelativePath" ~* '\.(djvu|djv)$') AND NOT bool_or(file."RelativePath" ~* '\.(epub|pdf|fb2|fb2\.zip|txt|rtf|docx|mobi|azw|azw3)$') THEN 4
                         ELSE 1
                     END::smallint AS "ReadingFormatTypeId",
                     bool_or(file."RelativePath" ~* '\.pdf$' AND file."MissingSince" IS NULL) AS "HasPdf",
@@ -209,7 +213,7 @@ namespace Jularr.Backend.Service.User.Reading.V1
                         AND stopped."WorkUnitId" IS NOT DISTINCT FROM asset."WorkUnitId"
                         AND stopped."ProgressPositionTypeId" = 2
                     JOIN "ReadableStoredFiles" AS file ON file."MediaAssetId" = asset."Id"
-                        AND file."RelativePath" ~* '\.(epub|cbz|cbr|cb7|pdf|fb2|fb2\.zip|txt|rtf|docx|mobi|azw|azw3)$'
+                        AND file."RelativePath" ~* '\.(epub|cbz|cbr|cb7|pdf|fb2|fb2\.zip|txt|rtf|docx|mobi|azw|azw3|djvu|djv)$'
                         AND (NOT file."IsDerived" OR file."DerivedAnalyzerVersion" = @PdfAnalyzerVersion)
                     LEFT JOIN LATERAL (
                         SELECT
@@ -533,6 +537,68 @@ namespace Jularr.Backend.Service.User.Reading.V1
             sql.Parameters.Add(Parameters);
             sql.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));
             return await Context.ReadSql.ReadOptionalAsync<ReadingResourceV1>(sql, CancellationToken) ?? throw new KeyNotFoundException("The resource was not found.");
+        }
+    }
+
+    // A page of a book whose pages are drawn when first shown (DjVu): from the cache, else drawn now and kept there. The Reader asks for it through its own page.
+    public sealed class RenderReadingPageV1 : UserService<ReadingSectionParametersV1, NoData>
+    {
+        private readonly ReadingContent _content;
+
+        internal RenderReadingPageV1(ReadingContent content)
+        {
+            _content = content;
+        }
+
+        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<ReadingResourceV1>()];
+        protected override ModuleRequirement GetInstanceModules(ReadingSectionParametersV1 parameters) => ModuleRequirement.All("Library", "Reading");
+        protected override ServicePermission GetPermission(ReadingSectionParametersV1 parameters, Type resultType) => new("profile.media.read");
+
+        protected override async Task<IServiceOutput> OnExecute()
+        {
+            // The DjVu file of a document the profile may read, whether the document still matches it, and the page if it is drawn already.
+            var source = await Context.ExecuteBatchAsync((ctx, ct) =>
+            {
+                var sql = new SqlStatement();
+                sql.Statement =
+                    """
+                    SELECT
+                        document."Id" AS "DocumentId",
+                        file."RelativePath",
+                        root."RelativePath" AS "RootRelativePath",
+                        mount."Id" AS "StorageMountId",
+                        jsonb_array_length(document."Structure" -> 'Sections') AS "SectionCount",
+                        (document."CacheCompletedAt" IS NOT NULL
+                            AND file."MissingSince" IS NULL
+                            AND file."SizeBytes" = document."SourceSizeBytes"
+                            AND file."ModifiedAt" = document."SourceModifiedAt") AS "IsCurrent",
+                        page."Bytes",
+                        page."MediaType"
+                    FROM
+                        "ReadingDocuments" AS document
+                        JOIN "StoredFiles" AS file ON file."Id" = document."StoredFileId"
+                        JOIN "MediaAssets" AS asset ON asset."Id" = file."MediaAssetId"
+                        JOIN "ProfileWorks" AS visible ON visible."WorkId" = asset."WorkId" AND visible."ProfileId" = @ProfileId
+                        JOIN "LibraryRoots" AS root ON root."Id" = file."LibraryRootId"
+                        JOIN "StorageMounts" AS mount ON mount."Id" = root."StorageMountId"
+                        LEFT JOIN "ReadingResources" AS page ON page."ReadingDocumentId" = document."Id"
+                            AND page."Path" = ':page/' || lpad(@SectionIndex::text, 5, '0')
+                    WHERE
+                        document."Id" = @DocumentId
+                        AND document."ReadingFormatTypeId" = 4
+                        AND coalesce((document."Structure" ->> 'RendersPages')::boolean, FALSE)
+                        AND file."RelativePath" ~* '\.(djvu|djv)$'
+                        AND @SectionIndex < jsonb_array_length(document."Structure" -> 'Sections');
+                    """;
+                sql.Parameters.Add(Parameters);
+                sql.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));
+                return ctx.ReadSql.ReadOptionalAsync<ReadingPageSourceData>(sql, ct);
+            }, CancellationToken) ?? throw new KeyNotFoundException("The page was not found.");
+
+            return source is { Bytes: { } bytes, MediaType: { } mediaType }
+                ? new ReadingResourceV1(bytes, mediaType)
+                : await _content.RenderPageAsync(Context, source, Parameters.SectionIndex, CancellationToken);
         }
     }
 

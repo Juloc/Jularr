@@ -9,11 +9,14 @@ using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Reading;
 using Jularr.Backend.Data.Logic.Library;
 using Jularr.Backend.Data.Logic.Reading;
+using Jularr.Backend.Data.User.Reading.V1;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Reading;
 using Jularr.Backend.Logic.Storage;
 using Jularr.Backend.Service.Core;
+using Jularr.Integrations.Data.Djvu;
 using Jularr.Integrations.Data.Nas;
+using Jularr.Integrations.Logic.Djvu;
 using Jularr.Integrations.Logic.Pdf;
 using Jularr.Integrations.Logic.Storage;
 using Jularr.Integrations.Logic.Usenet;
@@ -27,18 +30,28 @@ namespace Jularr.Backend.Service.User.Reading.V1
         private static partial Regex Tags();
 
         private const long BatchBytes = 8L * 1024 * 1024;
+
+        // A DjVu book is drawn a few pages ahead, one batch on the server at a time; a book on a direct share is copied aside up to this size.
+        private const int PagesAhead = 4;
+        private const long MaximumDjvuBytes = 2L * 1024 * 1024 * 1024;
+        private static readonly SemaphoreSlim DjvuGate = new(1, 1);
+
         private readonly StorageAccess _storage;
         private readonly ArchiveTools _archives;
+        private readonly DjvuTools _djvu;
         private readonly TimeProvider _time;
 
-        public ReadingContent(StorageAccess storage, ArchiveTools archives, TimeProvider time)
+        public ReadingContent(StorageAccess storage, ArchiveTools archives, DjvuTools djvu, TimeProvider time)
         {
             _storage = storage;
             _archives = archives;
+            _djvu = djvu;
             _time = time;
         }
 
         public static string SectionPath(int index) => ":section/" + index.ToString("D5", CultureInfo.InvariantCulture);
+
+        public static bool IsDjvu(string relativePath) => Path.GetExtension(relativePath).ToLowerInvariant() is ".djvu" or ".djv";
 
         // A scanned PDF's pages the recognizer has read go into the text.
         public async Task<long> OpenAsync(LogicContext context, ReadingSourceData source, CancellationToken ct)
@@ -59,23 +72,17 @@ namespace Jularr.Backend.Service.User.Reading.V1
                 throw new ServiceUnavailableException("reading_unavailable");
             }
 
-            Stream file;
-            try
-            {
-                var mount = await context.ExecuteBatchAsync((ctx, token) => ctx.ReadStorageMountAsync(source.StorageMountId, token), ct);
-                file = await _storage.Open(mount).OpenReadAsync(StoragePath.Combine(source.RootRelativePath, source.RelativePath), ct);
-            }
-            catch (Exception exception) when (exception is NasMountException or IOException or UnauthorizedAccessException)
-            {
-                // Offline storage is not a missing book.
-                throw new ServiceUnavailableException("reading_unavailable");
-            }
-
+            var file = await OpenFileAsync(context, source.StorageMountId, source.RootRelativePath, source.RelativePath, ct);
             await using (file)
             {
                 if (ComicPages.IsComic(source.RelativePath))
                 {
                     return await OpenComicAsync(context, source, file, ct);
+                }
+
+                if (IsDjvu(source.RelativePath))
+                {
+                    return await OpenDjvuAsync(context, source, file, ct);
                 }
 
                 if (source.RelativePath.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase))
@@ -496,6 +503,185 @@ namespace Jularr.Backend.Service.User.Reading.V1
 
             await writer.FlushAsync();
             await CompleteAsync(context, new ReadingDocumentCompleteData(documentId, null, null, JsonSerializer.Serialize(new ReadingStructure([.. pages], [])), 0), ct);
+        }
+
+        private async Task<Stream> OpenFileAsync(LogicContext context, long storageMountId, string rootRelativePath, string relativePath, CancellationToken ct)
+        {
+            try
+            {
+                var mount = await context.ExecuteBatchAsync((ctx, token) => ctx.ReadStorageMountAsync(storageMountId, token), ct);
+                return await _storage.Open(mount).OpenReadAsync(StoragePath.Combine(rootRelativePath, relativePath), ct);
+            }
+            catch (Exception exception) when (exception is NasMountException or IOException or UnauthorizedAccessException)
+            {
+                // Offline storage is not a missing book.
+                throw new ServiceUnavailableException("reading_unavailable");
+            }
+        }
+
+        // A DjVu book opens as its pages, counted now and drawn by DjVuLibre when they are first shown.
+        private async Task<long> OpenDjvuAsync(LogicContext context, ReadingSourceData source, Stream file, CancellationToken ct)
+        {
+            if (!_djvu.IsAvailable)
+            {
+                throw new ServiceUnavailableException("reading_djvu_unavailable");
+            }
+
+            var hash = await SHA256.HashDataAsync(file, ct);
+            file.Position = 0;
+            var save = new ReadingDocumentSaveData(source.StoredFileId, source.SizeBytes, source.ModifiedAt, hash, ComicPages.AnalyzerVersion, ReadingFormatType.Comic, null, null,
+                JsonSerializer.Serialize(new ReadingStructure([], [])), 0);
+            var state = await context.ExecuteBatchAsync((ctx, token) => ctx.CreateReadingDocumentAsync(save, token), ct);
+            if (state.IsCached)
+            {
+                return state.DocumentId;
+            }
+
+            await context.ExecuteBatchAsync(async (ctx, token) =>
+            {
+                await ctx.ClearReadingResourcesAsync(new ReadingDocumentIdData(state.DocumentId), token);
+                return true;
+            }, ct);
+
+            var count = await WithDjvuAsync(file, path => _djvu.CountPagesAsync(path, ct), ct);
+            var pages = Enumerable.Range(1, Math.Min(count, DjvuTools.MaximumPages)).Select(number => new ReadingStructureSection("page " + number.ToString(CultureInfo.InvariantCulture), null, 0, 1));
+            await CompleteAsync(context, new ReadingDocumentCompleteData(state.DocumentId, null, null, JsonSerializer.Serialize(new ReadingStructure([.. pages], [], rendersPages: true)), 0), ct);
+            return state.DocumentId;
+        }
+
+        // A page of a DjVu book from the cache, else drawn now with the next pages not drawn yet; only the asked page must succeed.
+        public async Task<ReadingResourceV1> RenderPageAsync(LogicContext context, ReadingPageSourceData source, int index, CancellationToken ct)
+        {
+            if (!source.IsCurrent)
+            {
+                throw new ServiceUnavailableException("reading_unavailable");
+            }
+
+            if (!_djvu.IsAvailable)
+            {
+                throw new ServiceUnavailableException("reading_djvu_unavailable");
+            }
+
+            await DjvuGate.WaitAsync(ct);
+            try
+            {
+                // Another request may have drawn these pages while this one waited.
+                var paths = Enumerable.Range(index, Math.Min(PagesAhead, source.SectionCount - index)).Select(ComicPages.PagePath).ToArray();
+                var cached = await context.ExecuteBatchAsync((ctx, token) => ReadPagesAsync(ctx, new ReadingResourcePathsData(source.DocumentId, paths), token), ct);
+                if (cached.FirstOrDefault(page => page.Path == paths[0]) is { } ready)
+                {
+                    return new ReadingResourceV1(ready.Bytes, ready.MediaType);
+                }
+
+                var missing = paths.Select((path, offset) => (Path: path, Number: index + offset + 1)).Where(page => cached.All(other => other.Path != page.Path)).ToArray();
+                var file = await OpenFileAsync(context, source.StorageMountId, source.RootRelativePath, source.RelativePath, ct);
+                DjvuPageImage?[] drawn;
+                await using (file)
+                {
+                    drawn = await WithDjvuAsync(file, async path =>
+                    {
+                        var sizes = await _djvu.ReadSizesAsync(path, [.. missing.Select(page => page.Number)], ct);
+                        var images = new DjvuPageImage?[sizes.Count];
+                        var parallel = new ParallelOptions { MaxDegreeOfParallelism = Math.Clamp(Environment.ProcessorCount / 2, 1, PagesAhead), CancellationToken = ct };
+                        await Parallel.ForEachAsync(Enumerable.Range(0, sizes.Count), parallel, async (offset, token) =>
+                        {
+                            try
+                            {
+                                images[offset] = await _djvu.RenderAsync(path, sizes[offset], token);
+                            }
+                            catch (Exception exception) when (offset > 0 && exception is InvalidDataException or TimeoutException)
+                            {
+                                // A later page is tried again when it is asked for.
+                            }
+                        });
+                        return images;
+                    }, ct);
+                }
+
+                await context.ExecuteBatchAsync(async (ctx, token) =>
+                {
+                    for (var offset = 0; offset < drawn.Length; offset++)
+                    {
+                        if (drawn[offset] is { } image)
+                        {
+                            await ctx.SaveReadingResourceAsync(new ReadingResourceData(source.DocumentId, missing[offset].Path, image.ContentType, image.Bytes), token);
+                        }
+                    }
+
+                    await ctx.RecountReadingCacheAsync(new ReadingDocumentIdData(source.DocumentId), token);
+                    return true;
+                }, ct);
+                return new ReadingResourceV1(drawn[0]!.Bytes, drawn[0]!.ContentType);
+            }
+            finally
+            {
+                DjvuGate.Release();
+            }
+        }
+
+        private static async Task<IReadOnlyList<ReadingEbookResourceData>> ReadPagesAsync(LogicContext ctx, ReadingResourcePathsData data, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    resource."Path",
+                    resource."MediaType",
+                    resource."Bytes"
+                FROM
+                    "ReadingResources" AS resource
+                WHERE
+                    resource."ReadingDocumentId" = @DocumentId
+                    AND resource."Path" = ANY(@Paths);
+                """;
+            sql.Parameters.Add(data);
+            return await ctx.ReadSql.ReadListAsync<ReadingEbookResourceData>(sql, ct);
+        }
+
+        // DjVuLibre reads a file on this host: a book on a direct share is copied aside into a private folder first. A file it cannot read is an invalid book.
+        private static async Task<T> WithDjvuAsync<T>(Stream file, Func<string, Task<T>> use, CancellationToken ct)
+        {
+            var folder = file is FileStream ? null : Directory.CreateTempSubdirectory("jularr-djvu-").FullName;
+            try
+            {
+                var path = folder is null ? Path.GetFullPath(((FileStream)file).Name) : Path.Combine(folder, "book.djvu");
+                if (folder is not null)
+                {
+                    await using var target = File.Create(path);
+                    var buffer = new byte[81920];
+                    int read;
+                    while ((read = await file.ReadAsync(buffer, ct)) > 0)
+                    {
+                        if (target.Length + read > MaximumDjvuBytes)
+                        {
+                            throw new ServiceUnavailableException("reading_invalid_file");
+                        }
+
+                        await target.WriteAsync(buffer.AsMemory(0, read), ct);
+                    }
+                }
+
+                return await use(path);
+            }
+            catch (DjvuUnavailableException)
+            {
+                throw new ServiceUnavailableException("reading_djvu_unavailable");
+            }
+            catch (Exception exception) when (exception is InvalidDataException or TimeoutException)
+            {
+                throw new ServiceUnavailableException("reading_invalid_file");
+            }
+            finally
+            {
+                try
+                {
+                    if (folder is not null) Directory.Delete(folder, true);
+                }
+                catch (IOException)
+                {
+                    // A busy temporary folder must not hide the outcome.
+                }
+            }
         }
 
         private async Task CompleteAsync(LogicContext context, ReadingDocumentCompleteData complete, CancellationToken ct)

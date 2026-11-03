@@ -161,8 +161,10 @@ jobs:
           sparse-checkout: .github/actions
           persist-credentials: false
       - uses: ./.github/actions/restore-build
-      # Backup integration requires pg_dump with the same major as PostgreSQL.
+      # Backup integration requires pg_dump with the same major as PostgreSQL; the DjVu tests draw with DjVuLibre.
       - uses: ./.github/actions/install-tools
+        with:
+          djvulibre: 'true'
       - name: Run the selected test classes of this shard
         shell: bash
         run: |
@@ -189,6 +191,8 @@ jobs:
             echo "::error::Backend shard ${SHARD}: a test lane failed (lines are prefixed [lane1] / [lane2])."
             exit 1
           fi
+        env:
+          JULARR_TEST_DJVULIBRE: /usr/bin
       - name: Keep test results
         if: always()
         uses: actions/upload-artifact@v7

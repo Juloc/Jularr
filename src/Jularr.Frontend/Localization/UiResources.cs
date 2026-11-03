@@ -2273,6 +2273,7 @@ namespace Jularr.Frontend.Localization
             new("acquisition.file.content_txt", "Not a valid TXT: the file holds binary data, not text"),
             new("acquisition.file.content_rtf", "Not a valid RTF: the file does not start like an RTF document"),
             new("acquisition.file.content_docx", "Not a valid DOCX: no ZIP archive with word/document.xml"),
+            new("acquisition.file.content_djvu", "Not a valid DjVu: the file does not start with AT&TFORM and DJVU or DJVM"),
             new("acquisition.file.content_cbz", "Not a valid CBZ: the file is no ZIP archive"),
             new("acquisition.file.content_cbr", "Not a valid CBR: the file is no RAR archive"),
             new("acquisition.file.content_cb7", "Not a valid CB7: the file is no 7-Zip archive"),

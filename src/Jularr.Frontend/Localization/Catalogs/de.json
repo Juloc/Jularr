@@ -9771,6 +9771,10 @@
    "This comic needs 7-Zip, which is not configured on the server.",
    "Dieser Comic braucht 7-Zip, das auf dem Server nicht eingerichtet ist."
   ],
+  "errors.reading_djvu_unavailable": [
+   "This book is a DjVu file. The server needs DjVuLibre (ddjvu and djvused) to show its pages.",
+   "Dieses Buch ist eine DjVu-Datei. Der Server braucht DjVuLibre (ddjvu und djvused), um die Seiten zu zeigen."
+  ],
   "errors.reading_drm": [
    "This book is DRM-protected and cannot be read in Jularr.",
    "Dieses Buch ist mit DRM geschützt und lässt sich in Jularr nicht lesen."
@@ -15664,6 +15668,7 @@
   "acquisition.file.content_txt": ["Not a valid TXT: the file holds binary data, not text","Kein gültiges TXT: Die Datei enthält Binärdaten statt Text"],
   "acquisition.file.content_rtf": ["Not a valid RTF: the file does not start like an RTF document","Kein gültiges RTF: Die Datei beginnt nicht wie ein RTF-Dokument"],
   "acquisition.file.content_docx": ["Not a valid DOCX: no ZIP archive with word/document.xml","Kein gültiges DOCX: kein ZIP-Archiv mit word/document.xml"],
+  "acquisition.file.content_djvu": ["Not a valid DjVu: the file does not start with AT&TFORM and DJVU or DJVM","Kein gültiges DjVu: Die Datei beginnt nicht mit AT&TFORM und DJVU oder DJVM"],
   "acquisition.file.content_cbz": ["Not a valid CBZ: the file is no ZIP archive","Kein gültiges CBZ: Die Datei ist kein ZIP-Archiv"],
   "acquisition.file.content_cbr": ["Not a valid CBR: the file is no RAR archive","Kein gültiges CBR: Die Datei ist kein RAR-Archiv"],
   "acquisition.file.content_cb7": ["Not a valid CB7: the file is no 7-Zip archive","Kein gültiges CB7: Die Datei ist kein 7-Zip-Archiv"],

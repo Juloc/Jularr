@@ -30,7 +30,7 @@ namespace Jularr.Frontend.Pages.User.Reader
         ReadReadingBookmarksV1 readBookmarks, DeleteReadingAnnotationV1 deleteNote, SearchReadingV1 search, ReadUiLocalesV1 readLocales, ReadLocalTranslationAvailabilityV1 readLocalAvailability, ReadWorkV1 readWork,
         ReadSpeechPreferencesV1 readSpeech, SaveSpeechPreferencesV1 saveSpeech, ReadAvailableSpeechModelsV1 readSpeechModels, ReadAuthenticationV1 authentication, IAntiforgery antiforgery, UiText texts, FrontendAssets assets,
         ReadReadingStateV1 readState, ReadReadingPositionV1 readPosition, ReadReadingPageNotesV1 readPageNotes, CreateReadingPageNoteV1 createPageNote, DeleteReadingPageNoteV1 deletePageNote,
-        ReadReaderSettingsV1 readSettings, ReadReadingSectionOffsetsV1 readOffsets)
+        ReadReaderSettingsV1 readSettings, ReadReadingSectionOffsetsV1 readOffsets, RenderReadingPageV1 renderPage)
         : JularrPage
     {
         // The languages this book can be read in: its original first, then the profile's and the other allowed ones Mozilla's models reach.
@@ -502,7 +502,10 @@ namespace Jularr.Frontend.Pages.User.Reader
             var count = Math.Max(1, document.SectionCount);
             var index = Math.Clamp(PageIndex ?? (document.Locator is { } locator && locator.StartsWith('p')
                 && int.TryParse(locator[1..], NumberStyles.None, CultureInfo.InvariantCulture, out var saved) ? saved : 0), 0, count - 1);
-            var pages = "/api/v1/reading/documents/" + document.DocumentId.ToString(CultureInfo.InvariantCulture) + "/resource?path=";
+            // Pages drawn when first shown (DjVu) come through this page, which draws them; the others straight from the cache.
+            var pages = document.RendersPages
+                ? "/Read/" + Id.ToString(CultureInfo.InvariantCulture) + "?handler=Page&document=" + document.DocumentId.ToString(CultureInfo.InvariantCulture) + "&path="
+                : "/api/v1/reading/documents/" + document.DocumentId.ToString(CultureInfo.InvariantCulture) + "/resource?path=";
             string Page(int number) => "?p=" + number.ToString(CultureInfo.InvariantCulture);
             var top = Header(document.Title, "", document.WorkId, [Overflowing(AppearanceTool(true), "text", 1), Overflowing(ModeTool(), "mode", 2), Overflowing(BookmarkTool(), "bookmark", 2), Tool("player-more", "reader.more", "more").Attribute("data-overflow-more", "")]);
             var previous = new A(new Icon("player-previous", assets)).Class("button button--icon").Attribute("aria-label", texts["reader.previous"]).Attribute("href", Page(Math.Max(0, index - 1))).Attribute("data-role", "previous");
@@ -747,6 +750,31 @@ namespace Jularr.Frontend.Pages.User.Reader
         }
 
         private static string PagePath(int index) => ":page/" + index.ToString("D5", CultureInfo.InvariantCulture);
+
+        // A page of a book drawn when first shown (DjVu), as the picture itself; the browser keeps it for an hour.
+        public async Task<IActionResult> OnGetPageAsync([BindRequired] long document, [BindRequired] string path)
+        {
+            if (!path.StartsWith(":page/", StringComparison.Ordinal) || !int.TryParse(path.AsSpan(6), NumberStyles.None, CultureInfo.InvariantCulture, out var index))
+            {
+                return NotFound();
+            }
+
+            try
+            {
+                var page = await renderPage.ExecuteAsync<ReadingResourceV1>(new ReadingSectionParametersV1(document, index), default, HttpContext.RequestAborted);
+                Response.Headers.CacheControl = "private,max-age=3600";
+                Response.Headers.XContentTypeOptions = "nosniff";
+                return File(page.Bytes, page.ContentType);
+            }
+            catch (KeyNotFoundException)
+            {
+                return NotFound();
+            }
+            catch (ServiceUnavailableException)
+            {
+                return StatusCode(StatusCodes.Status503ServiceUnavailable);
+            }
+        }
 
         // A list read checks the same source visibility without reopening or preparing the book.
         public async Task<IActionResult> OnGetNotesAsync()
