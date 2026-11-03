@@ -121,15 +121,24 @@ namespace Jularr.Backend.Tests
             using var animePage = await host.SendAsync(HttpMethod.Get, Anime);
             var anime = await animePage.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, animePage.StatusCode, anime);
-            StringAssert.Contains(anime, "No Anime default yet: Anime uses the series default (HD - 720p/1080p).");
+            StringAssert.Contains(anime, "Series: no Anime default yet, Anime uses the default of its type (HD - 720p/1080p).");
+            StringAssert.Contains(anime, "Movie: no Anime default yet, Anime uses the default of its type (HD - 720p/1080p).");
             StringAssert.Contains(anime, "/Admin/Acquisition/Profiles/New?type=Series&amp;subtype=Anime");
+            StringAssert.Contains(anime, "/Admin/Acquisition/Profiles/New?type=Movie&amp;subtype=Anime");
 
             // An Anime profile that is the default is the one the note names, and the series list does not show it.
             using var created = await host.SendAsync(HttpMethod.Post, Root + "profiles", new SaveAcquisitionProfileDataV1("Anime HD", MediaType.Series, true, ["WEBDL-1080p"], false, null, null, null, mediaSubtypeId: MediaSubtype.Anime));
             Assert.AreEqual(HttpStatusCode.OK, created.StatusCode, await created.Content.ReadAsStringAsync());
             anime = await (await host.SendAsync(HttpMethod.Get, Anime)).Content.ReadAsStringAsync();
-            StringAssert.Contains(anime, "Anime uses its own default: Anime HD.");
+            StringAssert.Contains(anime, "Series: Anime uses its own default, Anime HD.");
+            StringAssert.Contains(anime, "Movie: no Anime default yet");
             StringAssert.Contains(anime, ">Anime HD<");
+            using var film = await host.SendAsync(HttpMethod.Post, Root + "profiles", new SaveAcquisitionProfileDataV1("Anime Film", MediaType.Movie, true, ["WEBDL-1080p"], false, null, null, null, mediaSubtypeId: MediaSubtype.Anime));
+            Assert.AreEqual(HttpStatusCode.OK, film.StatusCode, await film.Content.ReadAsStringAsync());
+            anime = await (await host.SendAsync(HttpMethod.Get, Anime)).Content.ReadAsStringAsync();
+            StringAssert.Contains(anime, "Movie: Anime uses its own default, Anime Film.");
+            StringAssert.Contains(anime, ">Anime Film<");
+            Assert.IsFalse((await (await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Profiles?tab=profiles&mediaTypeId=1")).Content.ReadAsStringAsync()).Contains(">Anime Film<", StringComparison.Ordinal));
             Assert.IsFalse(anime.Contains(">HD - 720p/1080p<", StringComparison.Ordinal));
             series = await (await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Profiles?tab=profiles&mediaTypeId=2")).Content.ReadAsStringAsync();
             Assert.IsFalse(series.Contains(">Anime HD<", StringComparison.Ordinal));
@@ -138,14 +147,14 @@ namespace Jularr.Backend.Tests
             // The editor of an Anime profile names its default and returns to the Anime tab; other panes ignore the subtype.
             var id = (await (await host.SendAsync(HttpMethod.Get, Root + "profiles")).Content.ReadFromJsonAsync<BaseDataList<AcquisitionProfileDetailsV1>>())!.Single(item => item.Name == "Anime HD").Id;
             var editor = await (await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Profiles/" + id)).Content.ReadAsStringAsync();
-            StringAssert.Contains(editor, "Default for Anime");
+            StringAssert.Contains(editor, "Default for anime series");
             StringAssert.Contains(editor, "subtype=Anime");
 
             // Anime off: its tab is gone, the series tab still works.
             await host.Fixture.RunSqlAsync("UPDATE \"MediaSubtypes\" SET \"IsEnabled\" = FALSE WHERE \"Key\" = 'Anime'");
             series = await (await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Profiles?tab=profiles&mediaTypeId=2")).Content.ReadAsStringAsync();
             Assert.IsFalse(series.Contains("subtype=Anime", StringComparison.Ordinal));
-            using var wrong = await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Profiles?tab=profiles&mediaTypeId=1&subtype=Anime");
+            using var wrong = await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Profiles?tab=profiles&mediaTypeId=3&subtype=Anime");
             Assert.AreEqual(HttpStatusCode.NotFound, wrong.StatusCode);
         }
 

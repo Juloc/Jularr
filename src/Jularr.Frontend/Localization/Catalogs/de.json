@@ -2408,9 +2408,13 @@
    "Add series profile",
    "Serienprofil hinzufügen"
   ],
-  "profile.add.Anime": [
-   "Add anime profile",
-   "Anime-Profil hinzufügen"
+  "profile.add.AnimeSeries": [
+   "Add anime series profile",
+   "Anime-Serienprofil hinzufügen"
+  ],
+  "profile.add.AnimeMovie": [
+   "Add anime film profile",
+   "Anime-Filmprofil hinzufügen"
   ],
   "profile.add.Book": [
    "Add book profile",
@@ -2428,17 +2432,21 @@
    "Default for its media type",
    "Standard für seinen Medientyp"
   ],
-  "profile.isDefault.Anime": [
-   "Default for Anime",
-   "Standard für Anime"
+  "profile.isDefault.AnimeSeries": [
+   "Default for anime series",
+   "Standard für Anime-Serien"
+  ],
+  "profile.isDefault.AnimeMovie": [
+   "Default for anime films",
+   "Standard für Anime-Filme"
   ],
   "profile.anime.own": [
-   "Anime uses its own default: {0}.",
-   "Anime nutzt den eigenen Standard: {0}."
+   "{0}: Anime uses its own default, {1}.",
+   "{0}: Anime nutzt den eigenen Standard, {1}."
   ],
   "profile.anime.fallback": [
-   "No Anime default yet: Anime uses the series default ({0}).",
-   "Noch kein Anime-Standard: Anime nutzt den Serien-Standard ({0})."
+   "{0}: no Anime default yet, Anime uses the default of its type ({1}).",
+   "{0}: noch kein Anime-Standard, Anime nutzt den Standard seines Typs ({1})."
   ],
   "profile.upgradeAllowed": [
    "Upgrade to better releases",

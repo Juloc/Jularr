@@ -1930,7 +1930,7 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
-        public async Task Profiles_AnimeDefault_FallsBackToSeries_AndLeavesExistingWantedItemsOnTheirProfile()
+        public async Task Profiles_AnimeDefault_FallsBackToItsType_AndLeavesExistingWantedItemsOnTheirProfile()
         {
             using var storage = new TemporaryDirectory();
             using var downloads = new TemporaryDirectory();
@@ -1938,9 +1938,9 @@ namespace Jularr.Backend.Tests
             const string Profiles = "/api/v1/admin/acquisition/profiles";
             var seriesDefault = (await ReadProfilesAsync(host)).Single(profile => profile.MediaTypeId == MediaType.Series && profile.IsDefault).Id;
 
-            async Task<long> WantedAsync(string title, MediaSubtype? subtype)
+            async Task<long> WantedAsync(string title, MediaSubtype? subtype, MediaType type = MediaType.Series)
             {
-                using var created = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works", new CreateWorkDataV1(MediaType.Series, title, null, subtype));
+                using var created = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works", new CreateWorkDataV1(type, title, null, subtype));
                 var workId = (await created.Content.ReadFromJsonAsync<WorkDetailsV1>())!.Id;
                 return (long)(await host.ScalarAsync("INSERT INTO \"WantedItems\" (\"WorkId\") VALUES (" + workId + ") RETURNING \"Id\""))!;
             }
@@ -1952,10 +1952,10 @@ namespace Jularr.Backend.Tests
                 return (await new LogicContext(sql).ReadWantedTargetAsync(wantedId, default)).AcquisitionProfileId;
             }
 
-            async Task<long> CreateDefaultAsync(string name)
+            async Task<long> CreateDefaultAsync(string name, MediaType type = MediaType.Series)
             {
                 using var created = await host.SendAsync(HttpMethod.Post, Profiles,
-                    new SaveAcquisitionProfileDataV1(name, MediaType.Series, true, ["WEBDL-1080p"], false, null, null, null, mediaSubtypeId: MediaSubtype.Anime));
+                    new SaveAcquisitionProfileDataV1(name, type, true, ["WEBDL-1080p"], false, null, null, null, mediaSubtypeId: MediaSubtype.Anime));
                 Assert.AreEqual(HttpStatusCode.OK, created.StatusCode, await created.Content.ReadAsStringAsync());
                 return (await created.Content.ReadFromJsonAsync<CreateAcquisitionProfileResultV1>())!.Id;
             }
@@ -1982,6 +1982,16 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(replacing, await ResolvedAsync(await WantedAsync("Third Anime", MediaSubtype.Anime)));
             Assert.AreEqual(seriesDefault, await ResolvedAsync(firstAnime));
             Assert.IsFalse((await ReadProfilesAsync(host)).Single(profile => profile.Id == animeDefault).IsDefault);
+
+            // Anime films have their own default beside the one of Anime series, with the same fallback and the same bookkeeping.
+            var movieDefault = (await ReadProfilesAsync(host)).Single(profile => profile.MediaTypeId == MediaType.Movie && profile.IsDefault && profile.MediaSubtypeId is null).Id;
+            var firstFilm = await WantedAsync("First Anime Film", MediaSubtype.Anime, MediaType.Movie);
+            Assert.AreEqual(movieDefault, await ResolvedAsync(firstFilm));
+            var filmDefault = await CreateDefaultAsync("Anime Film", MediaType.Movie);
+            Assert.AreEqual(movieDefault, await ResolvedAsync(firstFilm));
+            Assert.AreEqual(filmDefault, await ResolvedAsync(await WantedAsync("Second Anime Film", MediaSubtype.Anime, MediaType.Movie)));
+            Assert.AreEqual(replacing, await ResolvedAsync(await WantedAsync("Fourth Anime", MediaSubtype.Anime)));
+            Assert.IsTrue((await ReadProfilesAsync(host)).Single(profile => profile.Id == replacing).IsDefault);
         }
 
         [TestMethod]
