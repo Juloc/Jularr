@@ -493,6 +493,153 @@ namespace Jularr.E2E.Tests
             await Steps.SubmitAsync(page, Steps.FormWith(page, "Create work and identify"));
         }
 
+        // A DjVu book opens in the Reader as its pages, drawn by DjVuLibre when first shown, and turns to its next page, on a wide screen and a phone.
+        [TestMethod]
+        [Timeout(240_000)]
+        public async Task LocalDjvu_ShowsItsPagesAsPictures_AndTurnsToTheNextPage()
+        {
+            var tools = Environment.GetEnvironmentVariable("JULARR_TEST_DJVULIBRE");
+            if (tools is not { Length: > 0 } || !File.Exists(Path.Combine(tools, "ddjvu")))
+            {
+                JularrInstance.Unavailable("JULARR_TEST_DJVULIBRE names no folder with DjVuLibre's tools.");
+            }
+
+            using var folders = new Folders("Books");
+            await WriteDjvuAsync(tools!, Path.Combine(folders.Library, "Books", "night-atlas.djvu"));
+            await using var jularr = await JularrInstance.StartAsync(new Dictionary<string, string>
+            {
+                ["Storage:LocalPaths:0"] = folders.Library,
+                ["Reading:DdjvuPath"] = Path.Combine(tools!, "ddjvu"),
+                ["Reading:DjvusedPath"] = Path.Combine(tools!, "djvused")
+            });
+            await using var session = await BrowserSession.StartAsync(jularr);
+            var page = session.Page;
+            const string Shown = "() => { const images = [...document.querySelectorAll('.reader-book__print img')]; return images.length > 0 && images.every(image => image.complete && image.naturalWidth > 0); }";
+            try
+            {
+                await AddBookAsync(page, folders, "Night Atlas");
+                var response = await page.GotoAsync("/Read/1", new() { Timeout = 30_000 });
+                Assert.AreEqual(200, response!.Status);
+                await page.WaitForFunctionAsync("() => { const r = document.querySelector('.reader'); return r.dataset.format === 'comic' && r.dataset.bookReady === 'true' && r.dataset.columns === '1'; }");
+                await page.WaitForFunctionAsync(Shown, null, new() { Timeout = 30_000 });
+                Assert.AreEqual(1, await page.Locator(".reader-book__print img").CountAsync());
+                StringAssert.Contains(await page.Locator(".reader-book__print img").First.GetAttributeAsync("src"), "handler=Page");
+                await Assertions.Expect(page.Locator("[data-role=position]")).ToHaveTextAsync("1 / 3");
+                await Evidence.SaveAsync(page, "reader-djvu-desktop");
+
+                // The next page is drawn too; on a wide screen the second and third stand side by side.
+                await page.Locator("[data-turn='1']").ClickAsync();
+                await page.WaitForFunctionAsync("() => { const r = document.querySelector('.reader'); return r.dataset.bookState === 'idle' && r.dataset.page === '1'; }");
+                await page.WaitForFunctionAsync(Shown, null, new() { Timeout = 30_000 });
+                var sources = await page.Locator(".reader-book__print img").EvaluateAllAsync<string[]>("images => images.map(image => image.src)");
+                Assert.IsTrue(sources.All(source => source.Contains("%3Apage%2F0000", StringComparison.Ordinal)) && !sources.Any(source => source.EndsWith("%3Apage%2F00000", StringComparison.Ordinal)),
+                    string.Join(", ", sources));
+                await Evidence.SaveAsync(page, "reader-djvu-desktop-next");
+
+                // A phone shows one page at a time, inside the screen.
+                await page.SetViewportSizeAsync(390, 844);
+                await page.GotoAsync("/Read/1?p=1");
+                await page.WaitForFunctionAsync("() => { const r = document.querySelector('.reader'); return r.dataset.bookReady === 'true' && r.dataset.columns === '1' && r.dataset.page === '1'; }");
+                await page.WaitForFunctionAsync(Shown, null, new() { Timeout = 30_000 });
+                await Assertions.Expect(page.Locator("[data-role=position]")).ToHaveTextAsync("2 / 3");
+                Assert.IsTrue(await page.EvaluateAsync<bool>("() => document.documentElement.scrollWidth <= innerWidth"));
+                await Evidence.SaveAsync(page, "reader-djvu-phone");
+                CollectionAssert.AreEqual(Array.Empty<string>(), session.Problems.ToArray());
+            }
+            catch (Exception exception) when (exception is not AssertInconclusiveException)
+            {
+                Evidence.Log("[reader-djvu] " + exception);
+                await Evidence.SaveAsync(page, "reader-djvu-failure");
+                throw;
+            }
+        }
+
+        // Three pages made with DjVuLibre's own encoders: a colour plate (c44) and two pages of lines like text (cjb2), bundled by djvm.
+        private static async Task WriteDjvuAsync(string tools, string target)
+        {
+            var work = Directory.CreateTempSubdirectory("jularr-djvu-fixture-").FullName;
+            try
+            {
+                const int Width = 1200, Height = 1700;
+                var colour = new byte[Width * Height * 3];
+                for (var index = 0; index < Width * Height; index++)
+                {
+                    var (x, y) = (index % Width, index / Width);
+                    var frame = x < 80 || x >= Width - 80 || y < 80 || y >= Height - 80;
+                    (colour[index * 3], colour[index * 3 + 1], colour[index * 3 + 2]) = frame ? ((byte)40, (byte)60, (byte)110) : ((byte)(120 + x * 100 / Width), (byte)(150 + y * 80 / Height), (byte)200);
+                }
+
+                await File.WriteAllBytesAsync(Path.Combine(work, "plate.ppm"), [.. System.Text.Encoding.ASCII.GetBytes("P6\n" + Width + " " + Height + "\n255\n"), .. colour]);
+                string[] pages = ["plate.djvu"];
+                await RunToolAsync(tools, "c44", work, "plate.ppm", "plate.djvu");
+                for (var number = 2; number <= 3; number++)
+                {
+                    await File.WriteAllBytesAsync(Path.Combine(work, "text.pbm"), TextPage(Width, Height, number));
+                    await RunToolAsync(tools, "cjb2", work, "text.pbm", "text" + number + ".djvu");
+                    pages = [.. pages, "text" + number + ".djvu"];
+                }
+
+                await RunToolAsync(tools, "djvm", work, ["-c", "book.djvu", .. pages]);
+                File.Copy(Path.Combine(work, "book.djvu"), target);
+            }
+            finally
+            {
+                Directory.Delete(work, true);
+            }
+        }
+
+        // Margins, a heading bar and lines of words of varying length; the page number in as many blocks.
+        private static byte[] TextPage(int width, int height, int number)
+        {
+            var row = (width + 7) / 8;
+            var pixels = new byte[row * height];
+            void Fill(int left, int top, int right, int bottom)
+            {
+                for (var y = top; y < bottom; y++)
+                {
+                    for (var x = left; x < right; x++)
+                    {
+                        pixels[y * row + x / 8] |= (byte)(0x80 >> (x % 8));
+                    }
+                }
+            }
+
+            Fill(150, 150, 700, 200);
+            for (var line = 0; line < 38; line++)
+            {
+                var top = 280 + line * 34;
+                var x = 150;
+                for (var word = 0; x < width - 150; word++)
+                {
+                    var length = 30 + (line * 7 + word * 13) % 90;
+                    Fill(x, top, Math.Min(x + length, width - 150), top + 14);
+                    x += length + 18;
+                }
+            }
+
+            for (var block = 0; block < number; block++)
+            {
+                Fill(width / 2 - 40 + block * 30, height - 110, width / 2 - 20 + block * 30, height - 90);
+            }
+
+            return [.. System.Text.Encoding.ASCII.GetBytes("P4\n" + width + " " + height + "\n"), .. pixels];
+        }
+
+        private static async Task RunToolAsync(string tools, string tool, string work, params string[] arguments)
+        {
+            var start = new System.Diagnostics.ProcessStartInfo(Path.Combine(tools, tool)) { WorkingDirectory = work, RedirectStandardError = true, RedirectStandardOutput = true, UseShellExecute = false };
+            foreach (var argument in arguments)
+            {
+                start.ArgumentList.Add(argument);
+            }
+
+            using var process = System.Diagnostics.Process.Start(start)!;
+            var errors = process.StandardError.ReadToEndAsync();
+            await process.StandardOutput.ReadToEndAsync();
+            await process.WaitForExitAsync();
+            Assert.AreEqual(0, process.ExitCode, tool + ": " + await errors);
+        }
+
         internal static async Task AddBookAsync(IPage page, Folders folders, string title)
         {
             await Owner.SetUpAndSignInAsync(page);

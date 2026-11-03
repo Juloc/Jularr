@@ -20,6 +20,7 @@ using Jularr.Integrations.Logic.AniList;
 using Jularr.Integrations.Logic.AnnasArchive;
 using Jularr.Integrations.Logic.Browser;
 using Jularr.Integrations.Logic.Codex;
+using Jularr.Integrations.Logic.Djvu;
 using Jularr.Integrations.Logic.Igdb;
 using Jularr.Integrations.Logic.Libretro;
 using Jularr.Integrations.Logic.MusicBrainz;
@@ -163,6 +164,11 @@ namespace Jularr.Backend.Service.Core
                 Par2Path = Executables.Resolve(configuration["Usenet:Par2Path"], "par2"),
                 SevenZipPath = Executables.Resolve(configuration["Usenet:SevenZipPath"], "7zz", "7z")
             });
+            services.AddSingleton(new DjvuTools
+            {
+                DdjvuPath = Executables.Resolve(configuration["Reading:DdjvuPath"], "ddjvu"),
+                DjvusedPath = Executables.Resolve(configuration["Reading:DjvusedPath"], "djvused")
+            });
 
             // Backups reach the same database.
             var target = new NpgsqlConnectionStringBuilder(connectionString);
@@ -263,6 +269,7 @@ namespace Jularr.Backend.Service.Core
             services.TryAddSingleton<DownloadSpeeds>();
             services.TryAddSingleton<DirectDownloadCleanup>();
             services.TryAddSingleton<ArchiveTools>();
+            services.TryAddSingleton<DjvuTools>();
             services.TryAddSingleton<PostgresBackupTools>();
             services.TryAddTransient<UsenetJob>();
             services.TryAddTransient<TorrentJob>();
