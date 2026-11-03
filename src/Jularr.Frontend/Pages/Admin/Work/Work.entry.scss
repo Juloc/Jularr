@@ -365,7 +365,7 @@ th[aria-sort="descending"] .work-sort::after { content: " ▾"; }
 
 .work-columns {
     position: fixed;
-    z-index: 60;
+    z-index: var(--z-drawer);
     width: 290px;
     max-height: calc(100vh - 16px);
     overflow-y: auto;

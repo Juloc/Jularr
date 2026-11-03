@@ -29,7 +29,7 @@
 
     &__list {
         position: absolute;
-        z-index: 30;
+        z-index: var(--z-dropdown);
         top: calc(100% + 10px);
         left: 0;
         display: grid;

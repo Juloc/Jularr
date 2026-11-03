@@ -160,7 +160,7 @@
     &__tip {
         display: none;
         position: absolute;
-        z-index: 5;
+        z-index: var(--z-dropdown);
         top: calc(100% + 6px);
         left: -8px;
         width: max-content;

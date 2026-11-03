@@ -1,0 +1,183 @@
+// The manual search: a wide dialog over the page (the same panel is the page itself), one table whose bodies are the sources. The dialog keeps its size
+// while skeletons give way to releases, so nothing jumps.
+.modal.search-dialog {
+    width: min(1120px, calc(100vw - 32px - env(safe-area-inset-left) - env(safe-area-inset-right)));
+    height: min(800px, calc(100dvh - 32px - env(safe-area-inset-top) - env(safe-area-inset-bottom)));
+
+    .modal__body { padding-bottom: 18px; }
+}
+
+.search-dialog__head {
+    flex-wrap: wrap;
+    align-items: flex-end;
+    row-gap: 10px;
+
+    .search-dialog__title { flex: 1 1 200px; order: 1; min-width: 0; align-self: center; h2 { overflow-wrap: anywhere; } }
+    .search-scope { order: 2; }
+    > .button { order: 3; align-self: center; }
+}
+
+// The scope fields and the button that asks every source again, in one row.
+.search-scope {
+    min-width: 0;
+
+    .ui-form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px 12px; }
+    .ui-field { width: 128px; }
+    .ui-form__actions { margin-inline-start: auto; }
+}
+
+.search-host .search-scope { margin-bottom: 14px; }
+
+// What only works with script is hidden without it, before the first paint: the panel gives way to the form, whose button posts the search.
+.search-scope__start { display: none; }
+
+@media (scripting: none) {
+    .search-panel[data-search-panel] { display: none; }
+    .search-scope__again { display: none; }
+    .search-scope__start { display: inline; }
+}
+
+.search-panel { display: grid; gap: 14px; min-width: 0; }
+
+.search-panel__status {
+    display: grid;
+    gap: 8px;
+
+    progress {
+        width: 100%;
+        height: 6px;
+        appearance: none;
+        border: 0;
+        border-radius: 99px;
+        background: var(--field);
+        overflow: hidden;
+
+        &::-webkit-progress-bar { background: var(--field); }
+        &::-webkit-progress-value { background: var(--accent); border-radius: 99px; transition: width var(--transition); }
+        &::-moz-progress-bar { background: var(--accent); border-radius: 99px; }
+    }
+
+    p { min-height: 18px; margin: 0; color: var(--muted); font-size: var(--text-control); font-weight: 680; }
+}
+
+.search-panel__chips { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.search-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    min-height: var(--control-height-compact);
+    padding: 0 13px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-control);
+    background: var(--surface);
+    color: var(--text);
+    cursor: pointer;
+    font-size: var(--text-control);
+    font-weight: var(--weight-control);
+    max-width: 100%;
+
+    &:hover { background: var(--field); }
+    &[aria-pressed="true"] { border-color: var(--accent-edge); background: var(--accent-soft); color: var(--accent-text); }
+
+    // The state takes its room from the start, so the chip does not widen when its source answers.
+    &__state { display: inline-grid; flex: none; place-items: center; width: 14px; height: 14px; color: var(--success); }
+    &__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    &__result { color: var(--muted); font-weight: 680; white-space: nowrap; }
+
+    &[data-state="loading"] .search-chip__state::before {
+        content: "";
+        width: 12px;
+        height: 12px;
+        border: 2px solid var(--border-strong);
+        border-top-color: var(--accent);
+        border-radius: 50%;
+        animation: search-spin .8s linear infinite;
+    }
+
+    &[data-state="failed"] { .search-chip__state, .search-chip__result { color: var(--warning); } }
+}
+
+.search-panel__empty { margin: 0; padding: 22px 0; color: var(--muted); text-align: center; }
+
+.search-host { min-width: 0; }
+
+.search-table {
+    th:first-child { border-top-left-radius: calc(var(--radius-panel) - 1px); }
+    th:last-child { border-top-right-radius: calc(var(--radius-panel) - 1px); }
+    th, td { padding: 10px 12px; }
+    td { height: 64px; vertical-align: middle; }
+    tbody[hidden] { display: none !important; }
+    tbody + tbody tr:first-child td { border-top: 1px solid var(--border); }
+}
+
+.search-row {
+    &__release { min-width: 200px; max-width: 380px; }
+    &__title { display: block; font-size: var(--text-body); font-weight: 800; line-height: 1.3; overflow-wrap: anywhere; }
+    &__facts, &__reason { display: block; margin-top: 2px; color: var(--muted); font-size: var(--text-small); }
+    &__reason { margin-top: 5px; }
+    &__buttons { display: flex; flex-wrap: nowrap; justify-content: flex-end; gap: 6px; }
+    &__buttons form { margin: 0; }
+
+    // A rejected release is grey; only its menu stays in colour.
+    &--rejected td:not(.search-row__actions) { color: var(--muted); }
+    &--rejected .search-row__title { color: var(--muted); font-weight: 700; }
+    &__actions { text-align: end; }
+    &__actions .action-menu { display: inline-block; text-align: start; }
+    // The warning opens inside the row, so no scrolling table clips it.
+    &__actions .action-menu__panel { position: static; min-width: 0; max-width: 250px; margin-top: 8px; padding: 10px; gap: 10px; box-shadow: none; }
+    &__warning { margin: 0; color: var(--warning); font-size: var(--text-control); font-weight: 680; line-height: 1.4; }
+
+    &--skeleton td { height: 64px; }
+}
+
+.search-skeleton { display: grid; gap: 8px; }
+
+.search-skeleton__bar {
+    display: block;
+    width: 38%;
+    height: 11px;
+    border-radius: 6px;
+    background: linear-gradient(90deg, var(--field) 25%, var(--border) 50%, var(--field) 75%);
+    background-size: 200% 100%;
+    animation: search-shimmer 1.3s linear infinite;
+
+    &--long { width: 72%; }
+}
+
+@keyframes search-spin { to { transform: rotate(360deg); } }
+@keyframes search-shimmer { to { background-position: -200% 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+    .search-chip[data-state="loading"] .search-chip__state::before,
+    .search-skeleton { display: grid; gap: 8px; }
+
+.search-skeleton__bar { animation: none; }
+}
+
+// A phone: the dialog nearly fills the screen, and each release is a card: the release on top, the facts under it, then the buttons.
+@media (max-width: 640px) {
+    .modal.search-dialog {
+        width: calc(100vw - 16px);
+        height: calc(100dvh - 16px);
+
+        .modal__body { padding: 14px 14px 16px; }
+    }
+
+    .search-dialog__head {
+        padding-inline: 14px;
+
+        .search-dialog__title { flex: 1 1 0; }
+        > .button { order: 2; }
+        .search-scope { order: 3; flex: 1 1 100%; }
+    }
+
+    .search-scope .ui-field { width: calc(50% - 6px); }
+    .search-scope .ui-form__actions { flex: 1 1 100%; margin-inline-start: 0; }
+    .search-scope .ui-form__actions .button { width: 100%; }
+    .search-table tbody + tbody { margin-top: 9px; }
+    .search-panel__results .search-table td.search-row__release { display: block; min-width: 0; max-width: none; text-align: start; }
+    .search-panel__results .search-table td.search-row__actions { display: block; text-align: start; }
+    .search-row__buttons { flex-wrap: wrap; justify-content: flex-start; }
+    .search-row--skeleton td { display: block; }
+}

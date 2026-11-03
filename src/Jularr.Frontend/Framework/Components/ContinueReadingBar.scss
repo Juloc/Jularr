@@ -2,7 +2,7 @@
 .continue-bar {
     position: sticky;
     bottom: calc(12px + env(safe-area-inset-bottom));
-    z-index: 15;
+    z-index: var(--z-sticky);
     display: flex;
     align-items: center;
     gap: 12px;

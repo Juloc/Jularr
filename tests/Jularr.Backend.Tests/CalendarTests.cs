@@ -59,9 +59,11 @@ namespace Jularr.Backend.Tests
 
             var week = await Html(Week());
             StringAssert.Contains(week, "Coming Movie");
+            StringAssert.Contains(week, "capsule-bar");
             Assert.IsFalse(week.Contains("Not Mine", StringComparison.Ordinal));
             Assert.IsFalse((await Html(Week("&type=series"))).Contains("Coming Movie", StringComparison.Ordinal));
             StringAssert.Contains(await Html(Week("&type=movies")), "Coming Movie");
+            StringAssert.Contains(await Html(Week("&type=series&type=movies")), "Coming Movie");
             StringAssert.Contains(await Html(Week("&status=watchlisted")), "Coming Movie");
             Assert.IsFalse((await Html(Week("&status=available"))).Contains("Coming Movie", StringComparison.Ordinal));
             StringAssert.Contains(await Html(Week("&q=coming")), "Coming Movie");

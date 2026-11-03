@@ -82,6 +82,24 @@ namespace Jularr.Backend.Logic.Acquisition
             return await ctx.ExecuteAsyncForAffectedRows(sql, ct) == 1;
         }
 
+        // A target that is not searched now first waits a day.
+        public static async Task DeferFirstWantedSearchAsync(this LogicContext ctx, long workId, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                UPDATE
+                    "WantedItems"
+                SET
+                    "NextSearchAt" = now() + interval '1 day'
+                WHERE
+                    "WorkId" = @Id
+                    AND "NextSearchAt" IS NULL;
+                """;
+            sql.Parameters.Add(new WorkIdData(workId));
+            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+        }
+
         public static async Task<bool> UpdateWantedItemAsync(this LogicContext ctx, WantedItemUpdateData data, CancellationToken ct)
         {
             if (data.TagIds is not null) await ctx.RequireAcquisitionTagsAsync(new AcquisitionTagSetData(data.TagIds), ct);

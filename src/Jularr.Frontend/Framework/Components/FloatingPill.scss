@@ -2,7 +2,8 @@
 .floating-pill {
     position: sticky;
     bottom: calc(40px + env(safe-area-inset-bottom));
-    z-index: 20;
+    // Above the continue bar where both stand.
+    z-index: calc(var(--z-sticky) + 1);
     display: flex;
     align-items: center;
     gap: 6px;

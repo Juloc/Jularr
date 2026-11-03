@@ -301,7 +301,6 @@ namespace Jularr.E2E.Tests
                 await Steps.ImportAndRequestAsync(page, "Book", null, FakeServices.BookTitle);
                 fakes.Offer(book);
                 await Steps.OpenSearchAsync(page, FakeServices.BookTitle);
-                await Steps.SubmitAsync(page, Steps.FormWith(page, "Start search"));
                 await Steps.GrabAsync(page, book);
 
                 // The download waits with its reason; the drawer names the file and why.

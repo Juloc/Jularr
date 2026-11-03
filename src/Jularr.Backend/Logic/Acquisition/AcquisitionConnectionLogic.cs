@@ -117,22 +117,15 @@ namespace Jularr.Backend.Logic.Acquisition
         public static bool Serves(AcquisitionConnectionData indexer, MediaType mediaType, bool automatic) =>
             (indexer.MediaTypeIds.Length == 0 || indexer.MediaTypeIds.Contains((int)mediaType)) && (!automatic || indexer.SearchesAutomatically);
 
-        // Queries left today after the ones a search already used.
-        // An indexer without its own daily limit still guards the searches nobody asked for, so a loop over a large library cannot use up its plan; a manual search has no such guard.
-        public const int AutomaticQueryLimit = 1000;
-
-        public static bool HasQueries(AcquisitionConnectionData indexer, int used, bool automatic = false)
-        {
-            int? limit = indexer.QueryLimit ?? (automatic ? AutomaticQueryLimit : null);
-            return limit is null || indexer.QueryCount + used < limit;
-        }
+        // Queries left today after the ones a search already used; only a limit the Owner set applies.
+        public static bool HasQueries(AcquisitionConnectionData indexer, int used) => indexer.QueryLimit is not { } limit || indexer.QueryCount + used < limit;
 
         // Automatic searches also skip backed-off indexers and those without grabs left.
         public static bool CanSearch(AcquisitionConnectionData indexer, MediaType mediaType, bool automatic, DateTime now) =>
-            Serves(indexer, mediaType, automatic) && HasQueries(indexer, 0, automatic)
+            Serves(indexer, mediaType, automatic) && HasQueries(indexer, 0)
             && (!automatic || (indexer.RetryAt is null || indexer.RetryAt <= now) && (indexer.GrabLimit is null || indexer.GrabCount < indexer.GrabLimit));
 
-        // Today's queries count against the limit; a failure backs off from 5 minutes doubling up to a day, or for the wait the indexer asked for if that is longer; an answer ends the backoff.
+        // Today's queries count against the limit; a failure backs off 1, 5, 15, 30, 60 minutes, then 3, 6, 12 and at most 24 hours, or for the wait the indexer asked for if that is longer; an answer ends the backoff.
         public static async Task RecordIndexerUseAsync(this LogicContext ctx, IndexerUseData data, CancellationToken ct)
         {
             var sql = new SqlStatement();
@@ -145,7 +138,7 @@ namespace Jularr.Backend.Logic.Acquisition
                     "GrabCount" = CASE WHEN connection."CountedOn" = current_date THEN connection."GrabCount" ELSE 0 END,
                     "CountedOn" = current_date,
                     "FailureCount" = CASE WHEN @IsAvailable THEN 0 ELSE connection."FailureCount" + 1 END,
-                    "RetryAt" = CASE WHEN NOT @IsAvailable THEN now() + greatest(least(interval '5 minutes' * power(2, least(connection."FailureCount", 9)), interval '1 day'), interval '1 second' * COALESCE(@RetryAfterSeconds, 0)) END,
+                    "RetryAt" = CASE WHEN NOT @IsAvailable THEN now() + greatest(interval '1 minute' * (ARRAY[1, 5, 15, 30, 60, 180, 360, 720, 1440])[least(connection."FailureCount", 8) + 1], interval '1 second' * COALESCE(@RetryAfterSeconds, 0)) END,
                     "LastErrorKey" = CASE WHEN NOT @IsAvailable THEN 'acquisition_unavailable' END,
                     "CheckedAt" = now()
                 WHERE

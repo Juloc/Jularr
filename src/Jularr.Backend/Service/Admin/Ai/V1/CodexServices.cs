@@ -108,9 +108,10 @@ namespace Jularr.Backend.Service.Admin.Ai.V1
         protected override async Task<IServiceOutput> OnRead()
         {
             var catalog = await _connection.ReadCatalogAsync(CancellationToken);
-            return catalog is null ? new CodexCatalogV1(false, [], null, [])
+            var (today, sinceStart) = _connection.Usage();
+            return catalog is null ? new CodexCatalogV1(false, [], null, [], today, sinceStart)
                 : new CodexCatalogV1(true, [.. catalog.Models.Select(model => new CodexModelV1(model.Id, model.Name, model.Efforts, model.DefaultEffort, model.IsDefault))], catalog.Usage?.Plan,
-                    [.. (catalog.Usage?.Windows ?? []).Select(window => new CodexUsageWindowV1(window.UsedPercent, window.Minutes, window.ResetsAt))]);
+                    [.. (catalog.Usage?.Windows ?? []).Select(window => new CodexUsageWindowV1(window.UsedPercent, window.Minutes, window.ResetsAt))], today, sinceStart);
         }
     }
 

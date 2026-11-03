@@ -29,6 +29,7 @@ namespace Jularr.Backend.Service.Admin.Request.V1
                     request."WorkId",
                     work."CanonicalTitle",
                     work."MediaTypeId",
+                    class."MediaSubtypeId",
                     COALESCE(profile."DisplayName", account."DisplayName") AS "RequesterName",
                     locale."Name" AS "RequestedLanguage",
                     request."AcquisitionRequestStatusTypeId",
@@ -38,6 +39,8 @@ namespace Jularr.Backend.Service.Admin.Request.V1
                     "AcquisitionRequests" AS request
                 INNER JOIN
                     "Works" AS work ON work."Id" = request."WorkId"
+                LEFT JOIN
+                    "WorkClasses" AS class ON class."WorkId" = work."Id"
                 INNER JOIN
                     "Accounts" AS account ON account."Id" = request."RequestedByAccountId"
                 LEFT JOIN
@@ -45,21 +48,26 @@ namespace Jularr.Backend.Service.Admin.Request.V1
                 INNER JOIN
                     "UiLocales" AS locale ON locale."Id" = request."UiLocaleId"
                 WHERE
-                    @RequestTabTypeId = 0
-                    OR CASE
-                        WHEN request."AcquisitionRequestStatusTypeId" = 1 THEN 1
-                        WHEN request."AcquisitionRequestStatusTypeId" = 2 THEN 2
-                        WHEN request."AcquisitionRequestStatusTypeId" = 6 THEN 4
-                        WHEN request."AcquisitionRequestStatusTypeId" IN (7, 9) THEN 5
-                        ELSE 3
-                    END = @RequestTabTypeId
+                    (
+                        @RequestTabTypeId = 0
+                        OR CASE
+                            WHEN request."AcquisitionRequestStatusTypeId" = 1 THEN 1
+                            WHEN request."AcquisitionRequestStatusTypeId" = 2 THEN 2
+                            WHEN request."AcquisitionRequestStatusTypeId" = 6 THEN 4
+                            WHEN request."AcquisitionRequestStatusTypeId" IN (7, 9) THEN 5
+                            ELSE 3
+                        END = @RequestTabTypeId
+                    )
+                    AND (cardinality(@MediaTypeIds::smallint[]) + cardinality(@MediaSubtypeIds::smallint[]) = 0
+                        OR class."MediaSubtypeId" IS NULL AND class."MediaTypeId" = ANY(@MediaTypeIds::smallint[])
+                        OR class."MediaSubtypeId" = ANY(@MediaSubtypeIds::smallint[]))
                 ORDER BY
                     request."CreatedAt" DESC,
                     request."Id" DESC
                 LIMIT @PageSize
                 OFFSET @Offset;
                 """;
-            sql.Parameters.Add(new AcquisitionRequestFilterData(Parameters.RequestTabTypeId));
+            sql.Parameters.Add(new AcquisitionRequestFilterData(Parameters.RequestTabTypeId, Parameters.MediaTypeIds, Parameters.MediaSubtypeIds));
             sql.Page = Page;
             return await Context.ReadSql.ReadPageAsync<RequestDetailsV1>(sql, CancellationToken);
         }
@@ -86,8 +94,15 @@ namespace Jularr.Backend.Service.Admin.Request.V1
                     count(*) FILTER (WHERE request."AcquisitionRequestStatusTypeId" = 6)::integer AS "DoneCount",
                     count(*) FILTER (WHERE request."AcquisitionRequestStatusTypeId" IN (7, 9))::integer AS "RejectedCount"
                 FROM
-                    "AcquisitionRequests" AS request;
+                    "AcquisitionRequests" AS request
+                LEFT JOIN
+                    "WorkClasses" AS class ON class."WorkId" = request."WorkId"
+                WHERE
+                    cardinality(@MediaTypeIds::smallint[]) + cardinality(@MediaSubtypeIds::smallint[]) = 0
+                    OR class."MediaSubtypeId" IS NULL AND class."MediaTypeId" = ANY(@MediaTypeIds::smallint[])
+                    OR class."MediaSubtypeId" = ANY(@MediaSubtypeIds::smallint[]);
                 """;
+            sql.Parameters.Add(new AcquisitionRequestTypeFilterData(Parameters.MediaTypeIds, Parameters.MediaSubtypeIds));
             return await Context.ReadSql.ReadRequiredAsync<RequestsSummaryV1>(sql, CancellationToken);
         }
     }

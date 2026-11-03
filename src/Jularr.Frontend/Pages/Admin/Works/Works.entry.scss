@@ -122,3 +122,11 @@
 
 // The search of the providers and the manual title are two ways to the same thing.
 .works-add-form > form + form, .works-add-form > .page-table-wrap + form { padding-top: 16px; border-top: 1px solid var(--border); }
+
+// A result adds with its "Search now" switch beside the button; the name stays on one line in the narrow actions cell.
+.works-add-form .page-table-wrap form { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
+
+.works-add-form .page-table-wrap .toggle__label { white-space: nowrap; }
+
+// The result table needs room for its columns and the switch.
+#works-add { width: min(860px, calc(100vw - 32px - env(safe-area-inset-left) - env(safe-area-inset-right))); }

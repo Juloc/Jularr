@@ -2281,7 +2281,30 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.OK, searched.StatusCode, html);
             StringAssert.Contains(html, Feature);
             StringAssert.Contains(html, "Different title");
-            StringAssert.Contains(html, "Select and download");
+            StringAssert.Contains(html, "In queue");
+
+            // The links open the same search as a dialog: its panel lists the sources, and each source answers on its own request with its rows.
+            using var workPage = await host.SendAsync(HttpMethod.Get, "/Admin/Works/" + workOfWanted);
+            StringAssert.Contains(await workPage.Content.ReadAsStringAsync(), "data-search-dialog");
+            using var dialog = await host.SendAsync(HttpMethod.Get, "/Admin/Wanted/" + wantedId + "/Search?handler=Dialog&returnUrl=%2FAdmin%2FWorks%2F" + workOfWanted);
+            var fragment = await dialog.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, dialog.StatusCode, fragment);
+            StringAssert.Contains(fragment, "data-search-panel");
+            StringAssert.Contains(fragment, "data-return-url=\"/Admin/Works/" + workOfWanted + "\"");
+            var indexerId = await host.ScalarAsync("SELECT \"Id\" FROM \"AcquisitionConnections\" WHERE \"AcquisitionConnectionTypeId\" = 1 ORDER BY \"Id\" LIMIT 1");
+            StringAssert.Contains(fragment, "data-source=\"" + indexerId + "\"");
+            using var source = await host.SendAsync(HttpMethod.Post, "/Admin/Wanted/" + wantedId + "/Search?handler=Source&connectionId=" + indexerId,
+                new Dictionary<string, string> { ["__RequestVerificationToken"] = LibraryTests.Token(html) });
+            var rows = await source.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, source.StatusCode, rows);
+            StringAssert.Contains(rows, "data-state=\"done\"");
+            StringAssert.Contains(rows, Feature);
+            StringAssert.Contains(rows, "name=\"overridesRejection\" value=\"true\"");
+
+            // A source that is not one of the list answers as failed, never as an empty list.
+            using var unknown = await host.SendAsync(HttpMethod.Post, "/Admin/Wanted/" + wantedId + "/Search?handler=Source&connectionId=999999",
+                new Dictionary<string, string> { ["__RequestVerificationToken"] = LibraryTests.Token(html) });
+            StringAssert.Contains(await unknown.Content.ReadAsStringAsync(), "data-state=\"failed\"");
         }
 
         [TestMethod]
@@ -2511,6 +2534,84 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(before, Asked());
         }
 
+        // The manual search asks one listed source at a time; what the sources found adds up, a rejected release is taken only on purpose, and Start now puts the download first.
+        [TestMethod]
+        public async Task ManualSearch_OneSourceAtATime_MergesOffersAndTakesRejectedReleasesOnlyWithOverride()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            var usenet = new FakeUsenet();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, usenet);
+            foreach (var data in new[]
+            {
+                new SaveAcquisitionConnectionDataV1("Open", AcquisitionConnectionType.Newznab, "https://open.example.test/", null, true, 20, [], null, null, null),
+                new SaveAcquisitionConnectionDataV1("Books", AcquisitionConnectionType.Newznab, "https://books.example.test/", FakeUsenet.IndexerKey, true, 20, [7020], null, null, null,
+                    mediaTypeIds: [(int)MediaType.Book])
+            })
+            {
+                using var created = await host.SendAsync(HttpMethod.Post, Connections, data);
+                Assert.AreEqual(HttpStatusCode.OK, created.StatusCode, await created.Content.ReadAsStringAsync());
+            }
+
+            int Asked(string name)
+            {
+                lock (usenet.IndexerHosts) return usenet.IndexerHosts.Count(asked => asked == name + ".example.test");
+            }
+
+            async Task<HttpResponseMessage> GrabAsync(long wantedId, WantedReleaseCandidateV1 candidate, bool startsNow = false, bool overridesRejection = false) =>
+                await host.SendAsync(HttpMethod.Post, "/api/v1/admin/wanted/" + wantedId + "/grab", new GrabWantedReleaseDataV1(candidate.CandidateId, startsNow, overridesRejection));
+
+            // The list names the sources that serve a film, not the one for books.
+            var wantedId = await CreateWantedMovieAsync(host);
+            using var listed = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/wanted/" + wantedId + "/search/sources", new SearchWantedDataV1());
+            Assert.AreEqual(HttpStatusCode.OK, listed.StatusCode, await listed.Content.ReadAsStringAsync());
+            var sources = (await listed.Content.ReadFromJsonAsync<BaseDataList<WantedSearchSourceV1>>())!;
+            CollectionAssert.AreEquivalent(new[] { "Indexer", "Open" }, sources.Select(source => source.Name).ToArray());
+
+            // One request asks one source: only its host is asked and only its releases come back. A source outside the list is refused.
+            async Task<WantedReleaseCandidateV1[]> SearchAsync(WantedSearchSourceV1 source)
+            {
+                using var searched = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/wanted/" + wantedId + "/search", new SearchWantedDataV1(null, null, null, source.Id));
+                Assert.AreEqual(HttpStatusCode.OK, searched.StatusCode, await searched.Content.ReadAsStringAsync());
+                return (await searched.Content.ReadFromJsonAsync<BaseDataList<WantedReleaseCandidateV1>>())!.ToArray();
+            }
+
+            var indexer = sources.Single(source => source.Name == "Indexer");
+            var open = sources.Single(source => source.Name == "Open");
+            var fromIndexer = await SearchAsync(indexer);
+            Assert.AreEqual((0, true), (Asked("open"), Asked("indexer") > 0));
+            Assert.IsTrue(fromIndexer.All(candidate => candidate.ConnectionName == "Indexer"));
+            var fromOpen = await SearchAsync(open);
+            Assert.IsTrue(fromOpen.All(candidate => candidate.ConnectionName == "Open"));
+            var books = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"AcquisitionConnections\" WHERE \"Name\" = 'Books'"))!;
+            using var outside = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/wanted/" + wantedId + "/search", new SearchWantedDataV1(null, null, null, books));
+            Assert.AreEqual(HttpStatusCode.BadRequest, outside.StatusCode);
+            StringAssert.Contains(await outside.Content.ReadAsStringAsync(), "source_not_available");
+
+            // A rejected release is taken only when the person overrides the rejection; without it the request says why.
+            var rejected = fromIndexer.First(candidate => candidate.ReleaseDecisionTypeId == ReleaseDecisionType.Rejected);
+            using var refused = await GrabAsync(wantedId, rejected);
+            Assert.AreEqual(HttpStatusCode.BadRequest, refused.StatusCode);
+            StringAssert.Contains(await refused.Content.ReadAsStringAsync(), "release_rejected");
+            Assert.AreEqual(0, usenet.Grabbed.Count);
+            using var overridden = await GrabAsync(wantedId, rejected, startsNow: true, overridesRejection: true);
+            Assert.AreEqual(HttpStatusCode.OK, overridden.StatusCode, await overridden.Content.ReadAsStringAsync());
+            Assert.IsTrue((await overridden.Content.ReadFromJsonAsync<GrabWantedReleaseResultV1>())!.IsPrioritized);
+            Assert.AreEqual(1, usenet.Grabbed.Count);
+
+            // Start now put the download first at its client; a normal grab would not have.
+            CollectionAssert.Contains(usenet.Commands, "queue:priority:SABnzbd_nzo_1:2");
+            Assert.AreEqual((short)4, await host.ScalarAsync("SELECT \"DownloadPriorityTypeId\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"));
+
+            // The search of the second source did not replace the first one's releases: both are still known (a film already downloading answers in_use, not outdated).
+            foreach (var candidate in new[] { fromIndexer.First(item => item.ReleaseDecisionTypeId != ReleaseDecisionType.Rejected), fromOpen.First(item => item.ReleaseDecisionTypeId != ReleaseDecisionType.Rejected) })
+            {
+                using var taken = await GrabAsync(wantedId, candidate);
+                Assert.AreEqual(HttpStatusCode.BadRequest, taken.StatusCode);
+                StringAssert.Contains(await taken.Content.ReadAsStringAsync(), "in_use");
+            }
+        }
+
         [TestMethod]
         public async Task Indexers_AFailingOneBacksOffWhileOthersSearch_ScopeManualOnlyLimitsAndKeylessHold()
         {
@@ -2556,7 +2657,7 @@ namespace Jularr.Backend.Tests
             Assert.IsTrue(Asked("open") > 0 && Asked("manual") > 0 && Asked("broken") > 0);
             Assert.AreEqual(0, Asked("books"));
             Assert.AreEqual(1, await ColumnAsync("Broken", "FailureCount"));
-            Assert.AreEqual(true, await host.ScalarAsync("SELECT \"RetryAt\" > now() + interval '4 minutes' FROM \"AcquisitionConnections\" WHERE \"Name\" = 'Broken'"));
+            Assert.AreEqual(true, await host.ScalarAsync("SELECT \"RetryAt\" > now() + interval '50 seconds' FROM \"AcquisitionConnections\" WHERE \"Name\" = 'Broken'"));
             Assert.AreEqual(0, await ColumnAsync("Open", "FailureCount"));
             Assert.IsTrue((int)(await ColumnAsync("Open", "QueryCount"))! > 0);
 

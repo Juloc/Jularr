@@ -462,8 +462,10 @@ namespace Jularr.Frontend.Pages.Admin.Works
                             form.Hidden(data => data.MediaSubtypeId);
                             form.Hidden(data => data.Namespace);
                             form.Hidden(data => data.ExternalId);
+                            form.Hidden(data => data.Monitor);
+                            if (searched.MediaTypeId != MediaType.Game) form.Toggle(data => data.SearchNow, "admin.works.searchNow");
                             form.Submit("admin.works.import");
-                        }, Address("Import"), csrf, new ImportMetadataWorkDataV1(searched.MediaTypeId, item.ExternalId, searched.MediaSubtypeId, item.Namespace))));
+                        }, Address("Import"), csrf, new ImportMetadataWorkDataV1(searched.MediaTypeId, item.ExternalId, searched.MediaSubtypeId, item.Namespace, monitor: true, searchNow: true))));
             }
 
             content.Add(new Form<CreateWorkDataV1>(form =>

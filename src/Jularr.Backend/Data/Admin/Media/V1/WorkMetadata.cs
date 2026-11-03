@@ -117,8 +117,10 @@ namespace Jularr.Backend.Data.Admin.Media.V1
 
     public sealed class ImportMetadataWorkDataV1 : BaseData
     {
-        public ImportMetadataWorkDataV1(MediaType mediaTypeId, string externalId, MediaSubtype? mediaSubtypeId = null, string? @namespace = null)
+        public ImportMetadataWorkDataV1(MediaType mediaTypeId, string externalId, MediaSubtype? mediaSubtypeId = null, string? @namespace = null, bool monitor = false, bool searchNow = false)
         {
+            Monitor = monitor;
+            SearchNow = searchNow;
             Namespace = @namespace;
             MediaTypeId = mediaTypeId;
             MediaSubtypeId = mediaSubtypeId;
@@ -137,6 +139,13 @@ namespace Jularr.Backend.Data.Admin.Media.V1
         // Books name their provider; without one Open Library is meant.
         [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Namespace), false)]
         public string? Namespace { get; }
+
+        // Like adding in Sonarr: the title is monitored, and searched now or by the feed and the later searches. Games are monitored per platform and stay unmonitored here.
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Monitor), false)]
+        public bool Monitor { get; }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.SearchNow), false)]
+        public bool SearchNow { get; }
 
         public override void Validate()
         {

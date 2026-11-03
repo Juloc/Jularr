@@ -8,6 +8,8 @@
     margin-bottom: 24px;
     border-radius: 16px;
     background: var(--surface);
+    // The poster hero is a layer of its own; while one of its menus is open it lies over the tabs and rows that follow it.
+    &:has(details[open]) { z-index: var(--z-dropdown); }
 
     .media-image {
         position: absolute;

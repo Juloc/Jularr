@@ -47,4 +47,11 @@ namespace Jularr.Integrations.Data.Codex
         public CodexModel[] Models { get; } = models;
         public CodexUsage? Usage { get; } = usage;
     }
+
+    // What one `codex exec` answered: the text, and the tokens it used (input plus output; 0 when Codex did not say).
+    internal sealed class CodexAnswer(string text, long tokens)
+    {
+        public string Text { get; } = text;
+        public long Tokens { get; } = tokens;
+    }
 }

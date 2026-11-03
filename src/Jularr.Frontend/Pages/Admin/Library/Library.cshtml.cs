@@ -51,6 +51,10 @@ namespace Jularr.Frontend.Pages.Admin.Library
         [BindProperty(SupportsGet = true, Name = "root")]
         public long? RootId { get; set; }
 
+        // Media types of the overview as slugs of the type bar, repeated or separated by commas; none shows all of them.
+        [BindProperty(SupportsGet = true, Name = "type")]
+        public string[] Types { get; set; } = [];
+
         // The unmatched file whose work is being searched.
         [BindProperty(SupportsGet = true, Name = "find")]
         public long? FindFileId { get; set; }
@@ -68,8 +72,12 @@ namespace Jularr.Frontend.Pages.Admin.Library
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
 
             // Every library with what it holds; new ones are added with their storage.
-            if (_overview is { } libraries)
+            if (_overview is { } overview)
             {
+                // Every type is listed in the administration; the bar narrows the libraries to the chosen ones.
+                var scopes = new ScopeSelection(Types, LibraryScopes.All.Where(scope => scope.Slug != "all").ToList());
+                page.Content.Add(new MediaTypeBar(assets, scopes.ListedSlugs, scopes.ChosenSlugs, "library.scope.", types => scopes.Parameter(types) is { } chosen ? "/Admin/Library?type=" + Uri.EscapeDataString(chosen).Replace("%2C", ",") : "/Admin/Library"));
+                var libraries = overview.Where(item => scopes.ChosenSlugs.Contains(LibraryScopes.Slug(item.MediaTypeId, item.MediaSubtypeId))).ToList();
                 if (libraries.Count > 0) page.Content.Add(Totals(libraries));
                 var table = new Table<LibraryOverviewV1>(libraries)
                     .Text(item => item.Name, "library.root")

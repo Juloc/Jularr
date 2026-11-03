@@ -5112,6 +5112,86 @@
    "The release was sent to the download client.",
    "Das Release wurde an den Download-Client gesendet."
   ],
+  "wanted.grabStarted": [
+   "The release was sent to the download client and goes first.",
+   "Das Release wurde an den Download-Client gesendet und kommt zuerst dran."
+  ],
+  "wanted.grabNotPrioritized": [
+   "The release was sent to the download client, but it could not be put first.",
+   "Das Release wurde an den Download-Client gesendet, konnte aber nicht nach vorn gestellt werden."
+  ],
+  "wanted.search.again": [
+   "Search again",
+   "Neu suchen"
+  ],
+  "wanted.search.source": [
+   "Source",
+   "Quelle"
+  ],
+  "wanted.search.sources": [
+   "Sources",
+   "Quellen"
+  ],
+  "wanted.search.noSources": [
+   "No enabled source serves this title.",
+   "Keine aktive Quelle bedient diesen Titel."
+  ],
+  "wanted.search.progress": [
+   "Sources searched",
+   "Durchsuchte Quellen"
+  ],
+  "wanted.search.running": [
+   "Searching {1} sources … {0} of {1} done",
+   "Durchsuche {1} Quellen … {0} von {1} fertig"
+  ],
+  "wanted.search.finished": [
+   "{0} releases from {1} sources",
+   "{0} Treffer aus {1} Quellen"
+  ],
+  "wanted.search.finishedFailed": [
+   "{0} releases from {1} sources · {2} did not answer",
+   "{0} Treffer aus {1} Quellen · {2} ohne Antwort"
+  ],
+  "wanted.search.filtered": [
+   "{0} of {1} releases · {2}",
+   "{0} von {1} Treffern · {2}"
+  ],
+  "wanted.search.source.limit": [
+   "Limit reached, try later",
+   "Limit erreicht, später wieder"
+  ],
+  "wanted.search.source.timeout": [
+   "No answer in time",
+   "Keine Antwort in der Zeit"
+  ],
+  "wanted.search.source.unavailable": [
+   "Not reachable",
+   "Nicht erreichbar"
+  ],
+  "wanted.search.source.failed": [
+   "Search failed",
+   "Suche fehlgeschlagen"
+  ],
+  "wanted.search.queue": [
+   "In queue",
+   "In Queue"
+  ],
+  "wanted.search.startNow": [
+   "Start now",
+   "Jetzt starten"
+  ],
+  "wanted.search.override": [
+   "Take anyway",
+   "Trotzdem holen"
+  ],
+  "wanted.search.overrideMenu": [
+   "Take a rejected release",
+   "Abgelehntes Release holen"
+  ],
+  "wanted.search.overrideWarning": [
+   "The profile rejected this release. It may be the wrong file or fail to import. Take it only if you know it fits.",
+   "Das Profil hat dieses Release abgelehnt. Es kann die falsche Datei sein oder sich nicht importieren lassen. Hol es nur, wenn du weißt, dass es passt."
+  ],
   "wanted.tab.search": [
    "Search",
    "Suche"
@@ -5223,10 +5303,6 @@
   "wanted.search.reason": [
    "Reason",
    "Grund"
-  ],
-  "wanted.search.grab": [
-   "Select and download",
-   "Auswählen und herunterladen"
   ],
   "wanted.history.empty": [
    "No releases have been taken yet.",
@@ -6512,10 +6588,6 @@
   "calendar.area.play": [
    "Play",
    "Spielen"
-  ],
-  "calendar.areaState": [
-   "{0}: {1} of {2} selected",
-   "{0}: {1} von {2} gewählt"
   ],
   "calendar.customize": [
    "Customize view",
@@ -8174,6 +8246,10 @@
    "Add",
    "Hinzufügen"
   ],
+  "admin.works.searchNow": [
+   "Search now",
+   "Jetzt suchen"
+  ],
   "admin.work.refreshMetadata": [
    "Update from the provider",
    "Vom Anbieter aktualisieren"
@@ -9730,6 +9806,14 @@
    "The indexer of this release was removed; search again.",
    "Der Indexer dieses Releases wurde entfernt; suche erneut."
   ],
+  "errors.validation.source_not_available": [
+   "This source is not available for this search; open the search again.",
+   "Diese Quelle ist für diese Suche nicht verfügbar; öffne die Suche neu."
+  ],
+  "errors.validation.release_rejected": [
+   "The profile rejected this release. Take it anyway to override the rejection.",
+   "Das Profil hat dieses Release abgelehnt. Hol es trotzdem, um die Ablehnung zu übergehen."
+  ],
   "errors.validation.invalid_network": [
    "Enter IP addresses or networks such as 192.168.1.10 or 10.0.0.0/8.",
    "Gib IP-Adressen oder Netzwerke wie 192.168.1.10 oder 10.0.0.0/8 ein."
@@ -10295,12 +10379,12 @@
    "Tokens pro Tag"
   ],
   "admin.ai.limitHint": [
-   "0 means unlimited. Jularr stops Codex work when a limit is reached.",
-   "0 heißt unbegrenzt. Jularr hält Codex-Arbeit an, wenn ein Limit erreicht ist."
+   "0 means unlimited. Jularr stops Codex translation when a limit is reached; the count since start begins again when Jularr restarts.",
+   "0 heißt unbegrenzt. Jularr hält die Codex-Übersetzung an, wenn ein Limit erreicht ist; der Zähler seit dem Start beginnt nach einem Neustart von Jularr neu."
   ],
   "admin.ai.runTokens": [
-   "Tokens per run",
-   "Tokens pro Lauf"
+   "Tokens since start",
+   "Tokens seit dem Start"
   ],
   "admin.ai.warnPercent": [
    "Warn at (% of the daily limit)",
@@ -10313,6 +10397,22 @@
   "admin.ai.settingsSaved": [
    "Settings saved",
    "Einstellungen gespeichert"
+  ],
+  "admin.ai.usedToday": [
+   "Tokens today",
+   "Tokens heute"
+  ],
+  "admin.ai.usedSinceStart": [
+   "Tokens since start",
+   "Tokens seit dem Start"
+  ],
+  "admin.ai.limitReached": [
+   "Limit reached",
+   "Limit erreicht"
+  ],
+  "admin.ai.limitNear": [
+   "Limit nearly reached",
+   "Limit fast erreicht"
   ],
   "errors.codex_not_installed": [
    "The Codex CLI is not available in this installation.",

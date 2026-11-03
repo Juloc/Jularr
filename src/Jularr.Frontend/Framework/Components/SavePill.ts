@@ -41,7 +41,6 @@ export function initializeSavePill(): void {
     const draft = draftIndex === undefined ? undefined : forms()[draftIndex];
     if (draft) drafts.add(draft);
     draftIndex = undefined;
-    document.documentElement.toggleAttribute("data-save-ready", true);
     if (!partial) changes = 0;
     update();
 }

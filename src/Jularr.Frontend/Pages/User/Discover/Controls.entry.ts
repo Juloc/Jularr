@@ -5,9 +5,6 @@ import { heroDefaults, readHeroPreferences, writeHeroPreferences, type HeroPrefe
 const heroKey = 'discover-hero';
 const layoutKey = 'discover-layout';
 
-// Controls that need script show with it.
-document.documentElement.classList.add('discover-scripted');
-
 function applyLayout(layout: string | null): void {
     if (layout === 'grid') document.documentElement.dataset.discoverLayout = 'grid';
     else delete document.documentElement.dataset.discoverLayout;

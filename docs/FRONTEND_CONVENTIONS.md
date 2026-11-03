@@ -27,6 +27,10 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
   its DOM setup with `onPage(import.meta.url, setup)`: it runs once per document load
   and again for each new page the script belongs to; document-level listeners are
   installed once at module level. HTML a script inserts goes through `inserted(element)`.
+- Pages hold still while they load (layout shift below 0.01, [LayoutShiftTests](../tests/Jularr.E2E.Tests/LayoutShiftTests.cs)).
+  What only works with script, or only without it, shows or hides through `@media (scripting: enabled)` / `(scripting: none)`,
+  which holds before the first paint, never through a class a script sets later. A control a script reveals keeps its room
+  (a shelf's heading is as high as its arrows), and a native control a script replaces is as high as its replacement.
 - Frontend owns UI appearance, interaction, presentation-only state.
   Backend owns permissions, identities, validation, business decisions,
   transaction boundaries, persistence, paging data and API contracts.
@@ -337,6 +341,11 @@ See [Frontend UX decisions](FRONTEND_UX.md) for design tokens, layout, page iden
   with `&__element` and `&--modifier`; reuse the same style for equivalent controls.
 - Keep CSS minimal: reuse inherited rules, avoid equivalent duplicated declarations
   and fix the owning style instead of stacking compensating overrides.
+- Layers use the z tokens of [Theme.scss](../src/Jularr.Frontend/Modules/Appearance/Theme.scss), lowest first: `--z-sticky` (floating pill,
+  continue bar, sticky toolbars), `--z-dropdown` (menus, lists and tips opened from the content), `--z-shell` (header, sidebar, minimized
+  player), `--z-menu` (phone menu), `--z-drawer` (drawers and panels that are no dialog), `--z-toast`, `--z-tooltip`, `--z-top`. Inside a
+  component only small local numbers (1-7); dialogs and popovers use the top layer. A container that is a layer of its own and holds a menu
+  lifts itself to `--z-dropdown` while the menu is open (`:has(details[open])`), so what follows it never covers the menu.
 - All catalog/Continue cards use the same canonical `MediaCard` (the UiDesigner MediaCard, owner decision 20 Oct): a small
   portrait cover of 133-150 px (a card to continue 176 px) with softly rounded corners, local availability top left as a tag,
   the heart top right, then the linked title and one line of facts: `year · type · rating` (what is unknown is left out; the rating

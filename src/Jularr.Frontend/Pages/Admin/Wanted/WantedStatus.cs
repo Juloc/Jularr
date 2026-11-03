@@ -24,5 +24,10 @@ namespace Jularr.Frontend.Pages.Admin.Wanted
         }
 
         public static string Home(long wantedItemId) => "/Admin/Wanted/" + wantedItemId.ToString(CultureInfo.InvariantCulture);
+
+        // The manual search of a target, or of its season, episode or volume: the page, which a link of data-search-dialog opens as a dialog instead.
+        public static string Search(long wantedItemId, int? parentUnitNumber = null, int? unitNumber = null) => Home(wantedItemId) + "/Search"
+            + (parentUnitNumber is null && unitNumber is null ? "" : "?" + string.Join("&", new[] { parentUnitNumber is { } parent ? "parentUnitNumber=" + parent.ToString(CultureInfo.InvariantCulture) : null,
+                unitNumber is { } unit ? "unitNumber=" + unit.ToString(CultureInfo.InvariantCulture) : null }.OfType<string>()));
     }
 }

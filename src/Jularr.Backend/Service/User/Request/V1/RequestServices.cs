@@ -127,8 +127,9 @@ namespace Jularr.Backend.Service.User.Request.V1
                 ) AS step ON TRUE
                 WHERE
                     request."RequestedByProfileId" = @ProfileId
-                    AND (@MediaTypeId::smallint IS NULL OR work."MediaTypeId" = @MediaTypeId AND (@MediaSubtypeId::smallint IS NOT NULL OR visible."MediaSubtypeId" IS NULL))
-                    AND (@MediaSubtypeId::smallint IS NULL OR visible."MediaSubtypeId" = @MediaSubtypeId)
+                    AND (cardinality(@MediaTypeIds::smallint[]) + cardinality(@MediaSubtypeIds::smallint[]) = 0
+                        OR visible."MediaSubtypeId" IS NULL AND work."MediaTypeId" = ANY(@MediaTypeIds::smallint[])
+                        OR visible."MediaSubtypeId" = ANY(@MediaSubtypeIds::smallint[]))
                     AND CASE @RequestListFilterTypeId::smallint
                         WHEN 1 THEN request."AcquisitionRequestStatusTypeId" = 1
                         WHEN 2 THEN request."AcquisitionRequestStatusTypeId" BETWEEN 2 AND 5
@@ -151,7 +152,7 @@ namespace Jularr.Backend.Service.User.Request.V1
                 """;
             sql.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));
             sql.Parameters.Add(new AccountParameters(Auth.AccountId!.Value));
-            sql.Parameters.Add(new ProfileRequestFilterData(Parameters.RequestListFilterTypeId, Parameters.RequestSortTypeId, Parameters.MediaTypeId, Parameters.MediaSubtypeId));
+            sql.Parameters.Add(new ProfileRequestFilterData(Parameters.RequestListFilterTypeId, Parameters.RequestSortTypeId, Parameters.MediaTypeIds, Parameters.MediaSubtypeIds));
             sql.Page = Page;
             return await Context.ReadSql.ReadPageAsync<RequestDetailsV1>(sql, CancellationToken);
         }

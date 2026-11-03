@@ -1,9 +1,6 @@
 import "./Drawer.scss";
 import { onPage } from "../../Modules/Navigation/PageSwap";
 
-// The panels need script, so their buttons show with it (also in HTML a page script inserts later).
-document.documentElement.classList.add('drawers-ready');
-
 function selectPane(dialog: HTMLDialogElement, pane: string): void {
     dialog.querySelectorAll<HTMLElement>('[data-drawer-tab]').forEach(tab => {
         const selected = tab.dataset.drawerTab === pane;
