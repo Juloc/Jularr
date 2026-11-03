@@ -261,8 +261,11 @@ namespace Jularr.Frontend.Pages.Admin.Activity
 
         private ListRow QueueRow(ActivityItemV1 item, string? csrf)
         {
+            // A download without a known client or indexer has no source line on the phone card.
+            var source = item.OperationTypeId == OperationType.Download ? LiveFacts.Join(item.ConnectionName, item.IndexerName) : null;
             var row = new ListRow([Identity(item), Status(item), Source(item), Transfer(item), RowActions(item, csrf)],
-                [ListPanel.Fact("activity.source", item.OperationTypeId == OperationType.Download ? new ValueText(LiveFacts.Join(item.ConnectionName, item.IndexerName)) : new Text("operation.type." + item.OperationTypeId))]);
+                item.OperationTypeId != OperationType.Download ? [ListPanel.Fact("activity.source", new Text("operation.type." + item.OperationTypeId))]
+                    : string.IsNullOrEmpty(source) ? [] : [ListPanel.Fact("activity.source", new ValueText(source))]);
             if (item.OperationStatusTypeId == OperationStatusType.Failed) row.Tinted(UiTone.Danger);
             else if (item.IsWaiting) row.Tinted(UiTone.Warning);
             return row;
