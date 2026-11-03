@@ -28,6 +28,7 @@ namespace Jularr.Frontend.Framework
             conventions.AddPageRoute("/Admin/Backup/Backup", "/Setup/Backup");
             conventions.AuthorizePage("/Admin/Requests/Requests", ServiceApi.RequestsReadPolicyName);
             conventions.AuthorizePage("/Admin/Wanted/Wanted", ServiceApi.WantedReadPolicyName);
+            conventions.AuthorizePage("/Admin/Blocked/Blocked", ServiceApi.WantedReadPolicyName);
             conventions.AuthorizePage("/Admin/Acquisition/Acquisition", ServiceApi.AcquisitionManagePolicyName);
             conventions.AuthorizePage("/Admin/DownloadStorage/DownloadStorage", ServiceApi.AcquisitionManagePolicyName);
             conventions.AuthorizePage("/Admin/Downloads/Downloads", ServiceApi.AcquisitionManagePolicyName);

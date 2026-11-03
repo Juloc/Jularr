@@ -2856,33 +2856,118 @@ namespace Jularr.Backend.Tests
             var summary = (await response.Content.ReadFromJsonAsync<ActivitySummaryV1>())!;
             Assert.AreEqual((2, 50L, 2, 1), (summary.ActiveCount, summary.BytesPerSecond, summary.ImportCount, summary.ErrorCount));
 
-            // The page: live tiles, one filter row, the failed entry with its retry, and the panel of one entry.
-            using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Activity?Filter=Errors");
+            // The page: the type bar, the entry's views in one row, the four groups with what needs a person first, the failed entry with its retry, and the panel of one entry.
+            using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Activity");
             var html = await page.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
-            foreach (var tile in new[] { "active", "speed", "import", "errors" })
-            {
-                StringAssert.Contains(html, "data-live=\"queue\" data-live-text=\"" + tile + "\"");
-            }
-
-            StringAssert.Contains(html, "href=\"/Admin/Activity?Filter=Waiting\"");
-            StringAssert.Contains(html, "handler=Retry&amp;operationId=5");
-            StringAssert.Contains(html, "href=\"/Admin/Activity?Filter=Errors&amp;operation=5\"");
-            Assert.AreEqual(1, System.Text.RegularExpressions.Regex.Matches(html, "navigation-tabs\"|navigation-tabs ").Count, "One row of filters only.");
+            StringAssert.Contains(html, "data-live=\"queue\" data-live-text=\"speed\"");
+            StringAssert.Contains(html, "class=\"capsule-bar");
+            var groups = new[] { "Help", "Import", "Running", "Queued" };
+            var positions = groups.Select(group => html.IndexOf("id=\"activity-group-" + group + "\"", StringComparison.Ordinal)).ToArray();
+            CollectionAssert.AreEqual(positions.Order().ToArray(), positions, "What needs the owner is first: help, import, running, queued.");
+            Assert.IsTrue(positions.All(position => position > 0), "All four groups are there.");
+            string Group(string name) => html[html.IndexOf("id=\"activity-group-" + name + "\"", StringComparison.Ordinal)..];
+            StringAssert.Contains(Group("Help")[..Group("Help").IndexOf("id=\"activity-group-Import\"", StringComparison.Ordinal)], "handler=Retry&amp;operationId=5");
+            StringAssert.Contains(Group("Import")[..Group("Import").IndexOf("id=\"activity-group-Running\"", StringComparison.Ordinal)], "Release 4");
+            StringAssert.Contains(Group("Import")[..Group("Import").IndexOf("id=\"activity-group-Running\"", StringComparison.Ordinal)], "Release 3");
+            StringAssert.Contains(Group("Running")[..Group("Running").IndexOf("id=\"activity-group-Queued\"", StringComparison.Ordinal)], "Release 1");
+            StringAssert.Contains(Group("Queued"), "Release 2");
+            StringAssert.Contains(html, "href=\"/Admin/Activity?operation=5\"");
+            StringAssert.Contains(html, "href=\"/Admin/History\"");
+            Assert.AreEqual(1, System.Text.RegularExpressions.Regex.Matches(html, "navigation-tabs\"|navigation-tabs ").Count, "One row of views only.");
             StringAssert.Contains(html, "class=\"view-switch\"");
-            StringAssert.Contains(html, "href=\"/Admin/Activity?Filter=History\"");
             StringAssert.Contains(html, "href=\"/Admin/Activity?files=true\"");
             using var filesView = await host.SendAsync(HttpMethod.Get, "/Admin/Activity?files=true");
             var filesViewHtml = await filesView.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, filesView.StatusCode, filesViewHtml);
             StringAssert.Contains(filesViewHtml, "class=\"view-switch\"");
-            Assert.AreEqual(0, System.Text.RegularExpressions.Regex.Matches(filesViewHtml, "navigation-tabs\"|navigation-tabs ").Count,
-                "Files reuses the same toolbar without queue-only filter chips.");
             Assert.IsFalse(System.Text.RegularExpressions.Regex.IsMatch(html, "<dialog[^>]* open=\"open\""), "Only the entry the address names is open.");
-            using var panel = await host.SendAsync(HttpMethod.Get, "/Admin/Activity?Filter=Errors&operation=5");
+            using var panel = await host.SendAsync(HttpMethod.Get, "/Admin/Activity?operation=5");
             var panelHtml = await panel.Content.ReadAsStringAsync();
             StringAssert.Matches(panelHtml, new System.Text.RegularExpressions.Regex("<dialog[^>]* open=\"open\""));
             StringAssert.Contains(panelHtml, "handler=Dismiss&amp;operationId=5");
+
+            // An entry that says why it failed has no bar, as the stream sets it: a bar here would vanish with the first snapshot and the rows below would jump.
+            await host.Fixture.RunSqlAsync("UPDATE \"Operations\" SET \"ProgressPercent\" = 30 WHERE \"Id\" = 5");
+            using var withProgress = await host.SendAsync(HttpMethod.Get, "/Admin/Activity");
+            var progressHtml = await withProgress.Content.ReadAsStringAsync();
+            var helpGroup = progressHtml[progressHtml.IndexOf("id=\"activity-group-Help\"", StringComparison.Ordinal)..progressHtml.IndexOf("id=\"activity-group-Import\"", StringComparison.Ordinal)];
+            Assert.IsFalse(System.Text.RegularExpressions.Regex.IsMatch(helpGroup, "<progress(?![^>]*hidden)[^>]*>"), "A failed entry shows no bar.");
+
+            // The type bar narrows the queue: the films' downloads stay for movies, none is left for books, and the choice stays in the views' addresses.
+            using var movies = await host.SendAsync(HttpMethod.Get, "/Admin/Activity?type=movies");
+            var moviesHtml = await movies.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, movies.StatusCode, moviesHtml);
+            StringAssert.Contains(moviesHtml, "Release 1");
+            StringAssert.Contains(moviesHtml, "href=\"/Admin/History?type=movies\"");
+            using var books = await host.SendAsync(HttpMethod.Get, "/Admin/Activity?type=books");
+            var booksHtml = await books.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, books.StatusCode, booksHtml);
+            Assert.IsFalse(booksHtml.Contains("Release 1", StringComparison.Ordinal));
+            Assert.IsFalse(booksHtml.Contains("id=\"activity-group-", StringComparison.Ordinal));
+        }
+
+        // The Activity entry's other views follow the type bar too: History lists the events of the chosen types, Blocked the blocked releases (by hand or by a fault) with the button that allows one again.
+        [TestMethod]
+        public async Task ActivityViews_HistoryAndBlocked_FollowTheTypeBar_AndBlockedUnblocks()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, new FakeUsenet(), razor: true);
+            await host.Fixture.RunSqlAsync("""
+                UPDATE "InstanceModules" SET "IsEnabled" = TRUE WHERE "Key" IN ('Acquisition', 'Requests');
+                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle") VALUES (901, 1, 'Blocked Film'), (902, 3, 'Blocked Book');
+                INSERT INTO "WantedItems" ("Id", "WorkId") VALUES (901, 901), (902, 902);
+                INSERT INTO "AcquisitionReleases" ("Id", "WantedItemId", "ReleaseIdentity", "Title", "AcquisitionReleaseStatusTypeId", "ReasonKey") VALUES
+                    (901, 901, 'blocked-film', 'Film Release Blocked', 4, NULL),
+                    (902, 902, 'blocked-book', 'Book Release Blocked', 4, NULL),
+                    (903, 901, 'faulty-film', 'Film Release Faulty', 3, 'download_failed'),
+                    (904, 901, 'allowed-film', 'Film Release Allowed', 5, NULL);
+                INSERT INTO "ActivityEvents" ("ActivityEventTypeId", "WorkId", "WorkTitle") VALUES (1, 901, 'Blocked Film'), (1, 902, 'Blocked Book');
+                """);
+
+            async Task<string> GetAsync(string address)
+            {
+                using var response = await host.SendAsync(HttpMethod.Get, address);
+                var html = await response.Content.ReadAsStringAsync();
+                Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, html);
+                return html;
+            }
+
+            // Blocked: every blocked release of every target, none of the allowed ones; the type bar narrows it and the views keep the choice.
+            var blocked = await GetAsync("/Admin/Activity/Blocked");
+            foreach (var title in new[] { "Film Release Blocked", "Book Release Blocked", "Film Release Faulty" })
+            {
+                StringAssert.Contains(blocked, title);
+            }
+
+            Assert.IsFalse(blocked.Contains("Film Release Allowed", StringComparison.Ordinal));
+            StringAssert.Contains(blocked, "class=\"capsule-bar");
+            StringAssert.Contains(blocked, "handler=Unblock&amp;wantedItemId=901&amp;acquisitionReleaseId=901");
+            var books = await GetAsync("/Admin/Activity/Blocked?type=books");
+            StringAssert.Contains(books, "Book Release Blocked");
+            Assert.IsFalse(books.Contains("Film Release", StringComparison.Ordinal));
+            StringAssert.Contains(books, "href=\"/Admin/History?type=books\"");
+            StringAssert.Contains(books, "href=\"/Admin/Activity?type=books\"");
+
+            // Unblocking allows the release again, so it leaves the list.
+            using (var unblocked = await host.SendAsync(HttpMethod.Post, "/Admin/Activity/Blocked?handler=Unblock&wantedItemId=901&acquisitionReleaseId=901",
+                new Dictionary<string, string> { ["__RequestVerificationToken"] = LibraryTests.Token(blocked) }))
+            {
+                Assert.AreEqual(HttpStatusCode.Redirect, unblocked.StatusCode, await unblocked.Content.ReadAsStringAsync());
+            }
+
+            Assert.AreEqual((short)5, await host.ScalarAsync("SELECT \"AcquisitionReleaseStatusTypeId\" FROM \"AcquisitionReleases\" WHERE \"Id\" = 901"));
+            Assert.IsFalse((await GetAsync("/Admin/Activity/Blocked")).Contains("Film Release Blocked", StringComparison.Ordinal));
+
+            // History: the events of the chosen types only, and the chip counts follow.
+            var history = await GetAsync("/Admin/History?type=movies");
+            StringAssert.Contains(history, "Blocked Film");
+            Assert.IsFalse(history.Contains("Blocked Book", StringComparison.Ordinal));
+            StringAssert.Contains(history, "class=\"capsule-bar");
+            var everything = await GetAsync("/Admin/History");
+            StringAssert.Contains(everything, "Blocked Film");
+            StringAssert.Contains(everything, "Blocked Book");
         }
 
         // Priority only changes which targets are searched first, never when; the bulk services and the page set it for chosen rows.

@@ -53,9 +53,10 @@ namespace Jularr.Frontend.Framework
                 new("activity", "admin.menu.activity", "activity",
                 [
                     new("admin.activity.title", "/Admin/Activity", Media, ["Library"]),
-                    new("admin.wanted.title", "/Admin/Wanted", Right("wanted.update"), ["Requests"]),
-                    new("admin.history.title", "/Admin/History", Media, ["Library"])
+                    new("admin.history.title", "/Admin/History", Media, ["Library"]),
+                    new("admin.blocked.title", "/Admin/Activity/Blocked", Right("wanted.update"), ["Requests"])
                 ], AdminCounter.OpenDownloads),
+                new("wanted", "admin.wanted.title", "bookmark", [new("admin.wanted.title", "/Admin/Wanted", Right("wanted.update"), ["Requests"])]),
                 new("jobs", "admin.jobs.title", "pulse",
                 [
                     new("admin.jobs.title", "/Admin/Jobs", Admin),
@@ -201,9 +202,10 @@ namespace Jularr.Frontend.Framework
 
         // The one row of the page's entry: its sibling pages as chips and, after a thin divider, the filter chips of the page's own list. A page without siblings and filters gets no row.
         // A page that holds the pane and the scope in its own state (the quality rules after a post) names them; one with filters gives the row the name of its filters.
+        // A page whose chips keep part of its own state (the Activity pages, their media types) gives the address of each page.
         // A page that knows how much it holds of a sibling gives the counts by label: a sibling with none is left out (nothing is set up for it), the others show their number.
         public static NavigationTabs Row(UiText texts, HttpRequest request, IReadOnlyList<NavigationTab>? filters = null, string? tab = null, string? mediaTypeId = null, string ariaLabelKey = "admin.menu.pages",
-            IReadOnlyDictionary<string, int>? counts = null)
+            IReadOnlyDictionary<string, int>? counts = null, Func<AdminMenuPage, string>? href = null)
         {
             var tabs = new List<NavigationTab>();
             if (Current(For(texts), request.Path.Value ?? "/", Query(request, tab)) is { Entry.Pages.Count: > 1 } current)
@@ -213,7 +215,7 @@ namespace Jularr.Frontend.Framework
                 {
                     int? count = counts is not null && counts.TryGetValue(page.LabelKey, out var known) ? known : null;
                     if (count == 0 && page != current.Page) continue;
-                    tabs.Add(new NavigationTab(page.LabelKey, page.Href(mediaTypeId), page == current.Page, Count: count));
+                    tabs.Add(new NavigationTab(page.LabelKey, href?.Invoke(page) ?? page.Href(mediaTypeId), page == current.Page, Count: count));
                 }
             }
 

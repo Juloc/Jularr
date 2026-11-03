@@ -319,8 +319,19 @@
   "pwa.update.install": ["Update", "Aktualisieren"],
   "pwa.update.later": ["Later", "Später"],
   "acquisition.connection.downloadPathWarning": ["Select a folder that Jularr can read. Until a download path is mapped, grabs from this client cannot start.","Wähle einen Ordner aus, auf den Jularr zugreifen kann. Ohne zugeordneten Downloadpfad können keine Downloads über diesen Client gestartet werden."],
+  "admin.blocked.title": ["Blocked","Gesperrt"],
+  "activity.limit": ["The first 100 entries are shown, what needs you first.","Die ersten 100 Einträge werden gezeigt, zuerst was dich braucht."],
+  "activity.group.Help": ["Needs your help","Braucht Hilfe"],
+  "activity.group.Import": ["To import","Zu importieren"],
+  "activity.group.Running": ["Downloading","Lädt gerade"],
+  "activity.group.Queued": ["Waiting in the downloader","Wartet im Downloader"],
+  "blocked.list": ["Blocked releases","Gesperrte Releases"],
+  "blocked.actions": ["Blocked releases actions","Aktionen für gesperrte Releases"],
+  "blocked.release": ["Release","Release"],
+  "blocked.since": ["Blocked since","Gesperrt seit"],
+  "blocked.byHand": ["Blocked by hand","Von Hand gesperrt"],
+  "blocked.empty": ["No release is blocked.","Kein Release ist gesperrt."],
   "activity.view.queue": ["Queue","Warteschlange"],
-  "activity.view.history": ["History","Verlauf"],
   "activity.views": ["Download views","Download-Ansichten"],
   "activity.files.noJobs": ["No torrent downloads on this page.","Auf dieser Seite gibt es keine Torrent-Downloads."],
   "activity.files": ["Files","Dateien"],
@@ -7712,10 +7723,6 @@
    "Continue download",
    "Download fortsetzen"
   ],
-  "activity.empty.History": [
-   "Nothing has finished yet.",
-   "Noch nichts abgeschlossen."
-  ],
   "details.availability": [
    "Available media",
    "Verfügbare Medien"
@@ -8667,46 +8674,6 @@
   "activity.importManually": [
    "Import by hand",
    "Von Hand importieren"
-  ],
-  "activity.filter.All": [
-   "All",
-   "Alle"
-  ],
-  "activity.filter.Active": [
-   "Active",
-   "Aktiv"
-  ],
-  "activity.filter.Waiting": [
-   "Waiting",
-   "Wartend"
-  ],
-  "activity.filter.Import": [
-   "Import",
-   "Import"
-  ],
-  "activity.filter.Errors": [
-   "Errors",
-   "Fehler"
-  ],
-  "activity.filter.History": [
-   "History",
-   "Verlauf"
-  ],
-  "activity.kpi.active": [
-   "Active",
-   "Aktiv"
-  ],
-  "activity.kpi.speed": [
-   "Speed",
-   "Tempo"
-  ],
-  "activity.kpi.import": [
-   "Import waiting",
-   "Import wartet"
-  ],
-  "activity.kpi.errors": [
-   "Errors",
-   "Fehler"
   ],
   "activity.source": [
    "Source",
@@ -13946,10 +13913,6 @@
   "activity.list": [
    "Queue",
    "Warteschlange"
-  ],
-  "activity.filters": [
-   "Queue states",
-   "Zustände der Warteschlange"
   ],
   "activity.actions": [
    "Page actions",

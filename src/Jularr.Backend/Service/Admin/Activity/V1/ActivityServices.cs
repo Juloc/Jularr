@@ -111,6 +111,9 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
                     AND (@AcquisitionConnectionId::bigint IS NULL OR connection."Id" = @AcquisitionConnectionId)
                     AND (@MediaTypeId::smallint IS NULL OR work."MediaTypeId" = @MediaTypeId)
                     AND (@DownloadPriorityTypeId::smallint IS NULL OR operation."DownloadPriorityTypeId" = @DownloadPriorityTypeId)
+                    AND (cardinality(@MediaTypeIds::smallint[]) + cardinality(@MediaSubtypeIds::smallint[]) = 0
+                        OR work."MediaSubtypeId" IS NULL AND work."MediaTypeId" = ANY(@MediaTypeIds::smallint[])
+                        OR work."MediaSubtypeId" = ANY(@MediaSubtypeIds::smallint[]))
                     AND (
                         @DownloadClientKindId::smallint IS NULL
                         OR @DownloadClientKindId = 1 AND connection."AcquisitionConnectionTypeId" = 6
@@ -133,9 +136,56 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
                 OFFSET @Offset;
                 """;
             sql.Parameters.Add(new ActivityFilterData(Parameters.ActivityFilterTypeId, Parameters.TorrentOnly, Parameters.DownloadsOnly, Parameters.FailedOnly, Parameters.DownloadClientKindId,
-                Parameters.AcquisitionConnectionId, Parameters.MediaTypeId, Parameters.DownloadPriorityTypeId));
+                Parameters.AcquisitionConnectionId, Parameters.MediaTypeId, Parameters.DownloadPriorityTypeId, Parameters.MediaTypeIds, Parameters.MediaSubtypeIds));
             sql.Page = Page;
             return await Context.ReadSql.ReadPageAsync<ActivityItemV1>(sql, CancellationToken);
+        }
+    }
+
+    [ServiceEndpoint("GET", "/api/v1/admin/activity/blocked")]
+    public sealed class ReadBlockedReleasesV1 : AdminService<ReadBlockedReleasesParametersV1>
+    {
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<PageResult<BlockedReleaseV1>>()];
+        protected override ModuleRequirement GetInstanceModules(ReadBlockedReleasesParametersV1 parameters) => ModuleRequirement.All("Requests");
+        protected override ServicePermission GetPermission(ReadBlockedReleasesParametersV1 parameters, Type resultType) => new("wanted.read");
+        protected override PageRequest GetPageRequest(ReadBlockedReleasesParametersV1 parameters) => new(parameters.Page, parameters.PageSize);
+
+        protected override async Task<IServiceOutput> OnRead()
+        {
+            // Blocked by hand or by a fault that blocks like it (as the target's own release list counts them), the latest first.
+            var sql = new SqlStatement();
+            sql.Statement =
+                $"""
+                SELECT
+                    release."Id",
+                    release."WantedItemId",
+                    work."Id" AS "WorkId",
+                    work."CanonicalTitle" AS "WorkTitle",
+                    work."MediaTypeId",
+                    release."Title",
+                    connection."Name" AS "ConnectionName",
+                    release."QualityKey",
+                    release."ReasonKey",
+                    release."UpdatedAt" AS "BlockedAt"
+                FROM
+                    "AcquisitionReleases" AS release
+                    JOIN "WantedItems" AS wanted ON wanted."Id" = release."WantedItemId"
+                    LEFT JOIN "Works" AS work ON work."Id" = wanted."WorkId"
+                    LEFT JOIN "AcquisitionConnections" AS connection ON connection."Id" = release."AcquisitionConnectionId"
+                WHERE
+                    (release."AcquisitionReleaseStatusTypeId" = 4 OR release."AcquisitionReleaseStatusTypeId" = 3 AND {DownloadLogic.ReleaseFaultSql})
+                    AND (cardinality(@MediaTypeIds::smallint[]) + cardinality(@MediaSubtypeIds::smallint[]) = 0
+                        OR work."MediaSubtypeId" IS NULL AND work."MediaTypeId" = ANY(@MediaTypeIds::smallint[])
+                        OR work."MediaSubtypeId" = ANY(@MediaSubtypeIds::smallint[]))
+                ORDER BY
+                    release."UpdatedAt" DESC,
+                    release."Id" DESC
+                LIMIT @PageSize
+                OFFSET @Offset;
+                """;
+            sql.Parameters.Add(new BlockedReleaseFilterData(Parameters.MediaTypeIds, Parameters.MediaSubtypeIds));
+            sql.Page = Page;
+            return await Context.ReadSql.ReadPageAsync<BlockedReleaseV1>(sql, CancellationToken);
         }
     }
 
@@ -321,8 +371,12 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
                 FROM
                     "ActivityEvents" AS event
                     LEFT JOIN "Accounts" AS account ON account."Id" = event."AccountId"
+                    LEFT JOIN "Works" AS work ON work."Id" = event."WorkId"
                 WHERE
                     (@WorkId::bigint IS NULL OR event."WorkId" = @WorkId)
+                    AND (cardinality(@MediaTypeIds::smallint[]) + cardinality(@MediaSubtypeIds::smallint[]) = 0
+                        OR work."MediaSubtypeId" IS NULL AND work."MediaTypeId" = ANY(@MediaTypeIds::smallint[])
+                        OR work."MediaSubtypeId" = ANY(@MediaSubtypeIds::smallint[]))
                     AND (
                         @ActivityEventGroupTypeId = 0
                         OR @ActivityEventGroupTypeId = CASE
@@ -338,7 +392,7 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
                 LIMIT @PageSize
                 OFFSET @Offset;
                 """;
-            sql.Parameters.Add(new ActivityWorkData(Parameters.WorkId, Parameters.ActivityEventGroupTypeId));
+            sql.Parameters.Add(new ActivityWorkData(Parameters.WorkId, Parameters.ActivityEventGroupTypeId, Parameters.MediaTypeIds, Parameters.MediaSubtypeIds));
             sql.Page = Page;
             return await Context.ReadSql.ReadPageAsync<ActivityEventV1>(sql, CancellationToken);
         }
@@ -365,11 +419,14 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
                     count(*) FILTER (WHERE event."ActivityEventTypeId" NOT IN (1, 2, 3, 4, 7, 8, 9))::integer AS "FilesCount"
                 FROM
                     "ActivityEvents" AS event
+                    LEFT JOIN "Works" AS work ON work."Id" = event."WorkId"
                 WHERE
-                    @WorkId::bigint IS NULL
-                    OR event."WorkId" = @WorkId;
+                    (@WorkId::bigint IS NULL OR event."WorkId" = @WorkId)
+                    AND (cardinality(@MediaTypeIds::smallint[]) + cardinality(@MediaSubtypeIds::smallint[]) = 0
+                        OR work."MediaSubtypeId" IS NULL AND work."MediaTypeId" = ANY(@MediaTypeIds::smallint[])
+                        OR work."MediaSubtypeId" = ANY(@MediaSubtypeIds::smallint[]));
                 """;
-            sql.Parameters.Add(new ActivityWorkData(Parameters.WorkId));
+            sql.Parameters.Add(new ActivityWorkData(Parameters.WorkId, mediaTypeIds: Parameters.MediaTypeIds, mediaSubtypeIds: Parameters.MediaSubtypeIds));
             return await Context.ReadSql.ReadRequiredAsync<ActivityEventsSummaryV1>(sql, CancellationToken);
         }
     }
