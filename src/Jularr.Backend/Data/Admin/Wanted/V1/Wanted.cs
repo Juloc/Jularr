@@ -441,8 +441,9 @@ namespace Jularr.Backend.Data.Admin.Wanted.V1
 
     public sealed class SearchWantedDataV1 : BaseData
     {
-        public SearchWantedDataV1(int? parentUnitNumber = null, int? unitNumber = null, string? language = null)
+        public SearchWantedDataV1(int? parentUnitNumber = null, int? unitNumber = null, string? language = null, long? acquisitionConnectionId = null)
         {
+            AcquisitionConnectionId = acquisitionConnectionId;
             Language = language;
             ParentUnitNumber = parentUnitNumber;
             UnitNumber = unitNumber;
@@ -458,17 +459,66 @@ namespace Jularr.Backend.Data.Admin.Wanted.V1
         // A book is searched for one edition: only releases in its language count.
         [DataField(typeof(WorkManagementFields), nameof(WorkManagementFields.LanguageCode), false)]
         public string? Language { get; }
+
+        // Only this source is asked (one of the sources the search lists); without it the manual search asks all of them.
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.Id), false)]
+        public long? AcquisitionConnectionId { get; }
+    }
+
+    // An enabled search source that serves this target, in the order of its priority.
+    public sealed class WantedSearchSourceV1 : BaseResponse
+    {
+        public WantedSearchSourceV1(long id, string name, AcquisitionConnectionType acquisitionConnectionTypeId)
+        {
+            Id = id;
+            Name = name;
+            AcquisitionConnectionTypeId = acquisitionConnectionTypeId;
+        }
+
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.Id))]
+        public long Id { get; }
+
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.Name))]
+        public string Name { get; }
+
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.AcquisitionConnectionTypeId))]
+        public AcquisitionConnectionType AcquisitionConnectionTypeId { get; }
     }
 
     public sealed class GrabWantedReleaseDataV1 : BaseData
     {
-        public GrabWantedReleaseDataV1(string candidateId)
+        public GrabWantedReleaseDataV1(string candidateId, bool startsNow = false, bool overridesRejection = false)
         {
             CandidateId = candidateId;
+            StartsNow = startsNow;
+            OverridesRejection = overridesRejection;
         }
 
         [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.CandidateId))]
         public string CandidateId { get; }
+
+        // The download goes before the others of its client (a forced priority, or first in the queue) instead of at the end.
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.StartsNow))]
+        public bool StartsNow { get; }
+
+        // Takes a release the profile rejected; without it only the releases the search allowed can be taken.
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.OverridesRejection))]
+        public bool OverridesRejection { get; }
+    }
+
+    // The release is in the queue; IsPrioritized says whether the requested priority could be set, which is false for a normal grab and when the client did not take it.
+    public sealed class GrabWantedReleaseResultV1 : BaseResponse
+    {
+        public GrabWantedReleaseResultV1(bool success, bool isPrioritized)
+        {
+            Success = success;
+            IsPrioritized = isPrioritized;
+        }
+
+        public bool Success { get; }
+
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.IsPrioritized))]
+        public bool IsPrioritized { get; }
     }
 
     public sealed class WantedReleaseV1 : BaseResponse

@@ -150,7 +150,7 @@ namespace Jularr.Frontend.Pages.Admin.Wanted
         {
             var actions = new List<IUiComponent>();
             var name = item.CanonicalTitle;
-            if (acquire) actions.Add(IconLink("search", "wanted.searchManual", WantedStatus.Home(item.Id) + "/Search", name));
+            if (acquire) actions.Add(IconLink("search", "wanted.searchManual", WantedStatus.Search(item.Id), name).Attribute("data-search-dialog", ""));
             actions.Add(IconLink("pencil", "wanted.edit", WantedStatus.Home(item.Id), name));
             if (manage)
             {
@@ -164,7 +164,7 @@ namespace Jularr.Frontend.Pages.Admin.Wanted
             return new Div([.. actions]).Class("list-actions");
         }
 
-        private IUiComponent IconLink(string icon, string labelKey, string href, string name) =>
+        private HtmlElement IconLink(string icon, string labelKey, string href, string name) =>
             new A(Glyph(icon, 18)).Class("button button--icon").Attribute("href", href).Attribute("aria-label", texts[labelKey] + " " + name).Attribute("title", texts[labelKey] + " " + name);
 
         public async Task<IActionResult> OnGetAsync()

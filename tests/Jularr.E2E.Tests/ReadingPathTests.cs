@@ -810,17 +810,14 @@ namespace Jularr.E2E.Tests
                 // Each search finds its release, offered just before; the chosen one is downloaded.
                 fakes.Offer(book);
                 await Steps.OpenSearchAsync(page, FakeServices.BookTitle);
-                await Steps.SubmitAsync(page, Steps.FormWith(page, "Start search"));
                 await Assertions.Expect(page.Locator("tr", new() { HasText = book.Title })).ToContainTextAsync("Eligible");
                 await Steps.GrabAsync(page, book);
                 fakes.Offer(volume);
                 await Steps.OpenSearchAsync(page, FakeServices.MangaTitle);
-                await Steps.SubmitAsync(page, Steps.FormWith(page, "Start search"));
                 await Assertions.Expect(page.Locator("tr", new() { HasText = volume.Title })).ToContainTextAsync("Eligible");
                 await Steps.GrabAsync(page, volume);
                 fakes.Offer(novel);
                 await Steps.OpenSearchAsync(page, FakeServices.NovelTitle);
-                await Steps.SubmitAsync(page, Steps.FormWith(page, "Start search"));
                 await Assertions.Expect(page.Locator("tr", new() { HasText = novel.Title })).ToContainTextAsync("Eligible");
                 await Steps.GrabAsync(page, novel);
                 CollectionAssert.AreEqual(new[] { book, volume, novel }.Select(release => fakes.NzbAddress(release).ToString()).ToArray(), fakes.Grabbed.ToArray());
@@ -1343,7 +1340,6 @@ namespace Jularr.E2E.Tests
                 // The PDF release is found, grabbed and imported like an EPUB.
                 fakes.Offer(pdf);
                 await Steps.OpenSearchAsync(page, FakeServices.BookTitle);
-                await Steps.SubmitAsync(page, Steps.FormWith(page, "Start search"));
                 await Steps.GrabAsync(page, pdf);
                 var details = await Steps.WaitForAvailableAsync(page, FakeServices.BookTitle, "Read");
                 Assert.AreEqual(1, Directory.EnumerateFiles(Path.Combine(folders.Library, "Books"), "*.pdf", SearchOption.AllDirectories).Count(), "The PDF was not imported once.");

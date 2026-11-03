@@ -70,7 +70,7 @@ namespace Jularr.Frontend.Pages.Admin.WantedItem
             {
                 // Seasons, episodes and volumes are chosen on the search page or in their rows.
                 actions.Add(AutomaticForm(new SearchWantedDataV1(), null, csrf));
-                actions.Add(new A(new Text("wanted.searchManual")).Class("button").Attribute("href", WantedStatus.Home(Id) + "/Search"));
+                actions.Add(new A(new Text("wanted.searchManual")).Class("button").Attribute("href", WantedStatus.Search(Id)).Attribute("data-search-dialog", ""));
             }
 
             actions.Add(new Form<UpdateWantedDataV1>(form =>

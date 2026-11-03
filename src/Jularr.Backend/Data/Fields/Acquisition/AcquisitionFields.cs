@@ -82,6 +82,9 @@ namespace Jularr.Backend.Data.Fields.Acquisition
         public static readonly DateTimeField PublishedAt = new() { Required = false };
         public static readonly DateTimeField CreatedAt = new();
         public static readonly BoolField IsBlocked = new();
+        public static readonly BoolField StartsNow = new();
+        public static readonly BoolField OverridesRejection = new();
+        public static readonly BoolField IsPrioritized = new();
     }
 
     public static class AcquisitionProfileFields
