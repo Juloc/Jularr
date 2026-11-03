@@ -13,8 +13,9 @@ using Microsoft.AspNetCore.Mvc.ModelBinding;
 
 namespace Jularr.Frontend.Pages.Admin.Activity
 {
-    // The queue on the list kit, as Sonarr's: the media-type bar on top, the entry's views (Queue, History, Blocked), then what is open in four groups, what needs the owner first (needs help, to import),
+    // The queue on the list kit, as Sonarr's: the media-type bar on top, the entry's views (Queue, History, Blocked), then the open downloads in four groups, what needs the owner first (needs help, to import),
     // then what downloads and what waits in the downloader; each entry a row with what a person can do with it and a drawer of details.
+    // Scans, imports and background jobs are no downloads: they and their failures show on the Jobs page and the Dashboard.
     public sealed class ActivityModel(ReadActivityV1 read, ReadActivitySummaryV1 summary, RetryActivityV1 retry, DismissActivityV1 dismiss, SaveActivitySourceLinkV1 sourceLink, RemoveActivityDownloadV1 remove,
         PauseActivityDownloadV1 pause, RetryActivityImportV1 retryImport, PauseActivityQueueV1 pauseQueue, ReadTorrentFilesV1 torrentFiles, IAntiforgery antiforgery, UiText texts, FrontendAssets assets) : JularrPage
     {
@@ -66,18 +67,19 @@ namespace Jularr.Frontend.Pages.Admin.Activity
 
             if (_items is { } items)
             {
+                IReadOnlyList<ActivityItemV1> downloads = [.. items.Items.Where(item => item.OperationTypeId == OperationType.Download)];
                 if (ShowFiles)
                 {
                     var empty = new Div(new IconTile(Glyph("search", 22), UiTone.Neutral), new P(new Text("activity.files.noJobs")));
-                    page.Content.Add(new ListPanel("activity.list", QueueColumns, [.. items.Items.Select(item => QueueRow(item, csrf))], empty).Modifier("activity-list activity-queue").Paged());
+                    page.Content.Add(new ListPanel("activity.list", QueueColumns, [.. downloads.Select(item => QueueRow(item, csrf))], empty).Modifier("activity-list activity-queue").Paged());
                 }
-                else if (items.Items.Count == 0)
+                else if (downloads.Count == 0)
                 {
                     page.Content.Add(new Div(new IconTile(Glyph("search", 22), UiTone.Neutral), new P(new Text("activity.empty.Queue"))).Class("list-empty"));
                 }
                 else
                 {
-                    var groups = Groups(items.Items);
+                    var groups = Groups(downloads);
                     page.Content.Add(Counts(groups));
                     foreach (var group in groups.Where(entry => entry.Items.Count > 0))
                     {
@@ -87,7 +89,7 @@ namespace Jularr.Frontend.Pages.Admin.Activity
                     if (items.Items.Count == QueueSize) page.Content.Add(new P(new Text("activity.limit")).Class("list-notice"));
                 }
 
-                page.Content.AddRange(items.Items.Select(item => DrawerOf(item, csrf)));
+                page.Content.AddRange(downloads.Select(item => DrawerOf(item, csrf)));
             }
 
             if (FormError is not null) page.Content.Add(new P(new Text(FormError.ResourceKey)).Attribute("role", "alert"));
@@ -96,7 +98,7 @@ namespace Jularr.Frontend.Pages.Admin.Activity
 
         private static readonly ListColumn[] QueueColumns = [new("activity.item", ListRole.Main), new("table.status", ListRole.Status), new("activity.source", ListRole.Data, 2), new("activity.transfer", ListRole.Data, 1), new("common.actions", ListRole.Actions)];
 
-        // The four groups of the queue, what needs the owner first: an entry that waits for a person or failed, what is downloaded and must be imported (also by hand), what downloads, what waits in the downloader.
+        // The four groups of the queue, what needs the owner first: a download that waits for a person or failed, what is downloaded and must be imported (also by hand), what downloads, what waits in the downloader.
         private enum QueueGroup { Help, Import, Running, Queued }
 
         private static QueueGroup GroupOf(ActivityItemV1 item)
@@ -105,8 +107,8 @@ namespace Jularr.Frontend.Pages.Admin.Activity
 
             // Waiting for a person: the files are ready to be placed by hand or the import is read again; anything else (a check at the source) needs help.
             if (item.IsWaiting) return item.ManualUrl is null && (item.CanImportManually || item.CanRetryImport) ? QueueGroup.Import : QueueGroup.Help;
-            if (item.DownloadStateTypeId == DownloadStateType.PostProcessing || item.OperationTypeId == OperationType.MediaImport) return QueueGroup.Import;
-            if (item.OperationTypeId == OperationType.Download && item.DownloadStateTypeId is null or DownloadStateType.Queued or DownloadStateType.Paused) return QueueGroup.Queued;
+            if (item.DownloadStateTypeId == DownloadStateType.PostProcessing) return QueueGroup.Import;
+            if (item.DownloadStateTypeId is null or DownloadStateType.Queued or DownloadStateType.Paused) return QueueGroup.Queued;
             return QueueGroup.Running;
         }
 
@@ -157,48 +159,10 @@ namespace Jularr.Frontend.Pages.Admin.Activity
         private IUiComponent QueueButton(string handler, string icon, string labelKey, string? csrf) =>
             new PostForm(Address(handler: handler), csrf, [], new Button(Glyph(icon, 16), new Span(new Text(labelKey)).Class("action-dock__text")).Submit());
 
-        // The icon and its tone say what an entry is: a download, a scan, a backup or a background job.
-        private IUiComponent TypeTile(ActivityItemV1 item)
-        {
-            var (icon, tone) = item.OperationTypeId switch
-            {
-                OperationType.Download => ("download", UiTone.Info),
-                OperationType.LibraryScan => ("scan", UiTone.Success),
-                OperationType.Backup => ("shield", UiTone.Success),
-                _ => ("pulse", UiTone.Accent)
-            };
-
-            return new IconTile(Glyph(icon), tone);
-        }
-
-        // The work first, then the release under it; a job is named by its key.
-        private IUiComponent Identity(ActivityItemV1 item)
-        {
-            IUiComponent title;
-            IUiComponent subline;
-            if (item.OperationTypeId == OperationType.Job)
-            {
-                title = new A(new Text("jobs.job." + item.Title)).Class("list-identity__title").Attribute("href", "/Admin/Jobs");
-                subline = new Text("operation.type.Job");
-            }
-            else if (item.OperationTypeId == OperationType.MediaImport)
-            {
-                title = new A(new Text("operation.type.MediaImport")).Class("list-identity__title").Attribute("href", "/Admin/Import");
-                subline = new Text("operation.type.MediaImport");
-            }
-            else if (item.WorkId is { } workId)
-            {
-                title = new A(new Truncated(item.WorkTitle ?? "")).Class("list-identity__title").Attribute("href", "/Admin/Works/" + workId.ToString(CultureInfo.InvariantCulture));
-                subline = new Truncated(item.Title);
-            }
-            else
-            {
-                title = new Truncated(item.Title);
-                subline = new Text("operation.type." + item.OperationTypeId);
-            }
-
-            return new ListIdentity(TypeTile(item), title, subline);
-        }
+        // The work first, then the release under it.
+        private IUiComponent Identity(ActivityItemV1 item) => item.WorkId is { } workId
+            ? new ListIdentity(new IconTile(Glyph("download"), UiTone.Info), new A(new Truncated(item.WorkTitle ?? "")).Class("list-identity__title").Attribute("href", "/Admin/Works/" + workId.ToString(CultureInfo.InvariantCulture)), new Truncated(item.Title))
+            : new ListIdentity(new IconTile(Glyph("download"), UiTone.Info), new Truncated(item.Title), new Text("operation.type.Download"));
 
         // The stream sets this marker; the state pill takes its tone from it.
         private static string Phase(ActivityItemV1 item)
@@ -229,10 +193,8 @@ namespace Jularr.Frontend.Pages.Admin.Activity
                 .Class("live-progress list-phase activity-status").Attribute("data-live", LiveKeys.Operation(item.Id)).Attribute("data-phase", phase);
         }
 
-        // The client and the indexer of a download; a scan or backup names its kind.
-        private static IUiComponent Source(ActivityItemV1 item) => item.OperationTypeId == OperationType.Download
-            ? new Span(new Truncated(LiveFacts.Join(item.ConnectionName, item.IndexerName))).Class("list-value list-value--fill")
-            : new Span(new Text("operation.type." + item.OperationTypeId)).Class("list-value");
+        // The client and the indexer of a download.
+        private static IUiComponent Source(ActivityItemV1 item) => new Span(new Truncated(LiveFacts.Join(item.ConnectionName, item.IndexerName))).Class("list-value list-value--fill");
 
         // The pace above, the size and time left below.
         private IUiComponent Transfer(ActivityItemV1 item)
@@ -262,10 +224,8 @@ namespace Jularr.Frontend.Pages.Admin.Activity
         private ListRow QueueRow(ActivityItemV1 item, string? csrf)
         {
             // A download without a known client or indexer has no source line on the phone card.
-            var source = item.OperationTypeId == OperationType.Download ? LiveFacts.Join(item.ConnectionName, item.IndexerName) : null;
-            var row = new ListRow([Identity(item), Status(item), Source(item), Transfer(item), RowActions(item, csrf)],
-                item.OperationTypeId != OperationType.Download ? [ListPanel.Fact("activity.source", new Text("operation.type." + item.OperationTypeId))]
-                    : string.IsNullOrEmpty(source) ? [] : [ListPanel.Fact("activity.source", new ValueText(source))]);
+            var source = LiveFacts.Join(item.ConnectionName, item.IndexerName);
+            var row = new ListRow([Identity(item), Status(item), Source(item), Transfer(item), RowActions(item, csrf)], string.IsNullOrEmpty(source) ? [] : [ListPanel.Fact("activity.source", new ValueText(source))]);
             if (item.OperationStatusTypeId == OperationStatusType.Failed) row.Tinted(UiTone.Danger);
             else if (item.IsWaiting) row.Tinted(UiTone.Warning);
             return row;
@@ -275,15 +235,11 @@ namespace Jularr.Frontend.Pages.Admin.Activity
         private IUiComponent RowActions(ActivityItemV1 item, string? csrf)
         {
             var actions = new List<IUiComponent>();
-            if (item.OperationTypeId == OperationType.Job)
-            {
-                actions.Add(IconLink("pulse", "jobs.open", "/Admin/Jobs"));
-            }
-            else if (item.OperationStatusTypeId == OperationStatusType.Failed)
+            if (item.OperationStatusTypeId == OperationStatusType.Failed)
             {
                 actions.Add(IconAction(item, "Retry", "sync", "activity.retry", csrf));
             }
-            else if (item.OperationTypeId == OperationType.Download)
+            else
             {
                 if (item.CanRetryImport) actions.Add(IconAction(item, "RetryImport", "sync", "activity.retryImport", csrf));
                 if (item.CanImportManually) actions.Add(IconLink("folder", "activity.importManually", "/Admin/ManualImport?operationId=" + item.Id.ToString(CultureInfo.InvariantCulture)));
@@ -321,7 +277,8 @@ namespace Jularr.Frontend.Pages.Admin.Activity
                 .Class("live-progress list-phase activity-status activity-status--drawer").Attribute("data-live", LiveKeys.Operation(item.Id)).Attribute("data-phase", phase);
 
             var facts = new List<(string, IUiComponent)>();
-            if (item.WorkId is not null) facts.Add(("activity.release", new Truncated(item.Title)));
+            // The drawer has room: the release wraps whole instead of carrying its text twice for a tip.
+            if (item.WorkId is not null) facts.Add(("activity.release", new ValueText(item.Title)));
             if (item.ConnectionName is { } client) facts.Add(("activity.client", new ValueText(client)));
             if (item.IndexerName is { } indexer) facts.Add(("activity.indexer", new ValueText(indexer)));
             if (item.SizeBytes is { } size) facts.Add(("activity.size", new ValueText(ByteSize.Format(size))));
@@ -335,7 +292,7 @@ namespace Jularr.Frontend.Pages.Admin.Activity
                     new Span(new ValueText(FileReason(item.UnmatchedFileReasons?.ElementAtOrDefault(index)))).Class("list-value list-value--dim")).Class("activity-file-row activity-file-row--reason"))])));
             }
 
-            if (item.OperationTypeId == OperationType.Download && !(item.OperationStatusTypeId == OperationStatusType.Failed))
+            if (item.OperationStatusTypeId != OperationStatusType.Failed)
             {
                 if (item.ManualUrl is { } manual) body.Add(Drawer.Block("activity.source.check", ManualLink(item, manual, csrf)));
                 body.Add(new Div(Confirmed(item, "Remove", "activity.remove", "activity.removeConfirm", csrf), Confirmed(item, "RemoveAndBlock", "activity.removeAndBlock", "activity.removeAndBlockConfirm", csrf)).Class("activity-confirms"));
@@ -370,30 +327,17 @@ namespace Jularr.Frontend.Pages.Admin.Activity
                 }
             }
 
-            var title = item.WorkTitle ?? (item.OperationTypeId == OperationType.Job ? texts["jobs.job." + item.Title] : item.Title);
-            return new Drawer(assets, DrawerId(item), [new DrawerPane("details", "activity.details", "activity.details", "info", body, [.. PanelActions(item, csrf)], null, title)],
+            return new Drawer(assets, DrawerId(item), [new DrawerPane("details", "activity.details", "activity.details", "info", body, [.. PanelActions(item, csrf)], null, item.WorkTitle ?? item.Title)],
                 sheet: true, closeHref: Address(), open: OpenOperationId == item.Id);
         }
 
-        // A failure is retried or put aside; a waiting download is read again, assigned by hand or taken out; a running one is told to wait or taken out; a job is shown on the Jobs page.
+        // A failure is retried or put aside; a waiting download is read again, assigned by hand or taken out; a running one is told to wait or taken out.
         private IEnumerable<IUiComponent> PanelActions(ActivityItemV1 item, string? csrf)
         {
-            if (item.OperationTypeId == OperationType.Job)
-            {
-                yield return new A(new Text("jobs.open")).Class("button").Attribute("href", "/Admin/Jobs");
-                if (item.OperationStatusTypeId == OperationStatusType.Failed) yield return Action(item, "Dismiss", "activity.dismiss", csrf);
-                yield break;
-            }
-
             if (item.OperationStatusTypeId == OperationStatusType.Failed)
             {
                 yield return Action(item, "Retry", "activity.retry", csrf, primary: true);
                 yield return Action(item, "Dismiss", "activity.dismiss", csrf);
-                yield break;
-            }
-
-            if (item.OperationTypeId != OperationType.Download)
-            {
                 yield break;
             }
 

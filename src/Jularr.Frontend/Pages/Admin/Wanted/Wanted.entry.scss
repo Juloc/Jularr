@@ -6,3 +6,19 @@
     --list-columns-medium: minmax(230px, 2.4fr) minmax(140px, 1.2fr) minmax(90px, .7fr) minmax(150px, .9fr) minmax(130px, .9fr);
     --list-columns-narrow: minmax(200px, 2.2fr) minmax(140px, 1.2fr) minmax(90px, .7fr) minmax(130px, .9fr);
 }
+
+// The pill with its short word and, when the last search said why nothing came, the whole reason in a small line under it.
+.wanted-status {
+    display: grid;
+    justify-items: start;
+    gap: 4px;
+    min-width: 0;
+
+    &__reason { max-width: 100%; color: var(--muted); font-size: var(--text-small); line-height: 1.35; overflow-wrap: anywhere; }
+}
+
+// Phone card: the state beside the name takes at most half the row, so the name keeps its room.
+@container list (max-width: 690px) {
+    .wanted-list .list-row:has(.wanted-status) { grid-template-columns: minmax(0, 1fr) fit-content(48%); }
+    .wanted-status { justify-items: end; text-align: right; }
+}

@@ -1,14 +1,18 @@
 // A small pill centred in the app content, well above the bottom edge (above the floating bar on a phone) and always in view while the page scrolls.
+// One rule for every list below it: `--floating-bottom` is how high it floats (higher over the bar of the book being read and over the minimized player),
+// and at the end of a page it rests at least as high, so the last row of a list is never under it. The room the page leaves below it
+// (the shell's `--main-end`, the bar of the book being read) counts; its own margin adds the rest.
 .floating-pill {
+    --floating-bottom: 40px;
     position: sticky;
-    bottom: calc(40px + env(safe-area-inset-bottom));
+    bottom: calc(var(--floating-bottom) + env(safe-area-inset-bottom));
     // Above the continue bar where both stand.
     z-index: calc(var(--z-sticky) + 1);
     display: flex;
     align-items: center;
     gap: 6px;
     width: fit-content;
-    margin: 24px auto 0;
+    margin: 24px auto max(0px, var(--floating-bottom) - var(--main-end, 0px) - var(--floating-after, 0px));
     padding: 6px;
     border: 1px solid var(--border);
     border-radius: 999px;
@@ -32,20 +36,16 @@
     // A divider between the pill's actions.
     &__divider { align-self: stretch; width: 1px; margin: 4px 2px; background: var(--border); }
 
-    // At the end of a page the pill cannot rise above the content's last line: it rests as high as it floats (the shell leaves 40px below the content on a phone).
-    @media (max-width: 780px) {
-        bottom: calc(96px + env(safe-area-inset-bottom));
-        margin-bottom: 56px;
-    }
+    @media (max-width: 780px) { --floating-bottom: 96px; }
 }
 
-// With the bar of the book being read on the page the pill sits above it, not on it: at the end of a page the bar rests 84 px above the edge and is 82 px high.
-body:has(.continue-bar) .floating-pill {
-    bottom: calc(176px + env(safe-area-inset-bottom));
-    // The pill cannot leave its page block: at the end of the page it rests this far above the end, clear of the bar (which rests 84 px above the edge on a phone).
-    margin-bottom: 48px;
+// Over the bar of the book being read (82px high, 84px above the edge on a phone), which follows the page with at least 98px of its own.
+body:has(.continue-bar) .floating-pill { --floating-bottom: 176px; --floating-after: 98px; }
 
-    @media (max-width: 780px) {
-        bottom: calc(176px + env(safe-area-inset-bottom));
-    }
+// Over the minimized player (88px high, 12px above the edge, 84px on a phone); the bar of the book being read gives way to it.
+body.player-mini .floating-pill {
+    --floating-bottom: 116px;
+    --floating-after: 0px;
+
+    @media (max-width: 780px) { --floating-bottom: 188px; }
 }

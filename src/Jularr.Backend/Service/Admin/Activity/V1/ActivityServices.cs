@@ -198,7 +198,7 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
 
         protected override async Task<IServiceOutput> OnRead()
         {
-            // The numbers of the queue's tiles; the pace is what the downloading jobs still have left over the time they still need.
+            // The numbers of the queue's tiles, which holds downloads only; the pace is what the downloading jobs still have left over the time they still need.
             var sql = new SqlStatement();
             sql.Statement =
                 """
@@ -213,7 +213,9 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
                     count(*) FILTER (WHERE state."ActivityFilterTypeId" = 3)::integer AS "HistoryCount"
                 FROM
                     "OperationQueueStates" AS state
-                    JOIN "Operations" AS operation ON operation."Id" = state."OperationId";
+                    JOIN "Operations" AS operation ON operation."Id" = state."OperationId"
+                WHERE
+                    operation."OperationTypeId" = 2;
                 """;
             return await Context.ReadSql.ReadRequiredAsync<ActivitySummaryV1>(sql, CancellationToken);
         }

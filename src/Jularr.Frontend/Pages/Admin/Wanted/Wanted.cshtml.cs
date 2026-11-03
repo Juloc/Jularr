@@ -93,7 +93,7 @@ namespace Jularr.Frontend.Pages.Admin.Wanted
             return new IconTile(Glyph(icon), tone);
         }
 
-        // The state of a target as its pill says it: paused, below its cutoff, available, on its way or still to find.
+        // The state of a target as its pill says it: paused, below its cutoff, available, on its way or still to find; why nothing came stands whole under the pill.
         private IUiComponent State(WantedDetailsV1 item)
         {
             var (tone, icon) = item.IsPaused ? (UiTone.Warning, "pause")
@@ -102,8 +102,9 @@ namespace Jularr.Frontend.Pages.Admin.Wanted
                 : item.IsDownloading ? (UiTone.Info, "download")
                 : item.OutcomeKey is not null ? (UiTone.Warning, "alert")
                 : (UiTone.Accent, "clock");
-            IUiComponent label = View == WantedViewType.CutoffUnmet && item.HasMedia && !item.IsPaused ? new Text("wanted.belowCutoff") : WantedStatus.Of(item);
-            return new StateChip(label, tone, Glyph(icon, 14));
+            IUiComponent label = View == WantedViewType.CutoffUnmet && item.HasMedia && !item.IsPaused ? new Text("wanted.belowCutoff") : WantedStatus.Short(item);
+            var chip = new StateChip(label, tone, Glyph(icon, 14));
+            return WantedStatus.ReasonKey(item) is { } reason ? new Div(chip, new Span(new Text(reason)).Class("wanted-status__reason")).Class("wanted-status") : chip;
         }
 
         // High targets are searched first, Normal ones after them; nothing waits. Only the exception is marked: a normal target shows nothing.
