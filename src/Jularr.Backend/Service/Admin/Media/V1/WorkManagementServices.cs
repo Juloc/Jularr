@@ -11,6 +11,7 @@ using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Acquisition;
 using Jularr.Backend.Logic.Library;
 using Jularr.Backend.Service.Core;
+using Jularr.Backend.Service.User.Translation.V1;
 
 namespace Jularr.Backend.Service.Admin.Media.V1
 {
@@ -367,7 +368,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                 groups = await Context.ReadSql.ReadListAsync<WorkManagementGroupV1>(sql, CancellationToken);
             }
 
-            // What readers had translated of the book's files
+            // What the server translated of the book's files: the sections any model has a cache of, per language
             IReadOnlyList<WorkManagementTranslationV1> translations = [];
             if (hero.MediaTypeId == MediaType.Book)
             {
@@ -376,9 +377,9 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                     """
                     SELECT
                         document."Id" AS "DocumentId",
-                        split_part(translated."Path", '/', 2) AS "Language",
+                        split_part(translated."Path", '/', 4) AS "Language",
                         version."WorkEditionId",
-                        least(100, round(100.0 * count(*) / greatest(1, (
+                        least(100, round(100.0 * count(DISTINCT split_part(translated."Path", '/', 5)) FILTER (WHERE translated."Path" ~ '/[0-9]{5}$') / greatest(1, (
                             SELECT
                                 count(*)
                             FROM
@@ -387,25 +388,29 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                                 section."ReadingDocumentId" = document."Id"
                                 AND section."Path" LIKE ':section/%'
                         ))))::integer AS "CoveragePercent",
-                        sum(length(translated."Bytes"))::bigint AS "Bytes"
+                        sum(length(translated."Bytes"))::bigint AS "Bytes",
+                        array_agg(DISTINCT split_part(translated."Path", '/', 3) ORDER BY split_part(translated."Path", '/', 3)) AS "Models"
                     FROM
                         "ReadingDocuments" AS document
                         JOIN "StoredFiles" AS file ON file."Id" = document."StoredFileId"
                         JOIN "MediaAssets" AS asset ON asset."Id" = file."MediaAssetId"
                         JOIN "WorkVersions" AS version ON version."Id" = asset."WorkVersionId"
-                        JOIN "ReadingResources" AS translated ON translated."ReadingDocumentId" = document."Id" AND translated."Path" LIKE ':translation/%'
+                        JOIN "ReadingResources" AS translated ON translated."ReadingDocumentId" = document."Id"
+                            AND translated."Path" ~ '^:localtranslation/v4/[^/]+/[a-z]{2,3}/[0-9]+$'
                     WHERE
                         asset."WorkId" = @WorkId
                     GROUP BY
                         document."Id",
-                        split_part(translated."Path", '/', 2),
+                        split_part(translated."Path", '/', 4),
                         version."WorkEditionId"
                     ORDER BY
                         "Language",
                         document."Id";
                     """;
                 sql.Parameters.Add(Parameters);
-                translations = await Context.ReadSql.ReadListAsync<WorkManagementTranslationV1>(sql, CancellationToken);
+                // The caches name Ollama's models without their provider; the page names every model by its id.
+                translations = [.. (await Context.ReadSql.ReadListAsync<WorkManagementTranslationV1>(sql, CancellationToken)).Select(item => new WorkManagementTranslationV1(item.DocumentId, item.Language,
+                    item.WorkEditionId, item.CoveragePercent, item.Bytes, [.. item.Models.Select(LocalReadingPaths.ModelId)]))];
             }
 
             // Further units of a file with several episodes

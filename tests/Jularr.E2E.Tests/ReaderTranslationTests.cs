@@ -200,22 +200,26 @@ namespace Jularr.E2E.Tests
             public Uri Address { get; }
             public int Generations => Volatile.Read(ref _generations);
 
-            private FakeOllama(int port, bool larger)
+            // Echoing answers every block with "DE " and its own text, which passes the translation checks; otherwise every answer is "Kapitel Eins".
+            private readonly bool _echo;
+
+            private FakeOllama(int port, bool larger, bool echo)
             {
                 _larger = larger;
                 Address = new Uri("http://127.0.0.1:" + port + "/");
+                _echo = echo;
                 _listener.Prefixes.Add(Address.ToString());
                 _listener.Start();
                 _running = ServeAsync();
             }
 
-            public static FakeOllama Start(bool larger = false)
+            public static FakeOllama Start(bool larger = false, bool echo = false)
             {
                 using var socket = new TcpListener(IPAddress.Loopback, 0);
                 socket.Start();
                 var port = ((IPEndPoint)socket.LocalEndpoint).Port;
                 socket.Stop();
-                return new FakeOllama(port, larger);
+                return new FakeOllama(port, larger, echo);
             }
 
             private async Task ServeAsync()
@@ -241,9 +245,14 @@ namespace Jularr.E2E.Tests
                         {
                             Interlocked.Increment(ref _generations);
                             using var reader = new StreamReader(context.Request.InputStream, Encoding.UTF8);
-                            body = (await reader.ReadToEndAsync()).Contains("\"translategemma:12b\"", StringComparison.Ordinal)
-                                ? """{"response":"Erstes Kapitel","eval_count":10,"eval_duration":1000000000}"""
-                                : """{"response":"Kapitel Eins","eval_count":10,"eval_duration":1000000000}""";
+                            var request = await reader.ReadToEndAsync();
+                            var answer = request.Contains("\"translategemma:12b\"", StringComparison.Ordinal) ? "Erstes Kapitel" : "Kapitel Eins";
+                            if (_echo)
+                            {
+                                var prompt = System.Text.Json.JsonDocument.Parse(request).RootElement.GetProperty("prompt").GetString()!;
+                                answer = "DE " + prompt[(prompt.LastIndexOf('\n') + 1)..];
+                            }
+                            body = System.Text.Json.JsonSerializer.Serialize(new { response = answer, eval_count = 10, eval_duration = 1000000000 });
                         }
                         else
                         {

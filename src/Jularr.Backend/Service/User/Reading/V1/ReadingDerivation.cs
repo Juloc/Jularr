@@ -107,7 +107,7 @@ namespace Jularr.Backend.Service.User.Reading.V1
 
             // A package a reader can open, with every chapter in it.
             var prepared = PdfBookHtml.Prepare(book, 0);
-            var package = ReadingEbook.Build(new ReadingEbookContent(0, "urn:jularr:pdf:" + Convert.ToHexString(hash).ToLowerInvariant(), source.Title, source.Language ?? "und", null, ModifiedAt(source), false,
+            var package = ReadingEbook.Build(new ReadingEbookContent(0, "urn:jularr:pdf:" + Convert.ToHexString(hash).ToLowerInvariant(), source.Title, source.Language ?? "und", ModifiedAt(source), false,
                 [.. prepared.Sections.Select(section => section.Html)], [.. prepared.Sections.Select(section => section.Structure.Title)], null, [.. prepared.Toc],
                 [.. book.Images.Select(image => new ReadingEbookResourceData(image.Path, image.MediaType, image.Bytes))]));
             if (!IsComplete(package, prepared.Sections.Count))

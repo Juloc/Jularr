@@ -6012,10 +6012,6 @@
    "This PDF holds scanned pages without text; it opens as a PDF.",
    "PDF ini berisi halaman hasil pindai tanpa teks; dibuka sebagai PDF."
   ],
-  "errors.reading_translation_incomplete": [
-   "This book is not translated into that language in every section yet.",
-   "Buku ini belum diterjemahkan ke bahasa tersebut di setiap bagiannya."
-  ],
   "errors.reading_pdf_recognizing": [
    "The scanned pages are being turned into text; until then the book opens as a PDF.",
    "Halaman hasil pindai sedang diubah menjadi teks; sampai selesai, buku dibuka sebagai PDF."

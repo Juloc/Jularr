@@ -75,7 +75,7 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
-        public async Task Sections_KeepOneTranslationPerLanguageForEveryReader()
+        public async Task ReaderLanguage_FollowsTheProfile_AndTheServerKeepsNoBrowserTranslation()
         {
             using var storage = new TemporaryDirectory();
             using var models = new TemporaryDirectory();
@@ -83,63 +83,21 @@ namespace Jularr.Backend.Tests
             var (first, _) = await ReadingTests.CreateBooksAsync(host, storage.Path, "First Book", "Second Book");
             using var opened = await host.SendAsync(HttpMethod.Post, "/api/v1/reading/assets/" + first + "/open");
             var document = (await opened.Content.ReadFromJsonAsync<ReadingDocumentV1>())!;
-            using var sectionResponse = await host.SendAsync(HttpMethod.Get, "/api/v1/reading/documents/" + document.DocumentId + "/sections/0");
-            var blocks = (await sectionResponse.Content.ReadFromJsonAsync<ReadingSectionV1>())!.Blocks;
-            var route = "/api/v1/reading/documents/" + document.DocumentId + "/sections/0/translations/de";
+            var route = "/api/v1/reading/documents/" + document.DocumentId + "/sections/0/local-translations/de/ollama:translategemma:4b?sourceLanguage=en";
 
-            using var missing = await host.SendAsync(HttpMethod.Get, route);
-            Assert.AreEqual(HttpStatusCode.NotFound, missing.StatusCode);
-
-            // Every block gets its text; a wrong count or anything but texts is refused.
-            using var wrong = await host.SendAsync(HttpMethod.Put, route, new SaveReadingTranslationDataV1(JsonSerializer.Serialize(new[] { "Nur einer" })));
-            Assert.AreEqual(HttpStatusCode.BadRequest, wrong.StatusCode);
-            using var markup = await host.SendAsync(HttpMethod.Put, route, new SaveReadingTranslationDataV1("{\"html\":\"<script>\"}"));
-            Assert.AreEqual(HttpStatusCode.BadRequest, markup.StatusCode);
-            var texts = Enumerable.Range(0, blocks).Select(index => "Block " + index).ToArray();
-            using var saved = await host.SendAsync(HttpMethod.Put, route, new SaveReadingTranslationDataV1(JsonSerializer.Serialize(texts)));
-            Assert.AreEqual(HttpStatusCode.OK, saved.StatusCode, await saved.Content.ReadAsStringAsync());
-            using var read = await host.SendAsync(HttpMethod.Get, route);
-            CollectionAssert.AreEqual(texts, JsonSerializer.Deserialize<string[]>((await read.Content.ReadFromJsonAsync<ReadingTranslationV1>())!.Blocks));
-
-            // Once every section is translated the book downloads in that language, marked as machine-translated; before, it does not.
-            var ebook = "/api/v1/reading/documents/" + document.DocumentId + "/ebook";
-            for (var index = 1; index < document.SectionCount; index++)
-            {
-                using var next = await host.SendAsync(HttpMethod.Get, "/api/v1/reading/documents/" + document.DocumentId + "/sections/" + index);
-                var count = (await next.Content.ReadFromJsonAsync<ReadingSectionV1>())!.Blocks;
-                if (count == 0)
-                {
-                    continue;
-                }
-
-                using var unfinished = await host.SendAsync(HttpMethod.Get, ebook + "?language=de");
-                Assert.AreEqual(HttpStatusCode.ServiceUnavailable, unfinished.StatusCode);
-                using var more = await host.SendAsync(HttpMethod.Put, "/api/v1/reading/documents/" + document.DocumentId + "/sections/" + index + "/translations/de",
-                    new SaveReadingTranslationDataV1(JsonSerializer.Serialize(Enumerable.Range(0, count).Select(block => "Abschnitt " + index + " Block " + block))));
-                Assert.AreEqual(HttpStatusCode.OK, more.StatusCode, await more.Content.ReadAsStringAsync());
-            }
-
-            using var reopened = await host.SendAsync(HttpMethod.Post, "/api/v1/reading/assets/" + first + "/open");
-            CollectionAssert.AreEqual(new[] { "de" }, (await reopened.Content.ReadFromJsonAsync<ReadingDocumentV1>())!.TranslatedLanguages);
-            using var untranslated = await host.SendAsync(HttpMethod.Get, ebook);
+            // The server no longer stores what the browser translated: the old per-section rows have no address, and nothing downloads translated.
+            using var removed = await host.SendAsync(HttpMethod.Get, "/api/v1/reading/documents/" + document.DocumentId + "/sections/0/translations/de");
+            Assert.AreEqual(HttpStatusCode.NotFound, removed.StatusCode);
+            Assert.AreEqual(0, document.TranslatedLanguages.Length);
+            using var untranslated = await host.SendAsync(HttpMethod.Get, "/api/v1/reading/documents/" + document.DocumentId + "/ebook?language=de");
             Assert.AreEqual(HttpStatusCode.NotFound, untranslated.StatusCode);
-            using var translated = await host.SendAsync(HttpMethod.Get, ebook + "?language=de");
-            Assert.AreEqual(HttpStatusCode.OK, translated.StatusCode, await translated.Content.ReadAsStringAsync());
-            Assert.AreEqual("First Book (de).epub", translated.Content.Headers.ContentDisposition?.FileName?.Trim('"'));
-            using var epub = new System.IO.Compression.ZipArchive(await translated.Content.ReadAsStreamAsync());
-            var package = ReadingTests.Entry(epub, "OEBPS/content.opf");
-            StringAssert.Contains(package, "<dc:language>de</dc:language>");
-            StringAssert.Contains(package, "Machine-translated from");
-            var section = ReadingTests.Entry(epub, "OEBPS/s00000.xhtml");
-            ReadingTests.Xml(section);
-            StringAssert.Contains(section, ">Block 0<");
 
-            // The reader offers it; switched off, translation is gone.
+            // The reader asks the server's TranslateGemma and offers no translated download yet.
             using var page = await host.SendAsync(HttpMethod.Get, "/Read/" + first);
             var reader = await page.Content.ReadAsStringAsync();
             StringAssert.Contains(reader, "data-local-translation-url=\"/api/v1/reading/documents/" + document.DocumentId + "/sections/0/local-translations/\"");
             Assert.IsFalse(reader.Contains("data-translation-url=", StringComparison.Ordinal));
-            StringAssert.Contains(reader, "href=\"" + ebook + "?language=de\"");
+            Assert.IsFalse(reader.Contains("/ebook?language=", StringComparison.Ordinal));
 
             // A book opens in the profile's language; its language button offers the original and the other allowed languages the server's TranslateGemma translates into.
             await host.Fixture.RunSqlAsync("UPDATE \"Profiles\" SET \"UiLocaleId\" = (SELECT \"Id\" FROM \"UiLocales\" WHERE \"Locale\" = 'de-DE') WHERE \"Id\" = 101");

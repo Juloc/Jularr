@@ -6012,10 +6012,6 @@
    "This PDF holds scanned pages without text; it opens as a PDF.",
    "この PDF にはテキストのないスキャンページが含まれているため、PDF として開きます。"
   ],
-  "errors.reading_translation_incomplete": [
-   "This book is not translated into that language in every section yet.",
-   "この本はまだすべてのセクションがその言語に翻訳されていません。"
-  ],
   "errors.reading_pdf_recognizing": [
    "The scanned pages are being turned into text; until then the book opens as a PDF.",
    "スキャンしたページをテキストに変換しています。完了するまで本はPDFとして開きます。"

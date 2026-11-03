@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Translation.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.System.Reading.V1;
@@ -82,7 +83,7 @@ namespace Jularr.Backend.Tests
             // The Reader finds the chapter translated without asking the model.
             using var translated = await host.SendAsync(HttpMethod.Get, "/api/v1/reading/documents/" + firstDocument.DocumentId + "/sections/0/local-translations/de/ollama:translategemma:4b?sourceLanguage=en");
             Assert.AreEqual(HttpStatusCode.OK, translated.StatusCode, await translated.Content.ReadAsStringAsync());
-            var blocks = JsonSerializer.Deserialize<string[]>((await translated.Content.ReadFromJsonAsync<ReadingTranslationV1>())!.Blocks)!;
+            var blocks = JsonSerializer.Deserialize<string[]>((await translated.Content.ReadFromJsonAsync<LocalReadingTranslationV1>(JsonSerializerOptions.Web))!.Blocks)!;
             Assert.IsTrue(blocks.Length > 0 && blocks.Any(block => block.StartsWith("DE ", StringComparison.Ordinal)), string.Join(" | ", blocks));
 
             // A language chosen for a book is a target too; a book in that language is left alone.
@@ -374,6 +375,137 @@ namespace Jularr.Backend.Tests
             using var parsed = JsonDocument.Parse(cache);
             var texts = parsed.RootElement.GetProperty("Texts").EnumerateArray().Select(text => text.GetString()).ToArray();
             CollectionAssert.AreEqual(new[] { "Part Two", "The second part begins.", "And it ends." }, texts);
+
+            // The translated EPUB keeps those paragraphs as they are and says how many did.
+            using var epub = await DownloadEpubAsync(host, document.DocumentId);
+            StringAssert.Contains(ReadingTests.Entry(epub, "OEBPS/s00001.xhtml"), "The second part begins.");
+            var colophon = ReadingTests.Entry(epub, "OEBPS/colophon.xhtml");
+            ReadingTests.Xml(colophon);
+            StringAssert.Matches(colophon, new System.Text.RegularExpressions.Regex("[1-9][0-9]* paragraphs keep the original text"));
+        }
+
+        [TestMethod]
+        public async Task TranslatedEpub_OnlyOnceEverySectionIsTranslated_ChosenModelsWinPerBlock_AndNamesTheModels()
+        {
+            using var storage = new TemporaryDirectory();
+            var ollama = new FakeOllama();
+            await using var host = await CreateHostAsync(storage.Path, ollama);
+            var (first, _) = await ReadingTests.CreateBooksAsync(host, storage.Path, "First Book", "Second Book");
+            var document = await ReadingTests.OpenAsync(host, first);
+            await PrepareGermanReadersAsync(host);
+            var ebook = "/api/v1/reading/documents/" + document.DocumentId + "/ebook?language=de";
+
+            // Part of the book translated: neither offered nor downloadable, and the admin list shows how far it is without a download.
+            await using var scope = host.Services.CreateAsyncScope();
+            Assert.IsTrue(await Translate(scope));
+            Assert.AreEqual(0, (await ReadingTests.OpenAsync(host, first)).TranslatedLanguages.Length);
+            using (var partial = await host.SendAsync(HttpMethod.Get, ebook)) Assert.AreEqual(HttpStatusCode.NotFound, partial.StatusCode);
+            var started = (await ReadBooksAsync(host)).Items.Single(book => book.DocumentId == document.DocumentId);
+            Assert.AreEqual(("de", "ollama:translategemma:4b", false), (started.Language, started.Models.Single(), started.IsComplete()));
+            Assert.IsTrue(started.Done[0] < started.Sections, started.Done[0] + "/" + started.Sections);
+
+            // Every section translated: the Reader offers it, it downloads, and the EPUB names its model in the metadata and on its last page.
+            var rounds = 0;
+            while (await Translate(scope)) Assert.IsTrue(++rounds < 200, "The job never finishes.");
+            CollectionAssert.AreEqual(new[] { "de" }, (await ReadingTests.OpenAsync(host, first)).TranslatedLanguages);
+            using (var reader = await host.SendAsync(HttpMethod.Get, "/Read/" + first)) StringAssert.Contains(await reader.Content.ReadAsStringAsync(), "href=\"" + ebook + "\"");
+            var finished = (await ReadBooksAsync(host)).Items.Single(book => book.DocumentId == document.DocumentId && book.Language == "de");
+            Assert.IsTrue(finished.IsComplete() && finished.Done[0] == finished.Sections && finished.Stale[0] == 0, string.Join(",", finished.Done));
+            using (var epub = await DownloadEpubAsync(host, document.DocumentId))
+            {
+                var package = ReadingTests.Entry(epub, "OEBPS/content.opf");
+                StringAssert.Contains(package, "<dc:language>de</dc:language>");
+                StringAssert.Contains(package, "<dc:contributor id=\"model0\">ollama:translategemma:4b</dc:contributor>");
+                StringAssert.Contains(package, "href=\"colophon.xhtml\"");
+                var section = ReadingTests.Entry(epub, "OEBPS/s00000.xhtml");
+                ReadingTests.Xml(section);
+                StringAssert.Contains(section, ">DE ");
+                var colophon = ReadingTests.Entry(epub, "OEBPS/colophon.xhtml");
+                StringAssert.Contains(colophon, "ollama:translategemma:4b");
+                StringAssert.Contains(colophon, "Every paragraph is translated.");
+                StringAssert.Contains(ReadingTests.Entry(epub, "OEBPS/nav.xhtml"), "About this translation");
+            }
+
+            // A block re-translated with another model shows that model's text in the EPUB too; both models are named.
+            await host.Fixture.RunSqlAsync($$"""
+                INSERT INTO "ReadingResources" ("ReadingDocumentId", "Path", "MediaType", "Bytes")
+                SELECT resource."ReadingDocumentId", ':localtranslation/v4/translategemma:12b/de/00000', resource."MediaType",
+                    convert_to(replace(convert_from(resource."Bytes", 'UTF8'), '"DE ', '"ZWOELF '), 'UTF8')
+                FROM "ReadingResources" AS resource
+                WHERE resource."ReadingDocumentId" = {{document.DocumentId}} AND resource."Path" = ':localtranslation/v4/translategemma:4b/de/00000';
+                INSERT INTO "ReadingTranslationChoices" ("ReadingDocumentId", "SectionIndex", "Language", "BlockIndex", "Model")
+                VALUES ({{document.DocumentId}}, 0, 'de', 0, 'ollama:translategemma:12b');
+                """);
+            using (var mixed = await DownloadEpubAsync(host, document.DocumentId))
+            {
+                var section = ReadingTests.Entry(mixed, "OEBPS/s00000.xhtml");
+                Assert.AreEqual(1, System.Text.RegularExpressions.Regex.Matches(section, ">ZWOELF ").Count, section);
+                StringAssert.Contains(section, ">DE ");
+                var package = ReadingTests.Entry(mixed, "OEBPS/content.opf");
+                StringAssert.Contains(package, "ollama:translategemma:4b</dc:contributor>");
+                StringAssert.Contains(package, "ollama:translategemma:12b</dc:contributor>");
+            }
+
+            // A new version of the model: the earlier texts still make the EPUB, and the list counts them as stale.
+            ollama.Digest = new string('c', 64);
+            Assert.IsTrue(await Translate(scope));
+            var renewing = (await ReadBooksAsync(host)).Items.Single(book => book.DocumentId == document.DocumentId && book.Language == "de");
+            Assert.IsTrue(renewing.Stale[Array.IndexOf(renewing.Models, "ollama:translategemma:4b")] > 0, string.Join(",", renewing.Stale));
+            using (var stale = await host.SendAsync(HttpMethod.Get, ebook)) Assert.AreEqual(HttpStatusCode.OK, stale.StatusCode);
+
+            // Whoever reads the book downloads it; a profile that cannot see books cannot, and the list is for administrators only.
+            await host.Fixture.RunSqlAsync("""UPDATE "Accounts" SET "AccountRoleTypeId" = 2 WHERE "Id" = 41;""");
+            using (var member = await host.SendAsync(HttpMethod.Get, ebook)) Assert.AreEqual(HttpStatusCode.OK, member.StatusCode, await member.Content.ReadAsStringAsync());
+            using (var list = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/translation/books")) Assert.IsTrue(list.StatusCode is HttpStatusCode.Forbidden or HttpStatusCode.Unauthorized, list.StatusCode.ToString());
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "ProfileMediaRules" ("ProfileId", "MediaTypeId", "IsBlocked") SELECT profile."Id", type."Id", TRUE FROM "Profiles" AS profile CROSS JOIN "MediaTypes" AS type;
+                INSERT INTO "ProfileMediaRules" ("ProfileId", "MediaSubtypeId", "IsBlocked") SELECT profile."Id", subtype."Id", TRUE FROM "Profiles" AS profile CROSS JOIN "MediaSubtypes" AS subtype;
+                """);
+            using (var hidden = await host.SendAsync(HttpMethod.Get, ebook)) Assert.AreEqual(HttpStatusCode.NotFound, hidden.StatusCode);
+        }
+
+        [TestMethod]
+        public async Task TranslatedEpub_TwoModelsThatTogetherCoverTheBook_AreOffered_AndBothNamed()
+        {
+            using var storage = new TemporaryDirectory();
+            var ollama = new FakeOllama();
+            await using var host = await CreateHostAsync(storage.Path, ollama);
+            var (first, _) = await ReadingTests.CreateBooksAsync(host, storage.Path, "First Book", "Second Book");
+            var document = await ReadingTests.OpenAsync(host, first);
+            await PrepareGermanReadersAsync(host);
+            await using var scope = host.Services.CreateAsyncScope();
+            var rounds = 0;
+            while (await Translate(scope)) Assert.IsTrue(++rounds < 200, "The job never finishes.");
+
+            // The small model keeps the first section only; the second is the larger model's, chosen for every block of it.
+            await host.Fixture.RunSqlAsync($$"""
+                UPDATE "ReadingResources" SET "Path" = ':localtranslation/v4/translategemma:12b/de/00001',
+                    "Bytes" = convert_to(replace(convert_from("Bytes", 'UTF8'), '"DE ', '"ZWOELF '), 'UTF8')
+                WHERE "ReadingDocumentId" = {{document.DocumentId}} AND "Path" = ':localtranslation/v4/translategemma:4b/de/00001';
+                INSERT INTO "ReadingTranslationChoices" ("ReadingDocumentId", "SectionIndex", "Language", "BlockIndex", "Model")
+                SELECT {{document.DocumentId}}, 1, 'de', block.position - 1, 'ollama:translategemma:12b'
+                FROM "ReadingResources" AS resource
+                    CROSS JOIN LATERAL jsonb_array_elements(convert_from(resource."Bytes", 'UTF8')::jsonb -> 'Texts') WITH ORDINALITY AS block (value, position)
+                WHERE resource."ReadingDocumentId" = {{document.DocumentId}} AND resource."Path" = ':localtranslation/v4/translategemma:12b/de/00001';
+                """);
+
+            // No single model covers the book, yet every block has its translation: offered, listed complete and downloadable, naming both models.
+            CollectionAssert.AreEqual(new[] { "de" }, (await ReadingTests.OpenAsync(host, first)).TranslatedLanguages);
+            var listed = (await ReadBooksAsync(host)).Items.Single(book => book.DocumentId == document.DocumentId && book.Language == "de");
+            Assert.IsTrue(listed.IsComplete() && listed.Translated == listed.Sections && listed.Done.All(done => done < listed.Sections), string.Join(",", listed.Done));
+            CollectionAssert.AreEquivalent(new[] { "ollama:translategemma:4b", "ollama:translategemma:12b" }, listed.Models);
+            using var epub = await DownloadEpubAsync(host, document.DocumentId);
+            StringAssert.Contains(ReadingTests.Entry(epub, "OEBPS/s00000.xhtml"), ">DE ");
+            StringAssert.Contains(ReadingTests.Entry(epub, "OEBPS/s00001.xhtml"), ">ZWOELF ");
+            var package = ReadingTests.Entry(epub, "OEBPS/content.opf");
+            StringAssert.Contains(package, "ollama:translategemma:4b</dc:contributor>");
+            StringAssert.Contains(package, "ollama:translategemma:12b</dc:contributor>");
+
+            // A block with no server text at all keeps the book incomplete.
+            await host.Fixture.RunSqlAsync("DELETE FROM \"ReadingResources\" WHERE \"Path\" = ':localtranslation/v4/translategemma:12b/de/00001'");
+            Assert.AreEqual(0, (await ReadingTests.OpenAsync(host, first)).TranslatedLanguages.Length);
+            using var incomplete = await host.SendAsync(HttpMethod.Get, "/api/v1/reading/documents/" + document.DocumentId + "/ebook?language=de");
+            Assert.AreEqual(HttpStatusCode.NotFound, incomplete.StatusCode);
         }
 
         [TestMethod]
@@ -556,6 +688,20 @@ namespace Jularr.Backend.Tests
         private static async Task<string> DigestAsync(AuthenticationTests.Host host, long documentId, string section) =>
             Convert.ToString(await host.ScalarAsync("SELECT convert_from(\"Bytes\", 'UTF8')::jsonb ->> 'ModelDigest' FROM \"ReadingResources\" WHERE \"ReadingDocumentId\" = " + documentId
                 + " AND \"Path\" = ':localtranslation/v4/translategemma:4b/de/" + section + "'"), System.Globalization.CultureInfo.InvariantCulture)!;
+
+        private static async Task<System.IO.Compression.ZipArchive> DownloadEpubAsync(AuthenticationTests.Host host, long documentId)
+        {
+            using var response = await host.SendAsync(HttpMethod.Get, "/api/v1/reading/documents/" + documentId + "/ebook?language=de");
+            Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, await response.Content.ReadAsStringAsync());
+            return new System.IO.Compression.ZipArchive(new MemoryStream(await response.Content.ReadAsByteArrayAsync()));
+        }
+
+        private static async Task<PageResult<TranslatedBookV1>> ReadBooksAsync(AuthenticationTests.Host host)
+        {
+            using var response = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/translation/books");
+            Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, await response.Content.ReadAsStringAsync());
+            return (await response.Content.ReadFromJsonAsync<PageResult<TranslatedBookV1>>(JsonSerializerOptions.Web))!;
+        }
 
         private static async Task<BookTranslationProgressV1> ReadProgressAsync(AuthenticationTests.Host host)
         {

@@ -45,48 +45,6 @@ namespace Jularr.Backend.Data.User.Reading.V1
         public int SectionIndex { get; }
     }
 
-    public sealed class ReadingTranslationParametersV1 : BaseParameters
-    {
-        public ReadingTranslationParametersV1(long documentId, int sectionIndex, string language)
-        {
-            DocumentId = documentId;
-            SectionIndex = sectionIndex;
-            Language = language;
-        }
-
-        [DataField(typeof(ReadingFields), nameof(ReadingFields.DocumentId))]
-        public long DocumentId { get; }
-
-        [DataField(typeof(ReadingFields), nameof(ReadingFields.SectionIndex))]
-        public int SectionIndex { get; }
-
-        [DataField(typeof(TranslationFields), nameof(TranslationFields.Language))]
-        public string Language { get; }
-    }
-
-    // A section's blocks in another language: a JSON array of plain texts in block order.
-    public sealed class ReadingTranslationV1 : BaseResponse
-    {
-        public ReadingTranslationV1(string blocks)
-        {
-            Blocks = blocks;
-        }
-
-        [DataField(typeof(TranslationFields), nameof(TranslationFields.Blocks))]
-        public string Blocks { get; }
-    }
-
-    public sealed class SaveReadingTranslationDataV1 : BaseData
-    {
-        public SaveReadingTranslationDataV1(string blocks)
-        {
-            Blocks = blocks;
-        }
-
-        [DataField(typeof(TranslationFields), nameof(TranslationFields.Blocks))]
-        public string Blocks { get; }
-    }
-
     public sealed class ReadingResourceParametersV1 : BaseParameters
     {
         public ReadingResourceParametersV1(long documentId, string path)
@@ -171,7 +129,7 @@ namespace Jularr.Backend.Data.User.Reading.V1
         [DataField(typeof(Fields.Media.WorkFields), nameof(Fields.Media.WorkFields.OriginalLanguage))]
         public string? OriginalLanguage { get; }
 
-        // Languages every section has a shared translation in, so the book downloads translated.
+        // Languages every block with text has a server translation in, from the models the translated EPUB mixes (earlier versions count), so the book downloads translated.
         [DataField(typeof(TranslationFields), nameof(TranslationFields.Languages))]
         public string[] TranslatedLanguages { get; }
 

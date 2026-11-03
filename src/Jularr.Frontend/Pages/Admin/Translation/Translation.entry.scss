@@ -1,3 +1,5 @@
+@use "../../../Framework/Components/HitArea";
+
 // The progress of the book translation: one line of text over a bar, the volumes of a series folded under their title.
 [data-translation-progress] {
     display: grid;
@@ -37,4 +39,15 @@
     }
     .translation-progress__more { display: grid; gap: 14px; }
     .translation-progress__more > summary { color: var(--accent-text); font-weight: 650; }
+}
+
+// The translated works on the list kit: work, language, the models with their sections, the download.
+.translation-books {
+    --list-columns: minmax(220px, 2fr) minmax(130px, 1fr) minmax(220px, 2fr) minmax(150px, auto);
+    --list-columns-medium: minmax(180px, 2fr) minmax(120px, 1fr) minmax(180px, 2fr) minmax(150px, auto);
+    --list-columns-narrow: minmax(160px, 2fr) minmax(110px, 1fr) minmax(160px, 2fr) minmax(140px, auto);
+
+    .translation-books__models { display: grid; gap: 2px; min-width: 0; }
+    .translation-books__models .list-value { overflow-wrap: anywhere; }
+    .list-actions .button { @include HitArea.phone-hit-area(8px, 12px); }
 }

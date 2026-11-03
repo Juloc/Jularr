@@ -6012,10 +6012,6 @@
    "This PDF holds scanned pages without text; it opens as a PDF.",
    "Ce PDF contient des pages numérisées sans texte ; il s'ouvre en PDF."
   ],
-  "errors.reading_translation_incomplete": [
-   "This book is not translated into that language in every section yet.",
-   "Ce livre n'est pas encore traduit dans cette langue dans toutes ses sections."
-  ],
   "errors.reading_pdf_recognizing": [
    "The scanned pages are being turned into text; until then the book opens as a PDF.",
    "Les pages numérisées sont en cours de conversion en texte ; d'ici là, le livre s'ouvre en PDF."

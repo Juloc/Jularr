@@ -20,6 +20,9 @@ namespace Jularr.Backend.Data.Fields.Translation
         public static readonly StringField Volume = new() { MaximumLength = 16, Required = false };
         public static readonly IntField BlockCount = new() { Minimum = 0, Maximum = 1_000_000_000 };
         public static readonly IntField Count = new() { Minimum = 0, Maximum = 10_000_000 };
+        // The models that translated one book into one language, and a count for each of them.
+        public static readonly StringArrayField Models = new() { ItemMaximumLength = 80, MaximumLength = 100 };
+        public static readonly IntArrayField Counts = new() { Minimum = 0, Maximum = 10_000_000, MaximumLength = 100 };
         // An Ollama machine by its place in the Owner's order, from 0.
         public static readonly IntField Machine = new() { Minimum = 0, Maximum = 7 };
 

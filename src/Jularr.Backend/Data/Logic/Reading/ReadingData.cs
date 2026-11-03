@@ -7,6 +7,7 @@ using Jularr.Backend.Data.Fields.Playback;
 using Jularr.Backend.Data.Fields.Profile;
 using Jularr.Backend.Data.Fields.Reading;
 using Jularr.Backend.Data.Fields.Storage;
+using Jularr.Backend.Data.Fields.Translation;
 
 namespace Jularr.Backend.Data.Logic.Reading
 {
@@ -347,6 +348,26 @@ namespace Jularr.Backend.Data.Logic.Reading
         public byte[] Bytes { get; }
     }
 
+    // A block of a translated book shown in another model's text than the default, for the EPUB of that translation.
+    internal sealed class ReadingEbookChoiceData : BaseData
+    {
+        public ReadingEbookChoiceData(int sectionIndex, int blockIndex, string model)
+        {
+            SectionIndex = sectionIndex;
+            BlockIndex = blockIndex;
+            Model = model;
+        }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.SectionIndex))]
+        public int SectionIndex { get; }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.BlockIndex))]
+        public int BlockIndex { get; }
+
+        [DataField(typeof(TranslationFields), nameof(TranslationFields.Name))]
+        public string Model { get; }
+    }
+
     // A scanned PDF to recognize, as long as its file stays the same.
     internal sealed class ReadingRecognitionData : BaseData
     {
@@ -486,18 +507,6 @@ namespace Jularr.Backend.Data.Logic.Reading
 
         [DataField(typeof(ReadingFields), nameof(ReadingFields.IsMissing))]
         public bool IsFailed { get; }
-    }
-
-    // How many blocks a prepared section has.
-    internal sealed class ReadingSectionBlocksData : BaseData
-    {
-        public ReadingSectionBlocksData(int blocks)
-        {
-            Blocks = blocks;
-        }
-
-        [DataField(typeof(ReadingFields), nameof(ReadingFields.SectionCount))]
-        public int Blocks { get; }
     }
 
     internal sealed class ReadingResourceData : BaseData

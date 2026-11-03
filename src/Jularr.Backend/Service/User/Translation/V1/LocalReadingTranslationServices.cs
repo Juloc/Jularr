@@ -20,7 +20,7 @@ using Microsoft.Extensions.Options;
 
 namespace Jularr.Backend.Service.User.Translation.V1
 {
-    // Provider-specific cache: intentionally outside the canonical :translation/{language} paths.
+    // The server's translation of a section, one cache per model: the Reader, the background job and the translated EPUB read it.
     internal static class LocalReadingPaths
     {
         public const int Algorithm = 4;
@@ -29,6 +29,10 @@ namespace Jularr.Backend.Service.User.Translation.V1
         // every other provider's key is its whole model id.
         public static string ModelKey(string modelId) =>
             modelId.StartsWith(OllamaTranslationProvider.ProviderKey + ":", StringComparison.Ordinal) ? modelId[(OllamaTranslationProvider.ProviderKey.Length + 1)..] : modelId;
+
+        // The model id of a cache key: Ollama's models are keyed without their provider.
+        public static string ModelId(string key) =>
+            Jularr.Integrations.Logic.Translation.OllamaLocalModels.Supported(key) ? TranslationProviders.Id(OllamaTranslationProvider.ProviderKey, key) : key;
 
         public static string Cache(int section, string language, string modelId) =>
             ":localtranslation/v4/" + ModelKey(modelId) + "/" + language + "/" + section.ToString("D5", global::System.Globalization.CultureInfo.InvariantCulture);
@@ -52,6 +56,13 @@ namespace Jularr.Backend.Service.User.Translation.V1
                 return new LocalTranslationCache(Algorithm, sourceLanguage, value.SourceHash, digest, new string?[count],
                     earlier.Any(text => text is not null) ? new LocalStaleTranslation(value.ModelDigest, earlier) : null);
             }
+            catch (JsonException) { return null; }
+        }
+
+        // A section's cache as stored, whichever version wrote it, when it still belongs to this text of the section.
+        public static LocalTranslationCache? Parse(string json, string html, int count)
+        {
+            try { return JsonSerializer.Deserialize<LocalTranslationCache>(json) is { } value ? Parse(json, html, value.SourceLanguage, null, count) : null; }
             catch (JsonException) { return null; }
         }
 
@@ -194,8 +205,7 @@ namespace Jularr.Backend.Service.User.Translation.V1
         }
     }
 
-    // Reads are authorized against the canonical Reader section; draft data is never
-    // added to its global translated-language or ebook catalog.
+    // Reads are authorized against the canonical Reader section.
     [ServiceEndpoint("GET", "/api/v1/reading/documents/{documentId:long}/sections/{sectionIndex:int}/local-translations/{language}/{model}")]
     public sealed class ReadLocalReadingTranslationV1 : UserService<LocalReadingTranslationParametersV1>
     {

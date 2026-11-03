@@ -6012,10 +6012,6 @@
    "This PDF holds scanned pages without text; it opens as a PDF.",
    "Este PDF contiene páginas escaneadas sin texto; se abre como PDF."
   ],
-  "errors.reading_translation_incomplete": [
-   "This book is not translated into that language in every section yet.",
-   "Este libro aún no está traducido a ese idioma en todas sus secciones."
-  ],
   "errors.reading_pdf_recognizing": [
    "The scanned pages are being turned into text; until then the book opens as a PDF.",
    "Las páginas escaneadas se están convirtiendo en texto; mientras tanto, el libro se abre como PDF."

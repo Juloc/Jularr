@@ -299,6 +299,38 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task BrowserTranslationRows_UpgradeDeletesOnlyThem_AndKeepsTheServersTranslationsAndEveryOtherResource()
+        {
+            using var folder = new LibraryTests.TemporaryDirectory();
+            var cs = TestPostgres.ResolveConnectionString(nameof(BrowserTranslationRows_UpgradeDeletesOnlyThem_AndKeepsTheServersTranslationsAndEveryOtherResource));
+            var options = Backup(folder.Path, out var backups);
+            var tools = Tools(cs, FakeDump(folder.Path, true), null);
+            await new DatabaseBaseline(cs, migrations: DatabaseBaseline.Migrations.Where(migration => migration.Version < 41).ToArray()).StartAsync(CancellationToken.None);
+            await ExecuteAsync(cs,
+                """
+                INSERT INTO "ReadingDocuments" ("Id", "SourceSizeBytes", "SourceModifiedAt", "ContentHash", "AnalyzerVersion", "ReadingFormatTypeId", "Structure", "TotalCharacters")
+                VALUES (900, 10, now(), decode(repeat('ab', 32), 'hex'), 1, 1, '{}', 0), (901, 10, now(), decode(repeat('cd', 32), 'hex'), 1, 1, '{}', 0);
+                INSERT INTO "ReadingResources" ("ReadingDocumentId", "Path", "MediaType", "Bytes")
+                SELECT document."Id", item."Path", 'application/json', convert_to('[]', 'UTF8')
+                FROM (VALUES (900), (901)) AS document ("Id")
+                    CROSS JOIN (VALUES (':translation/de/00000'), (':translation/de/00001'), (':translation/fr/00000'),
+                        (':localtranslation/v4/translategemma:4b/de/00000'), (':localtranslation/v4/codex:gpt-5/de/100000'),
+                        (':section/00000'), (':page/00000'), (':smartpage/00000'), ('images/translation/cover.jpg'), ('OEBPS/:translation/x.xhtml')) AS item ("Path");
+                INSERT INTO "ReadingTranslationChoices" ("ReadingDocumentId", "SectionIndex", "Language", "BlockIndex", "Model") VALUES (900, 0, 'de', 0, 'ollama:translategemma:12b');
+                """);
+            await new DatabaseBaseline(cs, options, tools).StartAsync(CancellationToken.None);
+
+            // The Mozilla rows are gone in every book; the server's translations, the choices and every other path stay, and a backup was made first.
+            Assert.AreEqual(0L, await ScalarAsync(cs, """SELECT count(*) FROM "ReadingResources" WHERE "Path" LIKE ':translation/%'"""));
+            Assert.AreEqual(14L, await ScalarAsync(cs, """SELECT count(*) FROM "ReadingResources" """));
+            Assert.AreEqual(4L, await ScalarAsync(cs, """SELECT count(*) FROM "ReadingResources" WHERE "Path" LIKE ':localtranslation/%'"""));
+            Assert.AreEqual(2L, await ScalarAsync(cs, """SELECT count(*) FROM "ReadingResources" WHERE "Path" = 'OEBPS/:translation/x.xhtml'"""));
+            Assert.AreEqual(1L, await ScalarAsync(cs, """SELECT count(*) FROM "ReadingTranslationChoices" """));
+            Assert.AreEqual(1, Directory.GetDirectories(backups).Length);
+            Assert.AreEqual(41, await ScalarAsync(cs, """SELECT "Version" FROM "DatabaseSchemaVersions" WHERE "Name" = '0041_remove_browser_translation_rows'"""));
+        }
+
+        [TestMethod]
         public async Task LibraryTieIndexes_UpgradeKeepsTiesAndIndexesTheirMarkedRows()
         {
             using var folder = new LibraryTests.TemporaryDirectory();
