@@ -28,7 +28,7 @@ function skeletons(count: number, className: string): HTMLElement {
     holder.setAttribute('aria-hidden', 'true');
     for (let index = 0; index < count; index++) {
         const card = document.createElement('div');
-        card.className = 'discover-skeleton';
+        card.className = 'media-skeleton';
         holder.append(card);
     }
     return holder;

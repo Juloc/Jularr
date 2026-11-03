@@ -80,11 +80,11 @@ namespace Jularr.E2E.Tests
             await page.GotoAsync("/Details/9000?tab=files");
             var rows = page.Locator(".details-file-items tbody tr");
             await Assertions.Expect(rows).ToHaveCountAsync(48);
-            await page.Locator("[data-infinite-next]").ScrollIntoViewIfNeededAsync();
+            await page.Locator("[data-infinite-list]").ScrollIntoViewIfNeededAsync();
             await Assertions.Expect(rows).ToHaveCountAsync(96);
-            await page.Locator("[data-infinite-next]").ScrollIntoViewIfNeededAsync();
+            await page.Locator("[data-infinite-list]").ScrollIntoViewIfNeededAsync();
             await Assertions.Expect(rows).ToHaveCountAsync(144);
-            await page.Locator("[data-infinite-next]").ScrollIntoViewIfNeededAsync();
+            await page.Locator("[data-infinite-list]").ScrollIntoViewIfNeededAsync();
             await Assertions.Expect(page.Locator("[data-infinite-next]")).ToHaveCountAsync(0);
             await Assertions.Expect(page.Locator(".details-file-items h3").Filter(new() { HasText = "First arc" }).First).ToBeVisibleAsync();
             Assert.IsTrue(await page.Locator(".details-file-items h3").Filter(new() { HasText = "Second arc" }).CountAsync() > 0);

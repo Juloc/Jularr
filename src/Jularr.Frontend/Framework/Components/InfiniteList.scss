@@ -1,8 +1,17 @@
+// The row under an endless list keeps its height (that of its button), so nothing shifts when the button gives way to a retry or the end.
 .infinite-list {
     display: flex;
     flex-wrap: wrap;
     justify-content: center;
     align-items: center;
     gap: 12px;
+    min-height: calc(var(--control-height) + 48px);
     padding: 24px 0;
+}
+
+// While pages load by themselves the row waits unseen in its place (an unseen row also does not count as moving when pages arrive above it);
+// its status still shows and is read out. The button shows as the retry after a failure, and always without script.
+@media (scripting: enabled) {
+    .infinite-list:not([data-infinite-manual]) { visibility: hidden; }
+    .infinite-list [data-infinite-status] { visibility: visible; }
 }

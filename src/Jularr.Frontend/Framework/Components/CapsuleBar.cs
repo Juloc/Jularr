@@ -13,14 +13,15 @@ namespace Jularr.Frontend.Framework
     // One row of capsules: an all capsule, then a capsule per group whose master link selects the group and whose items add or remove one entry.
     // Links carry the whole selection, so the bar works without script; the tools sit at the end.
     public sealed class CapsuleBar(FrontendAssets assets, string ariaLabelKey, string allLabelKey, string allHref, bool allSelected, IReadOnlyList<CapsuleGroup> groups,
-        IReadOnlyList<IUiComponent>? tools = null) : IUiComponent
+        IReadOnlyList<IUiComponent>? tools = null, bool hasAll = true) : IUiComponent
     {
         public void WriteTo(TextWriter writer, HtmlEncoder encoder, UiText texts)
         {
             var all = new A(new Icon("grid", assets, 16), new Span(new Text(allLabelKey))).Class(allSelected ? "capsule-bar__all capsule-bar__all--on" : "capsule-bar__all")
                 .Attribute("href", allHref).Attribute("aria-label", texts[allLabelKey]);
             if (allSelected) all.Attribute("aria-current", "true");
-            var capsules = new List<IUiComponent> { all };
+            var capsules = new List<IUiComponent>();
+            if (hasAll) capsules.Add(all);
 
             foreach (var group in groups)
             {
@@ -46,7 +47,7 @@ namespace Jularr.Frontend.Framework
 
             var bar = new List<IUiComponent> { new Nav([.. capsules]).Class("capsule-bar__areas").Attribute("aria-label", texts[ariaLabelKey]) };
             if (tools is { Count: > 0 }) bar.Add(new Div([.. tools]).Class("capsule-bar__tools"));
-            new Div(new Div([.. bar]).Class("capsule-bar__row")).Class("capsule-bar").WriteTo(writer, encoder, texts);
+            new Div(new Div([.. bar]).Class("capsule-bar__row")).Class(hasAll ? "capsule-bar" : "capsule-bar capsule-bar--single").WriteTo(writer, encoder, texts);
         }
     }
 }

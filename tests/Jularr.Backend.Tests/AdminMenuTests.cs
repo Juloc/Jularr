@@ -18,12 +18,12 @@ namespace Jularr.Backend.Tests
             var html = await GetAsync(host, "/Admin/Dashboard");
             var entries = Entries(html);
             foreach (var address in new[] { "/Admin/Dashboard", "/Admin/Activity", "/Admin/Wanted", "/Admin/Jobs", "/Admin/Works", "/Admin/Library", "/Admin/Downloads", "/Admin/Downloads/Servers", "/Admin/Downloads/Speed",
-                "/Admin/Downloads/Clients", "/Admin/Acquisition", "/Admin/Acquisition/Sources", "/Admin/Providers", "/Admin/Storage", "/Admin/Accounts", "/Admin/Instance", "/Admin/Localization", "/Admin/System", "/Admin/Backup", "/Admin/Ai" })
+                "/Admin/Downloads/Clients", "/Admin/Acquisition", "/Admin/Acquisition/Profiles?tab=profiles", "/Admin/Acquisition/Sources", "/Admin/Providers", "/Admin/Storage", "/Admin/Accounts", "/Admin/Instance", "/Admin/Localization", "/Admin/System", "/Admin/Backup", "/Admin/Ai" })
             {
                 CollectionAssert.Contains(entries, address);
             }
 
-            Assert.AreEqual(20, entries.Count);
+            Assert.AreEqual(21, entries.Count);
             Assert.AreEqual(7, Regex.Matches(html, "<section class=\"menu-group").Count);
             StringAssert.Contains(html, "class=\"menu-entry is-active\" href=\"/Admin/Dashboard\"");
 
@@ -35,15 +35,15 @@ namespace Jularr.Backend.Tests
                 StringAssert.Contains(page, "class=\"menu-entry is-active\" href=\"" + address + "\"", address);
             }
 
-            var indexers = Row(await GetAsync(host, "/Admin/Acquisition"));
-            StringAssert.Contains(indexers, "href=\"/Admin/Acquisition/Profiles?tab=profiles\"");
-            Assert.IsFalse(indexers.Contains("href=\"/Admin/Acquisition/Downloads\"", StringComparison.Ordinal));
-            Assert.IsFalse(indexers.Contains("href=\"/Admin/Downloads\"", StringComparison.Ordinal));
+            // The quality profiles are an entry of their own: their panes are its chips.
+            var rules = Row(await GetAsync(host, "/Admin/Acquisition/Profiles"));
+            foreach (var pane in new[] { "formats", "sizes", "release", "groups", "tags" }) StringAssert.Contains(rules, "tab=" + pane);
+            Assert.IsFalse(rules.Contains("href=\"/Admin/Acquisition\"", StringComparison.Ordinal));
 
             // A module that is off takes its entries and chips with it.
             await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = FALSE WHERE \"Key\" IN ('Acquisition', 'Requests')");
             entries = Entries(await GetAsync(host, "/Admin/Dashboard"));
-            foreach (var address in new[] { "/Admin/Downloads", "/Admin/Downloads/Servers", "/Admin/Downloads/Speed", "/Admin/Downloads/Clients", "/Admin/Acquisition", "/Admin/Acquisition/Sources", "/Admin/Wanted" })
+            foreach (var address in new[] { "/Admin/Downloads", "/Admin/Downloads/Servers", "/Admin/Downloads/Speed", "/Admin/Downloads/Clients", "/Admin/Acquisition", "/Admin/Acquisition/Profiles?tab=profiles", "/Admin/Acquisition/Sources", "/Admin/Wanted" })
             {
                 CollectionAssert.DoesNotContain(entries, address);
             }
