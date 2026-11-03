@@ -30,7 +30,7 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
         internal static readonly (MediaType Type, MediaSubtype? Subtype)[] Kinds =
         [
             (MediaType.Movie, null), (MediaType.Series, null), (MediaType.Book, null),
-            (MediaType.Series, MediaSubtype.Anime), (MediaType.Book, MediaSubtype.Manga), (MediaType.Book, MediaSubtype.LightNovel),
+            (MediaType.Series, MediaSubtype.Anime), (MediaType.Movie, MediaSubtype.Anime), (MediaType.Book, MediaSubtype.Manga), (MediaType.Book, MediaSubtype.LightNovel),
             (MediaType.Music, null), (MediaType.Game, null)
         ];
 
@@ -92,7 +92,7 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
             if (Tab == DownloadPages.Profiles)
             {
                 page.Content.Add(ProfileFigures());
-                if (Subtype == MediaSubtype.Anime) page.Content.Add(new P(new ValueText(AnimeDefaultNote())).Class("profiles-note").Attribute("role", "status"));
+                if (Subtype == MediaSubtype.Anime) page.Content.Add(AnimeDefaultNote());
             }
 
             switch (Tab)
@@ -119,16 +119,21 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
             }, isSingle: true);
         }
 
-        // Which profile Anime follows: its own default, else the series default.
-        private string AnimeDefaultNote()
+        // Which profile Anime series and Anime films follow: their own default, else the default of their type.
+        private IUiComponent AnimeDefaultNote() => new Div([.. new[] { MediaType.Series, MediaType.Movie }.Select(type =>
         {
-            var own = _profiles.FirstOrDefault(item => item.IsDefault && item.MediaSubtypeId == MediaSubtype.Anime);
-            if (own is not null) return string.Format(CultureInfo.CurrentCulture, texts["profile.anime.own"], own.Name);
-            return string.Format(CultureInfo.CurrentCulture, texts["profile.anime.fallback"], _profiles.FirstOrDefault(item => item.IsDefault && item.MediaSubtypeId is null)?.Name ?? "");
-        }
+            var label = texts[MediaTypeLabel.Key(type, null)];
+            var own = _profiles.FirstOrDefault(item => item.IsDefault && item.MediaTypeId == type && item.MediaSubtypeId == MediaSubtype.Anime);
+            var shown = own is not null ? string.Format(CultureInfo.CurrentCulture, texts["profile.anime.own"], label, own.Name)
+                : string.Format(CultureInfo.CurrentCulture, texts["profile.anime.fallback"], label, _profiles.FirstOrDefault(item => item.IsDefault && item.MediaTypeId == type && item.MediaSubtypeId is null)?.Name ?? "");
+            return (IUiComponent)new P(new ValueText(shown));
+        })]).Class("profiles-note").Attribute("role", "status");
 
         // The profiles of the chosen type: those without subtype, or those of the chosen subtype.
         private IEnumerable<AcquisitionProfileDetailsV1> Shown => _profiles.Where(item => item.MediaSubtypeId == Subtype);
+
+        // Anime has profiles of series and of films together.
+        private bool IsAnimeList => Tab == DownloadPages.Profiles && Subtype == MediaSubtype.Anime;
 
         private IUiComponent ProfileFigures() => new KpiTiles(
             new KpiTile("profile.kpi.total", Count(Shown.Count()), Glyph("layers"), UiTone.Accent),
@@ -149,7 +154,7 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
                 var qualities = string.Join(", ", item.AllowedQualities.Select(quality => QualityName(item, quality)));
                 var editor = Home(Request) + "/" + Number(item.Id);
                 var identity = new ListIdentity(new IconTile(Glyph("layers", 18), UiTone.Accent), new A(new ValueText(item.Name)).Class("list-identity__title").Attribute("href", editor),
-                    new Truncated(qualities));
+                    new Truncated(IsAnimeList ? texts[MediaTypeLabel.Key(item.MediaTypeId, null)] + " · " + qualities : qualities));
                 var cutoff = item.UpgradeAllowed && item.UpgradeCutoffQuality is { } stop ? new Span(new ValueText(QualityName(item, stop))).Class("list-value") : new Span(new Text("profile.noCutoff")).Class("list-value list-value--dim");
                 var scored = item.FormatScores.Count(score => score.Score != 0);
                 var state = item.IsDefault ? new StateChip(new Text("profile.default"), UiTone.Success, Glyph("check", 14))
@@ -162,7 +167,7 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
             page.Content.Add(new ListPanel("admin.profiles.title", columns, rows, empty).Modifier("profiles-list"));
 
             // One add action for the chosen type or subtype.
-            var actions = Kinds.Where(kind => kind.Type == MediaTypeId && kind.Subtype == Subtype).Select(kind => (IUiComponent)new A(Glyph("plus", 16), new Span(new Text("profile.add." + (kind.Subtype?.ToString() ?? kind.Type.ToString()))).Class("action-dock__text"))
+            var actions = Kinds.Where(kind => (IsAnimeList || kind.Type == MediaTypeId) && kind.Subtype == Subtype).Select(kind => (IUiComponent)new A(Glyph("plus", 16), new Span(new Text("profile.add." + (kind.Subtype == MediaSubtype.Anime ? "Anime" + kind.Type : kind.Subtype?.ToString() ?? kind.Type.ToString()))).Class("action-dock__text"))
                 .Class("button").Attribute("href", Home(Request) + "/New?type=" + kind.Type + (kind.Subtype is { } subtype ? "&subtype=" + subtype : ""))).ToList();
             page.Content.Add(new ActionDock(assets, "arr.actions", actions));
         }
@@ -208,7 +213,7 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
             switch (Tab)
             {
                 case DownloadPages.Profiles:
-                    _profiles = await profiles.ExecuteAsync<BaseDataList<AcquisitionProfileDetailsV1>>(new ReadAcquisitionProfilesParametersV1(mediaTypeId: MediaTypeId), cancellation);
+                    _profiles = await profiles.ExecuteAsync<BaseDataList<AcquisitionProfileDetailsV1>>(new ReadAcquisitionProfilesParametersV1(mediaTypeId: IsAnimeList ? null : MediaTypeId), cancellation);
                     break;
                 case DownloadPages.Formats:
                     _formats = await formats.ExecuteAsync<PageResult<CustomFormatDetailsV1>>(new ReadCustomFormatsParametersV1(MediaTypeId, PageNumber), cancellation);
