@@ -1930,7 +1930,7 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
-        public async Task Profiles_AnimeDefault_FallsBackToSeries_AndLeavesExistingWantedItemsOnTheirProfile()
+        public async Task Profiles_AnimeDefault_FallsBackToItsType_AndLeavesExistingWantedItemsOnTheirProfile()
         {
             using var storage = new TemporaryDirectory();
             using var downloads = new TemporaryDirectory();
@@ -1938,9 +1938,9 @@ namespace Jularr.Backend.Tests
             const string Profiles = "/api/v1/admin/acquisition/profiles";
             var seriesDefault = (await ReadProfilesAsync(host)).Single(profile => profile.MediaTypeId == MediaType.Series && profile.IsDefault).Id;
 
-            async Task<long> WantedAsync(string title, MediaSubtype? subtype)
+            async Task<long> WantedAsync(string title, MediaSubtype? subtype, MediaType type = MediaType.Series)
             {
-                using var created = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works", new CreateWorkDataV1(MediaType.Series, title, null, subtype));
+                using var created = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works", new CreateWorkDataV1(type, title, null, subtype));
                 var workId = (await created.Content.ReadFromJsonAsync<WorkDetailsV1>())!.Id;
                 return (long)(await host.ScalarAsync("INSERT INTO \"WantedItems\" (\"WorkId\") VALUES (" + workId + ") RETURNING \"Id\""))!;
             }
@@ -1952,10 +1952,10 @@ namespace Jularr.Backend.Tests
                 return (await new LogicContext(sql).ReadWantedTargetAsync(wantedId, default)).AcquisitionProfileId;
             }
 
-            async Task<long> CreateDefaultAsync(string name)
+            async Task<long> CreateDefaultAsync(string name, MediaType type = MediaType.Series)
             {
                 using var created = await host.SendAsync(HttpMethod.Post, Profiles,
-                    new SaveAcquisitionProfileDataV1(name, MediaType.Series, true, ["WEBDL-1080p"], false, null, null, null, mediaSubtypeId: MediaSubtype.Anime));
+                    new SaveAcquisitionProfileDataV1(name, type, true, ["WEBDL-1080p"], false, null, null, null, mediaSubtypeId: MediaSubtype.Anime));
                 Assert.AreEqual(HttpStatusCode.OK, created.StatusCode, await created.Content.ReadAsStringAsync());
                 return (await created.Content.ReadFromJsonAsync<CreateAcquisitionProfileResultV1>())!.Id;
             }
@@ -1982,6 +1982,16 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(replacing, await ResolvedAsync(await WantedAsync("Third Anime", MediaSubtype.Anime)));
             Assert.AreEqual(seriesDefault, await ResolvedAsync(firstAnime));
             Assert.IsFalse((await ReadProfilesAsync(host)).Single(profile => profile.Id == animeDefault).IsDefault);
+
+            // Anime films have their own default beside the one of Anime series, with the same fallback and the same bookkeeping.
+            var movieDefault = (await ReadProfilesAsync(host)).Single(profile => profile.MediaTypeId == MediaType.Movie && profile.IsDefault && profile.MediaSubtypeId is null).Id;
+            var firstFilm = await WantedAsync("First Anime Film", MediaSubtype.Anime, MediaType.Movie);
+            Assert.AreEqual(movieDefault, await ResolvedAsync(firstFilm));
+            var filmDefault = await CreateDefaultAsync("Anime Film", MediaType.Movie);
+            Assert.AreEqual(movieDefault, await ResolvedAsync(firstFilm));
+            Assert.AreEqual(filmDefault, await ResolvedAsync(await WantedAsync("Second Anime Film", MediaSubtype.Anime, MediaType.Movie)));
+            Assert.AreEqual(replacing, await ResolvedAsync(await WantedAsync("Fourth Anime", MediaSubtype.Anime)));
+            Assert.IsTrue((await ReadProfilesAsync(host)).Single(profile => profile.Id == replacing).IsDefault);
         }
 
         [TestMethod]
@@ -2847,33 +2857,118 @@ namespace Jularr.Backend.Tests
             var summary = (await response.Content.ReadFromJsonAsync<ActivitySummaryV1>())!;
             Assert.AreEqual((2, 50L, 2, 1), (summary.ActiveCount, summary.BytesPerSecond, summary.ImportCount, summary.ErrorCount));
 
-            // The page: live tiles, one filter row, the failed entry with its retry, and the panel of one entry.
-            using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Activity?Filter=Errors");
+            // The page: the type bar, the entry's views in one row, the four groups with what needs a person first, the failed entry with its retry, and the panel of one entry.
+            using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Activity");
             var html = await page.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
-            foreach (var tile in new[] { "active", "speed", "import", "errors" })
-            {
-                StringAssert.Contains(html, "data-live=\"queue\" data-live-text=\"" + tile + "\"");
-            }
-
-            StringAssert.Contains(html, "href=\"/Admin/Activity?Filter=Waiting\"");
-            StringAssert.Contains(html, "handler=Retry&amp;operationId=5");
-            StringAssert.Contains(html, "href=\"/Admin/Activity?Filter=Errors&amp;operation=5\"");
-            Assert.AreEqual(1, System.Text.RegularExpressions.Regex.Matches(html, "navigation-tabs\"|navigation-tabs ").Count, "One row of filters only.");
+            StringAssert.Contains(html, "data-live=\"queue\" data-live-text=\"speed\"");
+            StringAssert.Contains(html, "class=\"capsule-bar");
+            var groups = new[] { "Help", "Import", "Running", "Queued" };
+            var positions = groups.Select(group => html.IndexOf("id=\"activity-group-" + group + "\"", StringComparison.Ordinal)).ToArray();
+            CollectionAssert.AreEqual(positions.Order().ToArray(), positions, "What needs the owner is first: help, import, running, queued.");
+            Assert.IsTrue(positions.All(position => position > 0), "All four groups are there.");
+            string Group(string name) => html[html.IndexOf("id=\"activity-group-" + name + "\"", StringComparison.Ordinal)..];
+            StringAssert.Contains(Group("Help")[..Group("Help").IndexOf("id=\"activity-group-Import\"", StringComparison.Ordinal)], "handler=Retry&amp;operationId=5");
+            StringAssert.Contains(Group("Import")[..Group("Import").IndexOf("id=\"activity-group-Running\"", StringComparison.Ordinal)], "Release 4");
+            StringAssert.Contains(Group("Import")[..Group("Import").IndexOf("id=\"activity-group-Running\"", StringComparison.Ordinal)], "Release 3");
+            StringAssert.Contains(Group("Running")[..Group("Running").IndexOf("id=\"activity-group-Queued\"", StringComparison.Ordinal)], "Release 1");
+            StringAssert.Contains(Group("Queued"), "Release 2");
+            StringAssert.Contains(html, "href=\"/Admin/Activity?operation=5\"");
+            StringAssert.Contains(html, "href=\"/Admin/History\"");
+            Assert.AreEqual(1, System.Text.RegularExpressions.Regex.Matches(html, "navigation-tabs\"|navigation-tabs ").Count, "One row of views only.");
             StringAssert.Contains(html, "class=\"view-switch\"");
-            StringAssert.Contains(html, "href=\"/Admin/Activity?Filter=History\"");
             StringAssert.Contains(html, "href=\"/Admin/Activity?files=true\"");
             using var filesView = await host.SendAsync(HttpMethod.Get, "/Admin/Activity?files=true");
             var filesViewHtml = await filesView.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, filesView.StatusCode, filesViewHtml);
             StringAssert.Contains(filesViewHtml, "class=\"view-switch\"");
-            Assert.AreEqual(0, System.Text.RegularExpressions.Regex.Matches(filesViewHtml, "navigation-tabs\"|navigation-tabs ").Count,
-                "Files reuses the same toolbar without queue-only filter chips.");
             Assert.IsFalse(System.Text.RegularExpressions.Regex.IsMatch(html, "<dialog[^>]* open=\"open\""), "Only the entry the address names is open.");
-            using var panel = await host.SendAsync(HttpMethod.Get, "/Admin/Activity?Filter=Errors&operation=5");
+            using var panel = await host.SendAsync(HttpMethod.Get, "/Admin/Activity?operation=5");
             var panelHtml = await panel.Content.ReadAsStringAsync();
             StringAssert.Matches(panelHtml, new System.Text.RegularExpressions.Regex("<dialog[^>]* open=\"open\""));
             StringAssert.Contains(panelHtml, "handler=Dismiss&amp;operationId=5");
+
+            // An entry that says why it failed has no bar, as the stream sets it: a bar here would vanish with the first snapshot and the rows below would jump.
+            await host.Fixture.RunSqlAsync("UPDATE \"Operations\" SET \"ProgressPercent\" = 30 WHERE \"Id\" = 5");
+            using var withProgress = await host.SendAsync(HttpMethod.Get, "/Admin/Activity");
+            var progressHtml = await withProgress.Content.ReadAsStringAsync();
+            var helpGroup = progressHtml[progressHtml.IndexOf("id=\"activity-group-Help\"", StringComparison.Ordinal)..progressHtml.IndexOf("id=\"activity-group-Import\"", StringComparison.Ordinal)];
+            Assert.IsFalse(System.Text.RegularExpressions.Regex.IsMatch(helpGroup, "<progress(?![^>]*hidden)[^>]*>"), "A failed entry shows no bar.");
+
+            // The type bar narrows the queue: the films' downloads stay for movies, none is left for books, and the choice stays in the views' addresses.
+            using var movies = await host.SendAsync(HttpMethod.Get, "/Admin/Activity?type=movies");
+            var moviesHtml = await movies.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, movies.StatusCode, moviesHtml);
+            StringAssert.Contains(moviesHtml, "Release 1");
+            StringAssert.Contains(moviesHtml, "href=\"/Admin/History?type=movies\"");
+            using var books = await host.SendAsync(HttpMethod.Get, "/Admin/Activity?type=books");
+            var booksHtml = await books.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, books.StatusCode, booksHtml);
+            Assert.IsFalse(booksHtml.Contains("Release 1", StringComparison.Ordinal));
+            Assert.IsFalse(booksHtml.Contains("id=\"activity-group-", StringComparison.Ordinal));
+        }
+
+        // The Activity entry's other views follow the type bar too: History lists the events of the chosen types, Blocked the blocked releases (by hand or by a fault) with the button that allows one again.
+        [TestMethod]
+        public async Task ActivityViews_HistoryAndBlocked_FollowTheTypeBar_AndBlockedUnblocks()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, new FakeUsenet(), razor: true);
+            await host.Fixture.RunSqlAsync("""
+                UPDATE "InstanceModules" SET "IsEnabled" = TRUE WHERE "Key" IN ('Acquisition', 'Requests');
+                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle") VALUES (901, 1, 'Blocked Film'), (902, 3, 'Blocked Book');
+                INSERT INTO "WantedItems" ("Id", "WorkId") VALUES (901, 901), (902, 902);
+                INSERT INTO "AcquisitionReleases" ("Id", "WantedItemId", "ReleaseIdentity", "Title", "AcquisitionReleaseStatusTypeId", "ReasonKey") VALUES
+                    (901, 901, 'blocked-film', 'Film Release Blocked', 4, NULL),
+                    (902, 902, 'blocked-book', 'Book Release Blocked', 4, NULL),
+                    (903, 901, 'faulty-film', 'Film Release Faulty', 3, 'download_failed'),
+                    (904, 901, 'allowed-film', 'Film Release Allowed', 5, NULL);
+                INSERT INTO "ActivityEvents" ("ActivityEventTypeId", "WorkId", "WorkTitle") VALUES (1, 901, 'Blocked Film'), (1, 902, 'Blocked Book');
+                """);
+
+            async Task<string> GetAsync(string address)
+            {
+                using var response = await host.SendAsync(HttpMethod.Get, address);
+                var html = await response.Content.ReadAsStringAsync();
+                Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, html);
+                return html;
+            }
+
+            // Blocked: every blocked release of every target, none of the allowed ones; the type bar narrows it and the views keep the choice.
+            var blocked = await GetAsync("/Admin/Activity/Blocked");
+            foreach (var title in new[] { "Film Release Blocked", "Book Release Blocked", "Film Release Faulty" })
+            {
+                StringAssert.Contains(blocked, title);
+            }
+
+            Assert.IsFalse(blocked.Contains("Film Release Allowed", StringComparison.Ordinal));
+            StringAssert.Contains(blocked, "class=\"capsule-bar");
+            StringAssert.Contains(blocked, "handler=Unblock&amp;wantedItemId=901&amp;acquisitionReleaseId=901");
+            var books = await GetAsync("/Admin/Activity/Blocked?type=books");
+            StringAssert.Contains(books, "Book Release Blocked");
+            Assert.IsFalse(books.Contains("Film Release", StringComparison.Ordinal));
+            StringAssert.Contains(books, "href=\"/Admin/History?type=books\"");
+            StringAssert.Contains(books, "href=\"/Admin/Activity?type=books\"");
+
+            // Unblocking allows the release again, so it leaves the list.
+            using (var unblocked = await host.SendAsync(HttpMethod.Post, "/Admin/Activity/Blocked?handler=Unblock&wantedItemId=901&acquisitionReleaseId=901",
+                new Dictionary<string, string> { ["__RequestVerificationToken"] = LibraryTests.Token(blocked) }))
+            {
+                Assert.AreEqual(HttpStatusCode.Redirect, unblocked.StatusCode, await unblocked.Content.ReadAsStringAsync());
+            }
+
+            Assert.AreEqual((short)5, await host.ScalarAsync("SELECT \"AcquisitionReleaseStatusTypeId\" FROM \"AcquisitionReleases\" WHERE \"Id\" = 901"));
+            Assert.IsFalse((await GetAsync("/Admin/Activity/Blocked")).Contains("Film Release Blocked", StringComparison.Ordinal));
+
+            // History: the events of the chosen types only, and the chip counts follow.
+            var history = await GetAsync("/Admin/History?type=movies");
+            StringAssert.Contains(history, "Blocked Film");
+            Assert.IsFalse(history.Contains("Blocked Book", StringComparison.Ordinal));
+            StringAssert.Contains(history, "class=\"capsule-bar");
+            var everything = await GetAsync("/Admin/History");
+            StringAssert.Contains(everything, "Blocked Film");
+            StringAssert.Contains(everything, "Blocked Book");
         }
 
         // Priority only changes which targets are searched first, never when; the bulk services and the page set it for chosen rows.
@@ -3563,6 +3658,218 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.ServiceUnavailable, limited.StatusCode);
             StringAssert.Contains(await limited.Content.ReadAsStringAsync(), "acquisition_query_limit_reached");
         }
+
+        // The feed (RSS) of an indexer only triggers: a new release about a wanted title makes it due, the search and its selection do the rest.
+        [TestMethod]
+        public async Task Feed_NewReleaseOfAWantedMovie_MakesItDue_AndAReleaseSeenBeforeIsNotReprocessedAfterARestart()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            var usenet = new FakeUsenet();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, usenet);
+            var wantedId = await CreateWantedMovieAsync(host);
+            await host.Fixture.RunSqlAsync("UPDATE \"WantedItems\" SET \"NextSearchAt\" = now() + interval '7 days'");
+            async Task<bool> IsDueAsync() => (bool)(await host.ScalarAsync("SELECT \"NextSearchAt\" <= now() FROM \"WantedItems\" WHERE \"Id\" = " + wantedId))!;
+
+            // The first read of an indexer only learns what is there: its releases are seen, nothing is searched.
+            usenet.Results = FeedOf(("Example.Movie.2020.1080p.WEB-DL.H264-OLD", "old"));
+            await RunAsync<SyncFeedsV1>(host);
+            Assert.IsFalse(await IsDueAsync());
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"FeedReleases\""));
+            Assert.AreEqual(1, await host.ScalarAsync("SELECT \"QueryCount\" FROM \"AcquisitionConnections\" WHERE \"Name\" = 'Indexer'"));
+
+            // A new release of another title leaves the target alone; one of its own makes it due, with the reason.
+            usenet.Results = FeedOf(("Example.Movie.2020.1080p.WEB-DL.H264-OLD", "old"), ("Unrelated.Film.2021.1080p.WEB-DL.H264-GRP", "other"));
+            await RunAsync<SyncFeedsV1>(host);
+            Assert.IsFalse(await IsDueAsync());
+            usenet.Results = FeedOf(("Example.Movie.2020.1080p.WEB-DL.H264-OLD", "old"), ("Unrelated.Film.2021.1080p.WEB-DL.H264-GRP", "other"), (Feature, "feature"));
+            await RunAsync<SyncFeedsV1>(host);
+            Assert.IsTrue(await IsDueAsync());
+            Assert.AreEqual("feed_release", await host.ScalarAsync("SELECT \"LastOutcomeKey\" FROM \"WantedItems\" WHERE \"Id\" = " + wantedId));
+            Assert.AreEqual(3L, await host.ScalarAsync("SELECT count(*) FROM \"FeedReleases\""));
+
+            // A restart does not reprocess what was seen: the same feed leaves the target as it is.
+            await host.Fixture.RunSqlAsync("UPDATE \"WantedItems\" SET \"NextSearchAt\" = now() + interval '7 days', \"LastOutcomeKey\" = NULL");
+            await RunAsync<SyncFeedsV1>(host);
+            Assert.IsFalse(await IsDueAsync());
+            Assert.AreEqual(3L, await host.ScalarAsync("SELECT count(*) FROM \"FeedReleases\""));
+
+            // Seen releases leave after 14 days; the feed is not searched for them again.
+            await host.Fixture.RunSqlAsync("UPDATE \"FeedReleases\" SET \"SeenAt\" = now() - interval '15 days' WHERE \"ReleaseKey\" = 'old'");
+            usenet.Results = FeedOf(("Unrelated.Film.2021.1080p.WEB-DL.H264-GRP", "other"), (Feature, "feature"));
+            await RunAsync<SyncFeedsV1>(host);
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"FeedReleases\" WHERE \"ReleaseKey\" = 'old'"));
+
+            // The search takes the release the feed pointed to.
+            await host.Fixture.RunSqlAsync("UPDATE \"WantedItems\" SET \"NextSearchAt\" = now()");
+            usenet.Results = null;
+            await RunAsync<SearchDueWantedV1>(host);
+            Assert.AreEqual(1, usenet.Grabbed.Count);
+        }
+
+        // A feed read counts as a request: limits and backoff apply, manual-only indexers and indexers of other media are left out.
+        [TestMethod]
+        public async Task Feed_ReadsLikeAnAutomaticSearch_ManualOnlyAndOtherMediaAreLeftOut_FailureBacksOff_AndTheLimitHolds()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            var usenet = new FakeUsenet();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, usenet);
+            await host.Fixture.RunSqlAsync("UPDATE \"AcquisitionConnections\" SET \"IsEnabled\" = FALSE WHERE \"Name\" = 'Indexer'");
+            foreach (var data in new[]
+            {
+                new SaveAcquisitionConnectionDataV1("Broken", AcquisitionConnectionType.Newznab, "https://broken.example.test/", FakeUsenet.IndexerKey, true, 20, [], null, null, null),
+                new SaveAcquisitionConnectionDataV1("Books", AcquisitionConnectionType.Newznab, "https://books.example.test/", FakeUsenet.IndexerKey, true, 20, [7020], null, null, null,
+                    mediaTypeIds: [(int)MediaType.Book]),
+                new SaveAcquisitionConnectionDataV1("Manual", AcquisitionConnectionType.Newznab, "https://manual.example.test/", FakeUsenet.IndexerKey, true, 20, [], null, null, null,
+                    searchesAutomatically: false),
+                new SaveAcquisitionConnectionDataV1("Open", AcquisitionConnectionType.Newznab, "https://open.example.test/", null, true, 20, [], null, null, null, queryLimit: 1)
+            })
+            {
+                using var created = await host.SendAsync(HttpMethod.Post, Connections, data);
+                Assert.AreEqual(HttpStatusCode.OK, created.StatusCode, await created.Content.ReadAsStringAsync());
+            }
+
+            int Asked(string name)
+            {
+                lock (usenet.IndexerHosts) return usenet.IndexerHosts.Count(asked => asked == name + ".example.test");
+            }
+
+            async Task<object?> ColumnAsync(string name, string column) =>
+                await host.ScalarAsync($"SELECT \"{column}\" FROM \"AcquisitionConnections\" WHERE \"Name\" = '{name}'");
+
+            usenet.Results = FeedOf((Feature, "feature"));
+            await RunAsync<SyncFeedsV1>(host);
+            Assert.AreEqual(0, Asked("manual"));
+            Assert.AreEqual(0, Asked("books"));
+            Assert.AreEqual(1, Asked("open"));
+            Assert.AreEqual(1, Asked("broken"));
+
+            // The failing indexer backs off and is not asked again; the one at its daily limit is not either.
+            Assert.AreEqual(1, await ColumnAsync("Broken", "FailureCount"));
+            Assert.AreEqual(true, await host.ScalarAsync("SELECT \"RetryAt\" > now() + interval '50 seconds' FROM \"AcquisitionConnections\" WHERE \"Name\" = 'Broken'"));
+            Assert.AreEqual(1, await ColumnAsync("Open", "QueryCount"));
+            await RunAsync<SyncFeedsV1>(host);
+            Assert.AreEqual(1, Asked("broken"));
+            Assert.AreEqual(1, Asked("open"));
+            Assert.AreEqual(0, await ColumnAsync("Books", "QueryCount"));
+        }
+
+        // A target is searched after a week when the indexers have feeds, and as before when none has one.
+        [TestMethod]
+        public async Task Search_NothingFound_WaitsAWeekWithAFeed_AndTheEarlierRhythmWithout()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            var usenet = new FakeUsenet { Results = "<rss><channel></channel></rss>" };
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, usenet);
+            var wantedId = await CreateWantedMovieAsync(host);
+            await RunAsync<SearchDueWantedV1>(host);
+            Assert.AreEqual(true, await host.ScalarAsync("SELECT \"NextSearchAt\" BETWEEN now() + interval '6 days 23 hours' AND now() + interval '7 days 1 hour' FROM \"WantedItems\" WHERE \"Id\" = " + wantedId));
+
+            // Without an indexer that has a feed (manual-only) the earlier rhythm stays, so the title is not left without a search.
+            await host.Fixture.RunSqlAsync("UPDATE \"AcquisitionConnections\" SET \"SearchesAutomatically\" = TRUE, \"MediaTypeIds\" = '{3}' WHERE \"Name\" = 'Indexer'");
+            await host.Fixture.RunSqlAsync("UPDATE \"WantedItems\" SET \"NextSearchAt\" = NULL");
+            await RunAsync<SearchDueWantedV1>(host);
+            Assert.AreEqual(true, await host.ScalarAsync("SELECT \"NextSearchAt\" IS NULL OR \"NextSearchAt\" < now() + interval '1 day' FROM \"WantedItems\" WHERE \"Id\" = " + wantedId));
+        }
+
+        [TestMethod]
+        public void Backoff_MoviesAndSeriesWithAFeedWaitAWeek_BooksOneSearchADaySpreadOverTheDay_OthersKeepTheEarlierRhythm()
+        {
+            var feed = Indexer(1, AcquisitionConnectionType.Newznab, []);
+            var manualOnly = Indexer(2, AcquisitionConnectionType.Newznab, [], searchesAutomatically: false);
+            var books = Indexer(3, AcquisitionConnectionType.Newznab, [(int)MediaType.Book]);
+            Assert.AreEqual(TimeSpan.FromDays(7), SearchDueWantedV1.Backoff(MediaType.Movie, 10, 0, [feed]));
+            Assert.AreEqual(TimeSpan.FromDays(7), SearchDueWantedV1.Backoff(MediaType.Series, 10, 5, [manualOnly, feed]));
+
+            // No feed: movies and series are not left without a search.
+            Assert.AreEqual(TimeSpan.FromHours(6), SearchDueWantedV1.Backoff(MediaType.Series, 10, 0, [manualOnly, books]));
+            Assert.AreEqual(TimeSpan.FromHours(12), SearchDueWantedV1.Backoff(MediaType.Movie, 10, 1, []));
+            Assert.AreEqual(TimeSpan.FromHours(24), SearchDueWantedV1.Backoff(MediaType.Movie, 10, 4, [books]));
+
+            // Books and manga: a day and a fixed offset from the target's number, never less than a day, never more than two.
+            var one = SearchDueWantedV1.Backoff(MediaType.Book, 1, 0, [feed]);
+            var other = SearchDueWantedV1.Backoff(MediaType.Book, 700, 9, [feed]);
+            Assert.AreEqual(TimeSpan.FromHours(24) + TimeSpan.FromMinutes(1), one);
+            Assert.AreEqual(TimeSpan.FromHours(24) + TimeSpan.FromMinutes(700), other);
+            Assert.IsTrue(Enumerable.Range(1, 5000).All(id => SearchDueWantedV1.Backoff(MediaType.Book, id, 0, []) is { } wait && wait >= TimeSpan.FromHours(24) && wait < TimeSpan.FromHours(48)));
+        }
+
+        // When a missing episode or movie has had its release day and the feed found nothing, one search runs; the day's end counts, as releases come out during the day.
+        [TestMethod]
+        public async Task ReleaseDay_NextSearchOfAMissingEpisodeOrMovie_IsTheEndOfItsDay()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, new FakeUsenet());
+            using var created = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works", new CreateWorkDataV1(MediaType.Series, "Show"));
+            var series = (await created.Content.ReadFromJsonAsync<WorkDetailsV1>())!.Id;
+            using var movie = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works", new CreateWorkDataV1(MediaType.Movie, "Film", 2030));
+            var film = (await movie.Content.ReadFromJsonAsync<WorkDetailsV1>())!.Id;
+            await host.Fixture.RunSqlAsync($"""
+                INSERT INTO "WorkUnits" ("WorkId", "WorkUnitTypeId", "Number") VALUES ({series}, 1, 1);
+                INSERT INTO "WorkUnits" ("WorkId", "ParentWorkUnitId", "WorkUnitTypeId", "Number", "ReleasedOn", "IsMonitored")
+                SELECT {series}, season."Id", 2, episode."Number", current_date + episode."Number", episode."Number" <> 5
+                FROM "WorkUnits" AS season CROSS JOIN generate_series(1, 5) AS episode ("Number") WHERE season."WorkId" = {series} AND season."WorkUnitTypeId" = 1;
+                UPDATE "Works" SET "ReleasedOn" = current_date + 40 WHERE "Id" = {film};
+                INSERT INTO "WantedItems" ("Id", "WorkId") VALUES (710, {series}), (711, {film});
+                """);
+
+            async Task<DateTime?> NextAsync(long wantedId, DateTime now)
+            {
+                await using var sql = new SqlContext(host.Fixture.Database);
+                await sql.BeginAsync(SqlAccessMode.ReadOnly);
+                return await new LogicContext(sql).ReadNextReleaseDayAsync(new WantedReleaseDayData(wantedId, now), default);
+            }
+
+            // The episode that airs tomorrow is searched the day after tomorrow at 06:00 UTC; the unmonitored one never counts, and the movie waits for its own day.
+            var tomorrow = DateTime.UtcNow.Date.AddDays(1);
+            Assert.AreEqual(tomorrow.AddHours(30), await NextAsync(710, DateTime.UtcNow));
+            Assert.AreEqual(DateTime.UtcNow.Date.AddDays(40).AddHours(30), await NextAsync(711, DateTime.UtcNow));
+
+            // Once that moment has passed the next episode's day follows; with no later day there is none.
+            Assert.AreEqual(tomorrow.AddDays(1).AddHours(30), await NextAsync(710, tomorrow.AddHours(31)));
+            Assert.IsNull(await NextAsync(710, DateTime.UtcNow.Date.AddDays(10)));
+        }
+
+        [TestMethod]
+        public void FeedMatcher_MapsReleasesToTargetsByProviderIdsThenByTitle()
+        {
+            FeedTargetData Target(long id, MediaType type, string title, params string[] identities) => new(id, type, title, [], identities);
+            var show = Target(1, MediaType.Series, "Example Show", "tvdb:81189", "imdb:tt0903747");
+            var otherShow = Target(2, MediaType.Series, "Another Show", "tvdb:555");
+            var anime = new FeedTargetData(3, MediaType.Series, "Hello, I am a Witch", ["Majo to Watashi"], []);
+            var film = Target(4, MediaType.Movie, "Example Movie", "tmdb_movie:603", "imdb:tt0133093");
+            var untouched = Target(5, MediaType.Movie, "Unrelated Film");
+            IReadOnlyList<FeedTargetData> targets = [show, otherShow, anime, film, untouched];
+            long[] Ids(FeedEntry entry) => [.. FeedMatcher.Match(entry, targets).Select(target => target.WantedItemId)];
+
+            // The ids the indexer names decide, with or without "tt" and leading zeros; a different id is no match even when the title fits.
+            CollectionAssert.AreEqual(new long[] { 1 }, Ids(new FeedEntry("Some.Other.Name.S01E01.1080p.WEB-DL.H264-GRP", 5040, "81189", null, null)));
+            CollectionAssert.AreEqual(new long[] { 1 }, Ids(new FeedEntry("Some.Other.Name.S01E01.1080p.WEB-DL.H264-GRP", 5040, null, null, "0903747")));
+            CollectionAssert.AreEqual(Array.Empty<long>(), Ids(new FeedEntry("Example.Show.S01E01.1080p.WEB-DL.H264-GRP", 5040, "999", null, null)));
+            CollectionAssert.AreEqual(new long[] { 4 }, Ids(new FeedEntry("Whatever.1999.1080p.BluRay.x264-GRP", 2040, null, "603", null)));
+
+            // Without ids the series title of the parsed release name decides; the type comes from the category, or from the name without one.
+            CollectionAssert.AreEqual(new long[] { 1 }, Ids(new FeedEntry("Example.Show.S02E05.1080p.WEB-DL.H264-GRP", 5030, null, null, null)));
+            CollectionAssert.AreEqual(new long[] { 1 }, Ids(new FeedEntry("Example.Show.S02E05.1080p.WEB-DL.H264-GRP", null, null, null, null)));
+            CollectionAssert.AreEqual(new long[] { 4 }, Ids(new FeedEntry("Example.Movie.1999.1080p.BluRay.x264-GRP", null, null, null, null)));
+            CollectionAssert.AreEqual(Array.Empty<long>(), Ids(new FeedEntry("Example.Movie.1999.1080p.BluRay.x264-GRP", 5000, null, null, null)));
+
+            // Anime names: a group in front, the number behind the title, a known second title.
+            CollectionAssert.AreEqual(new long[] { 3 }, Ids(new FeedEntry("[SubGroup] Hello, I am a Witch - 02 [1080p]", null, null, null, null)));
+            CollectionAssert.AreEqual(new long[] { 3 }, Ids(new FeedEntry("[SubGroup] Majo to Watashi - 02 [1080p]", 5070, null, null, null)));
+            CollectionAssert.AreEqual(Array.Empty<long>(), Ids(new FeedEntry("[SubGroup] Something Else Entirely - 02 [1080p]", 5070, null, null, null)));
+        }
+
+        private static string FeedOf(params (string Title, string Guid)[] releases) =>
+            "<rss xmlns:newznab=\"http://www.newznab.com/DTD/2010/feeds/attributes/\"><channel>"
+            + string.Concat(releases.Select(release => $"<item><title>{release.Title}</title><guid>{release.Guid}</guid><pubDate>Mon, 05 Oct 2026 10:00:00 +0000</pubDate><enclosure url=\"/getnzb/{release.Guid}\" length=\"2000000000\" /></item>"))
+            + "</channel></rss>";
+
+        private static AcquisitionConnectionData Indexer(long id, AcquisitionConnectionType type, int[] mediaTypeIds, bool searchesAutomatically = true) =>
+            new(id, "Indexer " + id, type, "https://indexer.example.test", null, true, 10, [], null, null, null, null, 1, null, null, null, mediaTypeIds, searchesAutomatically, null, null, 0, 0, null, null, null, null);
 
         private static async Task<IReadOnlyList<WantedReleaseV1>> ReadReleasesAsync(Host host, long wantedId)
         {

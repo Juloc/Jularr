@@ -1,4 +1,5 @@
 import "./LayoutToggle.scss";
+import { rememberDevicePreference, shareDevicePreference } from "../../Modules/Appearance/DevicePreference";
 
 // The device's layout of personal lists; delegated from the document, so it also reaches pages swapped in later.
 const layoutKey = 'list-layout';
@@ -9,18 +10,18 @@ function applyLayout(layout: string | null): void {
 }
 
 try {
-    applyLayout(localStorage.getItem(layoutKey));
+    const stored = localStorage.getItem(layoutKey);
+    if (stored) {
+        applyLayout(stored);
+        shareDevicePreference(layoutKey, stored);
+    }
 } catch {
-    // Without storage the titles stay in a grid.
+    // Without storage the layout the page arrived in stays.
 }
 
 document.addEventListener('click', event => {
     if (!(event.target instanceof Element) || !event.target.closest('[data-layout-toggle]')) return;
     const list = document.documentElement.dataset.listLayout !== 'list';
     applyLayout(list ? 'list' : null);
-    try {
-        localStorage.setItem(layoutKey, list ? 'list' : 'grid');
-    } catch {
-        // The layout then applies to this visit only.
-    }
+    rememberDevicePreference(layoutKey, list ? 'list' : 'grid');
 });

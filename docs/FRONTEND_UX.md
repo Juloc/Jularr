@@ -88,6 +88,12 @@ SavePill, FolderPicker, IconInfo, TimePicker, FactList, Drawer, FilterDialog, Sh
   group itself; a page names only what lies between with `page.Parent(key, href)` / `page.ParentName(name, href)` and its
   item as `page.Title(key, name)`. Narrow headers show only the last two parts; a longer trail scrolls, never wraps.
   Where the last part equals a heading under it, that heading is dropped (kept visually hidden for assistive technology).
+- Owner's decision (issue #1881, Activity like Sonarr): the entry **Activity** has three views, **Queue** (`/Admin/Activity`, the default), **History** (`/Admin/History`)
+  and **Blocked** (`/Admin/Activity/Blocked`), each under the normal media-type capsule (`type=a,b` stays in every view's address). The Queue lists what is open in four groups,
+  what needs the owner first, each with its count: *Needs your help* (a check at the source such as Anna's Archive, a failure), *To import* (also what is imported by hand),
+  *Downloading* (with the live pace) and *Waiting in the downloader*; a group without entries is left out. Blocked lists the releases that are not taken again (blocked
+  by hand or by a fault) with **Allow again**. **Wanted** (missing titles) is a menu entry of its own and no part of Activity. The Queue's old filters (All, Active, Waiting,
+  Import, Errors), its four live tiles and its list of finished operations are gone (assumptions of the implementing agent, open to correction by the Owner).
 - Owner's decision 20 Oct, sidebar modes: on `/Admin/*` the sidebar shows only the administration menu, all groups open; the user
   entries are not shown, and the Jularr logo (linking to the user home) is the way back. No extra back button.
   The user menu has one entry, Administration, that opens the first allowed entry. On a narrow header a breadcrumb part with sub-pages opens them as a menu, the first part stays whole and a long last part (the title) ends in an ellipsis with its full text in a tip.

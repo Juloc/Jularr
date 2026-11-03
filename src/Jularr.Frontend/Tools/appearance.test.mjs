@@ -9,6 +9,7 @@ const compile = source => ts.transpileModule(source, { compilerOptions: { target
 const script = compile(source);
 const palette = {};
 runInNewContext(compile(readFileSync(new URL("../Modules/Appearance/Palette.ts", import.meta.url), "utf8")), { exports: palette });
+const devicePreferenceScript = compile(readFileSync(new URL("../Modules/Appearance/DevicePreference.ts", import.meta.url), "utf8"));
 
 function appearance(saved = {}, unavailable = false, accountAccent = "") {
     class Element {
@@ -39,6 +40,7 @@ function appearance(saved = {}, unavailable = false, accountAccent = "") {
     const requests = [];
     const storage = new Map(Object.entries(saved));
     const document = {
+        cookie: "",
         documentElement: root,
         querySelectorAll: selector => selector.includes("data-accent-input") ? [picker] : selector.includes("data-accent-value") ? [value]
             : selector.includes("data-set-accent") ? accentButtons : buttons,
@@ -60,10 +62,16 @@ function appearance(saved = {}, unavailable = false, accountAccent = "") {
             ? { ok: true, headers: { get: name => name === 'RequestVerificationToken' ? 'csrf-test-token' : null } }
             : { ok: true };
     };
+    // The cookies the page wrote, by name (the document of a test keeps only the last one written, as a header).
+    const cookies = new Map();
+    const cookieJar = { get cookie() { return [...cookies].map(([name, value]) => `${name}=${value}`).join("; "); }, set cookie(header) { const [pair] = header.split(";"); const [name, value] = pair.split("="); cookies.set(name, value); } };
+    Object.defineProperty(document, "cookie", Object.getOwnPropertyDescriptor(cookieJar, "cookie"));
+    const devicePreference = {};
+    runInNewContext(devicePreferenceScript, { document, localStorage, location: { protocol: "https:" }, exports: devicePreference });
     runInNewContext(script, { document, localStorage, Element, HTMLInputElement: Element, Set,
-        exports: {}, require: () => palette, window: { matchMedia: () => systemMode },
+        exports: {}, require: path => path.includes("DevicePreference") ? devicePreference : palette, window: { matchMedia: () => systemMode },
         fetch, setTimeout: callback => pendingTimers.push(callback), clearTimeout: () => {} });
-    return { Element, root, buttons, storage, styles, accentButtons, reset, picker, value, meta,
+    return { Element, root, buttons, storage, cookies, styles, accentButtons, reset, picker, value, meta,
         faviconSvg, faviconPng, appleIcon, error, requests,
         flush: async () => {
             for (const task of pendingTimers.splice(0)) task();
@@ -78,11 +86,15 @@ test("appearance restores valid preferences and exposes selected controls", () =
     assert.equal(ui.root.dataset.mode, "dark");
     assert.equal(ui.buttons[0].attributes["aria-pressed"], "true");
     assert.equal(ui.buttons[4].attributes["aria-pressed"], "true");
+    // The stored choices reach the server as cookies, so the next page arrives in them.
+    assert.equal(ui.cookies.get("jularr-ui-skin"), "original");
+    assert.equal(ui.cookies.get("jularr-ui-mode"), "dark");
 
     ui.click(ui.buttons[1]);
     assert.equal(ui.root.dataset.skin, "clean");
     assert.equal(ui.root.dataset.mode, "dark");
     assert.equal(ui.storage.get("jularr-ui-skin"), "clean");
+    assert.equal(ui.cookies.get("jularr-ui-skin"), "clean");
     assert.equal(ui.buttons[0].attributes["aria-pressed"], "false");
     assert.equal(ui.buttons[1].attributes["aria-pressed"], "true");
 });

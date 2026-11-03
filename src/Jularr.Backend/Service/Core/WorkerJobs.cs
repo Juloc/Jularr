@@ -72,6 +72,8 @@ namespace Jularr.Backend.Service.Core
             // Tracking looks every minute and every 15 seconds while a download runs.
             new("downloads", WorkerGroupType.Download, TimeSpan.FromMinutes(1), TimeSpan.Zero),
             new("wantedSearch", WorkerGroupType.Acquisition, TimeSpan.FromMinutes(2), TimeSpan.FromSeconds(10), intervalSetting: WorkerIntervalSettingType.WantedSearchMinutes),
+            // The newest releases of each Newznab indexer; a new one about a wanted title makes it searched at once, instead of searching the library over and over.
+            new("feedSync", WorkerGroupType.Acquisition, TimeSpan.FromMinutes(15), TimeSpan.FromSeconds(18)),
 
             // One read of the connected media servers; each provider has its own switch and result.
             new("providerSync", WorkerGroupType.Provider, TimeSpan.FromMinutes(30), TimeSpan.FromSeconds(40), canPauseWhileUsed: true, pausesWhileUsedByDefault: true,

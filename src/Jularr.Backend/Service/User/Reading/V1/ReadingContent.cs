@@ -407,7 +407,7 @@ namespace Jularr.Backend.Service.User.Reading.V1
                     await file.CopyToAsync(target, ct);
                 }
 
-                if (!await _archives.ExtractAsync(copy ?? ((FileStream)file).Name, folder, ct))
+                if (!await _archives.ExtractAsync(copy ?? ((FileStream)file).Name, folder, null, ct))
                 {
                     throw new ServiceUnavailableException("reading_invalid_file");
                 }

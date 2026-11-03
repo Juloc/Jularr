@@ -81,6 +81,7 @@ namespace Jularr.Backend.Data.Fields.Acquisition
         public static readonly LongField SizeBytes = new() { Minimum = 0, Required = false };
         public static readonly DateTimeField PublishedAt = new() { Required = false };
         public static readonly DateTimeField CreatedAt = new();
+        public static readonly DateTimeField UpdatedAt = new();
         public static readonly BoolField IsBlocked = new();
         public static readonly EnumField ReleaseProtocolId = new(typeof(ReleaseProtocol));
         public static readonly StringArrayField Languages = new() { ItemMaximumLength = 16, MaximumLength = 16 };

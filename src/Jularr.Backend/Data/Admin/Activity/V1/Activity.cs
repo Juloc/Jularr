@@ -16,8 +16,10 @@ namespace Jularr.Backend.Data.Admin.Activity.V1
     {
         public ReadActivityParametersV1(ActivityFilterType activityFilterTypeId = ActivityFilterType.All, int page = 1, int pageSize = 25, bool torrentOnly = false, bool downloadsOnly = false,
             bool failedOnly = false, DownloadClientKind? downloadClientKindId = null, long? acquisitionConnectionId = null, MediaType? mediaTypeId = null,
-            DownloadPriorityType? downloadPriorityTypeId = null)
+            DownloadPriorityType? downloadPriorityTypeId = null, MediaType[]? mediaTypeIds = null, MediaSubtype[]? mediaSubtypeIds = null)
         {
+            MediaTypeIds = mediaTypeIds ?? [];
+            MediaSubtypeIds = mediaSubtypeIds ?? [];
             DownloadPriorityTypeId = downloadPriorityTypeId;
             ActivityFilterTypeId = activityFilterTypeId;
             TorrentOnly = torrentOnly;
@@ -57,8 +59,85 @@ namespace Jularr.Backend.Data.Admin.Activity.V1
         [DataField(typeof(OperationFields), nameof(OperationFields.DownloadPriorityTypeId), false)]
         public DownloadPriorityType? DownloadPriorityTypeId { get; }
 
+        // The type bar's choice: types list their titles without subtype and subtypes list theirs across types; none lets every entry through.
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeIds))]
+        public MediaType[] MediaTypeIds { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaSubtypeIds))]
+        public MediaSubtype[] MediaSubtypeIds { get; }
+
         public int Page { get; }
         public int PageSize { get; }
+    }
+
+    // The blocked releases of every target, as the type bar chooses them; a person lifts a block through the target's release service.
+    public sealed class ReadBlockedReleasesParametersV1 : BaseParameters
+    {
+        public ReadBlockedReleasesParametersV1(int page = 1, int pageSize = 25, MediaType[]? mediaTypeIds = null, MediaSubtype[]? mediaSubtypeIds = null)
+        {
+            MediaTypeIds = mediaTypeIds ?? [];
+            MediaSubtypeIds = mediaSubtypeIds ?? [];
+            Page = page;
+            PageSize = pageSize;
+        }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeIds))]
+        public MediaType[] MediaTypeIds { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaSubtypeIds))]
+        public MediaSubtype[] MediaSubtypeIds { get; }
+
+        public int Page { get; }
+        public int PageSize { get; }
+    }
+
+    // A release that is not taken again: blocked by hand or by a fault that blocks like it, with its target and why.
+    public sealed class BlockedReleaseV1 : BaseResponse
+    {
+        public BlockedReleaseV1(long id, long wantedItemId, long? workId, string? workTitle, MediaType? mediaTypeId, string title, string? connectionName, string? qualityKey, string? reasonKey, DateTime blockedAt)
+        {
+            Id = id;
+            WantedItemId = wantedItemId;
+            WorkId = workId;
+            WorkTitle = workTitle;
+            MediaTypeId = mediaTypeId;
+            Title = title;
+            ConnectionName = connectionName;
+            QualityKey = qualityKey;
+            ReasonKey = reasonKey;
+            BlockedAt = blockedAt;
+        }
+
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.Id))]
+        public long Id { get; }
+
+        [DataField(typeof(WantedItemFields), nameof(WantedItemFields.Id))]
+        public long WantedItemId { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.Id), false)]
+        public long? WorkId { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.CanonicalTitle), false)]
+        public string? WorkTitle { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId), false)]
+        public MediaType? MediaTypeId { get; }
+
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.Title))]
+        public string Title { get; }
+
+        // The indexer the release came from.
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.Name), false)]
+        public string? ConnectionName { get; }
+
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.QualityKey))]
+        public string? QualityKey { get; }
+
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.ReasonKey))]
+        public string? ReasonKey { get; }
+
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.UpdatedAt))]
+        public DateTime BlockedAt { get; }
     }
 
     public sealed class ActivityOperationParametersV1 : BaseParameters
@@ -490,8 +569,11 @@ namespace Jularr.Backend.Data.Admin.Activity.V1
 
     public sealed class ReadActivityEventsParametersV1 : BaseParameters
     {
-        public ReadActivityEventsParametersV1(long? workId = null, int page = 1, int pageSize = 50, ActivityEventGroupType activityEventGroupTypeId = ActivityEventGroupType.All)
+        public ReadActivityEventsParametersV1(long? workId = null, int page = 1, int pageSize = 50, ActivityEventGroupType activityEventGroupTypeId = ActivityEventGroupType.All,
+            MediaType[]? mediaTypeIds = null, MediaSubtype[]? mediaSubtypeIds = null)
         {
+            MediaTypeIds = mediaTypeIds ?? [];
+            MediaSubtypeIds = mediaSubtypeIds ?? [];
             WorkId = workId;
             Page = page;
             PageSize = pageSize;
@@ -505,6 +587,13 @@ namespace Jularr.Backend.Data.Admin.Activity.V1
         // One Work's history, else everything.
         [DataField(typeof(WorkFields), nameof(WorkFields.Id), false)]
         public long? WorkId { get; }
+
+        // The type bar's choice, as in the queue.
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeIds))]
+        public MediaType[] MediaTypeIds { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaSubtypeIds))]
+        public MediaSubtype[] MediaSubtypeIds { get; }
 
         public int Page { get; }
         public int PageSize { get; }

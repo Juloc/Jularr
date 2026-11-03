@@ -759,7 +759,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             public bool Failed;
         }
 
-        private static NewznabCapabilities? ReadCapabilities(AcquisitionConnectionData indexer) =>
+        internal static NewznabCapabilities? ReadCapabilities(AcquisitionConnectionData indexer) =>
             indexer.Capabilities is null ? null : JsonSerializer.Deserialize<NewznabCapabilities>(indexer.Capabilities);
 
         private static string CacheKey(long wantedItemId) => "acquisition.offers." + wantedItemId.ToString(CultureInfo.InvariantCulture);

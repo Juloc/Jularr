@@ -23,11 +23,11 @@ function routesIn(directory) {
     return found;
 }
 
-test('the menu has seven groups with twenty-one entries, each with its own icon', () => {
+test('the menu has seven groups with twenty-two entries, each with its own icon', () => {
     assert.equal(groups.length, 7);
-    assert.equal(entries.length, 21);
-    assert.equal(new Set(entries.map(entry => entry.icon)).size, 21, 'every entry has an icon of its own');
-    assert.equal(new Set(entries.map(entry => entry.id)).size, 21);
+    assert.equal(entries.length, 22);
+    assert.equal(new Set(entries.map(entry => entry.icon)).size, 22, 'every entry has an icon of its own');
+    assert.equal(new Set(entries.map(entry => entry.id)).size, 22);
 });
 
 test('every icon is in the project icon set and every label is a declared text', () => {

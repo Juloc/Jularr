@@ -319,7 +319,7 @@ namespace Jularr.Backend.Tests
             var payload = Path.Combine(folder.Path, "payload");
             var tools = new ArchiveTools { SevenZipPath = Environment.GetEnvironmentVariable("JULARR_TEST_PYTHON") ?? (OperatingSystem.IsWindows() ? "python" : "python3") };
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-            await Assert.ThrowsAsync<ServiceUnavailableException>(() => tools.ExtractAsync("unused", folder.Path, timeout.Token, () =>
+            await Assert.ThrowsAsync<ServiceUnavailableException>(() => tools.ExtractAsync("unused", folder.Path, null, timeout.Token, () =>
             {
                 if (File.Exists(payload) && new FileInfo(payload).Length >= 4_096) throw new ServiceUnavailableException("usenet_disk_budget");
             }));

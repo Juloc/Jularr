@@ -1,5 +1,6 @@
 import { shownFeeds, showsFeedGroup } from './Feeds';
 import { heroDefaults, readHeroPreferences, writeHeroPreferences, type HeroPreferences } from '../../../Framework/Components/HeroCarousel';
+import { rememberDevicePreference, shareDevicePreference } from '../../../Modules/Appearance/DevicePreference';
 
 // Device-local choices of Discover. Everything is delegated from the document, so it also reaches HTML a page script inserts later.
 const heroKey = 'discover-hero';
@@ -13,17 +14,17 @@ function applyLayout(layout: string | null): void {
 
 function storeLayout(grid: boolean): void {
     applyLayout(grid ? 'grid' : null);
-    try {
-        localStorage.setItem(layoutKey, grid ? 'grid' : 'rows');
-    } catch {
-        // The layout then applies to this visit only.
-    }
+    rememberDevicePreference(layoutKey, grid ? 'grid' : 'rows');
 }
 
 try {
-    applyLayout(localStorage.getItem(layoutKey));
+    const stored = localStorage.getItem(layoutKey);
+    if (stored) {
+        applyLayout(stored);
+        shareDevicePreference(layoutKey, stored);
+    }
 } catch {
-    // Without storage the shelves stay in rows.
+    // Without storage the layout the page arrived in stays.
 }
 
 // The panel shows what the carousel and the shelves use now.
