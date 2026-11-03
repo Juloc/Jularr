@@ -150,10 +150,12 @@ reads use the stored state and the `StorageMountHealth` view, which shows an off
 connection with Wake-on-LAN as asleep. A failed probe counts in `FailedChecks`;
 `CheckStorageMountsV1`, run every minute by the storage worker, probes such a
 connection again after 1, 2, 5, 10 and then every 15 minutes, until it is available.
-The Owner is notified once, at the third failure in a row. Connections that are
-available are not polled, so a sleeping NAS is not woken; the worker never sends
-Wake-on-LAN. A probe that hangs in the kernel keeps its thread until the kernel gives
-up; callers continue after five seconds.
+The Owner is notified once, at the third failure in a row. The same job probes every
+available connection once its last check is an hour old, also one no library or
+download uses, so its state never goes stale; a connection with Wake-on-LAN is left
+out, so a sleeping NAS is not woken, and the worker never sends Wake-on-LAN. A probe
+that hangs in the kernel keeps its thread until the kernel gives up; callers continue
+after five seconds.
 
 Playback wakes sleeping storage on demand (per the connection's policy) and Arr+
 imports completed downloads into the target's selected writable library, or the

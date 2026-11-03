@@ -16,6 +16,9 @@ namespace Jularr.Backend.Service.System.Media.V1
     // only while nobody uses Jularr.
     public sealed class RefreshDiscoverFeedsV1 : SystemService<RefreshDiscoverFeedsParametersV1, NoData>
     {
+        // A list its provider could not give, or gave empty while the kept one has titles, is asked again after this pause instead of on every pass.
+        private static readonly TimeSpan FeedRetry = TimeSpan.FromMinutes(15);
+
         // A title its catalog could not detail waits this long before a pass asks for it again; the process remembers it.
         private static readonly TimeSpan DetailRetry = TimeSpan.FromHours(6);
         private const string UndetailedKey = "discover.ahead.undetailed";
@@ -57,22 +60,29 @@ namespace Jularr.Backend.Service.System.Media.V1
             foreach (var feed in pending.Missing.Concat(pending.Due))
             {
                 CancellationToken.ThrowIfCancellationRequested();
+                var answeredEmpty = false;
                 try
                 {
-                    await _feeds.LoadAsync(Context, feed, (entry, ct) => entry.Namespace is "tmdb_movie" or "tmdb_tv"
-                        ? _metadata.FetchExternalFeedAsync(Context, entry, ct)
-                        : _catalog.FetchExternalFeedAsync(entry, ct), CancellationToken, refresh: true);
+                    await _feeds.LoadAsync(Context, feed, async (entry, ct) =>
+                    {
+                        var works = entry.Namespace is "tmdb_movie" or "tmdb_tv"
+                            ? await _metadata.FetchExternalFeedAsync(Context, entry, ct)
+                            : await _catalog.FetchExternalFeedAsync(entry, ct);
+                        answeredEmpty = works.Count == 0;
+                        return works;
+                    }, CancellationToken, refresh: true);
                     changed = true;
                 }
                 catch (ServiceUnavailableException)
                 {
-                    // Leave the last good list intact, and let other keys run before this one is retried.
+                    // Leave the last good list intact and let other keys run before this one is retried. An empty answer is no outage:
+                    // a page past a list's current end stays empty, and the pass does not fail for it.
                     await Context.ExecuteBatchAsync(async (ctx, ct) =>
                     {
-                        await ctx.PostponeExternalFeedAsync(new ExternalFeedRetryData(feed, _time.GetUtcNow().UtcDateTime.AddMinutes(1)), ct);
+                        await ctx.PostponeExternalFeedAsync(new ExternalFeedRetryData(feed, _time.GetUtcNow().UtcDateTime + FeedRetry), ct);
                         return true;
                     }, CancellationToken);
-                    failed = true;
+                    failed |= !answeredEmpty;
                 }
             }
 

@@ -189,6 +189,36 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Connections_HealthyAndUnused_AreCheckedHourly_ExceptWhenWokenOnDemand()
+        {
+            using var storage = new LibraryTests.TemporaryDirectory();
+            await using var host = await LibraryTests.CreateHostAsync(storage.Path);
+            var mountId = await LibraryTests.CreateMountAsync(host);
+            Directory.CreateDirectory(Path.Combine(storage.Path, mountId.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+
+            async Task CheckAsync()
+            {
+                await using var scope = host.Services.CreateAsyncScope();
+                await scope.ServiceProvider.GetRequiredService<CheckStorageMountsV1>().ExecuteAsync<UpdateResult>(new StorageChecksParametersV1(), default, CancellationToken.None);
+            }
+
+            // A NAS woken on demand is left asleep until it is used.
+            await CheckAsync();
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"StorageMountStates\""));
+
+            // Without Wake-on-LAN a mount no library uses is checked, then again once its last check is an hour old.
+            await host.Fixture.RunSqlAsync("UPDATE \"StorageMounts\" SET \"WakeMacAddress\" = NULL, \"WakeBroadcastAddress\" = NULL, \"WakeOnDemand\" = FALSE");
+            await CheckAsync();
+            Assert.AreEqual(true, await host.ScalarAsync("SELECT \"StorageAvailabilityTypeId\" = 1 AND \"CheckedAt\" > now() - interval '1 minute' FROM \"StorageMountStates\""));
+            await host.Fixture.RunSqlAsync("UPDATE \"StorageMountStates\" SET \"CheckedAt\" = now() - interval '30 minutes'");
+            await CheckAsync();
+            Assert.AreEqual(true, await host.ScalarAsync("SELECT \"CheckedAt\" < now() - interval '29 minutes' FROM \"StorageMountStates\""));
+            await host.Fixture.RunSqlAsync("UPDATE \"StorageMountStates\" SET \"CheckedAt\" = now() - interval '61 minutes'");
+            await CheckAsync();
+            Assert.AreEqual(true, await host.ScalarAsync("SELECT \"CheckedAt\" > now() - interval '1 minute' FROM \"StorageMountStates\""));
+        }
+
+        [TestMethod]
         public void Synology_Certificates_NeedAnAuthorityOrTheOwnersTrust()
         {
             var selfSigned = new SynologyCertificate(new string('B', 64), false);

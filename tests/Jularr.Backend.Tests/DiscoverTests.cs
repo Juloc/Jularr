@@ -401,13 +401,28 @@ namespace Jularr.Backend.Tests
             await TimeWarmReadsAsync("TMDB top; 2 local Works, 1 result", () => host.SendAsync(HttpMethod.Post, "/api/v1/discover/feed", new ReadDiscoverFeedDataV1(MediaType.Movie, DiscoverFeedType.Top)));
             Assert.AreEqual(afterRequest, tmdb.Requests.Count);
 
+            // An empty answer is no outage: the pass keeps the last lists, does not fail and asks again only after a pause.
+            const string Postponed = "SELECT count(*) FROM \"ExternalWorkFeeds\" WHERE \"RetryAfter\" > now() + interval '14 minutes'";
             await host.Fixture.RunSqlAsync("UPDATE \"ExternalWorkFeeds\" SET \"RefreshedAt\" = now() - interval '13 hours'");
+            tmdb.AnswersEmpty = true;
+            await Refresh();
+            Assert.AreEqual(5L, await host.ScalarAsync(Postponed));
+            tmdb.AnswersEmpty = false;
+
+            // An outage fails the pass once; the lists wait before they are asked again instead of failing every pass.
+            await host.Fixture.RunSqlAsync("UPDATE \"ExternalWorkFeeds\" SET \"RetryAfter\" = now() - interval '1 minute'");
             tmdb.IsUnavailable = true;
             await Assert.ThrowsExactlyAsync<ServiceUnavailableException>(Refresh);
+            Assert.AreEqual(5L, await host.ScalarAsync(Postponed));
+            var asked = tmdb.Requests.Count;
+            await Refresh();
+            Assert.AreEqual(asked, tmdb.Requests.Count);
             using var old = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/feed", new ReadDiscoverFeedDataV1(MediaType.Movie, DiscoverFeedType.Top));
             Assert.AreEqual(HttpStatusCode.OK, old.StatusCode, await old.Content.ReadAsStringAsync());
             Assert.AreEqual("The Matrix", (await old.Content.ReadFromJsonAsync<BaseDataList<DiscoverItemV1>>())!.Single().Title);
-            Assert.AreEqual(5L, await host.ScalarAsync("SELECT count(*) FROM \"ExternalWorkFeeds\" WHERE \"RefreshedAt\" IS NOT NULL"));
+
+            // The five kept lists remain; the requested sequel's recommendations, first asked during the empty answers, are kept empty.
+            Assert.AreEqual(6L, await host.ScalarAsync("SELECT count(*) FROM \"ExternalWorkFeeds\" WHERE \"RefreshedAt\" IS NOT NULL"));
         }
 
         [TestMethod]
@@ -1678,6 +1693,7 @@ namespace Jularr.Backend.Tests
         {
             public List<Uri> Requests { get; } = [];
             public bool IsUnavailable { get; set; }
+            public bool AnswersEmpty { get; set; }
 
             // TMDB's series lists also name a show it links to no TheTVDB series.
             public bool WithUnlinkedShow { get; init; }
@@ -1691,7 +1707,7 @@ namespace Jularr.Backend.Tests
                 Requests.Add(request.RequestUri!);
                 if (IsUnavailable) return Task.FromResult(new HttpResponseMessage(HttpStatusCode.ServiceUnavailable));
                 if (request.Headers.Authorization?.Parameter != Token) return Task.FromResult(new HttpResponseMessage(HttpStatusCode.Unauthorized));
-                if (QueryHelpers.ParseQuery(request.RequestUri!.Query).GetValueOrDefault("query") == "PagedOnly")
+                if (AnswersEmpty || QueryHelpers.ParseQuery(request.RequestUri!.Query).GetValueOrDefault("query") == "PagedOnly")
                 {
                     return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("{\"results\":[]}", Encoding.UTF8, "application/json") });
                 }
