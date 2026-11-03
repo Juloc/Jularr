@@ -1,5 +1,3 @@
-using Jularr.Backend.Service.Admin.Ai.V1;
-using Jularr.Backend.Data.Admin.Ai.V1;
 using Jularr.Backend.Service.User.Translation.V1;
 using Jularr.Backend.Service.Public.Localization.V1;
 using Jularr.Backend.Data.User.Translation.V1;
@@ -29,7 +27,7 @@ using Microsoft.AspNetCore.Mvc.ModelBinding;
 namespace Jularr.Frontend.Pages.User.Reader
 {
     public sealed class ReaderModel(ReadReadingSourceV1 readSource, OpenReadingV1 open, ReadReadingTocV1 toc, ReadReadingSectionV1 section, ReadReadingSectionAnnotationsV1 readMarks, ReadReadingAnnotationsV1 readNotes,
-        ReadReadingBookmarksV1 readBookmarks, DeleteReadingAnnotationV1 deleteNote, SearchReadingV1 search, ReadUiLocalesV1 readLocales, ReadLocalTranslationAvailabilityV1 readLocalAvailability, ReadCodexRetranslationV1 readCodex, ReadWorkV1 readWork,
+        ReadReadingBookmarksV1 readBookmarks, DeleteReadingAnnotationV1 deleteNote, SearchReadingV1 search, ReadUiLocalesV1 readLocales, ReadLocalTranslationAvailabilityV1 readLocalAvailability, ReadWorkV1 readWork,
         ReadSpeechPreferencesV1 readSpeech, SaveSpeechPreferencesV1 saveSpeech, ReadAvailableSpeechModelsV1 readSpeechModels, ReadAuthenticationV1 authentication, IAntiforgery antiforgery, UiText texts, FrontendAssets assets,
         ReadReadingStateV1 readState, ReadReadingPositionV1 readPosition, ReadReadingPageNotesV1 readPageNotes, CreateReadingPageNoteV1 createPageNote, DeleteReadingPageNoteV1 deletePageNote,
         ReadReaderSettingsV1 readSettings, ReadReadingSectionOffsetsV1 readOffsets, RenderReadingPageV1 renderPage)
@@ -38,7 +36,6 @@ namespace Jularr.Frontend.Pages.User.Reader
         // The languages this book can be read in: its original first, then the profile's and the other allowed ones Mozilla's models reach.
         private string[] _languages = [];
         private string? _localTranslationModel;
-        private string? _codexModel;
 
         // A PDF without reading text, or whose reading text the profile did not ask for, opens as its original pages and says why, here, in a word.
         private string? _status;
@@ -172,7 +169,8 @@ namespace Jularr.Frontend.Pages.User.Reader
                 : new Div([.. new[] { "original" }.Concat(_languages).Select(code => new Button(new ValueText(LanguageName(code))).Class("button")
                     .Attribute("data-language-choice", code).Attribute("aria-pressed", code == Chosen(document) ? "true" : "false")),
                     new P(new Text("reader.translation.provider.original")).Attribute("data-translation-provider", "")
-                        .Attribute("role", "status"), .. CodexTools(document, index)]).Class("reader__panel reader__choices")
+                        .Attribute("role", "status"),
+                    .. _localTranslationModel is null ? Array.Empty<IUiComponent>() : [Retranslation(document, index)]]).Class("reader__panel reader__choices")
                     .Attribute("data-panel", "language").Attribute("hidden", "hidden").Attribute("aria-label", texts["reader.language"]);
 
             var bottom = new Div(Seek(false), new Div(
@@ -395,27 +393,34 @@ namespace Jularr.Frontend.Pages.User.Reader
             return frame;
         }
 
-        // The languages the book can be read in; the choice is kept for the profile.
-        // The Owner's re-translation by hand with Codex: this chapter, or the whole book chapter by chapter from the page (Stop ends it); the script does the asking.
-        private IUiComponent[] CodexTools(ReadingDocumentV1 document, int index)
-        {
-            if (_codexModel is null || _languages.Length == 0) return [];
-            return [new Div(
-                new P(new Text("reader.codex.title")).Class("reader__panel-title"),
+        // The one re-translation of the Reader, for every reader of the book: the models a machine has now (the script asks for them once the panel
+        // opens; an admin-only provider's only with the admin-only right), then the paragraph at the top of the page, this chapter or the whole book.
+        // A model that translates whole passages (Codex) goes chapter by chapter from here, with progress and Stop. It shows only while the server's
+        // translation does.
+        private IUiComponent Retranslation(ReadingDocumentV1 document, int index) => new Div(
+                new P(new Text("reader.retranslate.title")).Class("reader__retranslate-title"),
+                new Div().Class("reader__choices").Attribute("data-role", "retranslate-models").Attribute("role", "group").Attribute("aria-label", texts["reader.retranslate.model"]),
                 new Div(
-                    new Button(new Text("reader.codex.chapter")).Class("button").Attribute("type", "button").Attribute("data-codex-run", "chapter"),
-                    new Button(new Text("reader.codex.book")).Class("button").Attribute("type", "button").Attribute("data-codex-run", "book"),
-                    new Button(new Text("reader.codex.stop")).Class("button").Attribute("type", "button").Attribute("data-codex-stop", "").Attribute("hidden", "hidden")).Class("reader__choices"),
-                new P().Attribute("data-codex-status", "").Attribute("role", "status").Attribute("hidden", "hidden"))
-                .Class("reader__codex").Attribute("data-codex-retranslate", "").Attribute("data-codex-model", _codexModel)
-                .Attribute("data-codex-sections", document.SectionCount.ToString(CultureInfo.InvariantCulture))
-                .Attribute("data-codex-section", index.ToString(CultureInfo.InvariantCulture))
-                .Attribute("data-codex-url", "/api/v1/reading/documents/" + document.DocumentId.ToString(CultureInfo.InvariantCulture) + "/sections/")
-                .Attribute("data-codex-chapter-label", texts["reader.codex.progress"]).Attribute("data-codex-done-label", texts["reader.codex.done"])
-                .Attribute("data-codex-failed-label", texts["reader.codex.failed"]).Attribute("data-codex-pick-label", texts["reader.codex.pick"])]
-;
-        }
+                    new Button(new Text("reader.retranslate.paragraph")).Class("button").Attribute("type", "button").Attribute("data-retranslate", "block"),
+                    new Button(new Text("reader.retranslate.section")).Class("button").Attribute("type", "button").Attribute("data-retranslate", "section"),
+                    new Button(new Text("reader.retranslate.book")).Class("button").Attribute("type", "button").Attribute("data-retranslate", "book"),
+                    new Button(new Text("reader.codex.stop")).Class("button").Attribute("type", "button").Attribute("data-retranslate-stop", "").Attribute("hidden", "hidden")
+                ).Class("reader__choices"),
+                new P().Class("reader__retranslate-status").Attribute("data-role", "retranslate-status").Attribute("role", "status"))
+            .Class("reader__retranslate").Attribute("data-role", "retranslate").Attribute("hidden", "hidden")
+            .Attribute("data-models-url", "/api/v1/translation/local/models")
+            .Attribute("data-codex-sections", document.SectionCount.ToString(CultureInfo.InvariantCulture))
+            .Attribute("data-codex-section", index.ToString(CultureInfo.InvariantCulture))
+            .Attribute("data-codex-url", "/api/v1/reading/documents/" + document.DocumentId.ToString(CultureInfo.InvariantCulture) + "/sections/")
+            .TextAttribute("data-codex-chapter-label", "reader.codex.progress")
+            .TextAttribute("data-codex-done-label", "reader.codex.done")
+            .TextAttribute("data-codex-failed-label", "reader.codex.failed")
+            .TextAttribute("data-paragraph-label", "reader.retranslate.paragraphModel")
+            .TextAttribute("data-done-label", "reader.retranslate.done")
+            .TextAttribute("data-book-label", "reader.retranslate.bookQueued")
+            .TextAttribute("data-failed-label", "reader.retranslate.failed");
 
+        // The languages the book can be read in; the choice is kept for the profile.
         private IUiComponent Languages(ReadingDocumentV1 document) => _languages.Length == 0
             ? new Div(new P(new Text("reader.language.none"))).Class("reader__panel").Attribute("data-panel", "language").Attribute("hidden", "hidden").Attribute("aria-label", texts["reader.language"])
             : new Div([.. new[] { "original" }.Concat(_languages).Select(code => new Button(new ValueText(LanguageName(code))).Class("button")
@@ -804,16 +809,6 @@ namespace Jularr.Frontend.Pages.User.Reader
             catch (ServiceUnavailableException)
             {
                 _localTranslationModel = null;
-            }
-
-            // The Owner can re-translate by hand with Codex, where it is connected.
-            try
-            {
-                _codexModel = texts.Can("instance.settings.update") ? (await readCodex.ExecuteAsync<CodexRetranslationV1>(new CodexConnectionParametersV1(), ct)).Model : null;
-            }
-            catch (ServiceUnavailableException)
-            {
-                _codexModel = null;
             }
 
             return _localTranslationModel is not null ? candidates : [];

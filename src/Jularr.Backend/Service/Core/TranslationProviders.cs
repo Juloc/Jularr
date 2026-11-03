@@ -1,5 +1,6 @@
 using System.Net.Http;
 using Jularr.Backend.Data.Admin.Translation.V1;
+using Jularr.Backend.Data.User.Translation.V1;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Integrations.Logic.Translation;
 
@@ -18,6 +19,12 @@ namespace Jularr.Backend.Service.Core
 
         // The models this provider may translate with, without the provider part; never containing '/'.
         IReadOnlyList<string> Models { get; }
+
+        // Only an administrator may choose its models in the Reader (the Owner's default model translates for everyone).
+        bool IsAdminOnly { get; }
+
+        // The models a machine translates with now, without the provider part; asking is metadata work and bounded in time.
+        Task<IReadOnlyList<string>> AvailableAsync(TranslationSetupV1 setup, CancellationToken ct);
 
         // The machine that translates now with this model, or with the provider's preferred installed one when no model is named (null when the
         // provider only translates when asked by name); null when none answers.
@@ -53,7 +60,7 @@ namespace Jularr.Backend.Service.Core
             {
                 Statement = """
                     SELECT "TranslationMachines" AS "Machines", "TranslationModel" AS "Model", "CodexEffort" AS "CodexEffort", "CodexFallbackModel" AS "CodexFallbackModel",
-                        "CodexDailyTokens" AS "CodexDailyTokens", "CodexRunTokens" AS "CodexRunTokens" FROM "InstanceSettings" WHERE "Id" = 1;
+                        "CodexDailyTokens" AS "CodexDailyTokens", "CodexRunTokens" AS "CodexRunTokens", "CodexModel" AS "CodexModel" FROM "InstanceSettings" WHERE "Id" = 1;
                     """
             }, ct) ?? new TranslationSetupV1([], null);
 
@@ -80,6 +87,33 @@ namespace Jularr.Backend.Service.Core
                 if (await provider.ChooseAsync(setup, null, ct) is { } machine) return machine;
             return null;
         }
+
+        // The right that admits an admin-only provider's models, the one the Owner's re-translation by whole passages needs too.
+        public const string AdminOnlyRight = "instance.settings.update";
+
+        // Whether the verified caller holds that right.
+        public static bool MayUseAdminOnly(ServiceCaller caller) =>
+            ServiceGate.GetPermissions(caller.AccountId, caller.ProfileId, caller.ProfileOwnerAccountId, caller.AccountRoleTypeId, caller.IsDevice).Contains(AdminOnlyRight, StringComparer.Ordinal);
+
+        // Whether the caller may choose this model in the Reader: any profile a model of an ordinary provider and the Owner's default model,
+        // only a holder of the admin-only right the other models of an admin-only provider.
+        public bool MayChoose(string id, TranslationSetupV1 setup, ServiceCaller caller) =>
+            Find(id) is var (provider, _) && (!provider.IsAdminOnly || string.Equals(id, setup.Model, StringComparison.Ordinal) || MayUseAdminOnly(caller));
+
+        // The models the caller may choose now, in the providers' order; an admin-only provider is not even asked for anyone else. Passages: the
+        // provider translates a chapter in whole-passage requests (RetranslateLocalReadingSectionV1, the admin-only right), not block by block.
+        public async Task<ReaderTranslationModelV1[]> AvailableAsync(TranslationSetupV1 setup, ServiceCaller caller, CancellationToken ct)
+        {
+            var admin = MayUseAdminOnly(caller);
+            var models = new List<ReaderTranslationModelV1>();
+            foreach (var provider in _providers)
+            {
+                if (provider.IsAdminOnly && !admin) continue;
+                var passages = admin && provider is IBatchTranslationProvider;
+                models.AddRange((await provider.AvailableAsync(setup, ct)).Select(model => new ReaderTranslationModelV1(Id(provider.Key, model), passages)));
+            }
+            return [.. models.DistinctBy(model => model.Id, StringComparer.Ordinal)];
+        }
     }
 
     // The Ollama machines of the Owner's order through the same seam; the models and their checks stay those of OllamaLocalModels.
@@ -89,9 +123,16 @@ namespace Jularr.Backend.Service.Core
 
         public string Key => ProviderKey;
         public IReadOnlyList<string> Models => OllamaLocalModels.Candidates;
+        public bool IsAdminOnly => false;
 
         public async Task<TranslationMachine?> ChooseAsync(TranslationSetupV1 setup, string? model, CancellationToken ct) =>
             await machines.ChooseAsync(setup.Machines, ct, model) is var (server, chosen) ? new TranslationMachine(this, chosen, server) : null;
+
+        public async Task<IReadOnlyList<string>> AvailableAsync(TranslationSetupV1 setup, CancellationToken ct)
+        {
+            var installed = await machines.InstalledAsync(setup.Machines, ct);
+            return [.. OllamaLocalModels.Candidates.Where(model => installed.Contains(model, StringComparer.Ordinal))];
+        }
 
         public Task<string> DigestAsync(TranslationMachine machine, CancellationToken ct) => models.DigestAsync(machine.Address, machine.Model, ct);
 

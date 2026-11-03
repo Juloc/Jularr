@@ -1,6 +1,7 @@
 using System.Net.Http;
 using System.Text.Json;
 using AngleSharp.Html.Parser;
+using Jularr.Backend.Data.Admin.Translation.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Service;
 using Jularr.Backend.Data.Logic.Reading;
@@ -15,7 +16,8 @@ namespace Jularr.Backend.Service.System.Reading.V1
 {
     // Translates the library ahead of reading with the local TranslateGemma model, into every language a profile uses (its
     // interface language and the languages chosen for books), into the same cache the Reader fills while reading. Books someone
-    // is reading come first, from the chapter they are in. A few blocks per call; returns whether there was work.
+    // is reading come first, from the chapter they are in; passages a reader re-translated with another model come before them, with that model.
+    // A few blocks per call; returns whether there was work.
     // A reader's own request comes first: while the model is busy for one, the round ends and the job looks again later.
     public sealed class TranslateReadingBooksV1 : SystemService<BookTranslationParametersV1, NoData>
     {
@@ -42,7 +44,11 @@ namespace Jularr.Backend.Service.System.Reading.V1
             // The Owner's default model (else the largest installed TranslateGemma) on the first machine of the order that answers with it; one that
             // fails rests, and the next round goes to the next one.
             var setup = await Context.ExecuteBatchAsync(TranslationProviders.SetupAsync, CancellationToken);
-            if (await _providers.ChooseAsync(setup, CancellationToken) is not { } machine)
+            var machine = await _providers.ChooseAsync(setup, CancellationToken);
+
+            // Passages a reader re-translated with another model come first: they were asked for by name.
+            if (await TranslateChosenAsync(setup, machine?.ModelId) is { } chosen) return new UpdateResult(chosen);
+            if (machine is null)
             {
                 _progress.Idle("noMachine");
                 return new UpdateResult(false);
@@ -69,7 +75,62 @@ namespace Jularr.Backend.Service.System.Reading.V1
             }
 
             _progress.Picked(unit.DocumentId, unit.SectionIndex, unit.Language);
+            return new UpdateResult(await TranslateBlocksAsync(machine, digest, unit, null) ?? false);
+        }
 
+        // A few blocks of the next section someone re-translated with a model other than the default, with that model; null when none waits or
+        // no machine has such a model now. The progress view keeps counting the default model only.
+        private async Task<bool?> TranslateChosenAsync(TranslationSetupV1 setup, string? defaultModel)
+        {
+            var models = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadSql.ReadListAsync<ReadingTranslationChosenModelData>(new SqlStatement
+            {
+                Statement = """SELECT DISTINCT choice."Model" AS "ChosenModel" FROM "ReadingTranslationChoices" AS choice ORDER BY choice."Model";"""
+            }, ct), CancellationToken);
+            foreach (var chosen in models)
+            {
+                if (chosen.ChosenModel == defaultModel || _providers.Find(chosen.ChosenModel) is null) continue;
+                if (await _providers.ChooseAsync(setup, CancellationToken, chosen.ChosenModel) is not { } machine) continue;
+                string digest;
+                try
+                {
+                    digest = await machine.Provider.DigestAsync(machine, CancellationToken);
+                }
+                catch (Exception exception) when (exception is HttpRequestException or JsonException or InvalidDataException or TaskCanceledException && !CancellationToken.IsCancellationRequested)
+                {
+                    machine.Provider.Fail(machine);
+                    continue;
+                }
+
+                var (unit, blocks) = await Context.ExecuteBatchAsync(async (ctx, ct) =>
+                {
+                    var next = await ctx.ReadOptionalAsync<BookTranslationUnitData>(NextChosenSection(chosen, LocalReadingPaths.ModelKey(chosen.ChosenModel), digest), ct);
+                    if (next is null) return ((BookTranslationUnitData?)null, new HashSet<int>());
+                    var sql = new SqlStatement();
+                    sql.Statement =
+                        """
+                        SELECT
+                            choice."BlockIndex",
+                            choice."Model"
+                        FROM "ReadingTranslationChoices" AS choice
+                        WHERE choice."ReadingDocumentId" = @DocumentId
+                            AND choice."SectionIndex" = @SectionIndex
+                            AND choice."Language" = @Language
+                            AND choice."Model" = @ChosenModel;
+                        """;
+                    sql.Parameters.Add(new ReadingTranslationSectionData(next.DocumentId, next.SectionIndex, next.Language, []));
+                    sql.Parameters.Add(chosen);
+                    return ((BookTranslationUnitData?)next, (await ctx.ReadSql.ReadListAsync<ReadingTranslationChoiceData>(sql, ct)).Select(choice => choice.BlockIndex).ToHashSet());
+                }, CancellationToken);
+                if (unit is not null && await TranslateBlocksAsync(machine, digest, unit, blocks) is { } worked) return worked;
+            }
+            return null;
+        }
+
+        // Up to a few blocks of the section that this version of the model has not translated yet (only the given ones, when given), each kept at once;
+        // whether there was work, none when none of the given blocks was left to do.
+        private async Task<bool?> TranslateBlocksAsync(TranslationMachine machine, string digest, BookTranslationUnitData unit, IReadOnlySet<int>? only)
+        {
+            var reports = only is null;
             var nodes = new HtmlParser().ParseDocument(unit.Html).QuerySelectorAll("[data-b]").ToArray();
             var path = LocalReadingPaths.Cache(unit.SectionIndex, unit.Language, machine.ModelId);
             var texts = (unit.Cache is null ? null : LocalReadingPaths.Parse(unit.Cache, unit.Html, unit.SourceLanguage, digest, nodes.Length))?.Texts ?? new string?[nodes.Length];
@@ -77,16 +138,17 @@ namespace Jularr.Backend.Service.System.Reading.V1
             {
                 // A page of one picture has nothing to translate; it is done once its empty cache exists.
                 await Context.ExecuteBatchAsync((ctx, ct) => LocalReadingPaths.StoreAsync(ctx, unit.DocumentId, path, unit.Html, unit.SourceLanguage, digest, 0, new Dictionary<int, string>(), ct), CancellationToken);
-                return new UpdateResult(true);
+                return true;
             }
 
             if (machine.Provider is IBatchTranslationProvider batcher)
-                return await TranslateBatchAsync(batcher, machine, unit, nodes, texts, path, digest);
+                return await TranslateBatchAsync(batcher, machine, unit, nodes, texts, path, digest, only);
 
             var translated = 0;
+            var stored = 0;
             for (var index = 0; index < nodes.Length && translated < BlocksPerCall; index++)
             {
-                if (!string.IsNullOrWhiteSpace(texts[index])) continue;
+                if (!string.IsNullOrWhiteSpace(texts[index]) || only is not null && !only.Contains(index)) continue;
                 var node = nodes[index];
                 var source = ReadingHtml.TranslationText(node);
                 string value;
@@ -101,12 +163,12 @@ namespace Jularr.Backend.Service.System.Reading.V1
                         var context = ReadingHtml.TranslationContext(nodes, index);
                         // A failed block keeps its readable original rather than caching a nonsensical translation.
                         value = await machine.Provider.TranslateBlockAsync(machine, unit.SourceLanguage, unit.Language, source, context, CancellationToken) ?? source;
-                        _progress.BlockDone();
+                        if (reports) _progress.BlockDone();
                     }
                     catch (Exception exception) when (exception is HttpRequestException or JsonException or InvalidDataException or TaskCanceledException && !CancellationToken.IsCancellationRequested)
                     {
                         machine.Provider.Fail(machine);
-                        _progress.Idle("machineFailed");
+                        if (reports) _progress.Idle("machineFailed");
                         break;
                     }
                     finally { _gate.HeavyWork.Release(); }
@@ -117,22 +179,105 @@ namespace Jularr.Backend.Service.System.Reading.V1
                 var block = index;
                 texts = await Context.ExecuteBatchAsync((ctx, ct) => LocalReadingPaths.StoreAsync(ctx, unit.DocumentId, path, unit.Html, unit.SourceLanguage, digest, nodes.Length,
                     new Dictionary<int, string> { [block] = value }, ct), CancellationToken);
+                stored++;
             }
 
-            return new UpdateResult(translated > 0 || texts.All(text => text is not null));
+            // Chosen blocks this section's text no longer has leave the round to other work rather than being picked again and again.
+            if (only is not null && stored == 0) return null;
+            return translated > 0 || texts.Where((_, index) => only is null || only.Contains(index)).All(text => text is not null);
+        }
+
+        // The next section with blocks someone chose this model for that its current version has not translated yet, the latest choice first and
+        // a book's sections in order.
+        private static SqlStatement NextChosenSection(ReadingTranslationChosenModelData chosen, string modelKey, string digest)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                WITH chosen AS (
+                    SELECT
+                        choice."ReadingDocumentId",
+                        choice."SectionIndex",
+                        choice."Language",
+                        array_agg(choice."BlockIndex") AS "Blocks",
+                        max(choice."ChosenAt") AS "ChosenAt"
+                    FROM "ReadingTranslationChoices" AS choice
+                    WHERE choice."Model" = @ChosenModel
+                        AND choice."SectionIndex" < 100000
+                    GROUP BY choice."ReadingDocumentId", choice."SectionIndex", choice."Language"
+                ),
+                sections AS (
+                    SELECT
+                        chosen."ReadingDocumentId",
+                        chosen."SectionIndex",
+                        chosen."Language",
+                        chosen."Blocks",
+                        chosen."ChosenAt",
+                        lower(split_part(split_part(coalesce(document."Language", work."OriginalLanguage"), '-', 1), '_', 1)) AS "SourceLanguage",
+                        coalesce((document."Structure" -> 'Sections' -> chosen."SectionIndex" ->> 'Blocks')::integer, 0) AS "Count",
+                        lpad(chosen."SectionIndex"::text, 5, '0') AS "Key"
+                    FROM
+                        chosen
+                        JOIN "ReadingDocuments" AS document ON document."Id" = chosen."ReadingDocumentId"
+                        JOIN "StoredFiles" AS file ON file."Id" = document."StoredFileId"
+                        JOIN "MediaAssets" AS asset ON asset."Id" = file."MediaAssetId"
+                        JOIN "Works" AS work ON work."Id" = asset."WorkId"
+                    WHERE jsonb_typeof(document."Structure" -> 'Sections') = 'array'
+                )
+                SELECT
+                    section."ReadingDocumentId" AS "DocumentId",
+                    section."SectionIndex",
+                    section."Language",
+                    section."SourceLanguage",
+                    convert_from(text."Bytes", 'UTF8') AS "Html",
+                    section."Count" AS "Blocks",
+                    stored.value::text AS "Cache"
+                FROM
+                    sections AS section
+                    JOIN "ReadingResources" AS text ON text."ReadingDocumentId" = section."ReadingDocumentId"
+                        AND text."Path" = ':section/' || section."Key"
+                    LEFT JOIN "ReadingResources" AS cache ON cache."ReadingDocumentId" = section."ReadingDocumentId"
+                        AND cache."Path" = ':localtranslation/v4/' || @Model || '/' || section."Language" || '/' || section."Key"
+                    CROSS JOIN LATERAL (
+                        SELECT convert_from(cache."Bytes", 'UTF8')::jsonb AS value
+                    ) AS stored
+                WHERE
+                    length(section."SourceLanguage") BETWEEN 2 AND 3
+                    AND section."Language" <> section."SourceLanguage"
+                    AND EXISTS (
+                        SELECT 1
+                        FROM unnest(section."Blocks") AS block (number)
+                        WHERE block.number < section."Count"
+                            AND (
+                                stored.value IS NULL
+                                OR stored.value ->> 'ModelDigest' IS DISTINCT FROM @Digest
+                                OR coalesce(stored.value -> 'Texts' -> block.number, 'null'::jsonb) = 'null'::jsonb
+                            )
+                    )
+                ORDER BY
+                    section."ChosenAt" DESC,
+                    section."ReadingDocumentId",
+                    section."SectionIndex",
+                    section."Language"
+                LIMIT 1;
+                """;
+            sql.Parameters.Add(chosen);
+            sql.Parameters.Add(new BookTranslationModelData(modelKey, digest));
+            return sql;
         }
 
         // A provider that takes several blocks in one request translates the next stretch of the section together, with the passage before it as context; a block
-        // whose answer fails the checks is asked for alone, and one that still fails keeps its readable original.
-        private async Task<IServiceOutput> TranslateBatchAsync(IBatchTranslationProvider batcher, TranslationMachine machine, BookTranslationUnitData unit, AngleSharp.Dom.IElement[] nodes,
-            string?[] texts, string path, string digest)
+        // whose answer fails the checks is asked for alone, and one that still fails keeps its readable original. Only the given blocks, when given.
+        private async Task<bool?> TranslateBatchAsync(IBatchTranslationProvider batcher, TranslationMachine machine, BookTranslationUnitData unit, AngleSharp.Dom.IElement[] nodes,
+            string?[] texts, string path, string digest, IReadOnlySet<int>? only)
         {
+            var reports = only is null;
             var values = new Dictionary<int, string>();
             var sources = new List<(int Index, string Text)>();
             var characters = 0;
             for (var index = 0; index < nodes.Length; index++)
             {
-                if (!string.IsNullOrWhiteSpace(texts[index])) continue;
+                if (!string.IsNullOrWhiteSpace(texts[index]) || only is not null && !only.Contains(index)) continue;
                 var source = ReadingHtml.TranslationText(nodes[index]);
                 // A block holding others, or one without text, has nothing of its own to translate; an oversized one keeps its text.
                 if (nodes[index].QuerySelector("[data-b]") is not null || source.Length == 0) { values[index] = ""; continue; }
@@ -145,7 +290,7 @@ namespace Jularr.Backend.Service.System.Reading.V1
             var failed = false;
             if (sources.Count > 0)
             {
-                if (!await _gate.HeavyWork.WaitAsync(GateWait, CancellationToken)) return new UpdateResult(false);
+                if (!await _gate.HeavyWork.WaitAsync(GateWait, CancellationToken)) return false;
                 try
                 {
                     var answers = await batcher.TranslateBlocksAsync(machine, unit.SourceLanguage, unit.Language, [.. sources.Select(item => item.Text)], ReadingHtml.TranslationContext(nodes, sources[0].Index), CancellationToken);
@@ -153,13 +298,13 @@ namespace Jularr.Backend.Service.System.Reading.V1
                     {
                         var (index, source) = sources[k];
                         values[index] = answers[k] ?? await machine.Provider.TranslateBlockAsync(machine, unit.SourceLanguage, unit.Language, source, ReadingHtml.TranslationContext(nodes, index), CancellationToken) ?? source;
-                        _progress.BlockDone();
+                        if (reports) _progress.BlockDone();
                     }
                 }
                 catch (Exception exception) when (exception is HttpRequestException or JsonException or InvalidDataException or TaskCanceledException && !CancellationToken.IsCancellationRequested)
                 {
                     machine.Provider.Fail(machine);
-                    _progress.Idle("machineFailed");
+                    if (reports) _progress.Idle("machineFailed");
                     // What was translated before the failure is kept; the rest waits for the next round.
                     failed = true;
                 }
@@ -168,7 +313,8 @@ namespace Jularr.Backend.Service.System.Reading.V1
 
             if (values.Count > 0)
                 texts = await Context.ExecuteBatchAsync((ctx, ct) => LocalReadingPaths.StoreAsync(ctx, unit.DocumentId, path, unit.Html, unit.SourceLanguage, digest, nodes.Length, values, ct), CancellationToken);
-            return new UpdateResult(!failed && (sources.Count > 0 || texts.All(text => text is not null)));
+            if (only is not null && values.Count == 0 && !failed) return null;
+            return !failed && (sources.Count > 0 || texts.Where((_, index) => only is null || only.Contains(index)).All(text => text is not null));
         }
 
         // The next section to translate: from a book someone is reading (most recently read first, from the chapter they are in, then

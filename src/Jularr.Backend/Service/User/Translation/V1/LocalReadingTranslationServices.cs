@@ -1,10 +1,12 @@
 using System.Net.Http;
+using System.Security;
 using System.Text;
 using System.Security.Cryptography;
 using System.Text.Json;
 using AngleSharp.Html.Parser;
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Enums.Reading;
 using Jularr.Backend.Data.Enums.Service;
 using Jularr.Backend.Data.Logic.Profile;
 using Jularr.Backend.Data.Logic.Reading;
@@ -138,6 +140,60 @@ namespace Jularr.Backend.Service.User.Translation.V1
         }
     }
 
+    // The models the Reader offers for a re-translation: those a machine translates with now, an admin-only provider's only with the admin-only right.
+    [ServiceEndpoint("GET", "/api/v1/translation/local/models")]
+    public sealed class ReadReaderTranslationModelsV1 : UserService<ReaderTranslationModelsParametersV1>
+    {
+        private readonly TranslationProviders _providers;
+
+        internal ReadReaderTranslationModelsV1(TranslationProviders providers)
+        {
+            _providers = providers;
+        }
+
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<ReaderTranslationModelsV1>()];
+        protected override ModuleRequirement GetInstanceModules(ReaderTranslationModelsParametersV1 parameters) => ModuleRequirement.All("Library", "Reading", "Translation");
+        protected override ServicePermission GetPermission(ReaderTranslationModelsParametersV1 parameters, Type resultType) => new("profile.media.read");
+
+        protected override async Task<IServiceOutput> OnRead()
+        {
+            var setup = await TranslationProviders.SetupAsync(Context, CancellationToken);
+            return new ReaderTranslationModelsV1(await _providers.AvailableAsync(setup, Auth, CancellationToken));
+        }
+    }
+
+    // A re-translation with a chosen model, for every reader of the book: a paragraph, the section or the whole book shows that model's text there
+    // as soon as it has translated it (the Reader asks for the paragraph and the section's blocks at once, the background job for the rest).
+    [ServiceEndpoint("PUT", "/api/v1/reading/documents/{documentId:long}/sections/{sectionIndex:int}/local-translations/{language}/{model}/choices")]
+    public sealed class ChooseLocalReadingTranslationV1 : UserService<LocalReadingSectionModelParametersV1, LocalReadingChoiceDataV1>
+    {
+        private readonly TranslationProviders _providers;
+
+        internal ChooseLocalReadingTranslationV1(TranslationProviders providers)
+        {
+            _providers = providers;
+        }
+
+        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Update;
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
+        protected override ModuleRequirement GetInstanceModules(LocalReadingSectionModelParametersV1 parameters) => ModuleRequirement.All("Library", "Reading", "Translation");
+        protected override ServicePermission GetPermission(LocalReadingSectionModelParametersV1 parameters, Type resultType) => new("profile.media.read");
+
+        protected override async Task<IServiceOutput> OnUpdate()
+        {
+            if (_providers.Find(Parameters.Model) is null) throw new DataValidationException(nameof(Parameters.Model), "unknown_model");
+            if (Data.Scope == ReadingTranslationScope.Block && Data.BlockIndex is null) throw new DataValidationException(nameof(Data.BlockIndex), "required");
+            var setup = await TranslationProviders.SetupAsync(Context, CancellationToken);
+            if (!_providers.MayChoose(Parameters.Model, setup, Auth))
+                throw new SecurityException("Only the admin-only right may choose this model.");
+
+            var data = new ReadingTranslationScopeWriteData(Parameters.DocumentId, Data.Scope == ReadingTranslationScope.Book ? null : Parameters.SectionIndex,
+                Data.Scope == ReadingTranslationScope.Block ? Data.BlockIndex : null, Parameters.Language, Parameters.Model);
+            if (await Context.ChooseReadingTranslationAsync(data, Auth.ProfileId!.Value, CancellationToken) == 0) throw new KeyNotFoundException();
+            return new UpdateResult(true);
+        }
+    }
+
     // Reads are authorized against the canonical Reader section; draft data is never
     // added to its global translated-language or ebook catalog.
     [ServiceEndpoint("GET", "/api/v1/reading/documents/{documentId:long}/sections/{sectionIndex:int}/local-translations/{language}/{model}")]
@@ -260,6 +316,8 @@ namespace Jularr.Backend.Service.User.Translation.V1
         {
             if (_providers.Find(Parameters.Model) is null) throw new DataValidationException(nameof(Parameters.Model), "unknown_model");
             var setup = await Context.ExecuteBatchAsync(TranslationProviders.SetupAsync, CancellationToken);
+            if (!_providers.MayChoose(Parameters.Model, setup, Auth))
+                throw new SecurityException("Only the admin-only right may translate with this model.");
             var section = await _sections.ExecuteAsync<ReadingSectionV1>(new ReadingSectionParametersV1(Parameters.DocumentId, Parameters.SectionIndex), CancellationToken);
             var html = new HtmlParser().ParseDocument(section.Html);
             var nodes = html.QuerySelectorAll("[data-b]").ToArray();
