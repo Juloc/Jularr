@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Microsoft.Playwright;
 
 namespace Jularr.E2E.Tests
@@ -23,7 +24,7 @@ namespace Jularr.E2E.Tests
                 await Owner.SetUpAndSignInAsync(page);
 
                 // One row of navigation joins every page of the acquisition settings, and no page offers a waiting time.
-                foreach (var label in new[] { "Quality profiles", "Custom formats", "Quality sizes", "Release profiles", "Release groups", "Tags", "Indexers" })
+                foreach (var label in new[] { "Quality profiles", "Custom formats", "Quality sizes", "Release profiles", "Release groups", "Tags" })
                 {
                     await page.GotoAsync("/Admin/Acquisition/Profiles");
                     await page.Locator(".navigation-tabs").GetByRole(AriaRole.Link, new() { Name = label, Exact = true }).ClickAsync();
@@ -83,6 +84,22 @@ namespace Jularr.E2E.Tests
                 await Assertions.Expect(qualities.Nth(1).Locator("th")).ToHaveTextAsync(first);
                 await page.GotoAsync("/Admin/Acquisition/Profiles?tab=profiles&mediaTypeId=1");
                 await Assertions.Expect(Row(page, "Browser quality")).ToBeVisibleAsync();
+
+                // The media type bar chooses one type; its Anime tab has Anime's own profiles, and the one saved as default is the one Anime uses.
+                await page.GotoAsync("/Admin/Acquisition/Profiles?tab=profiles&mediaTypeId=2");
+                var bar = page.Locator("main .capsule-bar");
+                Assert.AreEqual(0, await bar.Locator(".capsule-bar__all").CountAsync(), "A single choice has no all capsule.");
+                await Steps.FollowAsync(page, bar.GetByRole(AriaRole.Link, new() { Name = "Anime", Exact = true }));
+                await Assertions.Expect(page).ToHaveURLAsync(new Regex("subtype=Anime"));
+                await Assertions.Expect(page.Locator(".profiles-note")).ToContainTextAsync("No Anime default yet");
+                await Steps.FollowAsync(page, page.GetByRole(AriaRole.Link, new() { Name = "Add anime profile", Exact = true }));
+                var anime = page.Locator("main form", new() { Has = page.Locator("[name=MinimumFormatScore]") });
+                await anime.Locator("[name=Name]").FillAsync("Browser anime");
+                await anime.GetByRole(AriaRole.Switch, new() { Name = "Default for Anime" }).CheckAsync(new() { Force = true });
+                await Steps.SaveAsync(page);
+                await page.GotoAsync("/Admin/Acquisition/Profiles?tab=profiles&mediaTypeId=2&subtype=Anime");
+                await Assertions.Expect(Row(page, "Browser anime")).ToBeVisibleAsync();
+                await Assertions.Expect(page.Locator(".profiles-note")).ToContainTextAsync("Anime uses its own default: Browser anime");
 
                 // A release profile is added in a dialog with Cancel; afterwards its settings are inputs of its card, saved by the page's pill.
                 await page.GotoAsync("/Admin/Acquisition/Profiles?tab=release&mediaTypeId=1");

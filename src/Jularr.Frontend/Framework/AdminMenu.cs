@@ -92,7 +92,10 @@ namespace Jularr.Frontend.Framework
                 new("acquisition", "acquisition.role.Search", "search",
                 [
                     new("acquisition.role.Search", "/Admin/Acquisition", Acquisition, ["Acquisition"]),
-                    new("acquisition.role.Subtitles", "/Admin/Acquisition/Subtitles", Acquisition, ["Acquisition", "Subtitles"]),
+                    new("acquisition.role.Subtitles", "/Admin/Acquisition/Subtitles", Acquisition, ["Acquisition", "Subtitles"])
+                ]),
+                new("profiles", "admin.profiles.title", "layers",
+                [
                     new("admin.profiles.title", "/Admin/Acquisition/Profiles", Acquisition, ["Acquisition"], "profiles", true),
                     new("arr.formats", "/Admin/Acquisition/Profiles", Acquisition, ["Acquisition"], "formats"),
                     new("arr.sizes", "/Admin/Acquisition/Profiles", Acquisition, ["Acquisition"], "sizes"),

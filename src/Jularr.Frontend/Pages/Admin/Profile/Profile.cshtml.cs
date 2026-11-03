@@ -53,6 +53,7 @@ namespace Jularr.Frontend.Pages.Admin.Profile
 
         private long? ProfileId => long.TryParse(Id, NumberStyles.None, CultureInfo.InvariantCulture, out var id) ? id : null;
         private MediaType Scope => _profile?.MediaTypeId ?? NewType ?? MediaType.Movie;
+        private MediaSubtype? ScopeSubtype => _profile is { } saved ? saved.MediaSubtypeId : NewSubtype;
 
         protected override void Define(Page page)
         {
@@ -75,7 +76,7 @@ namespace Jularr.Frontend.Pages.Admin.Profile
                 fields.Section("profile.section.general", section =>
                 {
                     section.Text(item => item.Name, "profile.name");
-                    section.Toggle(item => item.IsDefault, "profile.isDefault");
+                    section.Toggle(item => item.IsDefault, ScopeSubtype == MediaSubtype.Anime ? "profile.isDefault.Anime" : "profile.isDefault");
                 });
                 fields.Section("profile.section.qualities", section =>
                 {
@@ -180,7 +181,7 @@ namespace Jularr.Frontend.Pages.Admin.Profile
         }
 
         // The list this profile belongs to.
-        private string BackAddress() => DownloadPages.PaneAddress(DownloadPages.Profiles, Scope, ProfilesModel.Home(Request));
+        private string BackAddress() => DownloadPages.PaneAddress(DownloadPages.Profiles, Scope, ProfilesModel.Home(Request), ScopeSubtype);
 
         private IUiComponent Glyph(string name, int size = 20) => new Icon(name, assets, size);
 

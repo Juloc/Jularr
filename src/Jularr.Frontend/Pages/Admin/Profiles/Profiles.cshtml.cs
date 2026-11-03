@@ -1,11 +1,13 @@
 using System.Globalization;
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Acquisition.V1;
+using Jularr.Backend.Data.Admin.Instance.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Enums.Instance;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Service.Admin.Acquisition.V1;
+using Jularr.Backend.Service.Admin.Instance.V1;
 using Jularr.Frontend.Framework;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Mvc;
@@ -14,7 +16,7 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
 {
     // The quality rules, one pane each: profiles, custom formats, quality sizes, release profiles, release groups and tags. Profiles, formats and groups are lists (the profile has its own
     // page, the format's conditions a dialog, a group's rating saves on click); release profiles and tags are cards with their settings inside and sizes is one form, all saved by the
-    // page's pill; adding opens a dialog.
+    // page's pill; adding opens a dialog. The media type bar on top chooses one type; the profiles also have a tab for each subtype the instance offers (Anime, Manga, Light novels), each with its own default.
     public sealed partial class ProfilesModel(
         ReadAcquisitionProfilesV1 profiles,
         ReadCustomFormatsV1 formats, ReadCustomFormatV1 format, SaveCustomFormatV1 saveFormat, DeleteCustomFormatV1 deleteFormat, ImportCustomFormatsV1 importFormats,
@@ -22,13 +24,13 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
         ReadReleaseProfilesV1 releases, ReadReleaseProfileV1 release, SaveReleaseProfileV1 saveRelease, DeleteReleaseProfileV1 deleteRelease,
         ReadReleaseGroupsV1 groups, ReadReleaseGroupFiguresV1 groupFigures, AddReleaseGroupV1 addGroup, RateReleaseGroupV1 rateGroup,
         ReadAcquisitionTagsV1 tags, ReadAcquisitionTagV1 tag, SaveAcquisitionTagV1 saveTag, DeleteAcquisitionTagV1 deleteTag,
-        ReadAcquisitionConnectionsV1 connections, ReadAcquisitionConnectionV1 connection,
+        ReadAcquisitionConnectionsV1 connections, ReadAcquisitionConnectionV1 connection, ReadInstanceMediaV1 media,
         FrontendAssets assets, IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         internal static readonly (MediaType Type, MediaSubtype? Subtype)[] Kinds =
         [
             (MediaType.Movie, null), (MediaType.Series, null), (MediaType.Book, null),
-            (MediaType.Book, MediaSubtype.Manga), (MediaType.Book, MediaSubtype.LightNovel),
+            (MediaType.Series, MediaSubtype.Anime), (MediaType.Book, MediaSubtype.Manga), (MediaType.Book, MediaSubtype.LightNovel),
             (MediaType.Music, null), (MediaType.Game, null)
         ];
 
@@ -36,6 +38,9 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
         // The setup step shows the quality profiles only; the other panes belong to the administration.
         private string Tab { get => SetupWizard.IsActive(Request) ? DownloadPages.Profiles : SelectedTab ?? DownloadPages.Profiles; set => SelectedTab = value; }
         [BindProperty(SupportsGet = true)] public MediaType MediaTypeId { get; set; } = MediaType.Movie;
+
+        // The subtype whose profiles the list shows (profiles only).
+        [BindProperty(SupportsGet = true, Name = "subtype")] public MediaSubtype? Subtype { get; set; }
         [BindProperty(SupportsGet = true)] public long? Edit { get; set; }
         [BindProperty(SupportsGet = true, Name = "new")] public bool IsNew { get; set; }
         [BindProperty(SupportsGet = true, Name = "delete")] public bool ConfirmDelete { get; set; }
@@ -48,6 +53,7 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
         private PageResult<AcquisitionTagDetailsV1>? _tagPage;
         private PageResult<AcquisitionConnectionDetailsV1>? _indexerPage;
         private IReadOnlyList<AcquisitionProfileDetailsV1> _profiles = [];
+        private IReadOnlyList<MediaSubtype> _subtypes = [];
         private PageResult<CustomFormatDetailsV1>? _formats;
         private PageResult<ReleaseProfileDetailsV1>? _releases;
         private PageResult<AcquisitionTagDetailsV1>? _tags;
@@ -76,14 +82,19 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
             page.Asset("Framework/Components/Modal.entry.ts");
             page.Asset("Framework/Components/ActionDock.entry.ts");
             page.Asset("Framework/Components/Truncated.entry.ts");
-            page.Asset("Framework/Components/SelectLinkMenu.entry.ts");
             var isSetup = SetupWizard.IsActive(Request);
 
-            // One row of navigation; the quality rules are scoped by a media type (tags belong to every type).
+            // The media type bar, then one row of navigation; the quality rules are scoped by a media type (tags belong to every type).
             page.NoPageRow();
+            if (Tab != DownloadPages.Tags) page.Content.Add(ScopeBar());
             IUiComponent chips = isSetup ? new Span() : AdminMenu.Row(texts, Request, null, Tab, ((byte)MediaTypeId).ToString(CultureInfo.InvariantCulture));
-            page.Content.Add(Tab == DownloadPages.Tags ? new ListToolbar(chips) : new ListToolbar(chips, ScopeMenu()));
-            if (Tab == DownloadPages.Profiles) page.Content.Add(ProfileFigures());
+            page.Content.Add(new ListToolbar(chips));
+            if (Tab == DownloadPages.Profiles)
+            {
+                page.Content.Add(ProfileFigures());
+                if (Subtype == MediaSubtype.Anime) page.Content.Add(new P(new ValueText(AnimeDefaultNote())).Class("profiles-note").Attribute("role", "status"));
+            }
+
             switch (Tab)
             {
                 case DownloadPages.Profiles: DefineProfiles(page); break;
@@ -95,15 +106,35 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
             }
         }
 
-        // The media type the lists and editors are about; the other panes keep the choice.
-        private IUiComponent ScopeMenu() => new SelectLinkMenu(assets, [.. Enum.GetValues<MediaType>().Select(type =>
-            new NavigationTab(MediaTypeLabel.Key(type, null), DownloadPages.PaneAddress(Tab, type, Home(Request)), type == MediaTypeId))], "arr.scope");
+        // The media type the lists and editors are about; the other panes keep the choice. Profiles also have a tab per subtype the instance offers (Anime only while it is on).
+        private IUiComponent ScopeBar()
+        {
+            var types = new[] { MediaType.Movie, MediaType.Series, MediaType.Book, MediaType.Music, MediaType.Game };
+            var scopes = LibraryScopes.All.Where(scope => scope.Slug != "all" && (scope.Subtype is { } subtype ? Tab == DownloadPages.Profiles && _subtypes.Contains(subtype) : types.Contains(scope.Type!.Value))).ToList();
+            return new MediaTypeBar(assets, [.. scopes.Select(scope => scope.Slug)], [LibraryScopes.Slug(MediaTypeId, Subtype)], "library.scope.", picked =>
+            {
+                var scope = LibraryScopes.Find(picked.Count > 0 ? picked[0] : "series");
+                var type = scope.Subtype is { } subtype ? subtype == MediaSubtype.Anime ? MediaType.Series : MediaType.Book : scope.Type!.Value;
+                return DownloadPages.PaneAddress(Tab, type, Home(Request), scope.Subtype);
+            }, isSingle: true);
+        }
+
+        // Which profile Anime follows: its own default, else the series default.
+        private string AnimeDefaultNote()
+        {
+            var own = _profiles.FirstOrDefault(item => item.IsDefault && item.MediaSubtypeId == MediaSubtype.Anime);
+            if (own is not null) return string.Format(CultureInfo.CurrentCulture, texts["profile.anime.own"], own.Name);
+            return string.Format(CultureInfo.CurrentCulture, texts["profile.anime.fallback"], _profiles.FirstOrDefault(item => item.IsDefault && item.MediaSubtypeId is null)?.Name ?? "");
+        }
+
+        // The profiles of the chosen type: those without subtype, or those of the chosen subtype.
+        private IEnumerable<AcquisitionProfileDetailsV1> Shown => _profiles.Where(item => item.MediaSubtypeId == Subtype);
 
         private IUiComponent ProfileFigures() => new KpiTiles(
-            new KpiTile("profile.kpi.total", Count(_profiles.Count), Glyph("layers"), UiTone.Accent),
-            new KpiTile("profile.kpi.inUse", Count(_profiles.Count(item => item.WantedCount > 0)), Glyph("check"), UiTone.Success),
-            new KpiTile("profile.kpi.scored", Count(_profiles.Count(item => item.FormatScores.Any(score => score.Score != 0))), Glyph("sliders"), UiTone.Info),
-            new KpiTile("profile.kpi.upgrading", Count(_profiles.Count(item => item.UpgradeAllowed)), Glyph("sync"), UiTone.Warning)).Strip();
+            new KpiTile("profile.kpi.total", Count(Shown.Count()), Glyph("layers"), UiTone.Accent),
+            new KpiTile("profile.kpi.inUse", Count(Shown.Count(item => item.WantedCount > 0)), Glyph("check"), UiTone.Success),
+            new KpiTile("profile.kpi.scored", Count(Shown.Count(item => item.FormatScores.Any(score => score.Score != 0))), Glyph("sliders"), UiTone.Info),
+            new KpiTile("profile.kpi.upgrading", Count(Shown.Count(item => item.UpgradeAllowed)), Glyph("sync"), UiTone.Warning)).Strip();
 
         private void DefineProfiles(Page page)
         {
@@ -113,7 +144,7 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
                 new("profile.name", ListRole.Main), new("table.status", ListRole.Status), new("profile.cutoff", ListRole.Data, 1), new("arr.minimumScore", ListRole.Data, 2),
                 new("profile.scores", ListRole.Data, 2), new("common.actions", ListRole.Actions)
             };
-            var rows = _profiles.Select(item =>
+            var rows = Shown.Select(item =>
             {
                 var qualities = string.Join(", ", item.AllowedQualities.Select(quality => QualityName(item, quality)));
                 var editor = Home(Request) + "/" + Number(item.Id);
@@ -130,8 +161,8 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
             }).ToList();
             page.Content.Add(new ListPanel("admin.profiles.title", columns, rows, empty).Modifier("profiles-list"));
 
-            // One add action for every kind of the media type (books also have manga and light novels).
-            var actions = Kinds.Where(kind => kind.Type == MediaTypeId).Select(kind => (IUiComponent)new A(Glyph("plus", 16), new Span(new Text("profile.add." + (kind.Subtype?.ToString() ?? kind.Type.ToString()))).Class("action-dock__text"))
+            // One add action for the chosen type or subtype.
+            var actions = Kinds.Where(kind => kind.Type == MediaTypeId && kind.Subtype == Subtype).Select(kind => (IUiComponent)new A(Glyph("plus", 16), new Span(new Text("profile.add." + (kind.Subtype?.ToString() ?? kind.Type.ToString()))).Class("action-dock__text"))
                 .Class("button").Attribute("href", Home(Request) + "/New?type=" + kind.Type + (kind.Subtype is { } subtype ? "&subtype=" + subtype : ""))).ToList();
             page.Content.Add(new ActionDock(assets, "arr.actions", actions));
         }
@@ -165,8 +196,15 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
 
         protected override async Task LoadDataAsync()
         {
-            if (!Enum.IsDefined(MediaTypeId) || !DownloadPages.Panes.Contains(Tab)) throw new KeyNotFoundException();
+            if (!Enum.IsDefined(MediaTypeId) || !DownloadPages.Panes.Contains(Tab) || Subtype is not null && !Kinds.Contains((MediaTypeId, Subtype))) throw new KeyNotFoundException();
             var cancellation = HttpContext.RequestAborted;
+            if (Tab != DownloadPages.Profiles) Subtype = null;
+            if (Tab != DownloadPages.Tags)
+            {
+                var offered = await media.ExecuteAsync<BaseDataList<InstanceMediaDetailsV1>>(new ReadInstanceMediaParametersV1(), cancellation);
+                _subtypes = [.. Enum.GetValues<MediaSubtype>().Where(subtype => offered.Any(item => item.IsSubtype && item.IsEnabled && item.Key == subtype.ToString()))];
+            }
+
             switch (Tab)
             {
                 case DownloadPages.Profiles:
