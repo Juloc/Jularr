@@ -88,21 +88,37 @@ namespace Jularr.Backend.Service.User.Reading.V1
                 if (BookConversion.IsConverted(source.RelativePath))
                 {
                     // A format the reader does not read opens through its reading copy, an EPUB made in memory; the file itself stays as it is.
-                    var bytes = new MemoryStream();
-                    var buffer = new byte[81920];
-                    int read;
-                    while ((read = await file.ReadAsync(buffer, ct)) > 0)
+                    if (file.CanSeek && file.Length > BookConversion.MaximumSourceBytes)
                     {
-                        if (bytes.Length + read > BookConversion.MaximumSourceBytes)
-                        {
-                            throw new ServiceUnavailableException("reading_invalid_file");
-                        }
-
-                        bytes.Write(buffer, 0, read);
+                        throw new ServiceUnavailableException("reading_invalid_file");
                     }
 
-                    hash = SHA256.HashData(bytes.GetBuffer().AsSpan(0, (int)bytes.Length));
-                    bytes.Position = 0;
+                    // Read once into an array of its size where the length is known.
+                    byte[] bytes;
+                    if (file.CanSeek)
+                    {
+                        bytes = new byte[file.Length];
+                        await file.ReadExactlyAsync(bytes, ct);
+                    }
+                    else
+                    {
+                        using var copy = new MemoryStream();
+                        var buffer = new byte[81920];
+                        int read;
+                        while ((read = await file.ReadAsync(buffer, ct)) > 0)
+                        {
+                            if (copy.Length + read > BookConversion.MaximumSourceBytes)
+                            {
+                                throw new ServiceUnavailableException("reading_invalid_file");
+                            }
+
+                            copy.Write(buffer, 0, read);
+                        }
+
+                        bytes = copy.ToArray();
+                    }
+
+                    hash = SHA256.HashData(bytes);
                     try
                     {
                         epub = new MemoryStream(BookConversion.ToEpub(source.RelativePath, bytes));

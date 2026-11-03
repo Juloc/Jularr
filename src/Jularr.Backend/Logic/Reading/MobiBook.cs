@@ -13,41 +13,38 @@ namespace Jularr.Backend.Logic.Reading
         private const uint NullIndex = 0xFFFFFFFF;
         private const int MaximumIndexEntries = 100_000;
 
+        // A text record decompresses to 4 KiB; more than this is no text record.
+        private const int RecordBytes = 64 * 1024;
+
         // About this much HTML makes one block of a long chapter; the writer starts a new section between blocks.
         private const int BlockCharacters = 100_000;
 
-        [GeneratedRegex(@"filepos\s*=\s*[""']?0*(\d{1,10})[""']?", RegexOptions.IgnoreCase)]
+        // Every pattern is bounded and gives up after a while; a timeout reads as a broken file.
+        private const int PatternTimeout = 2000;
+
+        [GeneratedRegex(@"filepos\s{0,16}=\s{0,16}[""']?0*(\d{1,10})[""']?", RegexOptions.IgnoreCase, PatternTimeout)]
         private static partial Regex FilePosition();
 
-        [GeneratedRegex(@"<img\b[^>]*?\brecindex\s*=\s*[""']?(\d{1,6})[""']?[^>]*>", RegexOptions.IgnoreCase)]
+        [GeneratedRegex(@"<img\b[^>]{0,1024}?\brecindex\s{0,16}=\s{0,16}[""']?(\d{1,6})[""']?[^>]{0,1024}>", RegexOptions.IgnoreCase, PatternTimeout)]
         private static partial Regex RecordImage();
 
-        [GeneratedRegex(@"<mbp:pagebreak[^>]*>", RegexOptions.IgnoreCase)]
+        [GeneratedRegex(@"<mbp:pagebreak[^>]{0,1024}>", RegexOptions.IgnoreCase, PatternTimeout)]
         private static partial Regex PageBreak();
 
-        [GeneratedRegex(@"<head\b.*?</head>", RegexOptions.IgnoreCase | RegexOptions.Singleline)]
-        private static partial Regex Head();
-
         // Wrappers the reader's sanitizer would drop with their text.
-        [GeneratedRegex(@"</?(font|center|big|small|mbp:[a-z]+|guide|reference|html|body)\b[^>]*>", RegexOptions.IgnoreCase)]
+        [GeneratedRegex(@"</?(font|center|big|small|mbp:[a-z]{1,32}|guide|reference|html|body)\b[^>]{0,1024}>", RegexOptions.IgnoreCase, PatternTimeout)]
         private static partial Regex Wrappers();
 
-        [GeneratedRegex(@"<body\b[^>]*>(.*?)(</body>|$)", RegexOptions.IgnoreCase | RegexOptions.Singleline)]
-        private static partial Regex Body();
-
-        [GeneratedRegex(@"src\s*=\s*[""']kindle:embed:([0-9A-Va-v]{1,8})(\?[^""']*)?[""']", RegexOptions.IgnoreCase)]
+        [GeneratedRegex(@"src\s{0,16}=\s{0,16}[""']kindle:embed:([0-9A-Va-v]{1,8})(\?[^""']{0,256})?[""']", RegexOptions.IgnoreCase, PatternTimeout)]
         private static partial Regex EmbeddedImage();
 
-        [GeneratedRegex(@"href\s*=\s*[""']kindle:pos:fid:([0-9A-Va-v]{1,8}):off:[0-9A-Va-v]{1,12}[""']", RegexOptions.IgnoreCase)]
+        [GeneratedRegex(@"href\s{0,16}=\s{0,16}[""']kindle:pos:fid:([0-9A-Va-v]{1,8}):off:[0-9A-Va-v]{1,12}[""']", RegexOptions.IgnoreCase, PatternTimeout)]
         private static partial Regex PositionLink();
 
-        [GeneratedRegex(@"<h([1-3])\b[^>]*>(.*?)</h\1>", RegexOptions.IgnoreCase | RegexOptions.Singleline)]
-        private static partial Regex Heading();
-
-        [GeneratedRegex(@"<[^>]*>")]
+        [GeneratedRegex(@"<[^>]{0,1024}>", RegexOptions.None, PatternTimeout)]
         private static partial Regex Tags();
 
-        [GeneratedRegex(@"\bid=""(fp\d+)""")]
+        [GeneratedRegex(@"\bid=""(fp\d{1,10})""", RegexOptions.None, PatternTimeout)]
         private static partial Regex PositionAnchor();
 
         private sealed record Header(int Compression, int TextRecords, int Encryption, int Encoding, int Version, uint FirstImage, int ExtraFlags, uint FlowTable, uint FlowCount,
@@ -169,17 +166,17 @@ namespace Jularr.Backend.Logic.Reading
                 for (var index = 0; index < count && index < 10_000 && position + 8 <= exth.Length; index++)
                 {
                     var kind = BinaryPrimitives.ReadUInt32BigEndian(exth[position..]);
-                    var size = (int)BinaryPrimitives.ReadUInt32BigEndian(exth[(position + 4)..]);
-                    if (size < 8 || position + size > exth.Length)
+                    var size = BinaryPrimitives.ReadUInt32BigEndian(exth[(position + 4)..]);
+                    if (size < 8 || position + (long)size > exth.Length)
                     {
                         break;
                     }
 
-                    var value = exth.Slice(position + 8, size - 8);
+                    var value = exth.Slice(position + 8, (int)size - 8);
                     if (kind == 503) title = text.GetString(value);
                     else if (kind == 524) language = text.GetString(value).Trim();
                     else if (kind == 121 && value.Length >= 4) boundary = BinaryPrimitives.ReadUInt32BigEndian(value);
-                    position += size;
+                    position += (int)size;
                 }
             }
 
@@ -207,6 +204,7 @@ namespace Jularr.Backend.Logic.Reading
             }
 
             using var output = new MemoryStream();
+            var buffer = new byte[RecordBytes];
             for (var index = 1; index <= header.TextRecords; index++)
             {
                 var record = Record(data, records, first + index);
@@ -217,7 +215,7 @@ namespace Jularr.Backend.Logic.Reading
                 }
                 else
                 {
-                    Decompress(record, output);
+                    Decompress(record, output, buffer);
                 }
 
                 if (output.Length > BookConversion.MaximumTextBytes)
@@ -256,10 +254,10 @@ namespace Jularr.Backend.Logic.Reading
             return Math.Min(size, record.Length);
         }
 
-        // PalmDOC LZ77: literals, runs of literals, a space with a character, and copies from the last 2047 bytes of this record.
-        private static void Decompress(ReadOnlySpan<byte> input, MemoryStream output)
+        // PalmDOC LZ77: literals, runs of literals, a space with a character, and copies from the last 2047 bytes of this record. A record holds 4 KiB of text;
+        // one that decompresses beyond the shared buffer is broken.
+        private static void Decompress(ReadOnlySpan<byte> input, MemoryStream output, byte[] buffer)
         {
-            var buffer = new byte[Math.Max(8192, input.Length * 8)];
             var length = 0;
             for (var index = 0; index < input.Length;)
             {
@@ -309,18 +307,23 @@ namespace Jularr.Backend.Logic.Reading
             var book = new ConvertedBook { Title = header.Title, Language = header.Language };
             var raw = Encoding.Latin1.GetString(Text(data, records, 0, header));
 
-            // Anchors at the byte positions links name, before the tag they would split; then the links name them.
-            var anchors = FilePosition().Matches(raw).Select(match => long.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture)).Where(position => position < raw.Length)
-                .Distinct().Take(MaximumIndexEntries).Select(position =>
-                {
-                    var at = (int)position;
-                    var open = raw.LastIndexOf('<', Math.Max(0, at - 1));
-                    return (At: at > 0 && open >= 0 && raw.LastIndexOf('>', at - 1) < open ? open : at, Position: position);
-                }).OrderBy(anchor => anchor.At).ThenBy(anchor => anchor.Position).ToArray();
-            var html = new StringBuilder(raw.Length + anchors.Length * 24);
+            // Anchors at the byte positions links name, before the tag they would split (one pass over the text in position order); then the links name them.
+            var positions = FilePosition().Matches(raw).Select(match => long.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture)).Where(position => position < raw.Length)
+                .Distinct().Order().Take(MaximumIndexEntries).ToArray();
+            var html = new StringBuilder(raw.Length + positions.Length * 24);
             var copied = 0;
-            foreach (var (at, position) in anchors)
+            var open = -1;
+            var scanned = 0;
+            foreach (var position in positions)
             {
+                // The last tag opened before the position, unless it closed again.
+                for (; scanned < position; scanned++)
+                {
+                    if (raw[scanned] == '<') open = scanned;
+                    else if (raw[scanned] == '>') open = -1;
+                }
+
+                var at = Math.Max(copied, open >= 0 ? open : (int)position);
                 html.Append(raw, copied, at - copied).Append("<a id=\"fp").Append(position.ToString(CultureInfo.InvariantCulture)).Append("\"></a>");
                 copied = at;
             }
@@ -373,16 +376,20 @@ namespace Jularr.Backend.Logic.Reading
             {
                 var skeletons = Index(data, records, first + header.SkeletonIndex);
                 var fragments = Index(data, records, first + header.FragmentIndex);
+                // Skeletons follow each other, each with its fragments behind it; the files together stay within the text limit.
                 var next = 0;
+                var end = 0L;
+                var total = 0L;
                 foreach (var (_, tags) in skeletons)
                 {
-                    if (!tags.TryGetValue(1, out var count) || count.Count < 1 || !tags.TryGetValue(6, out var place) || place.Count < 2 || place[0] + place[1] > text.Length)
+                    if (!tags.TryGetValue(1, out var count) || count.Count < 1 || !tags.TryGetValue(6, out var place) || place.Count < 2 || place[0] < end || place[0] + place[1] > text.Length)
                     {
                         throw new InvalidDataException("A skeleton is broken.");
                     }
 
-                    var skeleton = text.Substring((int)place[0], (int)place[1]);
+                    var skeleton = new StringBuilder(text, (int)place[0], (int)place[1], (int)place[1]);
                     var position = place[0] + place[1];
+                    var moved = 0L;
                     for (var index = 0; index < count[0]; index++, next++)
                     {
                         if (next >= fragments.Count || !int.TryParse(fragments[next].Name, NumberStyles.None, CultureInfo.InvariantCulture, out var insert)
@@ -391,13 +398,23 @@ namespace Jularr.Backend.Logic.Reading
                             throw new InvalidDataException("A fragment is broken.");
                         }
 
+                        // Fragments go in where the skeleton says, usually at its end; text moved for an earlier place is bounded too.
                         var at = (int)Math.Clamp(insert - place[0], 0, skeleton.Length);
-                        skeleton = skeleton[..at] + text.Substring((int)position, (int)piece[1]) + skeleton[at..];
+                        moved += skeleton.Length - at;
+                        total += piece[1];
+                        if (moved > BookConversion.MaximumTextBytes || total + skeleton.Length > BookConversion.MaximumTextBytes)
+                        {
+                            throw new InvalidDataException("The book exceeds the size limit.");
+                        }
+
+                        skeleton.Insert(at, text.AsSpan((int)position, (int)piece[1]));
                         position += piece[1];
                         fragmentParts.Add(parts.Count);
                     }
 
-                    parts.Add(skeleton);
+                    total += place[1];
+                    end = position;
+                    parts.Add(skeleton.ToString());
                 }
             }
             else
@@ -409,7 +426,7 @@ namespace Jularr.Backend.Logic.Reading
             for (var index = 0; index < parts.Count; index++)
             {
                 var part = encoding.GetString(Encoding.Latin1.GetBytes(parts[index]));
-                part = Body().Match(part) is { Success: true } body ? body.Groups[1].Value : part;
+                part = Inside(part, "body") ?? part;
                 part = EmbeddedImage().Replace(part, match =>
                 {
                     var number = Convert32(match.Groups[1].Value);
@@ -588,26 +605,103 @@ namespace Jularr.Backend.Logic.Reading
             {
                 if (index > 0 && index < records.Length && Record(data, records, index) is { Length: > 8 } record && ComicPages.ContentType(record) is not null)
                 {
-                    return book.Image("r" + index.ToString(CultureInfo.InvariantCulture), record.ToArray());
+                    var found = index;
+                    return book.Image("r" + index.ToString(CultureInfo.InvariantCulture), () => Record(data, records, found).ToArray());
                 }
             }
 
             return null;
         }
 
-        private static string Clean(string html) => Wrappers().Replace(Head().Replace(html, ""), "");
+        private static string Clean(string html)
+        {
+            // The head goes; then the wrappers whose text would be lost.
+            var head = html.IndexOf("<head", StringComparison.OrdinalIgnoreCase);
+            while (head >= 0 && head + 5 < html.Length && html[head + 5] is not ('>' or ' ' or '\t' or '\r' or '\n'))
+            {
+                head = html.IndexOf("<head", head + 5, StringComparison.OrdinalIgnoreCase);
+            }
+
+            var close = head < 0 ? -1 : html.IndexOf("</head>", head, StringComparison.OrdinalIgnoreCase);
+            if (close >= 0)
+            {
+                html = html[..head] + html[(close + "</head>".Length)..];
+            }
+
+            return Wrappers().Replace(html, "");
+        }
+
+        // What an element of this name holds: from the end of its first opening tag to its closing tag or the end; null without it.
+        private static string? Inside(string html, string name)
+        {
+            var open = html.IndexOf("<" + name, StringComparison.OrdinalIgnoreCase);
+            var start = open < 0 ? -1 : html.IndexOf('>', open);
+            if (start < 0)
+            {
+                return null;
+            }
+
+            var end = html.IndexOf("</" + name + ">", start, StringComparison.OrdinalIgnoreCase);
+            return html[(start + 1)..(end < 0 ? html.Length : end)];
+        }
+
+        // The first heading of level 1 to 3 that closes, found in one pass: its level and its HTML.
+        private static (int Level, string Html)? FirstHeading(string html)
+        {
+            var unclosed = new bool[4];
+            var tagEnd = -1;
+            for (var at = html.IndexOf("<h", StringComparison.OrdinalIgnoreCase); at >= 0 && at + 3 < html.Length; at = html.IndexOf("<h", at + 2, StringComparison.OrdinalIgnoreCase))
+            {
+                var level = html[at + 2] - '0';
+                if (level is < 1 or > 3 || char.IsAsciiLetterOrDigit(html[at + 3]) || html[at + 3] == '_' || unclosed[level])
+                {
+                    continue;
+                }
+
+                if (tagEnd < at && (tagEnd = html.IndexOf('>', at)) < 0)
+                {
+                    return null;
+                }
+
+                var close = html.IndexOf("</h" + (char)('0' + level) + ">", tagEnd, StringComparison.OrdinalIgnoreCase);
+                if (close < 0)
+                {
+                    unclosed[level] = true;
+                    continue;
+                }
+
+                return (level, html[(tagEnd + 1)..close]);
+            }
+
+            return null;
+        }
+
+        // Text outside the tags, found in one pass.
+        private static bool HasText(string html)
+        {
+            var inTag = false;
+            foreach (var character in html)
+            {
+                if (character == '<') inTag = true;
+                else if (character == '>') inTag = false;
+                else if (!inTag && !char.IsWhiteSpace(character)) return true;
+            }
+
+            return false;
+        }
 
         // A chapter's HTML: its first heading names it, a long one is cut before paragraphs into blocks, its position anchors are registered.
         private static void Add(ConvertedBook book, string html, string? anchor)
         {
-            if (Tags().Replace(html, "").Trim().Length == 0 && !html.Contains("<img", StringComparison.OrdinalIgnoreCase))
+            if (!HasText(html) && !html.Contains("<img", StringComparison.OrdinalIgnoreCase))
             {
                 return;
             }
 
-            var heading = Heading().Match(html);
-            var title = heading.Success ? string.Join(' ', WebUtility.HtmlDecode(Tags().Replace(heading.Groups[2].Value, " ")).Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)) : "";
-            var chapter = book.Chapter(title.Length is > 0 and <= 300 ? title : null, heading.Success && heading.Groups[1].Value != "1" ? 1 : 0);
+            var heading = FirstHeading(html);
+            var title = heading is { } found ? string.Join(' ', WebUtility.HtmlDecode(Tags().Replace(found.Html.Length > 2000 ? found.Html[..2000] : found.Html, " "))
+                .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)) : "";
+            var chapter = book.Chapter(title.Length is > 0 and <= 300 ? title : null, heading is { Level: > 1 } ? 1 : 0);
             if (anchor is not null)
             {
                 book.Anchors.TryAdd(anchor, (book.Chapters.Count - 1, 0));

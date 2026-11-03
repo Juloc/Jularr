@@ -194,7 +194,7 @@ namespace Jularr.Backend.Service.System.Operation.V1
             var processed = 0L;
             var batch = new List<ScannedFile>(BatchSize);
             var state = new StorageScanState();
-            // A text file beside another book in its folder is a note, as on import; it is decided when the whole root is known.
+            // A text file beside another book or an audiobook in its folder is a note, as on import; it is decided when the whole root is known.
             var texts = new List<StorageFile>();
             var folders = new HashSet<string>(StringComparer.Ordinal);
             async Task AddAsync(StorageFile file)
@@ -220,7 +220,7 @@ namespace Jularr.Backend.Service.System.Operation.V1
                     continue;
                 }
 
-                if (root.MediaTypeId == MediaType.Book && LibraryFileTypes.GetAssetType(file.RelativePath) is MediaAssetType.Ebook or MediaAssetType.Comic)
+                if (root.MediaTypeId == MediaType.Book && LibraryFileTypes.GetAssetType(file.RelativePath) is MediaAssetType.Ebook or MediaAssetType.Comic or MediaAssetType.Audio)
                 {
                     folders.Add(StoragePath.Parent(file.RelativePath));
                 }

@@ -164,7 +164,7 @@ namespace Jularr.Backend.Tests
                 Assert.ThrowsExactly<InvalidDataException>(() => BookConversion.ToEpub(name, new MemoryStream(bytes)), name);
             }
 
-            // A corrupted byte in any place of a Kindle, RTF or Word file still ends in a reason, never another failure.
+            // A corrupted byte in any place of a Kindle, RTF or Word file still ends in a reason, never another failure, even without the last line of ToEpub.
             foreach (var (name, book) in new[]
             {
                 ("Damaged.azw3", kf8), ("Damaged.mobi", BookFormatFixtures.Mobi("<p>The night train <a filepos=0000000003>left</a> at nine.</p>")), ("Damaged.rtf", BookFormatFixtures.Rtf()),
@@ -179,7 +179,7 @@ namespace Jularr.Backend.Tests
                         damaged[position] = value;
                         try
                         {
-                            BookConversion.ToEpub(name, new MemoryStream(damaged));
+                            BookConversion.Read(name, damaged);
                         }
                         catch (Exception exception) when (exception is InvalidDataException or BookCompressionException or BookProtectedException)
                         {
@@ -199,6 +199,11 @@ namespace Jularr.Backend.Tests
             CollectionAssert.AreEqual(new[] { ".azw", ".docx", ".fb2.zip" }, placed.Select(placement => placement.Extension).Order(StringComparer.Ordinal).ToArray());
             Assert.IsTrue(placed.All(placement => placement.TargetStem == "Ann Author/Night Train (2020)/Night Train"), placed[0].TargetStem);
             Assert.HasCount(0, unplaced);
+
+            // Beside an audiobook a text file is its note too.
+            var audio = new List<UnplacedFile>();
+            Assert.HasCount(0, ImportPlacementLogic.Plan(MediaType.Book, null, "Night Train", 2020, null, Files("01.mp3", "02.mp3", "info.txt"), NamingPatternTests.DefaultSet, null, "Ann Author", unplaced: audio));
+            Assert.IsFalse(audio.Any(file => file.Path.EndsWith(".txt", StringComparison.Ordinal)));
 
             // A text file alone is the book.
             Assert.AreEqual(".txt", ImportPlacementLogic.Plan(MediaType.Book, null, "Night Train", 2020, null, Files("Night Train.txt"), NamingPatternTests.DefaultSet, null, "Ann Author").Single().Extension);
@@ -236,6 +241,73 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.ServiceUnavailable, locked.StatusCode);
             StringAssert.Contains(await locked.Content.ReadAsStringAsync(), "reading_drm");
             Assert.AreEqual(2L, await host.ScalarAsync("SELECT count(*) FROM \"ReadingDocuments\""));
+        }
+
+        [TestMethod]
+        public void Converters_HostileInputs_EndQuicklyWithAReasonOrTheirText()
+        {
+            // Deeply nested XML is refused before a document is built.
+            var nested = Encoding.UTF8.GetBytes("<FictionBook><body><section><p>" + string.Concat(Enumerable.Repeat("<e>", 100_000)) + "x" + string.Concat(Enumerable.Repeat("</e>", 100_000)) + "</p></section></body></FictionBook>");
+            Fast(() => Assert.ThrowsExactly<InvalidDataException>(() => BookConversion.Read("Deep.fb2", nested)));
+            var deepWord = BookFormatFixtures.Zip(("word/document.xml", Encoding.UTF8.GetBytes("<w:document xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\"><w:body>"
+                + string.Concat(Enumerable.Repeat("<w:p>", 100_000)) + string.Concat(Enumerable.Repeat("</w:p>", 100_000)) + "</w:body></w:document>")));
+            Fast(() => Assert.ThrowsExactly<InvalidDataException>(() => BookConversion.Read("Deep.docx", deepWord)));
+
+            // Unclosed headings, heads and wrappers in MOBI HTML cost one pass each; the text is still read.
+            var open = string.Concat(Enumerable.Repeat("<h1>x", 25_000)) + string.Concat(Enumerable.Repeat("<head", 5_000)) + string.Concat(Enumerable.Repeat("<font size=", 5_000))
+                + string.Concat(Enumerable.Repeat("<img recindex=", 2_000)) + "<p>The night train left at nine.</p>";
+            Fast(() => StringAssert.Contains(string.Concat(BookConversion.Read("Open.mobi", BookFormatFixtures.Mobi(open, image: false)).Chapters.SelectMany(chapter => chapter.Blocks)), "The night train"));
+
+            // Overlapping KF8 skeletons are no book; a size claim beyond the record ends the EXTH, and an RTF binary length beyond the file ends the file.
+            Fast(() => Assert.ThrowsExactly<InvalidDataException>(() => BookConversion.Read("Overlap.azw3", BookFormatFixtures.Kf8(overlapping: true))));
+            Fast(() => Assert.AreEqual("Kindle Book", BookConversion.Read("Huge.mobi", BookFormatFixtures.HugeExth()).Title));
+            Fast(() => StringAssert.Contains(string.Concat(BookConversion.Read("Bin.rtf", Encoding.ASCII.GetBytes(@"{\rtf1 Before\par\bin2147483647 x}")).Chapters.SelectMany(chapter => chapter.Blocks)), "Before"));
+
+            // One picture referred to many times is read once, and references beyond the limit are left out.
+            var many = Encoding.UTF8.GetBytes($$"""
+                <FictionBook xmlns:l="http://www.w3.org/1999/xlink"><body><section><p>{{string.Concat(Enumerable.Repeat("<image l:href=\"#b\"/>", 120_000))}}</p></section></body>
+                <binary id="b" content-type="image/png">{{System.Convert.ToBase64String(BookFormatFixtures.Png)}}</binary></FictionBook>
+                """);
+            Fast(() => Assert.HasCount(1, BookConversion.Read("Many.fb2", many).Images));
+            var book = new ConvertedBook();
+            var reads = 0;
+            for (var index = 0; index < BookConversion.MaximumImageReferences; index++)
+            {
+                Assert.IsNotNull(book.Image("same", () => { reads++; return BookFormatFixtures.Png; }));
+            }
+
+            Assert.IsNull(book.Image("other", () => { reads++; return BookFormatFixtures.Png; }));
+            Assert.AreEqual(1, reads);
+
+            // Ignorable groups inside a Word picture are no picture bytes.
+            var picture = Encoding.ASCII.GetBytes(@"{\rtf1 {\*\shppict{\pict{\*\picprop{\sp{\sn shapeType}{\sv 75}}}\pngblip{\*\blipuid 0123456789abcdef0123456789abcdef}" + System.Convert.ToHexString(BookFormatFixtures.Png) + @"}}\par Text\par}");
+            Assert.HasCount(1, BookConversion.Read("Picture.rtf", picture).Images);
+
+            // A book of countless chapters keeps a bounded number of sections; the rest joins the last one.
+            var lines = Encoding.UTF8.GetBytes(string.Join("\n\n", Enumerable.Range(0, 20_000).Select(index => "# Part " + index + "\n\nThe text of part " + index + ".")));
+            var (_, sections) = Fast(() => Convert("Lines.txt", lines));
+            Assert.IsTrue(sections.Length is > 9_000 and < 10_000, sections.Length.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            StringAssert.Contains(sections[^1], "The text of part 19999.");
+
+            // Characters XML forbids leave titles and text, so the package stays readable.
+            Assert.AreEqual("abc\uD83D\uDE00", BookConversion.Escape("a\uFFFEb\uFFFF\u0001c\uD800\uD83D\uDE00"));
+            var (package, _) = Convert("Odd.rtf", Encoding.ASCII.GetBytes(@"{\rtf1{\info{\title Odd\u-1?\u-2? Title}}Text\par}"));
+            Assert.AreEqual("Odd Title", package.Title);
+        }
+
+        // An action that must end within a few seconds.
+        private static void Fast(Action action) => Fast(() =>
+        {
+            action();
+            return true;
+        });
+
+        private static T Fast<T>(Func<T> action)
+        {
+            var watch = System.Diagnostics.Stopwatch.StartNew();
+            var result = action();
+            Assert.IsLessThan(5, watch.Elapsed.TotalSeconds, "Took " + watch.Elapsed);
+            return result;
         }
 
         // The copy as its package and the HTML of its sections.

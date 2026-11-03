@@ -59,9 +59,9 @@ namespace Jularr.Backend.Logic.Acquisition
         {
             if (mediaType == MediaType.Book)
             {
-                // A text file beside other documents is the release's note, not the book.
+                // A text file beside other documents or an audiobook is the release's note, not the book.
                 unplaced ??= [];
-                if (files.Any(file => LibraryFileTypes.GetAssetType(file.RelativePath) is MediaAssetType.Ebook or MediaAssetType.Comic && LibraryFileTypes.Extension(file.RelativePath) != ".txt"))
+                if (files.Any(file => LibraryFileTypes.GetAssetType(file.RelativePath) is MediaAssetType.Ebook or MediaAssetType.Comic or MediaAssetType.Audio && LibraryFileTypes.Extension(file.RelativePath) != ".txt"))
                 {
                     files = [.. files.Where(file => LibraryFileTypes.Extension(file.RelativePath) != ".txt")];
                 }

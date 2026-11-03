@@ -125,7 +125,7 @@ namespace Jularr.Backend.Tests
         }
 
         // A KF8 (AZW3) book: two files, each a skeleton with one fragment, a picture by kindle:embed, a flow table and the skeleton and fragment indexes.
-        public static byte[] Kf8() => Palm("BOOKMOBI", Kf8Records(true));
+        public static byte[] Kf8(bool overlapping = false) => Palm("BOOKMOBI", Kf8Records(true, overlapping));
 
         // A combined file: a MOBI 6 part with the picture, the boundary, then a KF8 part that shares the MOBI part's picture.
         public static byte[] Joint()
@@ -133,10 +133,10 @@ namespace Jularr.Backend.Tests
             var text = Encoding.UTF8.GetBytes("<p>The old MOBI text.</p>");
             var records = Chunks(text).Select(Compress).ToList();
             var first = Header(2, text.Length, records.Count, 0, 6, (uint)(records.Count + 1), 0, null, "Joint Book", (uint)(records.Count + 3));
-            return Palm("BOOKMOBI", [first, .. records, Png, "BOUNDARY"u8.ToArray(), .. Kf8Records(false)]);
+            return Palm("BOOKMOBI", [first, .. records, Png, "BOUNDARY"u8.ToArray(), .. Kf8Records(false, false)]);
         }
 
-        private static List<byte[]> Kf8Records(bool image)
+        private static List<byte[]> Kf8Records(bool image, bool overlapping)
         {
             const string FirstSkeleton = "<html><head><title>x</title></head><body aid=\"0\"></body></html>";
             const string SecondSkeleton = "<html><head></head><body aid=\"1\"></body></html>";
@@ -165,7 +165,7 @@ namespace Jularr.Backend.Tests
             var skeletons = new[]
             {
                 Entry("SKEL0000000", 0x05, 1, 0, FirstSkeleton.Length),
-                Entry("SKEL0000001", 0x05, 1, secondStart, SecondSkeleton.Length)
+                Entry("SKEL0000001", 0x05, 1, overlapping ? 0 : secondStart, SecondSkeleton.Length)
             };
             var fragmentTags = new byte[][] { [2, 1, 0x01, 0], [3, 1, 0x02, 0], [4, 1, 0x04, 0], [6, 2, 0x08, 0], [0, 0, 0, 1] };
             var fragments = new[]
@@ -174,6 +174,15 @@ namespace Jularr.Backend.Tests
                 Entry((secondStart + SecondSkeleton.IndexOf("</body>", StringComparison.Ordinal)).ToString("D10"), 0x0F, 0, 1, 1, 0, SecondFragment.Length)
             };
             return [first, .. records, .. image ? new[] { Png } : [], fdst, IndexHeader(skeletonTags), IndexRecord(skeletons), IndexHeader(fragmentTags), IndexRecord(fragments)];
+        }
+
+        // A MOBI 6 book whose EXTH record claims almost 2 GiB.
+        public static byte[] HugeExth()
+        {
+            var book = Mobi("<p>The night train left at nine.</p>");
+            var first = (int)BinaryPrimitives.ReadUInt32BigEndian(book.AsSpan(78));
+            BinaryPrimitives.WriteUInt32BigEndian(book.AsSpan(first + 16 + 0x108 + 12 + 4), 0x7FFFFFFF);
+            return book;
         }
 
         // A MOBI first record whose header says the text is encrypted, with nothing behind it.

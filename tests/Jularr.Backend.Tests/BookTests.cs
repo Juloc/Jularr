@@ -164,6 +164,9 @@ namespace Jularr.Backend.Tests
             File.WriteAllText(Path.Combine(books, "Pride and Prejudice", "readme.txt"), "note");
             Directory.CreateDirectory(Path.Combine(books, "Unknown Text Nobody Lists"));
             File.WriteAllText(Path.Combine(books, "Unknown Text Nobody Lists", "Unknown Text Nobody Lists.txt"), "a book in plain text");
+            Directory.CreateDirectory(Path.Combine(books, "Unknown Audio Nobody Lists"));
+            File.WriteAllBytes(Path.Combine(books, "Unknown Audio Nobody Lists", "01.mp3"), new byte[16]);
+            File.WriteAllText(Path.Combine(books, "Unknown Audio Nobody Lists", "info.txt"), "read by somebody");
             var rootId = await LibraryTests.CreateRootAsync(host, mountId, "Books", MediaType.Book);
 
             // The catalog names exactly one entry with the folder's title; a title it does not list stays for a person.

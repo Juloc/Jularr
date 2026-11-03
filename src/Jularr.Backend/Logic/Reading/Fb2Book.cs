@@ -25,20 +25,8 @@ namespace Jularr.Backend.Logic.Reading
 
         public static ConvertedBook Read(byte[] bytes)
         {
-            // No DTDs, no external entities; the declared encoding (often windows-1251) is honoured.
-            XDocument document;
-            try
-            {
-                using var reader = XmlReader.Create(new MemoryStream(bytes), new XmlReaderSettings
-                {
-                    DtdProcessing = DtdProcessing.Ignore, XmlResolver = null, MaxCharactersInDocument = BookConversion.MaximumTextBytes, MaxCharactersFromEntities = 1024
-                });
-                document = XDocument.Load(reader);
-            }
-            catch (Exception exception) when (exception is XmlException or ArgumentException or NotSupportedException)
-            {
-                throw new InvalidDataException("The FictionBook is no valid XML.", exception);
-            }
+            // No DTDs, no external entities, bounded depth; the declared encoding (often windows-1251) is honoured.
+            var document = EpubReader.LoadXml(bytes, BookConversion.MaximumTextBytes);
 
             if (document.Root is not { Name.LocalName: "FictionBook" } root)
             {
@@ -189,7 +177,7 @@ namespace Jularr.Backend.Logic.Reading
                         book.Add("<p>" + BookConversion.Escape(Clean(element.Value) ?? "") + "</p>");
                         break;
                     default:
-                        if (Clean(element.Value) is not null) book.Add("<p>" + Inline(element, 0) + "</p>");
+                        if (Clean(element.Value) is not null || element.Descendants().Any(child => child.Name.LocalName == "image")) book.Add("<p>" + Inline(element, 0) + "</p>");
                         break;
                 }
             }
@@ -226,14 +214,17 @@ namespace Jularr.Backend.Logic.Reading
                     return null;
                 }
 
-                try
+                return book.Image(id, () =>
                 {
-                    return book.Image(id, Convert.FromBase64String(binary.Value));
-                }
-                catch (FormatException)
-                {
-                    return null;
-                }
+                    try
+                    {
+                        return Convert.FromBase64String(binary.Value);
+                    }
+                    catch (FormatException)
+                    {
+                        return [];
+                    }
+                });
             }
 
             private string Inline(XElement element, int depth)

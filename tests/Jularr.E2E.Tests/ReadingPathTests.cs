@@ -427,8 +427,10 @@ namespace Jularr.E2E.Tests
                 await Assertions.Expect(page.Locator("[data-role=content] em")).ToHaveTextAsync("slowly");
                 await Evidence.SaveAsync(page, "reader-fb2-desktop");
                 await page.SetViewportSizeAsync(390, 844);
+                await page.GotoAsync("/Read/1");
                 await page.WaitForFunctionAsync("() => document.querySelector('.reader').dataset.columns === '1'");
                 await Assertions.Expect(page.Locator("[data-role=content]")).ToContainTextAsync("The night train left at nine");
+                await Assertions.Expect(page.Locator("[data-role=content]")).ToBeInViewportAsync();
                 await Evidence.SaveAsync(page, "reader-fb2-phone");
                 await page.SetViewportSizeAsync(1280, 720);
 

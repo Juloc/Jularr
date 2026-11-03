@@ -2,6 +2,7 @@ using System.Globalization;
 using System.IO.Compression;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Xml;
 using Jularr.Backend.Logic.Library;
 
 namespace Jularr.Backend.Logic.Reading
@@ -14,16 +15,18 @@ namespace Jularr.Backend.Logic.Reading
         public const long MaximumTextBytes = 64L * 1024 * 1024;
         public const int MaximumImages = 5000;
         public const long MaximumImageBytes = 256L * 1024 * 1024;
+        public const long MaximumPictureBytes = 32L * 1024 * 1024;
+        public const int MaximumImageReferences = 100_000;
 
-        // A section of the copy holds about this much HTML; a longer chapter continues in the next one.
+        // A section of the copy holds about this much HTML; a longer chapter continues in the next one, up to a bounded number of sections that leaves the EPUB within its entry limit.
         private const int SectionCharacters = 150_000;
+        private const int MaximumSections = 10_000;
 
-        [GeneratedRegex("href=\"#([^\"]{1,256})\"")]
+        [GeneratedRegex("href=\"#([^\"]{1,256})\"", RegexOptions.None, 1000)]
         private static partial Regex LocalLink();
 
         public static bool IsConverted(string relativePath) => LibraryFileTypes.Extension(relativePath) is ".fb2" or ".fb2.zip" or ".txt" or ".rtf" or ".docx" or ".mobi" or ".azw" or ".azw3";
 
-        // The reading copy of a book file as EPUB bytes; a protected Kindle book raises BookProtectedException.
         public static byte[] ToEpub(string relativePath, Stream file)
         {
             if (file.CanSeek && file.Length > MaximumSourceBytes)
@@ -31,17 +34,23 @@ namespace Jularr.Backend.Logic.Reading
                 throw new InvalidDataException("The book exceeds the size limit.");
             }
 
-            var extension = LibraryFileTypes.Extension(relativePath);
-            var book = extension switch
+            return ToEpub(relativePath, ReadBounded(file, MaximumSourceBytes));
+        }
+
+        // The reading copy of a book file as EPUB bytes; a protected Kindle book raises BookProtectedException, any other failure InvalidDataException.
+        public static byte[] ToEpub(string relativePath, byte[] bytes)
+        {
+            ConvertedBook book;
+            try
             {
-                ".fb2" => Fb2Book.Read(ReadBounded(file, MaximumTextBytes)),
-                ".fb2.zip" => Fb2Book.ReadZip(file),
-                ".txt" => TextBook.Read(ReadBounded(file, MaximumTextBytes)),
-                ".rtf" => RtfBook.Read(ReadBounded(file, MaximumSourceBytes)),
-                ".docx" => DocxBook.Read(file),
-                ".mobi" or ".azw" or ".azw3" => MobiBook.Read(ReadBounded(file, MaximumSourceBytes)),
-                _ => throw new InvalidDataException("The format has no reading copy.")
-            };
+                book = Read(relativePath, bytes);
+            }
+            catch (Exception exception) when (exception is ArgumentException or IndexOutOfRangeException or OverflowException or XmlException or DecoderFallbackException
+                or FormatException or RegexMatchTimeoutException or EndOfStreamException)
+            {
+                // The last line: a converter's unforeseen failure is a broken file, not a fault.
+                throw new InvalidDataException("The book cannot be read.", exception);
+            }
 
             if (book.Chapters.All(chapter => chapter.Blocks.Count == 0))
             {
@@ -50,6 +59,18 @@ namespace Jularr.Backend.Logic.Reading
 
             return Write(book);
         }
+
+        // The book a converter reads from the file's bytes.
+        public static ConvertedBook Read(string relativePath, byte[] bytes) => LibraryFileTypes.Extension(relativePath) switch
+        {
+            ".fb2" => bytes.Length <= MaximumTextBytes ? Fb2Book.Read(bytes) : throw new InvalidDataException("The book exceeds the size limit."),
+            ".fb2.zip" => Fb2Book.ReadZip(new MemoryStream(bytes, false)),
+            ".txt" => bytes.Length <= MaximumTextBytes ? TextBook.Read(bytes) : throw new InvalidDataException("The book exceeds the size limit."),
+            ".rtf" => RtfBook.Read(bytes),
+            ".docx" => DocxBook.Read(new MemoryStream(bytes, false)),
+            ".mobi" or ".azw" or ".azw3" => MobiBook.Read(bytes),
+            _ => throw new InvalidDataException("The format has no reading copy.")
+        };
 
         // The whole stream, at most limit bytes.
         public static byte[] ReadBounded(Stream stream, long limit)
@@ -101,25 +122,40 @@ namespace Jularr.Backend.Logic.Reading
             }
         }
 
-        // Text for HTML and XML: markup characters escaped, every other character kept as it is; characters XML forbids leave.
+        // Text for HTML and XML: markup characters escaped, every other character kept as it is; characters XML forbids (controls, U+FFFE, U+FFFF, lone surrogates) leave.
         public static string Escape(string text)
         {
-            if (text.AsSpan().IndexOfAny("&<>\"") < 0 && !text.Any(character => character < ' ' && character is not ('\t' or '\n' or '\r')))
-            {
-                return text;
-            }
-
             var html = new StringBuilder(text.Length + 16);
-            foreach (var character in text)
+            for (var index = 0; index < text.Length; index++)
             {
+                var character = text[index];
                 switch (character)
                 {
-                    case '&': html.Append("&amp;"); break;
-                    case '<': html.Append("&lt;"); break;
-                    case '>': html.Append("&gt;"); break;
-                    case '"': html.Append("&quot;"); break;
-                    case < ' ' and not ('\t' or '\n' or '\r'): break;
-                    default: html.Append(character); break;
+                    case '&':
+                        html.Append("&amp;");
+                        break;
+                    case '<':
+                        html.Append("&lt;");
+                        break;
+                    case '>':
+                        html.Append("&gt;");
+                        break;
+                    case '"':
+                        html.Append("&quot;");
+                        break;
+                    case < ' ' and not ('\t' or '\n' or '\r') or '\uFFFE' or '\uFFFF':
+                        break;
+                    default:
+                        if (char.IsHighSurrogate(character) && index + 1 < text.Length && char.IsLowSurrogate(text[index + 1]))
+                        {
+                            html.Append(character).Append(text[++index]);
+                        }
+                        else if (!char.IsSurrogate(character))
+                        {
+                            html.Append(character);
+                        }
+
+                        break;
                 }
             }
 
@@ -129,28 +165,52 @@ namespace Jularr.Backend.Logic.Reading
         // The EPUB: one XHTML file per section, the pictures beside them, navigation from the chapter titles.
         private static byte[] Write(ConvertedBook book)
         {
-            // Sections: a chapter starts one; a long chapter continues in the next at a block boundary.
+            // Sections: a chapter starts one; a long chapter continues in the next at a block boundary; past the limit everything joins the last one.
             var sections = new List<(int Chapter, StringBuilder Html)>();
-            var blockSection = new Dictionary<(int Chapter, int Block), int>();
+            var starts = new Dictionary<int, List<(int Block, int Section)>>();
+            var maximumSections = Math.Min(MaximumSections, EpubReader.MaximumEntries - book.Images.Count - 8);
             for (var chapter = 0; chapter < book.Chapters.Count; chapter++)
             {
                 StringBuilder? current = null;
                 var blocks = book.Chapters[chapter].Blocks;
                 for (var block = 0; block < blocks.Count; block++)
                 {
-                    if (current is null || current.Length > 0 && current.Length + blocks[block].Length > SectionCharacters)
+                    if (sections.Count < maximumSections && (current is null || current.Length > 0 && current.Length + blocks[block].Length > SectionCharacters))
                     {
                         current = new StringBuilder();
                         sections.Add((chapter, current));
+                        (starts.TryGetValue(chapter, out var list) ? list : starts[chapter] = []).Add((block, sections.Count - 1));
                     }
 
-                    blockSection[(chapter, block)] = sections.Count - 1;
+                    current ??= sections[^1].Html;
                     current.Append(blocks[block]).Append('\n');
                 }
             }
 
-            // Links to an anchor of another section name its file.
-            var anchorFiles = book.Anchors.Where(anchor => blockSection.ContainsKey(anchor.Value)).ToDictionary(anchor => anchor.Key, anchor => blockSection[anchor.Value], StringComparer.Ordinal);
+            // Links to an anchor of another section name its file: the last section of its chapter that starts at or before its block.
+            int? SectionOf((int Chapter, int Block) place)
+            {
+                if (!starts.TryGetValue(place.Chapter, out var list) || list[0].Block > place.Block)
+                {
+                    return null;
+                }
+
+                var (low, high) = (0, list.Count - 1);
+                while (low < high)
+                {
+                    var middle = (low + high + 1) / 2;
+                    if (list[middle].Block <= place.Block) low = middle;
+                    else high = middle - 1;
+                }
+
+                return list[low].Section;
+            }
+
+            var anchorFiles = new Dictionary<string, int>(StringComparer.Ordinal);
+            foreach (var (id, place) in book.Anchors)
+            {
+                if (SectionOf(place) is { } section) anchorFiles[id] = section;
+            }
             var chapterFiles = new Dictionary<int, int>();
             for (var index = sections.Count - 1; index >= 0; index--)
             {
@@ -265,6 +325,7 @@ namespace Jularr.Backend.Logic.Reading
         private long _characters;
         private long _imageBytes;
         private string? _pendingAnchor;
+        private int _imageReferences;
 
         public string? Title { get; set; }
 
@@ -324,19 +385,29 @@ namespace Jularr.Backend.Logic.Reading
         }
 
         // A picture under the converter's own key (its id or record number); null when its bytes are no picture or the limits are reached. The path is where sections find it.
-        public string? Image(string key, byte[] bytes)
+        public string? Image(string key, Func<byte[]> read)
         {
+            // Every reference counts, the known ones too; a picture is read once.
+            if (++_imageReferences > BookConversion.MaximumImageReferences)
+            {
+                return null;
+            }
+
             if (_imageKeys.TryGetValue(key, out var known))
             {
                 return known;
             }
 
             string? path = null;
-            if (ComicPages.ContentType(bytes) is { } mediaType && Images.Count < BookConversion.MaximumImages && _imageBytes + bytes.Length <= BookConversion.MaximumImageBytes)
+            if (Images.Count < BookConversion.MaximumImages)
             {
-                path = "images/" + Images.Count.ToString("D5", CultureInfo.InvariantCulture) + "." + mediaType["image/".Length..];
-                _imageBytes += bytes.Length;
-                Images[path] = new ConvertedImage(mediaType, bytes);
+                var bytes = read();
+                if (ComicPages.ContentType(bytes) is { } mediaType && bytes.Length <= BookConversion.MaximumPictureBytes && _imageBytes + bytes.Length <= BookConversion.MaximumImageBytes)
+                {
+                    path = "images/" + Images.Count.ToString("D5", CultureInfo.InvariantCulture) + "." + mediaType["image/".Length..];
+                    _imageBytes += bytes.Length;
+                    Images[path] = new ConvertedImage(mediaType, bytes);
+                }
             }
 
             _imageKeys[key] = path;

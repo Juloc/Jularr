@@ -162,7 +162,7 @@ namespace Jularr.Backend.Logic.Reading
                     // A picture's hexadecimal bytes become the picture where it stood.
                     if (state.Destination == Destination.Picture && (stack.Count == 0 || stack.Peek().Destination != Destination.Picture))
                     {
-                        if (state.PictureType is not null && picture.Length >= 16 && book.Image("rtf" + (pictures++).ToString(CultureInfo.InvariantCulture), Hex(picture)) is { } path)
+                        if (state.PictureType is not null && picture.Length >= 16 && book.Image("rtf" + (pictures++).ToString(CultureInfo.InvariantCulture), () => Hex(picture)) is { } path)
                         {
                             runs.Add(("<img src=\"" + path + "\" alt=\"\"/>", false, false, true));
                         }
@@ -204,7 +204,7 @@ namespace Jularr.Backend.Logic.Reading
 
                         if (word == "bin")
                         {
-                            index += Math.Max(0, parameter ?? 0);
+                            index = (int)Math.Min(data.Length, (long)index + Math.Max(0, parameter ?? 0));
                             continue;
                         }
 
@@ -256,7 +256,7 @@ namespace Jularr.Backend.Logic.Reading
 
                 if (state.Destination == Destination.Picture)
                 {
-                    if (state.PictureType is not null && char.IsAsciiHexDigit((char)current) && picture.Length < BookConversion.MaximumImageBytes) picture.Append((char)current);
+                    if (state.PictureType is not null && char.IsAsciiHexDigit((char)current) && picture.Length < BookConversion.MaximumPictureBytes * 2) picture.Append((char)current);
                     continue;
                 }
 
@@ -278,11 +278,11 @@ namespace Jularr.Backend.Logic.Reading
 
             void Control(string word, int? parameter)
             {
-                // An unknown destination behind \* is skipped with everything inside it.
+                // An unknown destination behind \* is skipped with everything inside it, also inside a picture (its id and properties are no picture bytes).
                 if (state.Ignorable && word is not ("shppict" or "pict" or "title"))
                 {
                     state.Ignorable = false;
-                    if (state.Destination is Destination.Text or Destination.Title) state.Destination = Destination.Skip;
+                    if (state.Destination is Destination.Text or Destination.Title or Destination.Picture) state.Destination = Destination.Skip;
                     return;
                 }
 

@@ -51,7 +51,7 @@ namespace Jularr.Backend.Logic.Reading
                     return null;
                 }
 
-                return book.Image(path, BookConversion.ReadEntry(entry, EpubReader.MaximumEntryBytes));
+                return book.Image(path, () => entry.Length > BookConversion.MaximumPictureBytes ? [] : BookConversion.ReadEntry(entry, BookConversion.MaximumPictureBytes));
             }
 
             // A paragraph's runs: text, tabs and breaks with their emphasis, pictures where they stand.
@@ -137,19 +137,8 @@ namespace Jularr.Backend.Logic.Reading
                 return null;
             }
 
-            // No DTDs, no external entities, bounded.
-            try
-            {
-                using var reader = XmlReader.Create(new MemoryStream(BookConversion.ReadEntry(entry, EpubReader.MaximumEntryBytes)), new XmlReaderSettings
-                {
-                    DtdProcessing = DtdProcessing.Ignore, XmlResolver = null, MaxCharactersInDocument = EpubReader.MaximumEntryBytes, MaxCharactersFromEntities = 1024
-                });
-                return XDocument.Load(reader);
-            }
-            catch (XmlException exception)
-            {
-                throw new InvalidDataException("The Word document contains invalid XML.", exception);
-            }
+            // No DTDs, no external entities, bounded in size and depth.
+            return EpubReader.LoadXml(BookConversion.ReadEntry(entry, EpubReader.MaximumEntryBytes), EpubReader.MaximumEntryBytes);
         }
     }
 }
