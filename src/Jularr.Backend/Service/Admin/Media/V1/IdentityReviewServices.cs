@@ -50,12 +50,16 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                     JOIN "Works" AS work ON work."Id" = match."WorkId"
                 WHERE
                     match."IdentityMatchStatusTypeId" = 2
+                    AND (cardinality(@MediaTypeIds::smallint[]) + cardinality(@MediaSubtypeIds::smallint[]) = 0
+                        OR work."MediaSubtypeId" IS NULL AND work."MediaTypeId" = ANY(@MediaTypeIds::smallint[])
+                        OR work."MediaSubtypeId" = ANY(@MediaSubtypeIds::smallint[]))
                 ORDER BY
                     match."CheckedAt",
                     work."Id"
                 LIMIT @PageSize
                 OFFSET @Offset;
                 """;
+            sql.Parameters.Add(new IdentityReviewFilterData(Parameters.MediaTypeIds, Parameters.MediaSubtypeIds));
             sql.Page = Page;
             return await Context.ReadSql.ReadPageAsync<IdentityReviewV1>(sql, CancellationToken);
         }

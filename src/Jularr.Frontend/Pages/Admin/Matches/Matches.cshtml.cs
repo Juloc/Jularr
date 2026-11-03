@@ -10,9 +10,10 @@ using Microsoft.AspNetCore.Mvc.ModelBinding;
 
 namespace Jularr.Frontend.Pages.Admin.Matches
 {
-    public sealed class MatchesModel(ReadIdentityReviewsV1 reviews, ResolveIdentityReviewV1 resolve, IAntiforgery antiforgery) : JularrPage
+    public sealed class MatchesModel(ReadIdentityReviewsV1 reviews, ResolveIdentityReviewV1 resolve, IAntiforgery antiforgery, FrontendAssets assets) : JularrPage
     {
         private PageResult<IdentityReviewV1>? _reviews;
+        private ScopeSelection? _scopes;
 
         [BindProperty(SupportsGet = true)]
         public long? WorkId { get; set; }
@@ -20,10 +21,18 @@ namespace Jularr.Frontend.Pages.Admin.Matches
         [BindProperty(SupportsGet = true)]
         public int PageNumber { get; set; } = 1;
 
+        // Media types as slugs of the type bar, repeated or separated by commas; none shows all of them.
+        [BindProperty(SupportsGet = true, Name = "type")]
+        public string[] Types { get; set; } = [];
+
+        // Every type is listed here; the bar offers all of them.
+        private ScopeSelection Scopes => _scopes ??= new ScopeSelection(Types, LibraryScopes.All.Where(scope => scope.Slug != "all").ToList());
+
         protected override void Define(Page page)
         {
             page.Title("admin.matches.title");
             page.Navigation("nav.admin");
+            page.Asset("Pages/Admin/Matches/Matches.entry.scss");
             if (_reviews is not { } reviews)
             {
                 if (FormError is not null) page.Content.Add(new P(new Text(FormError.ResourceKey)).Attribute("role", "alert"));
@@ -31,6 +40,7 @@ namespace Jularr.Frontend.Pages.Admin.Matches
             }
 
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
+            page.Content.Add(new MediaTypeBar(assets, Scopes.ListedSlugs, Scopes.ChosenSlugs, "library.scope.", types => Address(types: types)));
             page.Content.Add(new P(new Text(reviews.Items.Count == 0 ? "admin.matches.empty" : "admin.matches.hint")).Attribute("role", "status"));
 
             // Each Work: its candidates, an entry by number, or no AniList entry at all.
@@ -48,15 +58,15 @@ namespace Jularr.Frontend.Pages.Admin.Matches
                     {
                         form.Hidden(item => item.AniListId);
                         form.Submit("admin.matches.accept");
-                    }, Address(review.WorkId), csrf, new ResolveIdentityReviewDataV1(id)));
+                    }, Address(workId: review.WorkId), csrf, new ResolveIdentityReviewDataV1(id)));
                 }
 
                 content.Add(new Form<ResolveIdentityReviewDataV1>(form =>
                 {
                     form.Number(item => item.AniListId, "admin.matches.aniListId");
                     form.Submit("admin.matches.accept");
-                }, Address(review.WorkId), csrf, new ResolveIdentityReviewDataV1(null), WorkId == review.WorkId ? FormError : null));
-                content.Add(new Form<ResolveIdentityReviewDataV1>(form => form.Submit("admin.matches.dismiss"), Address(review.WorkId) + "&handler=Dismiss", csrf,
+                }, Address(workId: review.WorkId), csrf, new ResolveIdentityReviewDataV1(null), WorkId == review.WorkId ? FormError : null));
+                content.Add(new Form<ResolveIdentityReviewDataV1>(form => form.Submit("admin.matches.dismiss"), Address(workId: review.WorkId) + "&handler=Dismiss", csrf,
                     new ResolveIdentityReviewDataV1(null, true)));
                 page.Content.Add(new Section([.. content]).Class("ui-section"));
             }
@@ -74,20 +84,28 @@ namespace Jularr.Frontend.Pages.Admin.Matches
         public async Task<IActionResult> OnPostAsync([BindRequired] int aniListId)
         {
             await resolve.ExecuteAsync<UpdateResult>(new IdentityReviewParametersV1(WorkId ?? 0), new ResolveIdentityReviewDataV1(aniListId), HttpContext.RequestAborted);
-            return RedirectToPage("/Admin/Matches/Matches");
+            return LocalRedirect(Address());
         }
 
         public async Task<IActionResult> OnPostDismissAsync()
         {
             await resolve.ExecuteAsync<UpdateResult>(new IdentityReviewParametersV1(WorkId ?? 0), new ResolveIdentityReviewDataV1(null, true), HttpContext.RequestAborted);
-            return RedirectToPage("/Admin/Matches/Matches");
+            return LocalRedirect(Address());
         }
 
         protected override async Task LoadDataAsync()
         {
-            _reviews = await reviews.ExecuteAsync<PageResult<IdentityReviewV1>>(new ReadIdentityReviewsParametersV1(Math.Max(1, PageNumber)), HttpContext.RequestAborted);
+            var (types, subtypes) = Scopes.Filter();
+            _reviews = await reviews.ExecuteAsync<PageResult<IdentityReviewV1>>(new ReadIdentityReviewsParametersV1(Math.Max(1, PageNumber), mediaTypeIds: types, mediaSubtypeIds: subtypes), HttpContext.RequestAborted);
         }
 
-        private static string Address(long workId) => "/Admin/Works/Matches?workId=" + workId.ToString(CultureInfo.InvariantCulture);
+        // The page's address with the chosen types; a Work's own address names it for the form.
+        private string Address(long? workId = null, IReadOnlyList<string>? types = null)
+        {
+            var query = new List<string>();
+            if (workId is { } id) query.Add("workId=" + id.ToString(CultureInfo.InvariantCulture));
+            if (Scopes.Parameter(types ?? Scopes.Picked) is { } chosen) query.Add("type=" + Uri.EscapeDataString(chosen).Replace("%2C", ","));
+            return "/Admin/Works/Matches" + (query.Count > 0 ? "?" + string.Join("&", query) : "");
+        }
     }
 }
