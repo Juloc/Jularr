@@ -33,3 +33,14 @@ export function summarize(boxes: readonly Choice[]): Selection {
 export function countText(template: string, selection: Selection): string {
     return template.replace("{0}", String(selection.count)).replace("{1}", String(selection.total));
 }
+
+// The types a bar link chooses ("#type=a,b"); none means all of them.
+export function typesOf(href: string): string[] {
+    const hash = href.includes("#") ? href.slice(href.indexOf("#") + 1) : "";
+    return (new URLSearchParams(hash).get("type") ?? "").split(",").map(slug => slug.trim()).filter(slug => slug !== "");
+}
+
+// A row shows when no type is chosen, or its type is; a row of no known type is never filtered out.
+export function isShown(chosen: readonly string[], type: string | undefined): boolean {
+    return chosen.length === 0 || !type || chosen.includes(type);
+}
