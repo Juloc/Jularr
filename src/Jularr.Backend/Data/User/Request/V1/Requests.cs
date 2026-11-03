@@ -13,14 +13,14 @@ namespace Jularr.Backend.Data.User.Request.V1
     public sealed class ReadRequestsParametersV1 : BaseParameters
     {
         public ReadRequestsParametersV1(int page = 1, int pageSize = 25, RequestListFilterType requestListFilterTypeId = RequestListFilterType.All, RequestSortType requestSortTypeId = RequestSortType.Newest,
-            MediaType? mediaTypeId = null, MediaSubtype? mediaSubtypeId = null)
+            MediaType[]? mediaTypeIds = null, MediaSubtype[]? mediaSubtypeIds = null)
         {
             Page = page;
             PageSize = pageSize;
             RequestListFilterTypeId = requestListFilterTypeId;
             RequestSortTypeId = requestSortTypeId;
-            MediaTypeId = mediaTypeId;
-            MediaSubtypeId = mediaSubtypeId;
+            MediaTypeIds = mediaTypeIds ?? [];
+            MediaSubtypeIds = mediaSubtypeIds ?? [];
         }
 
         public int Page { get; }
@@ -32,12 +32,12 @@ namespace Jularr.Backend.Data.User.Request.V1
         [DataField(typeof(AcquisitionRequestFields), nameof(AcquisitionRequestFields.RequestSortTypeId))]
         public RequestSortType RequestSortTypeId { get; }
 
-        // A type alone lists its Works without subtype; a subtype lists that subtype across types.
-        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId), false)]
-        public MediaType? MediaTypeId { get; }
+        // A type lists its Works without subtype, a subtype lists that subtype across types; none lists everything.
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeIds))]
+        public MediaType[] MediaTypeIds { get; }
 
-        [DataField(typeof(WorkFields), nameof(WorkFields.MediaSubtypeId), false)]
-        public MediaSubtype? MediaSubtypeId { get; }
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaSubtypeIds))]
+        public MediaSubtype[] MediaSubtypeIds { get; }
     }
 
     public sealed class CreateRequestParametersV1 : BaseParameters

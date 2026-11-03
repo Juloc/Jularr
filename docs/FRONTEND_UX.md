@@ -146,7 +146,7 @@ SavePill, FolderPicker, IconInfo, TimePicker, FactList, Drawer, FilterDialog, Sh
   catalog (`LocalDiscovery`: AniList, TMDB's films) the grid is read locally, otherwise from the provider (AniList, TMDB's discover lists,
   Open Library). The Filter drawer lists the media types first, then the local availability, the filters above, then only the rankings the
   chosen types have; the rankings a chosen type lacks leave the panel as the types change. Library and Favorites share the same media-type bar,
-  filter panel (types, release year), order and layout. Owner's decision 2 Nov: the admin Media list has the same media-type bar above its toolbar (every type, several at once); its status chips stay in the toolbar and its filter drawer has no type.
+  filter panel (types, release year), order and layout. Owner's decision 2 Nov: the admin Media list has the same media-type bar above its toolbar (every type, several at once); its status chips stay in the toolbar and its filter drawer has no type. Owner's decision 3 Nov: the same media-type bar is on every page where a media type is chosen to narrow a list: also My requests (below the status tabs) and the Calendar (replacing its own chip bar); the Anime tab appears when Anime is active.
   Cards use the shared cover presentation and Backend-supplied state below. User/profile ordering is respected.
   Backend supplies effective capability/order/provider data; do not copy
   old `Jularr.Web` persistence or invent a new module toggle in Frontend.

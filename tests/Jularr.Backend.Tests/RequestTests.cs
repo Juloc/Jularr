@@ -88,7 +88,9 @@ namespace Jularr.Backend.Tests
             CollectionAssert.AreEqual(new long[] { 301, 302, 303, 304 }, await ReadAsync("?requestSortTypeId=Oldest"));
             CollectionAssert.AreEqual(new long[] { 304, 301, 302, 303 }, await ReadAsync("?requestSortTypeId=Status"));
             CollectionAssert.AreEqual(new long[] { 303, 302, 304 }, (await ReadAsync("?requestSortTypeId=Title")).Where(id => id != 301).ToArray());
-            CollectionAssert.AreEqual(new long[] { 302 }, await ReadAsync("?mediaTypeId=Book"));
+            CollectionAssert.AreEqual(new long[] { 302 }, await ReadAsync("?mediaTypeIds=Book"));
+            CollectionAssert.AreEqual(new long[] { 304, 303, 301 }, await ReadAsync("?mediaTypeIds=Movie"));
+            CollectionAssert.AreEqual(new long[] { 304, 303, 302, 301 }, await ReadAsync("?mediaTypeIds=Movie&mediaTypeIds=Book"));
 
             // Only requests that are not imported yet can be withdrawn.
             using var all = await host.SendAsync(HttpMethod.Get, "/api/v1/requests");
@@ -159,12 +161,16 @@ namespace Jularr.Backend.Tests
             var html = await browser.GetStringAsync("/Requests");
             StringAssert.Contains(html, "&lt;Work&gt;");
             StringAssert.Contains(html, "requests-bar");
+            StringAssert.Contains(html, "capsule-bar");
             StringAssert.Contains(html, "live-progress--compact");
             StringAssert.Contains(html, "request=301");
             Assert.IsFalse(html.Contains("request-drawer__foot", StringComparison.Ordinal));
             var movies = await browser.GetStringAsync("/Requests?type=movies&state=Active");
             StringAssert.Contains(movies, "&lt;Work&gt;");
             Assert.IsFalse(movies.Contains(">Book<", StringComparison.Ordinal));
+            var both = await browser.GetStringAsync("/Requests?type=movies,books&state=All");
+            StringAssert.Contains(both, "&lt;Work&gt;");
+            StringAssert.Contains(both, "Book");
             var available = await browser.GetStringAsync("/Requests?state=Available");
             Assert.IsFalse(available.Contains("&lt;Work&gt;", StringComparison.Ordinal));
             StringAssert.Contains(available, "Book");

@@ -20,7 +20,7 @@ namespace Jularr.Frontend.Pages.User.Calendar
     {
         private const int DefaultShown = 6;
 
-        // The media types the capsule groups by area; a type the profile hides is left out.
+        // The media types of the filter dialog by area; a type the profile hides is left out.
         private static readonly (string Key, string Icon, string[] Scopes)[] Areas =
         [
             ("calendar.area.watch", "play", ["anime", "series", "movies"]), ("calendar.area.read", "reading", ["manga", "books", "lightnovels"]),
@@ -108,28 +108,12 @@ namespace Jularr.Frontend.Pages.User.Calendar
 
         private IUiComponent Capsules(Query query)
         {
-            var all = Areas.SelectMany(area => area.Scopes).Where(_listed.Contains).ToArray();
-            var groups = Areas.Select(area => (area.Key, area.Icon, Scopes: area.Scopes.Where(_listed.Contains).ToArray())).Where(area => area.Scopes.Length > 0).Select(area =>
-            {
-                var chosen = area.Scopes.Count(query.Types.Contains);
-                var solo = chosen == area.Scopes.Length && query.Types.Count == area.Scopes.Length;
-                return new ChipGroup(area.Key, area.Icon, Address(query with { Types = area.Scopes }), chosen > 0, solo,
-                    string.Format(CultureInfo.CurrentCulture, texts["calendar.areaState"], texts[area.Key], chosen, area.Scopes.Length),
-                    [.. area.Scopes.Select(scope => new Chip("library.scope." + scope, Address(query with { Types = Toggle(query.Types, scope) }), query.Types.Contains(scope)))]);
-            }).ToArray();
             var tools = new IUiComponent[]
             {
-                new Button(new Icon("sliders", assets, 18)).IconOnly(texts["calendar.customize"]).Attribute("data-filter-open", "calendar-view"),
-                new Button(new Icon("filter", assets, 18)).IconOnly(texts["calendar.filter"]).Attribute("data-filter-open", "calendar-filter")
+                new Button(new Icon("sliders", assets, 18)).IconOnly(texts["calendar.customize"]).Attribute("data-filter-open", "calendar-view").Class("button button--icon capsule-bar__tool"),
+                new Button(new Icon("filter", assets, 18)).IconOnly(texts["calendar.filter"]).Attribute("data-filter-open", "calendar-filter").Class("button button--icon capsule-bar__tool")
             };
-            return new ChipBar(assets, new Chip("common.all", Address(query with { Types = all }), query.Types.Count == all.Length), groups, "discover.mediaTypes", tools);
-        }
-
-        // A chosen type leaves the selection, an unchosen joins it; the last one never leaves.
-        private IReadOnlyList<string> Toggle(IReadOnlyList<string> selected, string scope)
-        {
-            if (!selected.Contains(scope)) return [.. _listed.Where(type => type == scope || selected.Contains(type))];
-            return selected.Count == 1 ? selected : [.. selected.Where(type => type != scope)];
+            return new MediaTypeBar(assets, _listed, query.Types, "library.scope.", types => Address(query with { Types = types }), tools);
         }
 
         private IUiComponent Toolbar(Query query)
