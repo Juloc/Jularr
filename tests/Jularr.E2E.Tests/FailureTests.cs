@@ -95,13 +95,21 @@ namespace Jularr.E2E.Tests
                 await PrepareAsync(page, fakes, folders);
 
                 // A broken download lands in the queue; after Retry the broken release is blocked and the next good one is taken.
+                // The error tile counts every failed operation: the offline keyless catalogs are switched off and earlier job notices dismissed, so only the broken download counts.
+                await jularr.RunSqlAsync("""
+                    UPDATE "Providers" SET "IsEnabled" = FALSE WHERE "ProtectedSecret" IS NULL;
+                    UPDATE "Operations" SET "DismissedAt" = now() WHERE "OperationTypeId" <> 2 AND "OperationStatusTypeId" = 4 AND "DismissedAt" IS NULL;
+                    """);
+
+                // The good one is offered only once downloads work again: taken by the search in the background while they still fail, it would fail as well.
                 fakes.FailDownloads = true;
-                fakes.Offer(Film with { File = video }, LowerFilm with { File = video });
+                fakes.Offer(Film with { File = video });
                 await Steps.OpenSearchAsync(page, FakeServices.MovieTitle);
                 await Steps.SubmitAsync(page, Steps.FormWith(page, "Start search"));
                 await Steps.GrabAsync(page, Film);
                 var failed = await WaitForFailedDownloadAsync(page);
                 fakes.FailDownloads = false;
+                fakes.Offer(LowerFilm with { File = video });
 
                 // The error tile counts it and the Errors filter lists it, next to the history.
                 await Assertions.Expect(page.Locator("[data-live=queue][data-live-text=errors]")).ToHaveTextAsync("1");

@@ -1,3 +1,5 @@
+@use "HitArea";
+
 // The mockups' switch: a 37x21 pill on the stronger line with a 13px muted knob; on, it fills with the accent and the knob turns white.
 .toggle {
     position: relative;
@@ -41,4 +43,7 @@
     & > input:focus-visible + &__track { outline: 3px solid var(--focus); outline-offset: 2px; }
     & > input:disabled ~ span { opacity: .4; cursor: default; }
     & > input[aria-invalid="true"] + &__track { border-color: var(--danger); }
+
+    // A switch in a card is about 22px high: its tap reaches up and down into the free space of the card.
+    @include HitArea.phone-hit-area(8px, 22px, $border: 0px);
 }

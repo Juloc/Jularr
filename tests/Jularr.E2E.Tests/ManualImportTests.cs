@@ -269,5 +269,88 @@ namespace Jularr.E2E.Tests
                 throw;
             }
         }
+
+        // A book download nothing of which the import could place waits in the queue with each file's reason; from there the person assigns the file to the book by hand, and it lands under the import's own name.
+        [TestMethod]
+        [Timeout(600_000)]
+        public async Task WaitingBook_FromTheQueue_IsAssignedByHand()
+        {
+            using var folders = new Folders("Books");
+            var refused = Path.Combine(folders.Fixtures, "book.epub");
+            File.WriteAllText(refused, "<html>The check refuses this as an EPUB.</html>");
+            var book = new FakeRelease("Jane Austen - Pride and Prejudice (epub)", "pride", 7020, refused);
+            await using var fakes = await FakeServices.StartAsync(folders.Downloads);
+            await using var jularr = await JularrInstance.StartAsync(new Dictionary<string, string>
+            {
+                ["Providers:Tmdb"] = fakes.Tmdb3.ToString(),
+                ["Providers:Tvdb"] = fakes.Tvdb4.ToString(),
+                ["Providers:Images:image.tmdb.org"] = fakes.Images.ToString(),
+                ["Providers:Images:artworks.thetvdb.com"] = fakes.Images.ToString(),
+                ["Providers:OpenLibrary"] = fakes.OpenLibrary.ToString(),
+                ["Providers:Images:covers.openlibrary.org"] = fakes.Images.ToString(),
+                ["Storage:LocalPaths:0"] = folders.Library
+            });
+            await using var session = await BrowserSession.StartAsync(jularr);
+            var page = session.Page;
+
+            try
+            {
+                await Owner.SetUpAndSignInAsync(page);
+                await Steps.AddLibraryAsync(page, folders.Library, new LibraryPath("Books", "Book"));
+                await Steps.AddUsenetAsync(page, fakes, "7000,7020");
+                await Steps.ImportAndRequestAsync(page, "Book", null, FakeServices.BookTitle);
+                fakes.Offer(book);
+                await Steps.OpenSearchAsync(page, FakeServices.BookTitle);
+                await Steps.SubmitAsync(page, Steps.FormWith(page, "Start search"));
+                await Steps.GrabAsync(page, book);
+
+                // The download waits with its reason; the drawer names the file and why.
+                ILocator? waiting = null;
+                var deadline = System.Diagnostics.Stopwatch.StartNew();
+                while (waiting is null)
+                {
+                    Assert.IsTrue(deadline.Elapsed < TimeSpan.FromMinutes(6), "The download did not wait in the queue within six minutes.");
+                    await page.GotoAsync("/Admin/Activity");
+                    var row = Steps.ListRow(page, "Nothing in the download could be placed");
+                    if (await row.CountAsync() > 0) waiting = row.First;
+                    else await page.WaitForTimeoutAsync(3000);
+                }
+
+                await Steps.FollowAsync(page, waiting.GetByRole(AriaRole.Link, new() { Name = "Import by hand", Exact = true }));
+
+                // The file says why it was left out and is not chosen by itself.
+                var file = page.Locator(".manual-import-files .list-row").First;
+                await Assertions.Expect(file).ToContainTextAsync("Not a valid EPUB");
+                await Assertions.Expect(file).ToContainTextAsync("EPUB");
+                await Assertions.Expect(file.Locator("input[type=checkbox]")).Not.ToBeCheckedAsync();
+
+                // Matched as the whole book, it is chosen and shows the name the library gives it.
+                await Steps.FollowAsync(page, file.GetByRole(AriaRole.Button, new() { Name = "Match", Exact = true }));
+                var dialog = page.GetByRole(AriaRole.Dialog, new() { Name = "Match file", Exact = true });
+                await Assertions.Expect(dialog.Locator("input[name=MatchedSeason]")).ToBeVisibleAsync();
+                await Assertions.Expect(dialog.Locator("fieldset", new() { HasText = "Subtitle languages" })).ToHaveCountAsync(0);
+                await dialog.Locator("fieldset", new() { HasText = "Language" }).Locator("label", new() { HasText = "English" }).ClickAsync();
+                await Evidence.SaveAsync(page, "manual-import-book-match");
+                await Steps.FollowAsync(page, dialog.GetByRole(AriaRole.Button, new() { Name = "Apply", Exact = true }));
+                file = page.Locator(".manual-import-files .list-row").First;
+                await Assertions.Expect(file).ToContainTextAsync("Whole work");
+                await Assertions.Expect(file).ToContainTextAsync("→ Jane Austen/");
+                await Assertions.Expect(file.Locator("input[type=checkbox]")).ToBeCheckedAsync();
+                await Evidence.SaveAsync(page, "manual-import-book-files");
+
+                // Imported, the download leaves the queue and the book is in its library.
+                await Steps.FollowAsync(page, page.GetByRole(AriaRole.Button, new() { Name = "Import selected", Exact = true }));
+                await Assertions.Expect(page.Locator(".manual-import-report .list-row").First).ToContainTextAsync("Imported");
+                Assert.AreEqual(1, Directory.EnumerateFiles(Path.Combine(folders.Library, "Books", "Jane Austen"), "*.epub", SearchOption.AllDirectories).Count());
+                await page.GotoAsync("/Admin/Activity");
+                await Assertions.Expect(Steps.ListRow(page, "Nothing in the download could be placed")).ToHaveCountAsync(0);
+                CollectionAssert.AreEqual(Array.Empty<string>(), session.Problems.ToArray());
+            }
+            catch (Exception exception) when (exception is not AssertInconclusiveException)
+            {
+                await Evidence.SaveAsync(page, "failure-manual-import-book");
+                throw;
+            }
+        }
     }
 }

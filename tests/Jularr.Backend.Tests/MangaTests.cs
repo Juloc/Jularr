@@ -4,6 +4,7 @@ using System.Text;
 using Jularr.Backend.Service.Core;
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Acquisition.V1;
+using Jularr.Backend.Data.Admin.Activity.V1;
 using Jularr.Backend.Data.Admin.Instance.V1;
 using Jularr.Backend.Data.Admin.Media.V1;
 using Jularr.Backend.Data.Admin.Wanted.V1;
@@ -11,6 +12,7 @@ using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.User.Discover.V1;
 using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Enums.Media;
+using Jularr.Backend.Data.Enums.Storage;
 using Jularr.Backend.Data.Logic.Acquisition;
 using Jularr.Backend.Data.System.Acquisition.V1;
 using Jularr.Backend.Logic.Acquisition;
@@ -181,14 +183,51 @@ namespace Jularr.Backend.Tests
             // One volume, also in two formats, is still placed as the book it always was.
             Assert.IsNull(Plan("Novel - Group Volume 01.epub").Single().UnitNumber);
             Assert.IsTrue(Plan("Novel v01.epub", "Novel v01.pdf").All(placement => placement.UnitNumber is null));
-            Assert.IsNull(ImportPlacementLogic.UnmatchedVolumes(MediaSubtype.LightNovel, Files("Novel v01.epub"), volumes));
+            Assert.HasCount(0, Unplaced(MediaSubtype.LightNovel, "Novel", volumes, [], Files("Novel v01.epub")));
 
-            // A pack: a group name between title and volume is no obstacle; a present volume, a range and a number the Work lacks are not placed.
+            // A pack: a group name between title and volume is no obstacle; a present volume, a range and a number the Work lacks are not placed, each with why.
             string[] pack = ["Novel - Group Volume 01.epub", "Novel - Group Volume 02.epub", "Novel - Group Volume 03.epub", "Novel - Group Volume 01-02.epub", "Novel - Group Volume 09.epub", "Novel - Extras.epub"];
             CollectionAssert.AreEqual(new decimal?[] { 1, 2 }, Plan(pack).Select(placement => placement.UnitNumber).ToArray());
             Assert.IsTrue(Plan(pack).All(placement => placement.WorkUnitTypeId == WorkUnitType.Volume && placement.TargetStem == "Novel/Novel v0" + placement.UnitNumber));
-            CollectionAssert.AreEqual(new[] { "Pack/Novel - Extras.epub", "Pack/Novel - Group Volume 01-02.epub", "Pack/Novel - Group Volume 09.epub" },
-                ImportPlacementLogic.UnmatchedVolumes(MediaSubtype.LightNovel, Files(pack), volumes)!.ToArray());
+            CollectionAssert.AreEqual(new[] { "Novel - Extras.epub: no_volume", "Novel - Group Volume 01-02.epub: ambiguous", "Novel - Group Volume 03.epub: present", "Novel - Group Volume 09.epub: unknown_unit" },
+                Unplaced(MediaSubtype.LightNovel, "Novel", volumes, [], Files(pack)));
+        }
+
+        // The files the planner left out, each as "name: reason", in name order.
+        private static string[] Unplaced(MediaSubtype subtype, string title, TargetUnit[] volumes, TargetUnit[] chapters, Jularr.Integrations.Data.Storage.StorageFile[] files)
+        {
+            var unplaced = new List<UnplacedFile>();
+            ImportPlacementLogic.Plan(MediaType.Book, subtype, title, null, null, files, NamingPatternTests.DefaultSet, null, episodes: volumes, unplaced: unplaced, chapters: chapters);
+            return [.. unplaced.Select(file => Path.GetFileName(file.Path) + ": " + file.Reason).Order(StringComparer.Ordinal)];
+        }
+
+        [TestMethod]
+        public void Manga_NumberedAndChapterFiles_LandOnTheirUnitsAndAreNeverGuessed()
+        {
+            TargetUnit[] volumes = [new(1, null, 1, false), new(2, null, 2, false), new(3, null, 3, false)];
+            TargetUnit[] chapters = [new(12, 2, 12, false), new(13, 2, 13, false)];
+            static Jularr.Integrations.Data.Storage.StorageFile[] Files(params string[] names) => [.. names.Select(name => new Jularr.Integrations.Data.Storage.StorageFile("Pack/" + name, 1000, DateTime.UtcNow))];
+            IReadOnlyList<ImportPlacementData> Plan(TargetUnit[] chapterUnits, params string[] names) => ImportPlacementLogic.Plan(MediaType.Book, MediaSubtype.Manga, "Example Manga", null, null, Files(names),
+                NamingPatternTests.DefaultSet, null, episodes: volumes, chapters: chapterUnits);
+
+            // "Title 01", "Title - 01" and "Title #01" name volumes the Work has, tags after them aside; so does one such file alone.
+            var numbered = Plan([], "Example Manga 01 (Digital) (Group).cbz", "Example Manga - 02.cbz", "Example Manga #03.cbz");
+            CollectionAssert.AreEqual(new decimal?[] { 1, 2, 3 }, numbered.Select(placement => placement.UnitNumber).Order().ToArray());
+            Assert.IsTrue(numbered.All(placement => placement.WorkUnitTypeId == WorkUnitType.Volume));
+            Assert.AreEqual(2m, Plan([], "Example Manga 02.cbz").Single().UnitNumber);
+            CollectionAssert.AreEqual(new[] { "Example Manga 07.cbz: unknown_unit", "Example Manga 09.cbz: unknown_unit" }, Unplaced(MediaSubtype.Manga, "Example Manga", volumes, [], Files("Example Manga 07.cbz", "Example Manga 09.cbz")));
+
+            // A title that ends in a number is no volume: one such file is still the whole series.
+            Assert.IsNull(ImportPlacementLogic.Plan(MediaType.Book, MediaSubtype.Manga, "Mob Psycho 100", null, null, Files("Mob Psycho 100.cbz"), NamingPatternTests.DefaultSet, null, episodes: volumes).Single().UnitNumber);
+
+            // Chapter files land on the Work's chapters with their volume; a bare number that is also a chapter, a range, a part chapter or a chapter the Work lacks is never guessed.
+            string[] pack = ["Example Manga Chapter 12.cbz", "Example Manga Ch. 13.cbz", "Example Manga c014.cbz", "Example Manga c012-013.cbz", "Example Manga Ch. 12.5.cbz", "Example Manga 12.cbz",
+                "Example Manga v01-03.cbz", "Example Manga v01 (c001-007).cbz", "Example Manga Extras.cbz", "cover.jpg"];
+            var placed = Plan(chapters, pack);
+            CollectionAssert.AreEqual(new[] { "Chapter 12 in 2", "Chapter 13 in 2", "Volume 1 in " }, placed.Select(placement => placement.WorkUnitTypeId + " " + placement.UnitNumber + " in " + placement.ParentUnitNumber).Order(StringComparer.Ordinal).ToArray());
+            Assert.IsTrue(placed.Single(placement => placement.UnitNumber == 12).TargetStem.EndsWith(" v02 c012", StringComparison.Ordinal), placed[0].TargetStem);
+            CollectionAssert.AreEqual(new[] { "Example Manga 12.cbz: ambiguous", "Example Manga Ch. 12.5.cbz: ambiguous", "Example Manga Extras.cbz: no_volume", "Example Manga c012-013.cbz: ambiguous",
+                "Example Manga c014.cbz: unknown_unit", "Example Manga v01-03.cbz: ambiguous", "cover.jpg: extension" }, Unplaced(MediaSubtype.Manga, "Example Manga", volumes, chapters, Files(pack)));
         }
 
         [TestMethod]
@@ -203,15 +242,15 @@ namespace Jularr.Backend.Tests
             string[] trailing = ["無職転生 ～異世界行ったら本気だす～ 01.epub", "無職転生 ～異世界行ったら本気だす～ 02.epub", "無職転生 ～異世界行ったら本気だす～ 03.epub",
                 "無職転生 ～蛇足編～ 01.epub", "無職転生 ～蛇足編～ 02.epub", "無職転生 ～異世界行ったら本気だす～ スペシャルブック.epub"];
             CollectionAssert.AreEqual(new decimal?[] { 1, 2 }, Plan(trailing).Select(placement => placement.UnitNumber).ToArray());
-            CollectionAssert.AreEquivalent(new[] { "Pack/無職転生 ～蛇足編～ 01.epub", "Pack/無職転生 ～蛇足編～ 02.epub", "Pack/無職転生 ～異世界行ったら本気だす～ スペシャルブック.epub" },
-                ImportPlacementLogic.UnmatchedVolumes(MediaSubtype.LightNovel, Files(trailing), volumes)!.ToArray());
+            CollectionAssert.AreEquivalent(new[] { "無職転生 ～蛇足編～ 01.epub: no_volume", "無職転生 ～蛇足編～ 02.epub: no_volume", "無職転生 ～異世界行ったら本気だす～ 03.epub: present",
+                "無職転生 ～異世界行ったら本気だす～ スペシャルブック.epub: no_volume" }, Unplaced(MediaSubtype.LightNovel, "Novel", volumes, [], Files(trailing)));
 
             // "第01巻": the Japanese volume marker.
             CollectionAssert.AreEqual(new decimal?[] { 1, 2 }, Plan("小説 第01巻.epub", "小説 第02巻.epub", "小説 第03巻.epub").Select(placement => placement.UnitNumber).ToArray());
 
             // One numbered file is still one book, and two files that differ in no number are no pack.
             Assert.IsNull(Plan("無職転生 01.epub").Single().UnitNumber);
-            Assert.IsNull(ImportPlacementLogic.UnmatchedVolumes(MediaSubtype.LightNovel, Files("Alpha story.epub", "Beta story.epub"), volumes));
+            Assert.HasCount(0, Unplaced(MediaSubtype.LightNovel, "Novel", volumes, [], Files("Alpha story.epub", "Beta story.epub")));
         }
 
         [TestMethod]
@@ -311,7 +350,8 @@ namespace Jularr.Backend.Tests
                 var waiting = (await queue.Content.ReadFromJsonAsync<PageResult<Data.Admin.Activity.V1.ActivityItemV1>>())!.Items.Single(item => item.Id == operationId);
                 CollectionAssert.AreEqual(new[] { "Mushoku Tensei - Baka-Tsuki Side Stories.epub", "Mushoku Tensei - Baka-Tsuki Volume 27.epub" },
                     waiting.UnmatchedFiles!.Select(Path.GetFileName).ToArray());
-                Assert.IsFalse(waiting.CanImportManually);
+                CollectionAssert.AreEqual(new[] { "no_volume", "unknown_unit" }, waiting.UnmatchedFileReasons);
+                Assert.IsTrue(waiting.CanImportManually);
             }
 
             // Read again, the pack brings no second copy of a volume and still names the same files.
@@ -323,6 +363,150 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual("import_unmatched_files", await host.ScalarAsync("SELECT \"AttentionKey\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"));
             Assert.AreEqual(27, Directory.EnumerateFiles(folder).Count(), "The download keeps every file.");
             Assert.AreEqual(1, sources.Grabbed.Count);
+
+            // By hand: the volumes the import placed show as imported, the two others wait unnamed with the format as their quality.
+            string extra;
+            using (var read = await host.SendAsync(HttpMethod.Post, $"/api/v1/admin/activity/{operationId}/manual-import/files"))
+            {
+                Assert.AreEqual(HttpStatusCode.OK, read.StatusCode, await read.Content.ReadAsStringAsync());
+                var files = (await read.Content.ReadFromJsonAsync<ManualImportDownloadV1>())!.Files;
+                Assert.AreEqual(27, files.Count);
+                var open = files.Where(file => !file.IsHandled).ToArray();
+                CollectionAssert.AreEqual(new[] { "Mushoku Tensei - Baka-Tsuki Side Stories.epub", "Mushoku Tensei - Baka-Tsuki Volume 27.epub" }, open.Select(file => Path.GetFileName(file.Path)).Order(StringComparer.Ordinal).ToArray());
+                Assert.IsTrue(open.All(file => file.TargetName is null && file.Season is null && file.QualityKey == "EPUB"));
+                extra = open.Single(file => file.Path.EndsWith("Volume 27.epub", StringComparison.Ordinal)).Path;
+            }
+
+            // The file beyond the edition is its last volume, in English; the download keeps waiting for the side stories.
+            using (var assigned = await host.SendAsync(HttpMethod.Post, $"/api/v1/admin/activity/{operationId}/manual-import",
+                new RunManualImportDownloadDataV1(ImportTransferMode.Link, new BaseDataList<ManualImportChoiceV1>([new ManualImportChoiceV1(extra, true, 26, null, audioLanguages: ["eng"])]))))
+            {
+                Assert.AreEqual(HttpStatusCode.OK, assigned.StatusCode, await assigned.Content.ReadAsStringAsync());
+                var result = (await assigned.Content.ReadFromJsonAsync<ManualImportResultV1>())!;
+                Assert.AreEqual((1, false), (result.Imported, result.FinishedDownload));
+            }
+
+            var last = Named.Replace(" v01", " v26", StringComparison.Ordinal) + ".epub";
+            Assert.IsTrue(File.Exists(Path.Combine(novels, last)), string.Join(", ", Directory.EnumerateFiles(novels, "*.epub", SearchOption.AllDirectories).Select(Path.GetFileName)));
+            Assert.AreEqual(26L, await host.ScalarAsync(Volumes.Replace("BETWEEN 1 AND 25", "BETWEEN 1 AND 26", StringComparison.Ordinal)));
+            Assert.AreEqual(("EPUB", "eng"), ((string)(await host.ScalarAsync($"SELECT \"QualityKey\" FROM \"StoredFiles\" WHERE \"RelativePath\" = '{last}'"))!,
+                (string)(await host.ScalarAsync($"SELECT array_to_string(\"ChosenAudioLanguages\", ',') FROM \"StoredFiles\" WHERE \"RelativePath\" = '{last}'"))!));
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"ActivityEvents\" WHERE \"ActivityEventTypeId\" = 7 AND \"AccountId\" IS NOT NULL"));
+            Assert.AreEqual("import_unmatched_files", await host.ScalarAsync("SELECT \"AttentionKey\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"));
+
+            // Finished without the side stories, the download leaves the queue; SABnzbd keeps the job, since not every file was placed.
+            using (var finished = await host.SendAsync(HttpMethod.Post, $"/api/v1/admin/activity/{operationId}/manual-import",
+                new RunManualImportDownloadDataV1(ImportTransferMode.Link, new BaseDataList<ManualImportChoiceV1>([]), true)))
+            {
+                Assert.AreEqual(HttpStatusCode.OK, finished.StatusCode, await finished.Content.ReadAsStringAsync());
+                Assert.IsTrue((await finished.Content.ReadFromJsonAsync<ManualImportResultV1>())!.FinishedDownload);
+            }
+
+            Assert.AreEqual((short)3, await host.ScalarAsync($"SELECT \"OperationStatusTypeId\" FROM \"Operations\" WHERE \"Id\" = {operationId}"));
+            Assert.AreEqual(0, sources.Commands.Count);
+            Assert.AreEqual(27, Directory.EnumerateFiles(folder).Count(), "A hardlinked import leaves the download as it was.");
+        }
+
+        // A manga download nothing of which can be placed is rejected: SABnzbd deletes the job with its files, the release is blocked with its reason and date, and the next release is searched at once.
+        [TestMethod]
+        public async Task Manga_RejectedDownload_IsBlockedDeletedInSabnzbdAndTheNextReleaseIsSearchedAtOnce()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            var sources = new FakeMangaSources
+            {
+                Rss = """
+                    <rss><channel>
+                      <item><title>Example Manga v01 (2019) (Digital) (Group)</title><guid>first</guid><link>https://indexer.example.test/getnzb/first</link><size>200000000</size></item>
+                      <item><title>Example Manga v01 (2019) (Digital) (Other)</title><guid>second</guid><link>https://indexer.example.test/getnzb/second</link><size>190000000</size></item>
+                    </channel></rss>
+                    """
+            };
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, sources);
+            using var imported = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works/metadata", new ImportMetadataWorkDataV1(MediaType.Book, "101", MediaSubtype.Manga, "anilist"));
+            Assert.AreEqual(HttpStatusCode.OK, imported.StatusCode, await imported.Content.ReadAsStringAsync());
+            var work = (await imported.Content.ReadFromJsonAsync<WorkDetailsV1>())!;
+            await host.Fixture.RunSqlAsync($"""
+                INSERT INTO "AcquisitionRequests" ("Id", "WorkId", "RequestedByProfileId", "RequestedByAccountId", "UiLocaleId", "AcquisitionRequestStatusTypeId", "DecidedByAccountId", "DecidedAt")
+                VALUES (700, {work.Id}, 202, 42, 1, 2, 41, now());
+                INSERT INTO "WantedItems" ("Id", "WorkId") VALUES (800, {work.Id});
+                INSERT INTO "RequestTargets" ("AcquisitionRequestId", "WantedItemId") VALUES (700, 800);
+                UPDATE "WorkUnits" SET "IsMonitored" = ("Number" = 1) WHERE "WorkId" = {work.Id};
+                """);
+
+            // The volume arrives, but its file is no comic: nothing can be placed and the download waits.
+            await RunAsync<SearchDueWantedV1>(host);
+            Assert.HasCount(1, sources.Grabbed);
+            var folder = Directory.CreateDirectory(Path.Combine(downloads.Path, "Example Manga v01")).FullName;
+            File.WriteAllText(Path.Combine(folder, "Example Manga v01.cbz"), "<html>not a comic</html>");
+            sources.History = """{"history":{"slots":[{"nzo_id":"SABnzbd_nzo_1","name":"Example Manga v01","status":"Completed","storage":"/downloads/Example Manga v01"}]}}""";
+            await RunAsync<MonitorDownloadsV1>(host);
+            Assert.AreEqual("import_nothing_placeable", await host.ScalarAsync("SELECT \"AttentionKey\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"));
+            var operationId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"))!;
+
+            // Rejected: SABnzbd deletes the job and its files first, the release is blocked with why and when, and the target is due at once.
+            var signal = host.Services.GetRequiredService<AcquisitionSearchSignal>();
+            signal.TakeRequest();
+            using var rejected = await host.SendAsync(HttpMethod.Post, $"/api/v1/admin/activity/{operationId}/remove", new RemoveActivityDownloadDataV1(true));
+            Assert.AreEqual(HttpStatusCode.OK, rejected.StatusCode, await rejected.Content.ReadAsStringAsync());
+            CollectionAssert.AreEqual(new[] { "queue:delete:SABnzbd_nzo_1:1", "history:delete:SABnzbd_nzo_1:1" }, sources.Commands);
+            Assert.AreEqual(((short)4, "download_removed", true), ((short)(await host.ScalarAsync("SELECT \"AcquisitionReleaseStatusTypeId\" FROM \"AcquisitionReleases\""))!,
+                (string)(await host.ScalarAsync("SELECT \"ReasonKey\" FROM \"AcquisitionReleases\""))!, (bool)(await host.ScalarAsync("SELECT \"UpdatedAt\" >= \"CreatedAt\" FROM \"AcquisitionReleases\""))!));
+            Assert.AreEqual(1L, await host.ScalarAsync($"SELECT count(*) FROM \"ActivityEvents\" WHERE \"ActivityEventTypeId\" = 8 AND \"ReasonKey\" = 'download_removed'"));
+            Assert.AreEqual(true, await host.ScalarAsync("SELECT \"NextSearchAt\" <= now() FROM \"WantedItems\" WHERE \"Id\" = 800"));
+            Assert.IsTrue(signal.TakeRequest(), "The search is woken at once instead of on its next round.");
+
+            // The search that follows takes the other release, never the rejected one again.
+            await RunAsync<SearchDueWantedV1>(host);
+            Assert.HasCount(2, sources.Grabbed);
+            Assert.AreNotEqual(sources.Grabbed[0], sources.Grabbed[1]);
+        }
+
+        // A book from any folder is imported by hand: its file is proposed with its format and language, placed under the import's own name, linked or moved; only an administrator may do it.
+        [TestMethod]
+        [DataRow(ImportTransferMode.Link)]
+        [DataRow(ImportTransferMode.Move)]
+        public async Task Book_FromAnyFolder_IsImportedByHandLinkedOrMoved(ImportTransferMode mode)
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, new FakeMangaSources());
+            using var imported = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works/metadata", new ImportMetadataWorkDataV1(MediaType.Book, "OL9W"));
+            Assert.AreEqual(HttpStatusCode.OK, imported.StatusCode, await imported.Content.ReadAsStringAsync());
+            var work = (await imported.Content.ReadFromJsonAsync<WorkDetailsV1>())!;
+            await host.Fixture.RunSqlAsync($"INSERT INTO \"WantedItems\" (\"Id\", \"WorkId\", \"NextSearchAt\") VALUES (800, {work.Id}, now() + interval '3 days');");
+            var folder = Path.Combine(storage.Path, "1", "Incoming", "Release");
+            Directory.CreateDirectory(folder);
+            File.WriteAllBytes(Path.Combine(folder, "Example Manga German.epub"), ReadingTests.BuildEpub("Example Manga"));
+            File.WriteAllBytes(Path.Combine(folder, "cover.jpg"), new byte[16]);
+
+            // The book is found among the works and its folder read: the cover is no book, the epub is proposed with its format, its language and its name.
+            using var found = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/activity/manual-import/works?query=Example");
+            Assert.AreEqual(HttpStatusCode.OK, found.StatusCode, await found.Content.ReadAsStringAsync());
+            Assert.AreEqual((800L, MediaType.Book), (await found.Content.ReadFromJsonAsync<BaseDataList<ManualImportWorkV1>>())!.Select(item => (item.WantedItemId, item.MediaTypeId)).Single());
+            using var read = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/manual-import/800/files", new ReadManualImportDataV1(1, "Incoming/Release"));
+            Assert.AreEqual(HttpStatusCode.OK, read.StatusCode, await read.Content.ReadAsStringAsync());
+            var file = (await read.Content.ReadFromJsonAsync<ManualImportFolderV1>())!.Files.Single();
+            Assert.AreEqual(("Example Manga German.epub", "EPUB", "DE"), (file.Path, file.QualityKey, file.Languages));
+            StringAssert.StartsWith(file.TargetName!, "Mika Example/Example Manga (2019)");
+
+            // Placed as the person chose, in German; only a move takes the source.
+            using var placed = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/manual-import/800/import",
+                new RunManualImportDataV1(1, "Incoming/Release", mode, new BaseDataList<ManualImportChoiceV1>([new ManualImportChoiceV1(file.Path, true, null, null, audioLanguages: ["ger"])])));
+            Assert.AreEqual(HttpStatusCode.OK, placed.StatusCode, await placed.Content.ReadAsStringAsync());
+            Assert.AreEqual(1, (await placed.Content.ReadFromJsonAsync<ManualImportResultV1>())!.Imported);
+            Assert.IsTrue(File.Exists(Path.Combine(storage.Path, "1", "Books", file.TargetName!)), file.TargetName);
+            Assert.AreEqual(mode != ImportTransferMode.Move, File.Exists(Path.Combine(folder, file.Path)));
+            Assert.IsTrue(File.Exists(Path.Combine(folder, "cover.jpg")));
+            Assert.AreEqual(1L, await host.ScalarAsync($"SELECT count(*) FROM \"MediaAssets\" WHERE \"WorkId\" = {work.Id}"));
+            Assert.AreEqual(("EPUB", "ger"), ((string)(await host.ScalarAsync("SELECT \"QualityKey\" FROM \"StoredFiles\" WHERE \"MediaAssetId\" IS NOT NULL"))!,
+                (string)(await host.ScalarAsync("SELECT array_to_string(\"ChosenAudioLanguages\", ',') FROM \"StoredFiles\" WHERE \"MediaAssetId\" IS NOT NULL"))!));
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"ActivityEvents\" WHERE \"ActivityEventTypeId\" = 7 AND \"AccountId\" IS NOT NULL"));
+
+            // A person without the right to manage downloads may neither read nor import.
+            await host.Fixture.RunSqlAsync("UPDATE \"Accounts\" SET \"AccountRoleTypeId\" = 3 WHERE \"Id\" = 41");
+            using var denied = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/manual-import/800/files", new ReadManualImportDataV1(1, "Incoming/Release"));
+            Assert.AreEqual(HttpStatusCode.Forbidden, denied.StatusCode);
         }
 
         private static byte[] Archive(string header, int length) => [.. Encoding.Latin1.GetBytes(header), .. new byte[length - header.Length]];
@@ -333,7 +517,7 @@ namespace Jularr.Backend.Tests
             using var storage = new TemporaryDirectory();
             using var downloads = new TemporaryDirectory();
             await using var host = await CreateHostAsync(storage.Path, downloads.Path, new FakeMangaSources());
-            foreach (var feed in new[] { DiscoverFeedType.Trending, DiscoverFeedType.Top, DiscoverFeedType.New })
+            foreach (var feed in new[] { DiscoverFeedType.Trending, DiscoverFeedType.Popular, DiscoverFeedType.Manhwa, DiscoverFeedType.Top100 })
             {
                 using var ranked = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/feed", new ReadDiscoverCatalogFeedDataV1(MediaType.Book, feed, MediaSubtype.Manga));
                 Assert.AreEqual(HttpStatusCode.OK, ranked.StatusCode, await ranked.Content.ReadAsStringAsync());
@@ -394,6 +578,9 @@ namespace Jularr.Backend.Tests
             public string? Rss { get; set; }
 
             public List<string> Grabbed { get; } = [];
+
+            // What SABnzbd was told to delete: mode, name, job and whether its files go too.
+            public List<string> Commands { get; } = [];
             public string History { get; set; } = """{"history":{"slots":[]}}""";
 
             protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
@@ -436,6 +623,9 @@ namespace Jularr.Backend.Tests
                             case "addurl":
                                 Grabbed.Add(form["name"]!);
                                 return Json($$"""{"status":true,"nzo_ids":["SABnzbd_nzo_{{Grabbed.Count}}"]}""");
+                            case "queue" or "history" when form["name"] is "delete":
+                                Commands.Add($"{form["mode"]}:{form["name"]}:{form["value"]}:{form["del_files"]}");
+                                return Json("""{"status":true}""");
                             case "queue":
                                 return Json("""{"queue":{"paused":false,"slots":[]}}""");
                             case "history":

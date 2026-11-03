@@ -67,7 +67,14 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual((2, true), (all.Single(item => item.Id == 906).TargetCount, all.Single(item => item.Id == 906).IsMonitored));
 
             // Filters
-            CollectionAssert.AreEqual(new long[] { 903 }, (await ReadAsync(host, "mediaTypeId=2")).Select(item => item.Id).ToArray());
+            CollectionAssert.AreEqual(new long[] { 903 }, (await ReadAsync(host, "mediaTypeIds=2")).Select(item => item.Id).ToArray());
+            CollectionAssert.AreEqual(new long[] { 903, 906 }, (await ReadAsync(host, "mediaTypeIds=2&mediaTypeIds=7")).Select(item => item.Id).Order().ToArray());
+
+            // A subtype lists its titles across types, and its type alone no longer does
+            await host.Fixture.RunSqlAsync("""UPDATE "Works" SET "MediaSubtypeId" = 1 WHERE "Id" = 903""");
+            CollectionAssert.AreEqual(new long[] { 903 }, (await ReadAsync(host, "mediaSubtypeIds=1")).Select(item => item.Id).ToArray());
+            Assert.AreEqual(0, (await ReadAsync(host, "mediaTypeIds=2")).Count);
+            await host.Fixture.RunSqlAsync("""UPDATE "Works" SET "MediaSubtypeId" = NULL WHERE "Id" = 903""");
             CollectionAssert.AreEquivalent(new long[] { 901, 903, 905, 906 }, (await ReadAsync(host, "isMonitored=true")).Select(item => item.Id).ToArray());
             CollectionAssert.AreEquivalent(new long[] { 902, 904 }, (await ReadAsync(host, "isMonitored=false")).Select(item => item.Id).ToArray());
             CollectionAssert.AreEqual(new long[] { 903, 906 }, (await ReadAsync(host, "workListStatusId=" + (int)WorkListStatus.Missing)).Select(item => item.Id).Order().ToArray());
@@ -76,18 +83,18 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(0, (await ReadAsync(host, "libraryRootId=802")).Count);
             CollectionAssert.AreEqual(new long[] { 901 }, (await ReadAsync(host, "acquisitionProfileId=801")).Select(item => item.Id).ToArray());
             CollectionAssert.AreEqual(new[] { "Beta", "Delta", "Zeta" }, (await ReadAsync(host, "query=%20ta%20")).Select(item => item.CanonicalTitle).ToArray());
-            CollectionAssert.AreEqual(new long[] { 905 }, (await ReadAsync(host, "mediaTypeId=1&isMonitored=true&workListStatusId=3")).Select(item => item.Id).ToArray());
+            CollectionAssert.AreEqual(new long[] { 905 }, (await ReadAsync(host, "mediaTypeIds=1&isMonitored=true&workListStatusId=3")).Select(item => item.Id).ToArray());
 
             // Sort
             CollectionAssert.AreEqual(new long[] { 901 }, (await ReadAsync(host, "workSortTypeId=" + (int)WorkSortType.Size + "&isDescending=true&pageSize=1")).Select(item => item.Id).ToArray());
             CollectionAssert.AreEqual(new[] { "Zeta", "Gamma", "Epsilon", "Delta", "Beta", "Alpha" }, (await ReadAsync(host, "isDescending=true&pageSize=50")).Select(item => item.CanonicalTitle).ToArray());
             CollectionAssert.AreEqual(new long[] { 906, 905, 904, 903, 902, 901 }, (await ReadAsync(host, "workSortTypeId=" + (int)WorkSortType.Added + "&isDescending=true&pageSize=50")).Select(item => item.Id).ToArray());
-            CollectionAssert.AreEqual(new long[] { 902, 905, 901, 904 }, (await ReadAsync(host, "workSortTypeId=" + (int)WorkSortType.Year + "&mediaTypeId=1&pageSize=50")).Select(item => item.Id).ToArray());
+            CollectionAssert.AreEqual(new long[] { 902, 905, 901, 904 }, (await ReadAsync(host, "workSortTypeId=" + (int)WorkSortType.Year + "&mediaTypeIds=1&pageSize=50")).Select(item => item.Id).ToArray());
 
             // Paging is by the order, with the same filters.
             CollectionAssert.AreEqual(new[] { "Alpha", "Beta" }, (await ReadAsync(host, "pageSize=2&page=1")).Select(item => item.CanonicalTitle).ToArray());
             CollectionAssert.AreEqual(new[] { "Delta", "Epsilon" }, (await ReadAsync(host, "pageSize=2&page=2")).Select(item => item.CanonicalTitle).ToArray());
-            CollectionAssert.AreEqual(new[] { "Epsilon" }, (await ReadAsync(host, "pageSize=1&page=2&mediaTypeId=1&isMonitored=true")).Select(item => item.CanonicalTitle).ToArray());
+            CollectionAssert.AreEqual(new[] { "Epsilon" }, (await ReadAsync(host, "pageSize=1&page=2&mediaTypeIds=1&isMonitored=true")).Select(item => item.CanonicalTitle).ToArray());
         }
 
         [TestMethod]
@@ -333,20 +340,40 @@ namespace Jularr.Backend.Tests
             await using var host = await CreateAsync(razor: true);
             await SeedAsync(host);
 
+            // A first visit shows the posters, with the figures of the list under it and the library search in the dock
+            using var first = await host.SendAsync(HttpMethod.Get, "/Admin/Works");
+            var posters = await first.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, first.StatusCode, posters);
+            foreach (var expected in new[] { "works-posters", "works-footer", "handler=SearchAll" })
+            {
+                StringAssert.Contains(posters, expected);
+            }
+
             // The list, its filters and the mass editor
-            using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Works");
+            using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Works?view=Table");
             Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, await page.Content.ReadAsStringAsync());
             var html = await page.Content.ReadAsStringAsync();
-            foreach (var expected in new[] { "data-work-table=\"works\"", "name=\"type\"", "name=\"library\"", "name=\"profile\"", "id=\"works-bulk\"", "data-dock-select-all", "view-switch", ">Alpha<", ">Zeta<", "href=\"/Admin/Works/901\"" })
+            foreach (var expected in new[] { "data-work-table=\"works\"", "capsule-bar", "href=\"/Admin/Works?type=movies\"", "name=\"library\"", "name=\"profile\"", "id=\"works-bulk\"", "data-dock-select-all", "view-switch", ">Alpha<", ">Zeta<", "href=\"/Admin/Works/901\"" })
             {
                 StringAssert.Contains(html, expected);
             }
 
             Assert.IsFalse(html.Contains("style=\"", StringComparison.Ordinal));
-            var csrf = WebUtility.HtmlDecode(Regex.Match(html, "name=\"__RequestVerificationToken\" value=\"([^\"]+)\"").Groups[1].Value);
+
+            // The newest titles come first; the order is a choice of every view, and the search stays when the filters go
+            Assert.IsTrue(html.IndexOf(">Zeta<", StringComparison.Ordinal) < html.IndexOf(">Alpha<", StringComparison.Ordinal));
+            StringAssert.Contains(html, "<option value=\"3\" selected=\"selected\">");
+            StringAssert.Contains(html, "data-search-live");
+            using var titles = await host.SendAsync(HttpMethod.Get, "/Admin/Works?sort=0");
+            var byTitle = await titles.Content.ReadAsStringAsync();
+            Assert.IsTrue(byTitle.IndexOf(">Alpha<", StringComparison.Ordinal) < byTitle.IndexOf(">Zeta<", StringComparison.Ordinal));
+            using var none = await host.SendAsync(HttpMethod.Get, "/Admin/Works?type=series&q=Alpha");
+            StringAssert.Contains(await none.Content.ReadAsStringAsync(), "href=\"/Admin/Works?q=Alpha\"");
+
+            var csrf =WebUtility.HtmlDecode(Regex.Match(html, "name=\"__RequestVerificationToken\" value=\"([^\"]+)\"").Groups[1].Value);
 
             // A filter leads to the titles that fit
-            using var films = await host.SendAsync(HttpMethod.Get, "/Admin/Works?type=1&monitored=false");
+            using var films = await host.SendAsync(HttpMethod.Get, "/Admin/Works?type=movies&monitored=false");
             var filtered = await films.Content.ReadAsStringAsync();
             StringAssert.Contains(filtered, ">Beta<");
             Assert.IsFalse(filtered.Contains(">Alpha<", StringComparison.Ordinal));

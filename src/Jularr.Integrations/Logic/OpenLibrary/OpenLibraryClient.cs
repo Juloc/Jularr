@@ -25,9 +25,26 @@ namespace Jularr.Integrations.Logic.OpenLibrary
             return ReadResults(document.RootElement, "docs");
         }
 
-        public async Task<IReadOnlyList<OpenLibraryResult>> ReadTrendingAsync(CancellationToken ct)
+        // Works by subjects (all must match), first publication years and language (MARC code, such as ger), twenty a page; most read first unless newest is asked for.
+        public async Task<IReadOnlyList<OpenLibraryResult>> SearchFilteredAsync(IReadOnlyList<string> subjects, int? yearFrom, int? yearTo, string? language, bool newest, int page,
+            CancellationToken ct)
         {
-            using var document = await GetAsync("trending/weekly.json?limit=20", ct);
+            var terms = subjects.Select(subject => "subject:\"" + subject.Replace("\"", "", StringComparison.Ordinal) + "\"").ToList();
+            if (yearFrom is not null || yearTo is not null)
+            {
+                terms.Add("first_publish_year:[" + (yearFrom?.ToString(CultureInfo.InvariantCulture) ?? "*") + " TO " + (yearTo?.ToString(CultureInfo.InvariantCulture) ?? "*") + "]");
+            }
+
+            if (language is { Length: 3 } code) terms.Add("language:" + code);
+            if (terms.Count == 0) return await ReadTrendingAsync(page, ct);
+            using var document = await GetAsync("search.json?q=" + Uri.EscapeDataString(string.Join(' ', terms)) + "&fields=" + Fields + "&limit=20&page="
+                + Math.Clamp(page, 1, 500).ToString(CultureInfo.InvariantCulture) + "&sort=" + (newest ? "new" : "readinglog"), ct);
+            return ReadResults(document.RootElement, "docs");
+        }
+
+        public async Task<IReadOnlyList<OpenLibraryResult>> ReadTrendingAsync(int page, CancellationToken ct)
+        {
+            using var document = await GetAsync("trending/weekly.json?limit=20&page=" + page.ToString(CultureInfo.InvariantCulture), ct);
             return ReadResults(document.RootElement, "works");
         }
 

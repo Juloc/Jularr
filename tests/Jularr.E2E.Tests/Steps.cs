@@ -125,13 +125,21 @@ namespace Jularr.E2E.Tests
             }
         }
 
+        // A segmented choice is tapped on its label, as a person does: on a phone the 44 px label lies over its small radio.
+        public static async Task ChooseSegmentAsync(ILocator form, string name, string value)
+        {
+            var choice = $"[name={name}][value={value}]";
+            await form.Locator("label.ui-segment", new() { Has = form.Page.Locator(choice) }).ClickAsync();
+            await Assertions.Expect(form.Locator(choice)).ToBeCheckedAsync();
+        }
+
         // The local folder as a writable connection with one library path per media type folder.
         public static async Task AddLibraryAsync(IPage page, string localPath, params LibraryPath[] roots)
         {
             await page.GotoAsync("/Admin/Storage?protocol=Local");
             await page.FillAsync("form [name=Name]", "Library");
             await page.SelectOptionAsync("form [name=SharePath]", localPath);
-            await page.Locator("form [name=IsReadOnly][value=False]").CheckAsync();
+            await ChooseSegmentAsync(page.Locator("form", new() { Has = page.Locator("[name=IsReadOnly]") }), "IsReadOnly", "False");
             await SubmitAsync(page, page.Locator("form", new() { Has = page.Locator("[name=SharePath]") }));
             var connection = page.Url;
             foreach (var (folder, type, subtype) in roots)
@@ -177,31 +185,31 @@ namespace Jularr.E2E.Tests
             await SubmitAsync(page, page.Locator("dialog#connection-editor form"));
         }
 
-        // Found in Discover and requested on its Work's page; the Owner's request is approved at once.
+        // Found in Discover and requested from its card; the Owner's request is approved at once.
         public static async Task RequestAsync(IPage page, string query, string title)
         {
             await page.GotoAsync("/?q=" + Uri.EscapeDataString(query));
             var card = page.Locator(".media-card", new() { HasText = title });
-            await card.HoverAsync();
-            await FollowAsync(page, card.GetByRole(AriaRole.Link, new() { Name = "Request", Exact = true }));
-            await RequestHereAsync(page);
+            await RequestOnCardAsync(card);
         }
 
-        // Found in its catalog on Discover and requested on its Work's page.
+        // Found in its catalog on Discover and requested from its card.
         public static async Task RequestFromCatalogAsync(IPage page, string type, string title)
         {
             await page.GotoAsync("/?type=" + type + "&q=" + Uri.EscapeDataString(title));
             var card = page.Locator(".media-card", new() { HasText = title }).First;
-            await card.HoverAsync();
-            await FollowAsync(page, card.GetByRole(AriaRole.Link, new() { Name = "Request", Exact = true }));
-            await RequestHereAsync(page);
+            await RequestOnCardAsync(card);
         }
 
-        // A Work's page asks in the menu of its Request button.
-        private static async Task RequestHereAsync(IPage page)
+        // The round icon of a card requests at once with the defaults; the icon then takes the request's phase.
+        private static async Task RequestOnCardAsync(ILocator card)
         {
-            await page.Locator("summary.action-menu__button", new() { HasText = "Request" }).ClickAsync();
-            await SubmitAsync(page, FormWith(page, "Request this work"));
+            await card.HoverAsync();
+            var button = card.GetByRole(AriaRole.Button, new() { Name = "Request", Exact = true });
+            await button.ClickAsync();
+            await Assertions.Expect(button).ToHaveAttributeAsync("data-phase", new System.Text.RegularExpressions.Regex(".+"));
+            await Assertions.Expect(button).Not.ToHaveAttributeAsync("aria-busy", "true", new() { Timeout = 15000 });
+            await Assertions.Expect(button).ToHaveAttributeAsync("data-phase", new System.Text.RegularExpressions.Regex(".+"));
         }
 
         // A row of the admin list on the page (the list kit): the one whose text holds this.

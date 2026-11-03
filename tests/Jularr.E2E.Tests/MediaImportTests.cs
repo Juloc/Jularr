@@ -244,7 +244,7 @@ namespace Jularr.E2E.Tests
                 await page.SetViewportSizeAsync(1280, 720);
 
                 // The titles are in the library once, each with a target.
-                await page.GotoAsync("/Admin/Works");
+                await page.GotoAsync("/Admin/Works?view=Table");
                 foreach (var title in new[] { FakeServices.MovieTitle, FakeServices.SeriesTitle, FakeServices.BookTitle, FakeServices.AlbumTitle })
                 {
                     await Assertions.Expect(page.Locator("main .list-row", new() { HasText = title })).ToHaveCountAsync(1);
@@ -266,7 +266,7 @@ namespace Jularr.E2E.Tests
                 await Assertions.Expect(page.Locator("main table tbody tr input[type=checkbox]")).ToHaveCountAsync(0);
                 // All rows already exist; no need to submit again to discover there are no changes.
                 await Assertions.Expect(page.Locator("[data-import-count]")).ToHaveCountAsync(0);
-                await page.GotoAsync("/Admin/Works");
+                await page.GotoAsync("/Admin/Works?view=Table");
                 await Assertions.Expect(page.Locator("main .list-row")).ToHaveCountAsync(4);
                 CollectionAssert.AreEqual(Array.Empty<string>(), session.Problems.ToArray());
             }

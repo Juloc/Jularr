@@ -109,7 +109,78 @@
     &__primary {
         min-width: 0;
         &-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+        // The action of a card is one round icon: appears with the hover, always where there is none.
+        &.button--icon { width: 44px; height: 44px; min-width: 44px; padding: 0; border-radius: 50%; box-shadow: var(--shadow); }
     }
+
+    // The label of an action shows only in the hover preview's pill; the card itself shows the icon.
+    &__actions .media-card__primary-label { display: none; }
+
+    // The request icon follows the live phase of the profile's request on the accent: plus, a clock while it waits for approval, a pulsing search,
+    // then the download's percent in a ring, and at the end the play icon. The icons share one cell and fade into each other; while a request runs
+    // the icon stays on the cover without the hover.
+    .card-request {
+        position: relative;
+        &__icons { display: inline-grid; flex: none; place-items: center; > span { grid-area: 1 / 1; display: inline-flex; opacity: 0; transform: scale(.55); transition: opacity .22s ease, transform .22s ease; } }
+        .card-request__plus { opacity: 1; transform: none; }
+        &:hover:not([data-phase]) .card-request__plus { transform: rotate(90deg); }
+        &[data-phase] {
+            .card-request__plus { opacity: 0; transform: scale(.55); }
+            .card-request__search { opacity: 1; transform: none; animation: card-request-pulse 1.3s ease-in-out infinite; }
+        }
+        &[data-phase="open"] {
+            .card-request__search { opacity: 0; animation: none; }
+            .card-request__wait { opacity: 1; transform: none; }
+        }
+        &[data-phase="downloading"], &[data-phase="importing"] {
+            .card-request__search { opacity: 0; animation: none; }
+            .card-request__download { opacity: 1; transform: none; }
+        }
+        // White play on the accent: no success green of the live button here.
+        &.button[data-phase="completed"] {
+            color: #fff;
+            .card-request__search { opacity: 0; animation: none; }
+            .card-request__done { opacity: 1; transform: none; }
+        }
+        &[data-phase="rejected"], &[data-phase="failed"], &[data-phase="cancelled"] {
+            .card-request__search { opacity: 0; animation: none; }
+            .card-request__plus { opacity: 1; transform: none; }
+        }
+        &[aria-busy="true"] { cursor: progress; }
+
+        // The download's percent: a ring in the phase's colour with the number inside, in place of the icon.
+        &__ring {
+            position: absolute;
+            inset: 4px;
+            display: grid;
+            place-items: center;
+            counter-reset: percent var(--live-percent, 0);
+            font-size: 11px;
+            font-weight: 800;
+            line-height: 1;
+            pointer-events: none;
+            &::before {
+                content: "";
+                position: absolute;
+                inset: 0;
+                border-radius: 50%;
+                background: conic-gradient(currentColor calc(var(--live-percent, 0) * 1%), color-mix(in srgb, currentColor 22%, transparent) 0);
+                mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px));
+                transition: background .4s ease;
+            }
+            &::after { content: counter(percent) "%"; position: relative; }
+            &[hidden] { display: none; }
+        }
+        &:not([data-phase="downloading"]) .card-request__ring { display: none; }
+        &:has(.card-request__ring:not([hidden])) .card-request__icons { visibility: hidden; }
+    }
+    &__actions:has(.card-request[data-phase]:not([data-phase="completed"], [data-phase="rejected"], [data-phase="failed"], [data-phase="cancelled"])) {
+        opacity: 1;
+        visibility: visible;
+        background: none;
+    }
+    &__surface:hover &__actions { background: linear-gradient(transparent, rgb(0 0 0 / 28%)); }
 
     // The heart sits top right on a white disc.
     &__bookmark {
@@ -131,11 +202,11 @@
         }
     }
 
-    // The box of a chosen card sits top left on a white disc, as the bookmark does on the right.
+    // The box of a chosen card sits top left on a white disc, centred as high as the bookmark on the right; its phone tap of 44px stays inside the cover.
     &__select {
         position: absolute;
-        top: 6px;
-        left: 6px;
+        top: 8px;
+        left: 8px;
         z-index: 4;
         display: grid;
         width: 28px;
@@ -177,11 +248,14 @@
     &__surface:focus-within, &__surface[data-open] {
         .media-card__actions { opacity: 1; visibility: visible; }
     }
+    // The action comes with the mouse's hover; a touch screen shows it always. A mouse that moves (the script marks it on the root) counts even where
+    // the browser reports no hover.
     @media (hover: hover) and (pointer: fine) {
         &__surface:hover .media-card__actions { opacity: 1; visibility: visible; }
     }
+    :root[data-pointer="mouse"] & .media-card__surface:hover .media-card__actions { opacity: 1; visibility: visible; }
     @media (hover: none), (pointer: coarse) {
-        &__actions { opacity: 1; visibility: visible; }
+        :root:not([data-pointer="mouse"]) & .media-card__actions { opacity: 1; visibility: visible; }
     }
     // The card under an open preview is hidden, not removed: the cards of the row never change width or position.
     &[data-preview-open] > &__surface, &[data-preview-open] > &__details { opacity: 0; }
@@ -221,14 +295,14 @@
         &::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, transparent 62%, rgb(9 4 23 / 53%) 100%); }
     }
 
-    // A very wide frame, centred and larger than the area: only the picture of the trailer shows, none of the provider's own bars, title or branding.
+    // The embed is as high as the frame and three times as wide: the picture fills the frame, the provider's title and branding in its corners stay outside.
     &__trailer {
         position: absolute;
         inset: 0;
         z-index: 1;
         overflow: hidden;
         pointer-events: none;
-        iframe { position: absolute; top: 50%; left: 50%; width: 240%; height: auto; aspect-ratio: 16 / 9; border: 0; opacity: 0; transform: translate(-50%, -50%); transition: opacity .2s ease; pointer-events: none; }
+        iframe { position: absolute; top: 0; left: 50%; width: 300%; height: 100%; border: 0; opacity: 0; transform: translateX(-50%); transition: opacity .2s ease; pointer-events: none; }
     }
     &__preview[data-trailer-ready] &__trailer iframe { opacity: 1; }
 
@@ -361,17 +435,22 @@
         .button:active:not(:disabled) { transform: scale(.97); }
     }
     &__preview-extra { display: flex; align-items: center; gap: 7px; min-width: 0; }
+    &__preview-extra .card-request:has(.card-request__ring:not([hidden])) .card-request__icons { display: none; }
+    &__preview-extra .card-request__ring { position: relative; inset: auto; width: 26px; height: 26px; flex: none; font-size: 8px; &[hidden] { display: none; } }
+    // The card's action as a larger pill with its text (the request names its live phase, with the same animations).
     &__preview-actions .media-card__preview-primary {
-        min-width: 105px;
-        height: 31px;
-        min-height: 31px;
-        padding: 0 12px;
-        gap: 6px;
+        width: auto;
+        min-width: 118px;
+        height: 36px;
+        min-height: 36px;
+        padding: 0 14px;
+        gap: 7px;
         border-radius: 22px;
         box-shadow: 0 3px 7px rgb(128 64 247 / 13%);
-        font-size: 11.2px;
+        font-size: 12.5px;
         font-weight: 680;
-        .ui-icon { width: 15px; height: 15px; }
+        .ui-icon { width: 16px; height: 16px; }
+        .media-card__primary-label { display: inline; }
     }
     &__preview-actions .media-card__preview-save, &__preview-actions .media-card__preview-details {
         width: 31px;
@@ -412,5 +491,6 @@
     .media-card { width: 100%; max-width: 150px; }
 }
 
+@keyframes card-request-pulse { 50% { opacity: .45; transform: scale(.86); } }
 @keyframes media-card-preview-in { from { opacity: 0; transform: translateY(4px); } }
 @keyframes media-card-preview-progress { to { width: 100%; } }

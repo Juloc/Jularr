@@ -59,11 +59,11 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             }
         }
 
-        public async Task<IReadOnlyList<AniListMedia>> ReadBookRankingAsync(MediaSubtype subtype, AniListRanking ranking, CancellationToken ct)
+        public async Task<IReadOnlyList<AniListMedia>> ReadBookRankingAsync(MediaSubtype subtype, AniListListQuery list, int page, CancellationToken ct)
         {
             try
             {
-                return await aniList.ReadRankedAsync(AniListMediaType.Manga, AniListMatching.Formats(MediaType.Book, subtype), ranking, ct);
+                return await aniList.ReadRankedAsync(AniListMediaType.Manga, AniListMatching.Formats(MediaType.Book, subtype), list, page, ct);
             }
             catch (AniListException exception)
             {
@@ -71,11 +71,41 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             }
         }
 
-        public async Task<IReadOnlyList<AniListMedia>> ReadAnimeRankingAsync(AniListRanking ranking, CancellationToken ct)
+        // AniList's tags and sites for Discover's filter, kept a day.
+        public async Task<AniListFilterOptions> ReadFilterOptionsAsync(CancellationToken ct)
+        {
+            const string key = "anilist.filterOptions";
+            if (cache.TryGetValue(key, out AniListFilterOptions? cached)) return cached!;
+            try
+            {
+                var options = await aniList.ReadFilterOptionsAsync(ct);
+                cache.Set(key, options, new MemoryCacheEntryOptions { AbsoluteExpirationRelativeToNow = TimeSpan.FromDays(1), Size = Math.Max(1, options.Tags.Count) });
+                return options;
+            }
+            catch (AniListException exception)
+            {
+                throw Translate(exception);
+            }
+        }
+
+        // A ranked list of any of the type's formats, as Discover's filter narrows it.
+        public async Task<IReadOnlyList<AniListMedia>> ReadFilteredAsync(AniListMediaType type, IReadOnlyCollection<string> formats, AniListListQuery list, int page, CancellationToken ct)
         {
             try
             {
-                return await aniList.ReadRankedAsync(AniListMediaType.Anime, AniListMatching.Formats(MediaType.Series, MediaSubtype.Anime), ranking, ct);
+                return await aniList.ReadRankedAsync(type, formats, list, page, ct);
+            }
+            catch (AniListException exception)
+            {
+                throw Translate(exception);
+            }
+        }
+
+        public async Task<IReadOnlyList<AniListMedia>> ReadAnimeRankingAsync(AniListListQuery list, int page, CancellationToken ct)
+        {
+            try
+            {
+                return await aniList.ReadRankedAsync(AniListMediaType.Anime, AniListMatching.Formats(MediaType.Series, MediaSubtype.Anime), list, page, ct);
             }
             catch (AniListException exception)
             {
@@ -125,7 +155,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
         // A Japanese reader sees the native title, everyone else the English or the romanized one.
         public static string Title(AniListMedia media, string? language) => language == "ja" && media.NativeTitle is { } native ? native : Title(media);
 
-        public async Task<(IReadOnlyList<AniListCatalogEntry> Entries, bool HasMore)> ReadCatalogPageAsync(int afterId, CancellationToken ct)
+        public async Task<(IReadOnlyList<AniListCatalogEntry> Entries, int NextAfterId, bool HasMore)> ReadCatalogPageAsync(int afterId, CancellationToken ct)
         {
             try
             {

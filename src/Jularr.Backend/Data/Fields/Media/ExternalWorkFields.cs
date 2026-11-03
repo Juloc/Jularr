@@ -23,6 +23,9 @@ namespace Jularr.Backend.Data.Fields.Media
         // The place of a Discover shelf or scope in its request.
         public static readonly IntField Shelf = new() { Minimum = 0 };
         public static readonly IntField TopVotes = new() { Minimum = 0 };
+        // An anime season, 1 winter to 4 fall, and the year it counts to.
+        public static readonly IntField Season = new() { Minimum = 1, Maximum = 4 };
+        public static readonly IntField SeasonYear = new() { Minimum = 1800, Maximum = 2200 };
         public static readonly DateField Day = new();
         public static readonly StringField Shelves = new() { AllowBlank = false };
         public static readonly StringField SearchTerms = new() { AllowBlank = false, MaximumLength = 1000 };

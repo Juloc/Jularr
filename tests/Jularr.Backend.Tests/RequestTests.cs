@@ -393,6 +393,24 @@ namespace Jularr.Backend.Tests
             var detailsHtml = await requestedDetails.Content.ReadAsStringAsync();
             StringAssert.Contains(detailsHtml, "Requested");
             Assert.IsFalse(detailsHtml.Contains("Request this work", StringComparison.Ordinal));
+            StringAssert.Contains(detailsHtml, "breadcrumb__item\"><a href=\"/\">Discover</a>", "A title the library has nothing of yet sits under Discover.");
+
+            // The request shows as a live pill in its phase's colour that leads nowhere.
+            var pill = Regex.Match(detailsHtml, "<span class=\"live-phase-pill\"[^>]*>").Value;
+            StringAssert.Contains(pill, "data-live=\"request-work:" + requestedWork + "\"");
+            StringAssert.Contains(pill, "data-phase=\"approved\"");
+            Assert.IsFalse(Regex.IsMatch(detailsHtml, "<a [^>]*data-live=\"request-work:"), "The pill is not a link.");
+
+            // Nothing to play yet leads back to the title; a pointer over the running request withdraws it after the dialog, and the title can be requested again.
+            using var play = await browser.GetAsync("/Details/" + requestedWork + "?handler=Play");
+            Assert.AreEqual("/Details/" + requestedWork, play.Headers.Location?.OriginalString);
+            StringAssert.Contains(detailsHtml, "data-dialog-open=\"request-withdraw\"");
+            token = WebUtility.HtmlDecode(Regex.Match(detailsHtml, "name=\"__RequestVerificationToken\" value=\"([^\"]+)\"").Groups[1].Value);
+            using var withdrawn = await browser.PostAsync("/Details/" + requestedWork + "?handler=Withdraw&requestId=" + id, new FormUrlEncodedContent(new Dictionary<string, string> { ["__RequestVerificationToken"] = token }));
+            Assert.AreEqual(HttpStatusCode.Redirect, withdrawn.StatusCode, await withdrawn.Content.ReadAsStringAsync());
+            Assert.AreEqual((short)9, await host.ScalarAsync("SELECT \"AcquisitionRequestStatusTypeId\" FROM \"AcquisitionRequests\" WHERE \"Id\" = " + id));
+            using var afterWithdraw = await host.SendAsync(HttpMethod.Get, "/Details/" + requestedWork);
+            Assert.IsFalse((await afterWithdraw.Content.ReadAsStringAsync()).Contains("live-phase-pill", StringComparison.Ordinal));
 
             // Disabled does not erase data.
             await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = FALSE WHERE \"Key\" = 'Requests'");

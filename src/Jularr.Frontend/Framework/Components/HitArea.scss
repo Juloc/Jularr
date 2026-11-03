@@ -1,0 +1,49 @@
+@use "sass:string";
+
+// The one phone tap rule (owner's decision 2 Nov): every tap target has a hit area of at least 44x44px; the visual size stays as it is.
+// Mixins only, no output. A component includes one of them for its phone widths; nothing is added to a desktop.
+//
+//   hit-area      an invisible overlay (::after, or $pseudo) centred on the element that grows to 44px and never shrinks below the box. The overlay is
+//                 clipped by an ancestor or by the element's own overflow, so use hit-pad for those.
+//   hit-pad       transparent padding with a negative margin of the same size (text on one line: the height follows the line height), for a
+//                 target whose own overflow clips an overlay, such as a title that ends in an ellipsis.
+//   phone-*       the same inside the phone media query (project convention: max-width 640px). In a container query, include the plain mixin.
+//
+// The overlay grows into the free space around the target only: its reach is limited to the gap to the next target (--hit-gap-x, --hit-gap-y,
+// set by the group that is tighter than the default), so two targets never overlap; where 44px does not fit, the largest size that does is taken.
+$hit-size: 44px;
+$phone: "(max-width: 640px)";
+
+@mixin hit-area($gap-x: 8px, $gap-y: 12px, $pseudo: after, $border: 1px) {
+    // Zero specificity: a component that positions itself keeps its own value; a static element becomes the overlay's reference.
+    @at-root :where(#{&}) { position: relative; }
+
+    // The overlay is measured against the padding box, so the element's border is added back ($border, 0 for a borderless element).
+    $box-x: "100% + #{$border * 2}";
+    &::#{$pseudo} {
+        content: "";
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: string.unquote("max(#{$box-x}, min(#{$hit-size}, #{$box-x} + var(--hit-gap-x, #{$gap-x})))");
+        height: string.unquote("max(#{$box-x}, min(#{$hit-size}, #{$box-x} + var(--hit-gap-y, #{$gap-y})))");
+        transform: translate(-50%, -50%);
+    }
+}
+
+@mixin hit-pad($gap-y: 12px) {
+    // Positioned, so that its padding is above the text lines it grows over (they are no targets).
+    @at-root :where(#{&}) { position: relative; }
+    // Written as plain CSS text: Sass cannot subtract a line height (lh) from pixels.
+    $reach: string.unquote("min(#{$hit-size} - 1lh, var(--hit-gap-y, #{$gap-y}))");
+    padding-block: string.unquote("max(0px, calc(#{$reach} / 2))");
+    margin-block: string.unquote("min(0px, calc(#{$reach} / -2))");
+}
+
+@mixin phone-hit-area($gap-x: 8px, $gap-y: 12px, $pseudo: after, $border: 1px) {
+    @media #{$phone} { @include hit-area($gap-x, $gap-y, $pseudo, $border); }
+}
+
+@mixin phone-hit-pad($gap-y: 12px) {
+    @media #{$phone} { @include hit-pad($gap-y); }
+}

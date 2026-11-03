@@ -35,7 +35,7 @@ namespace Jularr.Backend.Data.Admin.Activity.V1
         public long WantedItemId { get; }
     }
 
-    // A film or series a folder can be imported to.
+    // A film, series or book a folder can be imported to.
     public sealed class ManualImportWorkV1 : BaseResponse
     {
         public ManualImportWorkV1(long wantedItemId, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string canonicalTitle, int? releaseYear)
@@ -78,13 +78,15 @@ namespace Jularr.Backend.Data.Admin.Activity.V1
         public string RelativePath { get; }
     }
 
-    // A video of the folder with what its name says it is and the name it would be given in the library.
+    // A video or book file of the folder with what its name says it is and the name it would be given in the library; of a book Season is the volume and Episode a manga chapter.
     public sealed class ManualImportFileV1 : BaseResponse
     {
-        public ManualImportFileV1(string path, long sizeBytes, int? season, int? episode, string? qualityKey, string? targetName, string? languages = null, bool isHandled = false)
+        public ManualImportFileV1(string path, long sizeBytes, int? season, int? episode, string? qualityKey, string? targetName, string? languages = null, bool isHandled = false,
+            string? unplacedReason = null)
         {
             Languages = languages;
             IsHandled = isHandled;
+            UnplacedReason = unplacedReason;
             Path = path;
             SizeBytes = sizeBytes;
             Season = season;
@@ -118,6 +120,10 @@ namespace Jularr.Backend.Data.Admin.Activity.V1
         // Of a waiting download: a person imported this file already, so it is not chosen again.
         [DataField(typeof(ManualImportFields), nameof(ManualImportFields.IsHandled))]
         public bool IsHandled { get; }
+
+        // Of a waiting download: why the import did not place it (a text key below acquisition.file.), so a person decides before it is chosen.
+        [DataField(typeof(ManualImportFields), nameof(ManualImportFields.UnplacedReason))]
+        public string? UnplacedReason { get; }
     }
 
     public sealed class ManualImportFolderV1 : BaseResponse
@@ -159,7 +165,7 @@ namespace Jularr.Backend.Data.Admin.Activity.V1
         [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.UnitStart))]
         public int? Episode { get; }
 
-        // Another film or series than the one the import is for; a download keeps its own.
+        // Another title than the one the import is for; a download keeps its own.
         [DataField(typeof(WantedItemFields), nameof(WantedItemFields.Id), false)]
         public long? WantedItemId { get; }
 
@@ -188,11 +194,12 @@ namespace Jularr.Backend.Data.Admin.Activity.V1
 
     public sealed class ManualImportNameV1 : BaseResponse
     {
-        public ManualImportNameV1(string path, long wantedItemId, MediaType mediaTypeId, string workTitle, string? targetName)
+        public ManualImportNameV1(string path, long wantedItemId, MediaType mediaTypeId, string workTitle, string? targetName, MediaSubtype? mediaSubtypeId = null)
         {
             Path = path;
             WantedItemId = wantedItemId;
             MediaTypeId = mediaTypeId;
+            MediaSubtypeId = mediaSubtypeId;
             WorkTitle = workTitle;
             TargetName = targetName;
         }
@@ -205,6 +212,9 @@ namespace Jularr.Backend.Data.Admin.Activity.V1
 
         [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId))]
         public MediaType MediaTypeId { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaSubtypeId))]
+        public MediaSubtype? MediaSubtypeId { get; }
 
         [DataField(typeof(WorkFields), nameof(WorkFields.CanonicalTitle))]
         public string WorkTitle { get; }

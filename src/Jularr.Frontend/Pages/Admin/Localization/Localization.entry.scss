@@ -1,0 +1,5 @@
+// The links above the messages (Languages, one per language) are plain text links; on a phone each is a 44px high line and the languages sit apart.
+@media (max-width: 640px) {
+    .locale-nav { display: flex; flex-wrap: wrap; column-gap: 16px; }
+    .locale-link { display: inline-flex; align-items: center; min-height: 44px; }
+}
