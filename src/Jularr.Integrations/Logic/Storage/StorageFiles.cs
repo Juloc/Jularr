@@ -77,7 +77,7 @@ namespace Jularr.Integrations.Logic.Storage
                     {
                         if (entry.Name != RecycleFolder) pending.Push(path);
                     }
-                    else if (extensions is null || extensions.Contains(Path.GetExtension(entry.Name).ToLowerInvariant()))
+                    else if (extensions is null || StoragePath.HasExtension(entry.Name, extensions))
                     {
                         yield return new StorageFile(path, entry.Length, entry.ModifiedAt);
                     }

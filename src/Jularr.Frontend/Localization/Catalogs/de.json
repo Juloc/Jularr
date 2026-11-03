@@ -9554,6 +9554,14 @@
    "This comic needs 7-Zip, which is not configured on the server.",
    "Dieser Comic braucht 7-Zip, das auf dem Server nicht eingerichtet ist."
   ],
+  "errors.reading_drm": [
+   "This book is DRM-protected and cannot be read in Jularr.",
+   "Dieses Buch ist mit DRM geschützt und lässt sich in Jularr nicht lesen."
+  ],
+  "errors.reading_kindle_compression": [
+   "This Kindle book uses HUFF/CDIC compression, which Jularr cannot read yet.",
+   "Dieses Kindle-Buch nutzt die HUFF/CDIC-Kompression, die Jularr noch nicht lesen kann."
+  ],
   "errors.health_degraded": [
    "A service did not answer the last health check. The Dashboard shows which one.",
    "Ein Dienst hat beim letzten Gesundheitscheck nicht geantwortet. Das Dashboard zeigt, welcher."
@@ -9705,6 +9713,18 @@
   "errors.validation.invalid_network": [
    "Enter IP addresses or networks such as 192.168.1.10 or 10.0.0.0/8.",
    "Gib IP-Adressen oder Netzwerke wie 192.168.1.10 oder 10.0.0.0/8 ein."
+  ],
+  "errors.validation.codex_model_invalid": [
+   "Enter a model name as Codex lists it, such as gpt-5.4.",
+   "Gib einen Modellnamen so ein, wie Codex ihn listet, etwa gpt-5.4."
+  ],
+  "errors.validation.codex_effort_invalid": [
+   "Choose one of the efforts the model offers.",
+   "Wähle eine der Stufen, die das Modell anbietet."
+  ],
+  "errors.validation.codex_run_over_daily": [
+   "The limit per run cannot be higher than the daily limit.",
+   "Das Limit pro Lauf darf nicht höher sein als das Tageslimit."
   ],
   "errors.validation.translation_machine_invalid": [
    "Enter Ollama machines by their address in the private network, such as 192.168.1.20 or 192.168.1.20:11434.",
@@ -10173,6 +10193,106 @@
   "admin.ai.disconnectDone": [
    "Codex disconnected",
    "Codex getrennt"
+  ],
+  "admin.ai.usage": [
+   "Plan usage",
+   "Plan-Auslastung"
+  ],
+  "admin.ai.usageLine": [
+   "ChatGPT plan",
+   "ChatGPT-Tarif"
+  ],
+  "admin.ai.windowShort": [
+   "Short window",
+   "Kurzes Fenster"
+  ],
+  "admin.ai.windowWeek": [
+   "Weekly window",
+   "Wochenfenster"
+  ],
+  "admin.ai.resets": [
+   "Starts over",
+   "Beginnt neu"
+  ],
+  "admin.ai.settings": [
+   "Settings",
+   "Einstellungen"
+  ],
+  "admin.ai.settingsLine": [
+   "What Codex uses when it translates",
+   "Was Codex beim Übersetzen verwendet"
+  ],
+  "admin.ai.model": [
+   "Model",
+   "Modell"
+  ],
+  "admin.ai.effort": [
+   "Reasoning effort",
+   "Denkaufwand"
+  ],
+  "admin.ai.effort.minimal": [
+   "Minimal",
+   "Sehr niedrig"
+  ],
+  "admin.ai.effort.low": [
+   "Low",
+   "Niedrig"
+  ],
+  "admin.ai.effort.medium": [
+   "Medium",
+   "Mittel"
+  ],
+  "admin.ai.effort.high": [
+   "High",
+   "Hoch"
+  ],
+  "admin.ai.effort.xhigh": [
+   "Extra high",
+   "Sehr hoch"
+  ],
+  "admin.ai.fallback": [
+   "Fallback model",
+   "Ersatzmodell"
+  ],
+  "admin.ai.fallbackHint": [
+   "Takes over when the model is not available or its limit is reached.",
+   "Übernimmt, wenn das Modell nicht verfügbar ist oder sein Limit erreicht ist."
+  ],
+  "admin.ai.noFallback": [
+   "No fallback",
+   "Kein Ersatzmodell"
+  ],
+  "admin.ai.codexDefault": [
+   "Codex default",
+   "Standard von Codex"
+  ],
+  "admin.ai.notOffered": [
+   "not offered any more",
+   "wird nicht mehr angeboten"
+  ],
+  "admin.ai.dailyTokens": [
+   "Tokens per day",
+   "Tokens pro Tag"
+  ],
+  "admin.ai.limitHint": [
+   "0 means unlimited. Jularr stops Codex work when a limit is reached.",
+   "0 heißt unbegrenzt. Jularr hält Codex-Arbeit an, wenn ein Limit erreicht ist."
+  ],
+  "admin.ai.runTokens": [
+   "Tokens per run",
+   "Tokens pro Lauf"
+  ],
+  "admin.ai.warnPercent": [
+   "Warn at (% of the daily limit)",
+   "Warnen ab (% des Tageslimits)"
+  ],
+  "admin.ai.catalogUnavailable": [
+   "Codex could not be asked for its models right now. Your saved choices are kept.",
+   "Codex konnte gerade nicht nach seinen Modellen gefragt werden. Deine gespeicherten Auswahlen bleiben erhalten."
+  ],
+  "admin.ai.settingsSaved": [
+   "Settings saved",
+   "Einstellungen gespeichert"
   ],
   "errors.codex_not_installed": [
    "The Codex CLI is not available in this installation.",
@@ -15246,7 +15366,11 @@
   "acquisition.file.content_pdf": ["Not a valid PDF: the file does not begin with %PDF-","Kein gültiges PDF: Die Datei beginnt nicht mit %PDF-"],
   "acquisition.file.content_mobi": ["Not a valid MOBI: the header names neither BOOKMOBI nor TEXtREAd","Kein gültiges MOBI: Der Dateikopf nennt weder BOOKMOBI noch TEXtREAd"],
   "acquisition.file.content_azw3": ["Not a valid AZW3: the header does not name BOOKMOBI","Kein gültiges AZW3: Der Dateikopf nennt nicht BOOKMOBI"],
-  "acquisition.file.content_palmdoc": ["An old PalmDOC MOBI: the reader cannot open it yet","Ein altes PalmDOC-MOBI: Der Reader kann es noch nicht öffnen"],
+  "acquisition.file.content_azw": ["Not a valid AZW: the header does not name BOOKMOBI","Kein gültiges AZW: Der Dateikopf nennt nicht BOOKMOBI"],
+  "acquisition.file.content_fb2": ["Not a valid FB2: no FictionBook XML, also not inside its ZIP","Kein gültiges FB2: kein FictionBook-XML, auch nicht in seinem ZIP"],
+  "acquisition.file.content_txt": ["Not a valid TXT: the file holds binary data, not text","Kein gültiges TXT: Die Datei enthält Binärdaten statt Text"],
+  "acquisition.file.content_rtf": ["Not a valid RTF: the file does not start like an RTF document","Kein gültiges RTF: Die Datei beginnt nicht wie ein RTF-Dokument"],
+  "acquisition.file.content_docx": ["Not a valid DOCX: no ZIP archive with word/document.xml","Kein gültiges DOCX: kein ZIP-Archiv mit word/document.xml"],
   "acquisition.file.content_cbz": ["Not a valid CBZ: the file is no ZIP archive","Kein gültiges CBZ: Die Datei ist kein ZIP-Archiv"],
   "acquisition.file.content_cbr": ["Not a valid CBR: the file is no RAR archive","Kein gültiges CBR: Die Datei ist kein RAR-Archiv"],
   "acquisition.file.content_cb7": ["Not a valid CB7: the file is no 7-Zip archive","Kein gültiges CB7: Die Datei ist kein 7-Zip-Archiv"],
@@ -15683,6 +15807,18 @@
   "translation.local.machines": [
    "Ollama machines, one address per line; the first that answers translates",
    "Ollama-Rechner, eine Adresse pro Zeile; der erste erreichbare übersetzt"
+  ],
+  "translation.local.defaultModel": [
+   "Default model",
+   "Standardmodell"
+  ],
+  "translation.local.defaultModel.automatic": [
+   "Automatic: the largest installed TranslateGemma",
+   "Automatisch: das größte installierte TranslateGemma"
+  ],
+  "translation.local.defaultModelHint": [
+   "Translates books, the Reader and subtitles for everyone. A model no machine has stops the server translation until one installs it.",
+   "Übersetzt Bücher, den Reader und Untertitel für alle. Ein Modell, das kein Rechner hat, hält die Server-Übersetzung an, bis einer es installiert."
   ],
   "translation.local.machine.offline": [
    "not reachable",

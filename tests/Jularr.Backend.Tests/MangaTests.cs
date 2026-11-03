@@ -407,6 +407,68 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(27, Directory.EnumerateFiles(folder).Count(), "A hardlinked import leaves the download as it was.");
         }
 
+        // A light novel download in the new formats: each valid format is placed once under the book's name (a zipped FB2 keeps both extensions), a broken file and
+        // the release note stay in the download, and the book reads through its reading copy.
+        [TestMethod]
+        public async Task LightNovel_Fb2AndDocxDownload_IsPlacedByItsFormatsAndReads()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            const string Release = "Night Train (2014) EPUB";
+            var sources = new FakeMangaSources
+            {
+                Manga = """
+                    {"id":4243,"type":"MANGA","format":"NOVEL","title":{"romaji":"Yakou Ressha","english":"Night Train","native":"夜行列車"},"synonyms":[],"startDate":{"year":2014},
+                     "volumes":null,"status":"FINISHED","staff":{"edges":[{"role":"Story","node":{"name":{"full":"Ann Author"}}}]}}
+                    """,
+                Rss = $"""
+                    <rss><channel>
+                      <item><title>{Release}</title><guid>fb2</guid><link>https://indexer.example.test/getnzb/fb2</link><size>2000000</size></item>
+                    </channel></rss>
+                    """
+            };
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, sources);
+            Directory.CreateDirectory(Path.Combine(storage.Path, "1", "Light Novels"));
+            await LibraryTests.CreateRootAsync(host, 1, "Light Novels", MediaType.Book, MediaSubtype.LightNovel);
+            using var imported = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works/metadata", new ImportMetadataWorkDataV1(MediaType.Book, "4243", MediaSubtype.LightNovel, "anilist"));
+            Assert.AreEqual(HttpStatusCode.OK, imported.StatusCode, await imported.Content.ReadAsStringAsync());
+            var work = (await imported.Content.ReadFromJsonAsync<WorkDetailsV1>())!;
+            await host.Fixture.RunSqlAsync($"""
+                INSERT INTO "AcquisitionRequests" ("Id", "WorkId", "RequestedByProfileId", "RequestedByAccountId", "UiLocaleId", "AcquisitionRequestStatusTypeId", "DecidedByAccountId", "DecidedAt")
+                VALUES (700, {work.Id}, 202, 42, 1, 2, 41, now());
+                INSERT INTO "WantedItems" ("Id", "WorkId") VALUES (800, {work.Id});
+                INSERT INTO "RequestTargets" ("AcquisitionRequestId", "WantedItemId") VALUES (700, 800);
+                """);
+            using var searched = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/wanted/800/search", new SearchWantedDataV1());
+            Assert.AreEqual(HttpStatusCode.OK, searched.StatusCode, await searched.Content.ReadAsStringAsync());
+            var release = (await searched.Content.ReadFromJsonAsync<BaseDataList<WantedReleaseCandidateV1>>())!.Single(candidate => candidate.Title == Release);
+            using var grabbed = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/wanted/800/grab", new GrabWantedReleaseDataV1(release.CandidateId));
+            Assert.AreEqual(HttpStatusCode.OK, grabbed.StatusCode, release.ReasonCode + " " + await grabbed.Content.ReadAsStringAsync());
+
+            var folder = Directory.CreateDirectory(Path.Combine(downloads.Path, "Night Train FB2")).FullName;
+            File.WriteAllBytes(Path.Combine(folder, "Night Train.fb2.zip"), BookFormatFixtures.Zip(("Night Train.fb2", BookFormatFixtures.Fb2())));
+            File.WriteAllBytes(Path.Combine(folder, "Night Train.docx"), BookFormatFixtures.Docx());
+            File.WriteAllBytes(Path.Combine(folder, "Night Train.rtf"), "not a rich text"u8.ToArray());
+            File.WriteAllText(Path.Combine(folder, "release notes.txt"), "Scanned and proofread by the group.");
+            sources.History = """{"history":{"slots":[{"nzo_id":"SABnzbd_nzo_1","name":"Night Train FB2","status":"Completed","storage":"/downloads/Night Train FB2"}]}}""";
+            await RunAsync<MonitorDownloadsV1>(host);
+
+            // Both formats under one name; the import is done, and the broken RTF and the note stay in the download.
+            var novels = Path.Combine(storage.Path, "1", "Light Novels");
+            var placed = Directory.EnumerateFiles(novels, "*", SearchOption.AllDirectories).Select(path => Path.GetRelativePath(novels, path)).Order(StringComparer.Ordinal).ToArray();
+            Assert.HasCount(2, placed, string.Join(", ", placed));
+            Assert.AreEqual(placed[0][..^".docx".Length], placed[1][..^".fb2.zip".Length], string.Join(", ", placed));
+            StringAssert.EndsWith(placed[1], ".fb2.zip");
+            Assert.IsTrue(File.Exists(Path.Combine(folder, "release notes.txt")) && File.Exists(Path.Combine(folder, "Night Train.rtf")));
+            Assert.AreEqual((short)3, await host.ScalarAsync("SELECT \"OperationStatusTypeId\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"));
+
+            // The reader opens the book through its reading copy.
+            var asset = (long)(await host.ScalarAsync("SELECT \"MediaAssetId\" FROM \"StoredFiles\" WHERE \"RelativePath\" LIKE '%.fb2.zip'"))!;
+            var document = await ReadingTests.OpenAsync(host, asset);
+            using var section = await host.SendAsync(HttpMethod.Get, "/api/v1/reading/documents/" + document.DocumentId + "/sections/1");
+            StringAssert.Contains((await section.Content.ReadFromJsonAsync<Data.User.Reading.V1.ReadingSectionV1>())!.Html, "The night train left at nine.");
+        }
+
         // A manga download nothing of which can be placed is rejected: SABnzbd deletes the job with its files, the release is blocked with its reason and date, and the next release is searched at once.
         [TestMethod]
         public async Task Manga_RejectedDownload_IsBlockedDeletedInSabnzbdAndTheNextReleaseIsSearchedAtOnce()

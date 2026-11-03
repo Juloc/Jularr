@@ -194,6 +194,19 @@ namespace Jularr.Backend.Service.System.Operation.V1
             var processed = 0L;
             var batch = new List<ScannedFile>(BatchSize);
             var state = new StorageScanState();
+            // A text file beside another book or an audiobook in its folder is a note, as on import; it is decided when the whole root is known.
+            var texts = new List<StorageFile>();
+            var folders = new HashSet<string>(StringComparer.Ordinal);
+            async Task AddAsync(StorageFile file)
+            {
+                var facts = ReleaseFacts.OfPath(file.RelativePath, root.MediaTypeId == MediaType.Movie);
+                batch.Add(new ScannedFile(file.RelativePath, file.SizeBytes, file.ModifiedAt, facts?.ReleaseName, facts?.ReleaseGroup, facts?.QualityKey, facts?.Edition, facts?.Revision ?? 1));
+                if (batch.Count == BatchSize)
+                {
+                    processed += await SaveBatchAsync(root.Id, seenAt, batch, processed);
+                }
+            }
+
             await foreach (var file in storage.EnumerateFilesAsync(directory, LibraryFileTypes.GetScanExtensions(root.MediaTypeId, root.MediaSubtypeId), state, CancellationToken))
             {
                 if (MediaPathParser.IsSample(file.RelativePath) || !IsStorablePath(file.RelativePath))
@@ -201,12 +214,23 @@ namespace Jularr.Backend.Service.System.Operation.V1
                     continue;
                 }
 
-                var facts = ReleaseFacts.OfPath(file.RelativePath, root.MediaTypeId == MediaType.Movie);
-                batch.Add(new ScannedFile(file.RelativePath, file.SizeBytes, file.ModifiedAt, facts?.ReleaseName, facts?.ReleaseGroup, facts?.QualityKey, facts?.Edition, facts?.Revision ?? 1));
-                if (batch.Count == BatchSize)
+                if (root.MediaTypeId == MediaType.Book && LibraryFileTypes.Extension(file.RelativePath) == ".txt")
                 {
-                    processed += await SaveBatchAsync(root.Id, seenAt, batch, processed);
+                    texts.Add(file);
+                    continue;
                 }
+
+                if (root.MediaTypeId == MediaType.Book && LibraryFileTypes.GetAssetType(file.RelativePath) is MediaAssetType.Ebook or MediaAssetType.Comic or MediaAssetType.Audio)
+                {
+                    folders.Add(StoragePath.Parent(file.RelativePath));
+                }
+
+                await AddAsync(file);
+            }
+
+            foreach (var text in texts.Where(text => !folders.Contains(StoragePath.Parent(text.RelativePath))))
+            {
+                await AddAsync(text);
             }
 
             processed += await SaveBatchAsync(root.Id, seenAt, batch, processed);

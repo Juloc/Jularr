@@ -13,6 +13,8 @@ namespace Jularr.Frontend.Framework
         public Page Definition { get; private set; } = new();
         private ServiceError? _error;
         protected ServiceError? FormError => _error is not null && HttpMethods.IsPost(Request.Method) ? _error : null;
+        // A failed read shows its reason above the page by itself.
+        protected bool HasReadError => _error is not null && HttpMethods.IsGet(Request.Method);
 
         // The quiet hint of an action lives in TempData until the response that shows it; the layout shows it for a page without script.
         public const string HintKey = "JularrHint";

@@ -83,13 +83,70 @@ namespace Jularr.Backend.Service.User.Reading.V1
                     return await OpenPdfAsync(context, source, file, ct);
                 }
 
-                var hash = await SHA256.HashDataAsync(file, ct);
-                file.Position = 0;
+                byte[] hash;
+                Stream epub = file;
+                if (BookConversion.IsConverted(source.RelativePath))
+                {
+                    // A format the reader does not read opens through its reading copy, an EPUB made in memory; the file itself stays as it is.
+                    if (file.CanSeek && file.Length > BookConversion.MaximumSourceBytes)
+                    {
+                        throw new ServiceUnavailableException("reading_invalid_file");
+                    }
+
+                    // Read once into an array of its size where the length is known.
+                    byte[] bytes;
+                    if (file.CanSeek)
+                    {
+                        bytes = new byte[file.Length];
+                        await file.ReadExactlyAsync(bytes, ct);
+                    }
+                    else
+                    {
+                        using var copy = new MemoryStream();
+                        var buffer = new byte[81920];
+                        int read;
+                        while ((read = await file.ReadAsync(buffer, ct)) > 0)
+                        {
+                            if (copy.Length + read > BookConversion.MaximumSourceBytes)
+                            {
+                                throw new ServiceUnavailableException("reading_invalid_file");
+                            }
+
+                            copy.Write(buffer, 0, read);
+                        }
+
+                        bytes = copy.ToArray();
+                    }
+
+                    hash = SHA256.HashData(bytes);
+                    try
+                    {
+                        epub = new MemoryStream(BookConversion.ToEpub(source.RelativePath, bytes));
+                    }
+                    catch (BookProtectedException)
+                    {
+                        throw new ServiceUnavailableException("reading_drm");
+                    }
+                    catch (BookCompressionException)
+                    {
+                        throw new ServiceUnavailableException("reading_kindle_compression");
+                    }
+                    catch (InvalidDataException)
+                    {
+                        throw new ServiceUnavailableException("reading_invalid_file");
+                    }
+                }
+                else
+                {
+                    hash = await SHA256.HashDataAsync(file, ct);
+                    file.Position = 0;
+                }
+
                 EpubPackage package;
                 ZipArchive archive;
                 try
                 {
-                    archive = new ZipArchive(file, ZipArchiveMode.Read, leaveOpen: true);
+                    archive = new ZipArchive(epub, ZipArchiveMode.Read, leaveOpen: true);
                     package = EpubReader.Read(archive);
                 }
                 catch (InvalidDataException)

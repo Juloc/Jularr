@@ -150,28 +150,75 @@ namespace Jularr.Backend.Tests
         [TestMethod]
         public void ProviderPaths_KeepModelsAndTargetsSeparateFromBergamot()
         {
-            var first = LocalReadingPaths.Cache(12, "de", "translategemma:4b");
-            var second = LocalReadingPaths.Cache(12, "de", "translategemma:12b");
+            var first = LocalReadingPaths.Cache(12, "de", "ollama:translategemma:4b");
+            var second = LocalReadingPaths.Cache(12, "de", "ollama:translategemma:12b");
             Assert.AreNotEqual(first, second);
-            Assert.AreNotEqual(first, LocalReadingPaths.Cache(12, "id", "translategemma:4b"));
+            Assert.AreNotEqual(first, LocalReadingPaths.Cache(12, "id", "ollama:translategemma:4b"));
             Assert.AreNotEqual(first, Jularr.Backend.Logic.Reading.ReadingTranslations.Path(12, "de"));
             Assert.IsFalse(first.StartsWith(":translation/", StringComparison.Ordinal), "Local drafts cannot be counted as finished languages.");
+
+            // Ollama keeps the cache keys of before provider-qualified ids, so nothing is translated again; another provider's key is its whole id.
+            Assert.AreEqual(":localtranslation/v4/translategemma:4b/de/00012", first);
+            Assert.AreEqual(":localtranslation/v4/codex:gpt-5/de/100003", LocalReadingPaths.Cache(100003, "de", "codex:gpt-5"));
         }
 
         [TestMethod]
-        public void Cache_RejectsStaleSourceLanguageDigestAndAlgorithm()
+        public void Providers_ResolveQualifiedModelIds_AndOnlyApprovedModels()
+        {
+            using var http = new HttpClient(new Machines());
+            var machines = new LocalTranslationMachines(new OllamaLocalModels(http), Options.Create(new LocalTranslationOptions { Endpoint = "http://ollama:11434" }), new Clock());
+            var providers = new TranslationProviders([new OllamaTranslationProvider(new OllamaLocalModels(http), machines)]);
+
+            Assert.AreEqual(("ollama", "translategemma:12b"), providers.Find("ollama:translategemma:12b") is var (provider, model) ? (provider.Key, model) : default);
+            foreach (var id in new[] { "translategemma:12b", "ollama:untrusted:90b", "codex:gpt-5", ":translategemma:4b", "ollama:", "", null })
+                Assert.IsNull(providers.Find(id), id);
+            Assert.AreEqual("ollama:translategemma:4b", TranslationProviders.Id(OllamaTranslationProvider.ProviderKey, "translategemma:4b"));
+        }
+
+        [TestMethod]
+        public async Task Providers_TheOwnersDefaultModel_WinsAndIsNeverReplacedByAnother()
+        {
+            using var http = new HttpClient(new Machines());
+            var machines = new LocalTranslationMachines(new OllamaLocalModels(http), Options.Create(new LocalTranslationOptions { Endpoint = "http://ollama:11434" }), new Clock());
+            var providers = new TranslationProviders([new OllamaTranslationProvider(new OllamaLocalModels(http), machines)]);
+            string[] order = ["http://192.168.1.20:11434", "http://10.0.0.2:11434"];
+
+            // Without a default: the largest model of the first machine that answers, as before.
+            Assert.AreEqual("ollama:translategemma:4b", (await providers.ChooseAsync(new TranslationSetupV1(order, null), default))?.ModelId);
+            // The default goes to the machine that has it; a named model wins over the default.
+            var chosen = await providers.ChooseAsync(new TranslationSetupV1(order, "ollama:translategemma:12b"), default);
+            Assert.AreEqual(("ollama:translategemma:12b", new Uri("http://10.0.0.2:11434/")), (chosen?.ModelId, chosen?.Address));
+            Assert.AreEqual("ollama:translategemma:4b", (await providers.ChooseAsync(new TranslationSetupV1(order, "ollama:translategemma:12b"), default, "ollama:translategemma:4b"))?.ModelId);
+            // A default no machine has, or an unknown one, translates nothing rather than with another model.
+            Assert.IsNull(await providers.ChooseAsync(new TranslationSetupV1(order, "ollama:translategemma:27b"), default));
+            Assert.IsNull(await providers.ChooseAsync(new TranslationSetupV1(order, "codex:gpt-5"), default));
+        }
+
+        [TestMethod]
+        public void Cache_RejectsStaleSourceLanguageAndAlgorithm_AndKeepsAnEarlierModelVersionAsStale()
         {
             const string html = "<p data-b=\"0\">Rina pulang.</p>";
             var digest = new string('a', 64);
             var source = LocalReadingPaths.SourceHash(html, "id");
-            var cache = new LocalTranslationCache(LocalReadingPaths.Algorithm, "id", source, digest, ["Rina ging nach Hause.", null!]);
+            var cache = new LocalTranslationCache(LocalReadingPaths.Algorithm, "id", source, digest, ["Rina ging nach Hause.", null]);
             var json = JsonSerializer.Serialize(cache);
             Assert.IsNotNull(LocalReadingPaths.Parse(json, html, "id", digest, 2), "A partial cache must survive refresh.");
             Assert.IsNull(LocalReadingPaths.Parse(json, html, "ja", digest, 2));
             Assert.IsNull(LocalReadingPaths.Parse(json, html + "changed", "id", digest, 2));
-            Assert.IsNull(LocalReadingPaths.Parse(json, html, "id", new string('b', 64), 2));
             Assert.IsNull(LocalReadingPaths.Parse(json, html, "id", digest, 1));
             Assert.IsNull(LocalReadingPaths.Parse("{broken", html, "id", digest, 2));
+
+            // A cache written before stale texts existed reads as before.
+            var earlier = $$"""{"AlgorithmVersion":4,"SourceLanguage":"id","SourceHash":"{{source}}","ModelDigest":"{{digest}}","Texts":["Rina ging nach Hause.",null]}""";
+            Assert.AreEqual("Rina ging nach Hause.", LocalReadingPaths.Parse(earlier, html, "id", digest, 2)!.Texts[0]);
+
+            // A new version of the model starts empty and keeps the earlier text visible as stale; read as stored, the cache is unchanged.
+            var renewed = LocalReadingPaths.Parse(json, html, "id", new string('b', 64), 2)!;
+            Assert.AreEqual(new string('b', 64), renewed.ModelDigest);
+            CollectionAssert.AreEqual(new string?[] { null, null }, renewed.Texts);
+            Assert.AreEqual(("Rina ging nach Hause.", true), LocalReadingPaths.Visible(renewed, 0));
+            Assert.AreEqual(((string?)null, false), LocalReadingPaths.Visible(renewed, 1));
+            Assert.AreEqual(("Rina ging nach Hause.", false), LocalReadingPaths.Visible(LocalReadingPaths.Parse(json, html, "id", null, 2)!, 0));
         }
 
         [TestMethod]
