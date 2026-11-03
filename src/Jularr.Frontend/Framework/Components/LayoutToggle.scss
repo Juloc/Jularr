@@ -2,4 +2,6 @@
 .layout-toggle.button { width: 36px; min-height: 36px; .ui-icon:last-child { display: none; } }
 
 @media (scripting: none) { [data-layout-toggle] { display: none; } }
+// In the list layout a grey card is a row.
+html[data-list-layout="list"] .media-skeleton { max-width: none; &::before { aspect-ratio: auto; height: 131px; border-radius: var(--radius-panel); } &::after { display: none; } }
 html[data-list-layout="list"] .layout-toggle .ui-icon { &:first-child { display: none; } &:last-child { display: block; } }

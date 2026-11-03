@@ -70,7 +70,8 @@ namespace Jularr.Frontend.Framework
                 if (Paging?.NextHref is { } next) links.Add(new A(new Text("list.loadMore")).Attribute("href", next).Attribute("data-infinite-next", "").Attribute("hx-ignore", "").Class("button"));
                 links.Add(new Span().Attribute("role", "status").Attribute("aria-live", "polite").Attribute("data-infinite-status", ""));
                 new Div([.. links]).Class("infinite-list").Attribute("data-infinite-list", target).Attribute("data-infinite-page", Page.ToString(CultureInfo.InvariantCulture))
-                    .Attribute("data-loading", texts["list.loading"]).Attribute("data-error", texts["list.retry"]).WriteTo(writer, encoder, texts);
+                    .Attribute("data-loading", texts["list.loading"]).Attribute("data-error", texts["list.retry"]).Attribute("data-retry-label", texts["list.tryAgain"])
+                    .Attribute("data-end", texts["list.endTitles"]).WriteTo(writer, encoder, texts);
                 return;
             }
             if (!IsDocked && _scope is not null && Paging is { } paging) ActionDock.PagingZone(_scope.Assets, paging, inline: true).WriteTo(writer, encoder, texts);

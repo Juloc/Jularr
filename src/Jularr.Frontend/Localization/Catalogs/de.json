@@ -414,6 +414,8 @@
   "list.loadMore": ["Load more", "Weitere laden"],
   "list.loading": ["Loading more entries…", "Weitere Einträge werden geladen…"],
   "list.retry": ["Could not load more entries. Try again.", "Weitere Einträge konnten nicht geladen werden. Erneut versuchen."],
+  "list.tryAgain": ["Try again", "Erneut versuchen"],
+  "list.endTitles": ["No more titles.", "Keine weiteren Titel."],
   "companion.title": [
    "Phone remote",
    "Handy-Fernbedienung"

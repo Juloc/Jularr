@@ -3,7 +3,8 @@ using Microsoft.Playwright;
 
 namespace Jularr.E2E.Tests
 {
-    // Pages hold still while they load: what script shows or hides is decided before the first paint, and a shelf keeps room for its arrows.
+    // Pages hold still while they load: what script shows or hides is decided before the first paint, a shelf keeps room for its arrows,
+    // and an endless list adds its pages without moving what is above.
     [TestClass]
     public sealed class LayoutShiftTests
     {
@@ -35,15 +36,16 @@ namespace Jularr.E2E.Tests
             var page = browser.Page;
             await Owner.SetUpAndSignInAsync(page);
 
-            // Enough films that the shelves of Discover outgrow their width and show their arrows.
-            var works = string.Join(", ", Enumerable.Range(1, 12).Select(i => $"({9700 + i}, 'tmdb_movie', 1, 'Film {i}', '{2000 + i}-03-31', 'https://127.0.0.1/{i}.jpg', {100 - i}, 7.5, 1000, {i})"));
-            var identities = string.Join(", ", Enumerable.Range(1, 12).Select(i => $"({9700 + i}, 'tmdb_movie', '{9700 + i}')"));
+            // Enough films that the shelves of Discover outgrow their width and the Library loads further pages by itself.
+            var works = string.Join(", ", Enumerable.Range(1, 60).Select(i => $"({9700 + i}, 'tmdb_movie', 1, 'Film {i}', '{2000 + i}-03-31', 'https://127.0.0.1/{i}.jpg', {100 - i}, 7.5, 1000, {i})"));
+            var identities = string.Join(", ", Enumerable.Range(1, 60).Select(i => $"({9700 + i}, 'tmdb_movie', '{9700 + i}')"));
             await jularr.RunSqlAsync($"""
                 UPDATE "InstanceModules" SET "IsEnabled" = TRUE WHERE "Key" = 'LocalDiscovery';
                 UPDATE "ExternalWorkSyncs" SET "CompletedAt" = now() WHERE "Namespace" = 'tmdb_movie';
                 INSERT INTO "Works" ("Id", "CatalogNamespace", "MediaTypeId", "CanonicalTitle", "ReleasedOn", "ImageUrl", "Popularity", "Rating", "Votes", "TrendingRank") VALUES {works};
                 INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") VALUES {identities};
                 """);
+            await jularr.SeedLibraryFilesAsync();
 
             // Shelves, choice selects, layout toggles and drawer buttons, the save pill's forms on cards and in lists.
             string[] paths = ["/", "/Library", "/Favorites", "/Notifications", "/Admin/Providers", "/Admin/Catalog", "/Admin/Downloads", "/Account/Sessions"];
@@ -60,6 +62,19 @@ namespace Jularr.E2E.Tests
                         var score = result.GetProperty("score").GetDouble();
                         if (score >= 0.01) shifts.Add($"{width}px {path}: {score:0.0000} ({result.GetProperty("sources").GetString()})");
                     }
+
+                    // Scrolling down the Library loads its further pages; the cards above hold still and the row of the link moves unseen.
+                    await page.GotoAsync("/Library");
+                    for (var step = 0; step < 6; step++)
+                    {
+                        await page.Mouse.WheelAsync(0, 2500);
+                        await page.WaitForTimeoutAsync(500);
+                    }
+
+                    await Assertions.Expect(page.Locator(".library-grid .media-card")).ToHaveCountAsync(60);
+                    await Assertions.Expect(page.Locator("[data-infinite-status]")).ToHaveTextAsync("No more titles.");
+                    var scrolled = await page.EvaluateAsync<JsonElement>(Measure);
+                    if (scrolled.GetProperty("score").GetDouble() >= 0.01) shifts.Add($"{width}px /Library scrolled: {scrolled.GetProperty("score").GetDouble():0.0000} ({scrolled.GetProperty("sources").GetString()})");
                 }
 
                 CollectionAssert.AreEqual(Array.Empty<string>(), shifts.ToArray(), string.Join("; ", shifts));
