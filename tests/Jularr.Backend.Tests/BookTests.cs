@@ -160,11 +160,16 @@ namespace Jularr.Backend.Tests
             File.WriteAllText(Path.Combine(books, release, release + ".epub"), "book");
             Directory.CreateDirectory(Path.Combine(books, "Unknown Title Nobody Lists"));
             File.WriteAllText(Path.Combine(books, "Unknown Title Nobody Lists", "Somebody - Unknown Title Nobody Lists.epub"), "book");
+            // A text beside a book is its note; a text alone in its folder is the book.
+            File.WriteAllText(Path.Combine(books, "Pride and Prejudice", "readme.txt"), "note");
+            Directory.CreateDirectory(Path.Combine(books, "Unknown Text Nobody Lists"));
+            File.WriteAllText(Path.Combine(books, "Unknown Text Nobody Lists", "Unknown Text Nobody Lists.txt"), "a book in plain text");
             var rootId = await LibraryTests.CreateRootAsync(host, mountId, "Books", MediaType.Book);
 
             // The catalog names exactly one entry with the folder's title; a title it does not list stays for a person.
             await LibraryTests.ScanAsync(host, rootId);
             Assert.AreEqual(3L, await host.ScalarAsync("""SELECT count(*) FROM "StoredFiles" WHERE "MediaAssetId" IS NOT NULL """));
+            Assert.AreEqual("Unknown Text Nobody Lists/Unknown Text Nobody Lists.txt", await host.ScalarAsync("""SELECT string_agg("RelativePath", ',') FROM "StoredFiles" WHERE "RelativePath" LIKE '%.txt' """));
             Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "Works" WHERE "CanonicalTitle" = 'Pride and Prejudice' """));
             Assert.AreEqual(1L, await host.ScalarAsync("""
                 SELECT count(*) FROM "StoredFiles" AS file JOIN "MediaAssets" AS asset ON asset."Id" = file."MediaAssetId" JOIN "Works" AS work ON work."Id" = asset."WorkId"
