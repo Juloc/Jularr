@@ -190,11 +190,34 @@ namespace Jularr.Backend.Logic.Acquisition
             }
         }
 
-        // The chosen targets that are not paused are due now, the highest priority first when the search runs; no choice leaves the due ones as they are.
+        // The chosen targets that are not paused are due now, the highest priority first when the search runs; no choice leaves the due ones as they are,
+        // and no choice of targets but of media types makes every target of those types that is not paused due now.
         public static async Task StartWantedSearchAsync(this LogicContext ctx, WantedSearchStartData data, CancellationToken ct)
         {
             if (data.WantedItemIds.Length == 0)
             {
+                if (data.MediaTypeIds.Length + data.MediaSubtypeIds.Length == 0)
+                {
+                    return;
+                }
+
+                var ofTypes = new SqlStatement();
+                ofTypes.Statement =
+                    """
+                    UPDATE
+                        "WantedItems" AS wanted
+                    SET
+                        "NextSearchAt" = NULL
+                    FROM
+                        "Works" AS work
+                    WHERE
+                        work."Id" = wanted."WorkId"
+                        AND NOT wanted."IsPaused"
+                        AND (work."MediaSubtypeId" IS NULL AND work."MediaTypeId" = ANY(@MediaTypeIds::smallint[])
+                            OR work."MediaSubtypeId" = ANY(@MediaSubtypeIds::smallint[]));
+                    """;
+                ofTypes.Parameters.Add(data);
+                await ctx.ExecuteAsyncForAffectedRows(ofTypes, ct);
                 return;
             }
 

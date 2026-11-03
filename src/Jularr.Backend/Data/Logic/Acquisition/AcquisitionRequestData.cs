@@ -1,5 +1,6 @@
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
+using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Fields.Account;
 using Jularr.Backend.Data.Fields.Acquisition;
 using Jularr.Backend.Data.Fields.Library;
@@ -215,13 +216,21 @@ namespace Jularr.Backend.Data.Logic.Acquisition
     // The targets whose next search is brought forward to now; none names every target.
     internal sealed class WantedSearchStartData : BaseData
     {
-        public WantedSearchStartData(long[] wantedItemIds)
+        public WantedSearchStartData(long[] wantedItemIds, MediaType[] mediaTypeIds, MediaSubtype[] mediaSubtypeIds)
         {
             WantedItemIds = wantedItemIds;
+            MediaTypeIds = mediaTypeIds;
+            MediaSubtypeIds = mediaSubtypeIds;
         }
 
         [DataField(typeof(WantedItemFields), nameof(WantedItemFields.Ids))]
         public long[] WantedItemIds { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeIds))]
+        public MediaType[] MediaTypeIds { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaSubtypeIds))]
+        public MediaSubtype[] MediaSubtypeIds { get; }
     }
 
     // One unit's, or a season's, monitoring for a wanted Work.

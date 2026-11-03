@@ -197,7 +197,9 @@ namespace Jularr.Frontend.Pages.Admin.Wanted
         {
             if (bulk == "Search")
             {
-                await startSearch.ExecuteAsync<UpdateResult>(new StartWantedSearchParametersV1(), new StartWantedSearchDataV1(wantedItemIds ?? []), HttpContext.RequestAborted);
+                // The chosen rows are searched; with none chosen, the media types of the bar (all of them: every target that is due).
+                var (types, subtypes) = Scopes.Filter();
+                await startSearch.ExecuteAsync<UpdateResult>(new StartWantedSearchParametersV1(), new StartWantedSearchDataV1(wantedItemIds ?? [], types, subtypes), HttpContext.RequestAborted);
                 TempData["WantedBulk"] = "wanted.search.started";
             }
             else if (Enum.TryParse<WantedPriorityType>(bulk, out var priority) && Enum.IsDefined(priority) && wantedItemIds is { Length: > 0 })

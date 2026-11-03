@@ -465,7 +465,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
         {
             await Context.ExecuteBatchAsync(async (ctx, ct) =>
             {
-                await ctx.StartWantedSearchAsync(new WantedSearchStartData(Data.WantedItemIds), ct);
+                await ctx.StartWantedSearchAsync(new WantedSearchStartData(Data.WantedItemIds, Data.MediaTypeIds, Data.MediaSubtypeIds), ct);
                 return true;
             }, CancellationToken);
             return new UpdateResult(true);

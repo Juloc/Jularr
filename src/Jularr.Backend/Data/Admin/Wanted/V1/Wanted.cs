@@ -123,20 +123,29 @@ namespace Jularr.Backend.Data.Admin.Wanted.V1
         public WantedPriorityType WantedPriorityTypeId { get; }
     }
 
-    // The chosen targets are searched as soon as the search runs; none chosen means every target that is due.
+    // The chosen targets are searched as soon as the search runs; none chosen means every target that is due, or, with media types, every target of those types.
     public sealed class StartWantedSearchParametersV1 : BaseParameters
     {
     }
 
     public sealed class StartWantedSearchDataV1 : BaseData
     {
-        public StartWantedSearchDataV1(long[] wantedItemIds)
+        public StartWantedSearchDataV1(long[] wantedItemIds, MediaType[]? mediaTypeIds = null, MediaSubtype[]? mediaSubtypeIds = null)
         {
             WantedItemIds = wantedItemIds;
+            MediaTypeIds = mediaTypeIds ?? [];
+            MediaSubtypeIds = mediaSubtypeIds ?? [];
         }
 
         [DataField(typeof(WantedItemFields), nameof(WantedItemFields.Ids))]
         public long[] WantedItemIds { get; }
+
+        // Without chosen targets: a type searches its titles without subtype, a subtype that subtype across types; none of either is every target that is due.
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeIds))]
+        public MediaType[] MediaTypeIds { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaSubtypeIds))]
+        public MediaSubtype[] MediaSubtypeIds { get; }
     }
 
     public sealed class WantedDetailsV1 : BaseResponse
