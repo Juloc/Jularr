@@ -31,6 +31,17 @@ namespace Jularr.Backend.Data.User.Translation.V1
         public string SourceLanguage { get; } = sourceLanguage;
     }
 
+    // A section's server translation: Blocks is a JSON array with one text per block (empty when nothing is translated yet), Models the model id
+    // each text comes from (null without text) and Stale whether it is from an earlier version of that model, shown until the new one replaces it.
+    public sealed class LocalReadingTranslationV1(string blocks, string?[] models, bool[] stale) : BaseResponse
+    {
+        [DataField(typeof(TranslationFields), nameof(TranslationFields.Blocks))]
+        public string Blocks { get; } = blocks;
+
+        public string?[] Models { get; } = models;
+        public bool[] Stale { get; } = stale;
+    }
+
     public sealed class LocalReadingBlockParametersV1(long documentId, int sectionIndex, string language, string model, int blockIndex) : BaseParameters
     {
         [DataField(typeof(ReadingFields), nameof(ReadingFields.DocumentId))]

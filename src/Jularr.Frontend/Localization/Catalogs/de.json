@@ -15800,6 +15800,18 @@
    "Ollama machines, one address per line; the first that answers translates",
    "Ollama-Rechner, eine Adresse pro Zeile; der erste erreichbare übersetzt"
   ],
+  "translation.local.defaultModel": [
+   "Default model",
+   "Standardmodell"
+  ],
+  "translation.local.defaultModel.automatic": [
+   "Automatic: the largest installed TranslateGemma",
+   "Automatisch: das größte installierte TranslateGemma"
+  ],
+  "translation.local.defaultModelHint": [
+   "Translates books, the Reader and subtitles for everyone. A model no machine has stops the server translation until one installs it.",
+   "Übersetzt Bücher, den Reader und Untertitel für alle. Ein Modell, das kein Rechner hat, hält die Server-Übersetzung an, bis einer es installiert."
+  ],
   "translation.local.machine.offline": [
    "not reachable",
    "nicht erreichbar"

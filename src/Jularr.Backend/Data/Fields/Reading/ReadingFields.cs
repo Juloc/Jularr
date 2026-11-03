@@ -24,6 +24,8 @@ namespace Jularr.Backend.Data.Fields.Reading
         public static readonly BoolField IsPending = new();
         public static readonly BoolField IsPdf = new();
         public static readonly StringField Path = new(NpgsqlDbType.Varchar) { MaximumLength = 1024, AllowBlank = false };
+        // A few resources of one document read together, such as one section's translation by several models.
+        public static readonly StringArrayField Paths = new() { ItemMaximumLength = 1024, MaximumLength = 64 };
         public static readonly StringField MediaType = new(NpgsqlDbType.Varchar) { MaximumLength = 128, AllowBlank = false };
         public static readonly ByteArrayField Bytes = new();
         public static readonly StringField Html = new() { AllowBlank = true };

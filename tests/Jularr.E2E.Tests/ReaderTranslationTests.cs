@@ -86,7 +86,7 @@ namespace Jularr.E2E.Tests
             Assert.AreEqual(200, response!.Status);
             var nextReader = page.Locator(".reader");
             await Assertions.Expect(nextReader).ToHaveAttributeAsync("data-reading-language", "de");
-            await Assertions.Expect(nextReader).ToHaveAttributeAsync("data-local-model", "translategemma:4b");
+            await Assertions.Expect(nextReader).ToHaveAttributeAsync("data-local-model", "ollama:translategemma:4b");
             try
             {
                 await Assertions.Expect(page.Locator("[data-role=content]")).ToContainTextAsync("Kapitel Eins", new() { Timeout = 60_000 });

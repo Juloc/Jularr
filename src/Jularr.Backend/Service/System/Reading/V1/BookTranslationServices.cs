@@ -9,7 +9,6 @@ using Jularr.Backend.Data.System.Reading.V1;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Service.Core;
 using Jularr.Backend.Service.User.Translation.V1;
-using Jularr.Integrations.Logic.Translation;
 using Microsoft.Extensions.Options;
 
 namespace Jularr.Backend.Service.System.Reading.V1
@@ -22,15 +21,13 @@ namespace Jularr.Backend.Service.System.Reading.V1
     {
         private const int BlocksPerCall = 6;
         private static readonly TimeSpan GateWait = TimeSpan.FromSeconds(2);
-        private readonly OllamaLocalModels _models;
-        private readonly LocalTranslationMachines _machines;
+        private readonly TranslationProviders _providers;
         private readonly LocalTranslationGate _gate;
         private readonly BookTranslationProgress _progress;
 
-        internal TranslateReadingBooksV1(OllamaLocalModels models, LocalTranslationMachines machines, LocalTranslationGate gate, BookTranslationProgress progress)
+        internal TranslateReadingBooksV1(TranslationProviders providers, LocalTranslationGate gate, BookTranslationProgress progress)
         {
-            _models = models;
-            _machines = machines;
+            _providers = providers;
             _gate = gate;
             _progress = progress;
         }
@@ -42,9 +39,10 @@ namespace Jularr.Backend.Service.System.Reading.V1
 
         protected override async Task<IServiceOutput> OnExecute()
         {
-            // The first machine of the order that answers; one that fails rests, and the next round goes to the next one.
-            var saved = await Context.ExecuteBatchAsync(LocalTranslationMachines.SavedAsync, CancellationToken);
-            if (await _machines.ChooseAsync(saved, CancellationToken) is not var (server, model))
+            // The Owner's default model (else the largest installed TranslateGemma) on the first machine of the order that answers with it; one that
+            // fails rests, and the next round goes to the next one.
+            var setup = await Context.ExecuteBatchAsync(TranslationProviders.SetupAsync, CancellationToken);
+            if (await _providers.ChooseAsync(setup, CancellationToken) is not { } machine)
             {
                 _progress.Idle("noMachine");
                 return new UpdateResult(false);
@@ -52,16 +50,18 @@ namespace Jularr.Backend.Service.System.Reading.V1
             string digest;
             try
             {
-                digest = await _models.DigestAsync(server, model, CancellationToken);
+                digest = await machine.Provider.DigestAsync(machine, CancellationToken);
             }
             catch (Exception exception) when (exception is HttpRequestException or JsonException or InvalidDataException or TaskCanceledException && !CancellationToken.IsCancellationRequested)
             {
-                _machines.Fail(server);
+                machine.Provider.Fail(machine);
                 _progress.Idle("machineFailed");
                 return new UpdateResult(false);
             }
 
-            var unit = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadOptionalAsync<BookTranslationUnitData>(NextSection(model, digest), ct), CancellationToken);
+            var key = LocalReadingPaths.ModelKey(machine.ModelId);
+            _progress.Translating(key, digest);
+            var unit = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadOptionalAsync<BookTranslationUnitData>(NextSection(key, digest), ct), CancellationToken);
             if (unit is null)
             {
                 _progress.Idle(null);
@@ -71,8 +71,8 @@ namespace Jularr.Backend.Service.System.Reading.V1
             _progress.Picked(unit.DocumentId, unit.SectionIndex, unit.Language);
 
             var nodes = new HtmlParser().ParseDocument(unit.Html).QuerySelectorAll("[data-b]").ToArray();
-            var path = LocalReadingPaths.Cache(unit.SectionIndex, unit.Language, model);
-            var texts = (unit.Cache is null ? null : LocalReadingPaths.Parse(unit.Cache, unit.Html, unit.SourceLanguage, digest, nodes.Length))?.Texts ?? new string[nodes.Length];
+            var path = LocalReadingPaths.Cache(unit.SectionIndex, unit.Language, machine.ModelId);
+            var texts = (unit.Cache is null ? null : LocalReadingPaths.Parse(unit.Cache, unit.Html, unit.SourceLanguage, digest, nodes.Length))?.Texts ?? new string?[nodes.Length];
             if (nodes.Length == 0)
             {
                 // A page of one picture has nothing to translate; it is done once its empty cache exists.
@@ -97,12 +97,12 @@ namespace Jularr.Backend.Service.System.Reading.V1
                     {
                         var context = ReadingHtml.TranslationContext(nodes, index);
                         // A failed block keeps its readable original rather than caching a nonsensical translation.
-                        value = await _models.TranslateBlockAsync(server, model, unit.SourceLanguage, unit.Language, source, context, CancellationToken) ?? source;
+                        value = await machine.Provider.TranslateBlockAsync(machine, unit.SourceLanguage, unit.Language, source, context, CancellationToken) ?? source;
                         _progress.BlockDone();
                     }
                     catch (Exception exception) when (exception is HttpRequestException or JsonException or InvalidDataException or TaskCanceledException && !CancellationToken.IsCancellationRequested)
                     {
-                        _machines.Fail(server);
+                        machine.Provider.Fail(machine);
                         _progress.Idle("machineFailed");
                         break;
                     }
@@ -122,8 +122,9 @@ namespace Jularr.Backend.Service.System.Reading.V1
         // The next section to translate: from a book someone is reading (most recently read first, from the chapter they are in, then
         // the chapters before it), then the rest of the library one book after the other (a book is finished before the next starts); into each language a profile uses that is not the book's own.
         // A scan's Smart Pages are units of their own (from 100000 on): first where someone reads the book's pages, from the page they are on.
-        // Done means a cache from this model with every block filled in.
-        private static SqlStatement NextSection(string model, string digest)
+        // Done means a cache from this model in this version with every block filled in. A section only an earlier version translated is stale: it
+        // stays readable and waits for the missing sections of the books being read, or of the rest of the library.
+        private static SqlStatement NextSection(string modelKey, string digest)
         {
             var sql = new SqlStatement();
             sql.Statement =
@@ -172,7 +173,7 @@ namespace Jularr.Backend.Service.System.Reading.V1
                     book."SourceLanguage",
                     convert_from(text."Bytes", 'UTF8') AS "Html",
                     section."Blocks",
-                    convert_from(cache."Bytes", 'UTF8') AS "Cache"
+                    stored.value::text AS "Cache"
                 FROM
                     books AS book
                     JOIN "ReadingDocuments" AS document ON document."Id" = book."Id"
@@ -200,20 +201,29 @@ namespace Jularr.Backend.Service.System.Reading.V1
                         AND text."Path" = section."Path"
                     LEFT JOIN "ReadingResources" AS cache ON cache."ReadingDocumentId" = book."Id"
                         AND cache."Path" = ':localtranslation/v4/' || @Model || '/' || target."Language" || '/' || section."Key"
+                    CROSS JOIN LATERAL (
+                        SELECT convert_from(cache."Bytes", 'UTF8')::jsonb AS value
+                    ) AS stored
+                    CROSS JOIN LATERAL (
+                        SELECT
+                            stored.value IS NOT NULL
+                            AND (stored.value ->> 'ModelDigest' IS DISTINCT FROM @Digest OR jsonb_typeof(stored.value -> 'Stale') = 'object') AS "IsStale"
+                    ) AS state
                 WHERE
                     length(target."Language") BETWEEN 2 AND 3
                     AND length(book."SourceLanguage") BETWEEN 2 AND 3
                     AND target."Language" <> book."SourceLanguage"
                     AND (
-                        cache."ReadingDocumentId" IS NULL
-                        OR convert_from(cache."Bytes", 'UTF8')::jsonb ->> 'ModelDigest' IS DISTINCT FROM @Digest
+                        stored.value IS NULL
+                        OR state."IsStale"
                         OR EXISTS (
-                            SELECT 1 FROM jsonb_array_elements(convert_from(cache."Bytes", 'UTF8')::jsonb -> 'Texts') AS block (value)
+                            SELECT 1 FROM jsonb_array_elements(stored.value -> 'Texts') AS block (value)
                             WHERE block.value = 'null'::jsonb
                         )
                     )
                 ORDER BY
                     book."ReadAt" IS NULL,
+                    state."IsStale",
                     book."ReadAt" DESC,
                     book."Id",
                     section."IsPage" <> book."ReadsPages",
@@ -222,7 +232,7 @@ namespace Jularr.Backend.Service.System.Reading.V1
                     target."Language"
                 LIMIT 1;
                 """;
-            sql.Parameters.Add(new BookTranslationModelData(model, digest));
+            sql.Parameters.Add(new BookTranslationModelData(modelKey, digest));
             return sql;
         }
     }

@@ -27,6 +27,8 @@ namespace Jularr.Backend.Data.Fields.Instance
         public static readonly StringArrayField TranslationMachines = new() { ItemMaximumLength = 255, MaximumLength = 8 };
         // The free bytes of the Ollama model volume as the Owner typed them; 0 leaves the configured value.
         public static readonly LongField TranslationFreeBytes = new() { Minimum = 0 };
+        // The Owner's default translation model as a provider-qualified id; none keeps the largest installed TranslateGemma.
+        public static readonly StringField TranslationModel = new(NpgsqlDbType.Varchar) { MaximumLength = 80, Required = false, Trim = true };
         public static readonly StringField PublicUrl = new(NpgsqlDbType.Varchar) { MaximumLength = 500, Required = false, Trim = true, Format = Enums.Field.StringFormat.HttpUrl };
         public static readonly BoolField KeepsReleases = new();
         public static readonly EnumField RecycleModeId = new(typeof(Enums.Library.RecycleMode));
