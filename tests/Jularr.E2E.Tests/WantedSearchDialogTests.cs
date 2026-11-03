@@ -71,12 +71,45 @@ namespace Jularr.E2E.Tests
                 // A chip shows only the releases of its source, without a new request.
                 var calls = sources.Calls;
                 await dialog.GetByRole(AriaRole.Button, new() { Name = "Slow catalog" }).ClickAsync();
-                await Assertions.Expect(dialog.Locator("tbody[data-source]:not([hidden])")).ToHaveCountAsync(1);
-                await Assertions.Expect(dialog.GetByRole(AriaRole.Status).First).ToContainTextAsync("Slow catalog");
+                await Assertions.Expect(dialog.Locator("tr.search-row[data-index]:visible")).ToHaveCountAsync(1);
+                await Assertions.Expect(dialog.GetByRole(AriaRole.Status).First).ToContainTextAsync("1 of 3 releases");
                 await Evidence.SaveAsync(page, "wanted-search-filtered-desktop");
                 await dialog.GetByRole(AriaRole.Button, new() { Name = "Slow catalog" }).ClickAsync();
-                await Assertions.Expect(dialog.Locator("tbody[data-source]:not([hidden])")).ToHaveCountAsync(3);
+                await Assertions.Expect(dialog.Locator("tr.search-row[data-index]:visible")).ToHaveCountAsync(3);
                 Assert.AreEqual(calls, sources.Calls, "Filtering asked the sources again.");
+
+                // The filters only show or hide what is loaded: a language, a size nothing has, and the order across the sources; the bar itself never moves.
+                async Task ChooseAsync(string current, string option)
+                {
+                    await dialog.GetByRole(AriaRole.Button, new() { Name = current, Exact = true }).ClickAsync();
+                    await page.GetByRole(AriaRole.Option, new() { Name = option, Exact = true }).ClickAsync();
+                }
+
+                var rows = dialog.Locator("tr.search-row[data-index]:visible");
+                var bar = await dialog.Locator(".search-filters").BoundingBoxAsync();
+                await ChooseAsync("All languages", "German");
+                await Assertions.Expect(rows).ToHaveCountAsync(1);
+                await Assertions.Expect(rows.First).ToContainTextAsync("Moby Dick");
+                await Assertions.Expect(dialog.GetByRole(AriaRole.Status).First).ToContainTextAsync("1 of 3 releases");
+                await Evidence.SaveAsync(page, "wanted-search-language-filter-desktop");
+                await dialog.GetByRole(AriaRole.Button, new() { Name = "Clear filters" }).ClickAsync();
+                await Assertions.Expect(rows).ToHaveCountAsync(3);
+                await ChooseAsync("Any size", "Over 20 GB");
+                await Assertions.Expect(rows).ToHaveCountAsync(0);
+                await Assertions.Expect(dialog.Locator("[data-search-nomatch]")).ToBeVisibleAsync();
+                await Evidence.SaveAsync(page, "wanted-search-no-match-desktop");
+                var after = await dialog.Locator(".search-filters").BoundingBoxAsync();
+                Assert.AreEqual((bar!.X, bar.Y, bar.Width, bar.Height), (after!.X, after.Y, after.Width, after.Height), "The filter bar moved while filtering.");
+                await dialog.GetByRole(AriaRole.Button, new() { Name = "Clear filters" }).ClickAsync();
+                await ChooseAsync("Sort", "Best score");
+                var order = await dialog.Locator("tbody[data-merged] tr.search-row").EvaluateAllAsync<string[]>("rows => rows.map(row => row.dataset.score)");
+                CollectionAssert.AreEqual(new[] { "60", "60", "0" }, order);
+                await dialog.Locator("tr.search-row[data-index]").Nth(2).EvaluateAsync("row => row.dataset.size = '9000000000'");
+                await ChooseAsync("Sort", "Largest");
+                Assert.AreEqual("9000000000", await dialog.Locator("tbody[data-merged] tr.search-row").First.GetAttributeAsync("data-size"));
+                await Evidence.SaveAsync(page, "wanted-search-sorted-desktop");
+                await ChooseAsync("Sort", "Sort by source");
+                Assert.AreEqual(0, await dialog.Locator("tbody[data-merged]").CountAsync());
 
                 // On a phone every release is a card and nothing runs over the side.
                 await page.SetViewportSizeAsync(390, 844);
@@ -118,7 +151,7 @@ namespace Jularr.E2E.Tests
                     Interlocked.Increment(ref sources._calls);
                     return Results.Text("""
                         {"results":[{"id":1342,"title":"Pride and Prejudice","authors":[{"name":"Austen, Jane"}],"languages":["en"],"formats":{"application/epub+zip":"https://www.gutenberg.org/ebooks/1342.epub3.images"}},
-                        {"id":2701,"title":"Moby Dick","authors":[{"name":"Melville, Herman"}],"languages":["en"],"formats":{"application/epub+zip":"https://www.gutenberg.org/ebooks/2701.epub3.images"}}]}
+                        {"id":2701,"title":"Moby Dick","authors":[{"name":"Melville, Herman"}],"languages":["de"],"formats":{"application/epub+zip":"https://www.gutenberg.org/ebooks/2701.epub3.images"}}]}
                         """, "application/json");
                 });
                 app.MapGet("/slow/books", async (HttpContext http) =>

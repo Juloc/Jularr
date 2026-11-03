@@ -65,7 +65,7 @@ namespace Jularr.Backend.Service.User.Translation.V1
         // Adds translated blocks to a section's cache under the document's row lock, so the Reader and the background job never
         // lose each other's blocks; a block already translated stays. Never called while a model runs.
         public static async Task<string?[]> StoreAsync(LogicContext ctx, long documentId, string path, string html, string sourceLanguage,
-            string digest, int count, IReadOnlyDictionary<int, string> blocks, CancellationToken ct)
+            string digest, int count, IReadOnlyDictionary<int, string> blocks, CancellationToken ct, bool replace = false)
         {
             var lockSql = new SqlStatement();
             lockSql.Statement =
@@ -84,7 +84,7 @@ namespace Jularr.Backend.Service.User.Translation.V1
             var changed = count == 0 && (existing is null || Parse(existing.Cache, html, sourceLanguage, null, 0)?.ModelDigest != digest);
             foreach (var (index, value) in blocks)
             {
-                if (!string.IsNullOrWhiteSpace(texts[index])) continue;
+                if (!replace && !string.IsNullOrWhiteSpace(texts[index])) continue;
                 texts[index] = value;
                 changed = true;
             }
@@ -166,7 +166,7 @@ namespace Jularr.Backend.Service.User.Translation.V1
     // A re-translation with a chosen model, for every reader of the book: a paragraph, the section or the whole book shows that model's text there
     // as soon as it has translated it (the Reader asks for the paragraph and the section's blocks at once, the background job for the rest).
     [ServiceEndpoint("PUT", "/api/v1/reading/documents/{documentId:long}/sections/{sectionIndex:int}/local-translations/{language}/{model}/choices")]
-    public sealed class ChooseLocalReadingTranslationV1 : UserService<LocalReadingChoiceParametersV1, LocalReadingChoiceDataV1>
+    public sealed class ChooseLocalReadingTranslationV1 : UserService<LocalReadingSectionModelParametersV1, LocalReadingChoiceDataV1>
     {
         private readonly TranslationProviders _providers;
 
@@ -177,8 +177,8 @@ namespace Jularr.Backend.Service.User.Translation.V1
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Update;
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
-        protected override ModuleRequirement GetInstanceModules(LocalReadingChoiceParametersV1 parameters) => ModuleRequirement.All("Library", "Reading", "Translation");
-        protected override ServicePermission GetPermission(LocalReadingChoiceParametersV1 parameters, Type resultType) => new("profile.media.read");
+        protected override ModuleRequirement GetInstanceModules(LocalReadingSectionModelParametersV1 parameters) => ModuleRequirement.All("Library", "Reading", "Translation");
+        protected override ServicePermission GetPermission(LocalReadingSectionModelParametersV1 parameters, Type resultType) => new("profile.media.read");
 
         protected override async Task<IServiceOutput> OnUpdate()
         {
@@ -188,7 +188,7 @@ namespace Jularr.Backend.Service.User.Translation.V1
             if (!_providers.MayChoose(Parameters.Model, setup, Auth.AccountRoleTypeId != AccountRoleType.User))
                 throw new SecurityException("Only an administrator may choose this model.");
 
-            var data = new ReadingTranslationChoiceWriteData(Parameters.DocumentId, Data.Scope == ReadingTranslationScope.Book ? null : Parameters.SectionIndex,
+            var data = new ReadingTranslationScopeWriteData(Parameters.DocumentId, Data.Scope == ReadingTranslationScope.Book ? null : Parameters.SectionIndex,
                 Data.Scope == ReadingTranslationScope.Block ? Data.BlockIndex : null, Parameters.Language, Parameters.Model);
             if (await Context.ChooseReadingTranslationAsync(data, Auth.ProfileId!.Value, CancellationToken) == 0) throw new KeyNotFoundException();
             return new UpdateResult(true);

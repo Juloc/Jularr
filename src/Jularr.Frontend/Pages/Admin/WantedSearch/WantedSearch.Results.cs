@@ -6,6 +6,7 @@ using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Service.Core;
 using Jularr.Frontend.Framework;
 using Jularr.Frontend.Pages.Admin.Wanted;
+using Jularr.Frontend.Pages.Admin.Work;
 
 namespace Jularr.Frontend.Pages.Admin.WantedSearch
 {
@@ -50,6 +51,8 @@ namespace Jularr.Frontend.Pages.Admin.WantedSearch
                     new P(new ValueText(_candidates is null ? Format("wanted.search.running", 0, _sources.Count) : Format("wanted.search.finished", _candidates.Count, _sources.Count)))
                         .Attribute("role", "status").Attribute("data-search-status", "")).Class("search-panel__status"),
                 _candidates is null ? Chips() : new Span(),
+                _candidates is null ? Filters() : new Span(),
+                new P(new Text("wanted.search.noMatch")).Class("search-panel__empty").Attribute("role", "status").Attribute("data-search-nomatch", "").Attribute("hidden", "hidden"),
                 new P(new Text("wanted.search.empty")).Class("search-panel__empty").Attribute("role", "status").Attribute("data-search-empty", "").Attribute("hidden", "hidden"),
                 Results(item, csrf, returnUrl),
                 _candidates is null ? Icons() : new Span()).Class("search-panel");
@@ -69,6 +72,23 @@ namespace Jularr.Frontend.Pages.Admin.WantedSearch
             .Class("search-chip").Attribute("aria-pressed", "false").Attribute("data-source", Count(source.Id)).Attribute("data-state", "loading"))])
             .Class("search-panel__chips").Attribute("role", "group").TextAttribute("aria-label", "wanted.search.sources");
 
+        // What a person narrows and orders the loaded releases by; the script applies it to the rows, nothing is asked again. The language list grows with what the sources found.
+        private IUiComponent Filters()
+        {
+            static IUiComponent Choice(string value, string labelKey) => new Option(new Text(labelKey)).Attribute("value", value);
+            IUiComponent Menu(string name, string labelKey, IUiComponent[] options) => new Select(options).Class("search-filter").Attribute("data-filter", name).TextAttribute("aria-label", labelKey);
+            var clear = new Button(new Icon("close", assets, 14), new Span(new Text("wanted.search.filters.clear"))).Compact().Soft();
+            clear.Attribute("data-filters-clear", "").Attribute("disabled", "disabled");
+            return new Div(
+                Menu("language", "wanted.search.filter.language", [Choice("", "wanted.search.filter.language")]),
+                Menu("protocol", "wanted.search.filter.protocol", [Choice("", "wanted.search.filter.protocol"), .. Enum.GetNames<ReleaseProtocol>().Select(name => Choice(name, "wanted.search.protocol." + name))]),
+                Menu("age", "wanted.search.filter.age", [Choice("", "wanted.search.filter.age"), .. new[] { 1, 7, 30, 90, 365 }.Select(days => Choice(Count(days), "wanted.search.age." + Count(days)))]),
+                Menu("size", "wanted.search.filter.size", [Choice("", "wanted.search.filter.size"), .. Enumerable.Range(0, 5).Select(range => Choice(Count(range), "wanted.search.size." + Count(range)))]),
+                Menu("sort", "wanted.search.sort", [Choice("source", "wanted.search.sort.source"), Choice("score", "wanted.search.sort.score"), Choice("newest", "wanted.search.sort.newest"),
+                    Choice("largest", "wanted.search.sort.largest"), Choice("smallest", "wanted.search.sort.smallest")]),
+                clear).Class("search-filters").Attribute("role", "group").TextAttribute("aria-label", "wanted.search.filters");
+        }
+
         // The small marks a chip takes when its source has answered.
         private IUiComponent Icons() => new Template(new Span(new Icon("check", assets, 14)).Attribute("data-icon", "ok"), new Span(new Icon("alert", assets, 14)).Attribute("data-icon", "failed"));
 
@@ -78,7 +98,7 @@ namespace Jularr.Frontend.Pages.Admin.WantedSearch
                 Head("wanted.search.release"), Head("wanted.search.source"), Head("wanted.search.quality"), Head("wanted.search.size"),
                 Head("wanted.search.age"), Head("wanted.search.score"), Head("wanted.search.decision"), Head("common.actions")));
             IUiComponent[] bodies = _candidates is { } candidates
-                ? [new Tbody([.. candidates.Select(candidate => Row(candidate, csrf, returnUrl))])]
+                ? [new Tbody([.. candidates.Select((candidate, index) => Row(candidate, csrf, returnUrl, 0, index))])]
                 : [.. _sources.Select(Skeleton)];
             return new Div(new TableElement([head, .. bodies]).Class("page-table search-table")).Class("page-table-wrap page-table-wrap--stack search-panel__results");
         }
@@ -93,7 +113,7 @@ namespace Jularr.Frontend.Pages.Admin.WantedSearch
 
         // The answer of one source: its rows and their number.
         private IUiComponent SourceBody(long connectionId, BaseDataList<WantedReleaseCandidateV1> candidates, string? csrf, string? returnUrl) =>
-            new Tbody([.. candidates.Select(candidate => Row(candidate, csrf, returnUrl))]).Attribute("data-source", Count(connectionId)).Attribute("data-state", "done").Attribute("data-count", Count(candidates.Count));
+            new Tbody([.. candidates.Select((candidate, index) => Row(candidate, csrf, returnUrl, connectionId, index))]).Attribute("data-source", Count(connectionId)).Attribute("data-state", "done").Attribute("data-count", Count(candidates.Count));
 
         // A source that failed has no rows; the chip says why in short, and in full when hovered.
         private IUiComponent SourceFailure(long connectionId, ServiceError error)
@@ -110,7 +130,7 @@ namespace Jularr.Frontend.Pages.Admin.WantedSearch
         }
 
         // Every candidate stays visible with its decision and reason; a rejected one is grey and can only be taken through its warning menu. The score's rules and points show on hover.
-        private IUiComponent Row(WantedReleaseCandidateV1 item, string? csrf, string? returnUrl)
+        private IUiComponent Row(WantedReleaseCandidateV1 item, string? csrf, string? returnUrl, long sourceId, int index)
         {
             var rejected = item.ReleaseDecisionTypeId == ReleaseDecisionType.Rejected;
             var facts = new List<IUiComponent>();
@@ -127,7 +147,10 @@ namespace Jularr.Frontend.Pages.Admin.WantedSearch
                 Cell("wanted.search.score", Score(item)),
                 Cell("wanted.search.decision", new Div(new StateChip(new Text("acquisition.decision." + item.ReleaseDecisionTypeId), Tone(item.ReleaseDecisionTypeId)), reason.Class("search-row__reason"))),
                 new Td(rejected ? Override(item, csrf, returnUrl) : Grabs(item, csrf, returnUrl)).Class("search-row__actions"))
-                .Class("search-row" + (rejected ? " search-row--rejected" : "")).Attribute("data-decision", item.ReleaseDecisionTypeId.ToString());
+                .Class("search-row" + (rejected ? " search-row--rejected" : "")).Attribute("data-decision", item.ReleaseDecisionTypeId.ToString())
+                .Attribute("data-source", Count(sourceId)).Attribute("data-index", Count(index)).Attribute("data-score", Count(item.Score))
+                .Attribute("data-size", item.SizeBytes is { } size ? Count(size) : "").Attribute("data-published", item.PublishedAt is { } published ? new DateTimeOffset(published, TimeSpan.Zero).ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture) : "")
+                .Attribute("data-protocol", item.ReleaseProtocolId.ToString()).Attribute("data-languages", string.Join(';', item.Languages.Select(WorkLanguages.Code).Distinct().Select(code => code + "=" + WorkLanguages.Name(code))));
         }
 
         private static IEnumerable<IUiComponent> Joined(List<IUiComponent> facts)

@@ -1,4 +1,5 @@
 using Jularr.Backend.Data.Admin.Translation.V1;
+using Jularr.Backend.Logic.Playback;
 using Jularr.Backend.Service.Core;
 using Jularr.Integrations.Logic.Codex;
 
@@ -35,7 +36,15 @@ namespace Jularr.Backend.Tests
                 done
                 echo "$model $effort" >> "$CODEX_HOME/asked"
                 if [ "$model" = broken ]; then exit 1; fi
-                printf 'Translated by %s: %s' "$model" "$(printf '%s' "$prompt" | tail -n 1)" > "$out"
+                if [ "$model" = limited ]; then
+                  printf '{"type":"turn.started"}\n{"type":"error","message":"You hit your usage limit. Upgrade to Pro, or try again at %s."}\n{"type":"turn.failed","error":{"message":"You hit your usage limit."}}\n' "Nov 4th, 2099 7:41 AM"
+                  exit 1
+                fi
+                case "$prompt" in
+                  *'[[1]]'*) printf '%s\n' "$prompt" | awk -v m="$model" '/^\[\[[0-9]+\]\]$/ { print; getline; print "Translated by " m ": " $0; print "" }' > "$out" ;;
+                  *'[1] '*) printf '%s\n' "$prompt" | grep '^\[[0-9]*\] ' | sed "s/^\(\[[0-9]*\]\) /\1 Translated by $model: /" > "$out" ;;
+                  *) printf 'Translated by %s: %s' "$model" "$(printf '%s' "$prompt" | tail -n 1)" > "$out" ;;
+                esac
                 printf '{"type":"turn.completed","usage":{"input_tokens":100,"cached_input_tokens":5,"output_tokens":50}}\n' ;;
             esac
             """;
@@ -132,6 +141,93 @@ namespace Jularr.Backend.Tests
             CollectionAssert.AreEqual(new[] { "gpt-test", "gpt-ok" }, provider.Models.ToArray());
             Assert.IsNotNull(new TranslationProviders([provider]).Find("codex:gpt-ok"));
             Assert.IsNull(new TranslationProviders([provider]).Find("codex:made-up"));
+        }
+
+        [TestMethod]
+        public async Task Provider_TranslatesSeveralBlocksInOneRequest_AndAsksAgainForAMissingOne()
+        {
+            using var folder = new Folder();
+            folder.SignIn();
+            using var connection = folder.Connection();
+            var provider = new CodexTranslationProvider(connection, TimeProvider.System);
+            var machine = (await provider.ChooseAsync(new TranslationSetupV1([], null), "gpt-test", default))!;
+
+            var answers = await provider.TranslateBlocksAsync(machine, "ja", "de", ["Rina went home", "The rain stopped", "Kai waited"], "Before", default);
+
+            CollectionAssert.AreEqual(new[] { "Translated by gpt-test: Rina went home", "Translated by gpt-test: The rain stopped", "Translated by gpt-test: Kai waited" }, answers);
+            Assert.AreEqual(1, File.ReadAllLines(Path.Combine(folder.Home, "asked")).Length, "one request for three blocks");
+            Assert.AreEqual((150L, 150L), connection.Usage());
+
+            // The answer's parts by their numbers: a missing or empty part is null, order and extra lines do not matter.
+            CollectionAssert.AreEqual(new string?[] { "A", null, "C\nmore" }, CodexTranslationProvider.Numbered("[[1]]\nA\n\n[[3]]\nC\nmore\n[[2]]\n\n", 3));
+            CollectionAssert.AreEqual(new string?[] { "A", "B" }, CodexTranslationProvider.Numbered("noise\n[[2]]\nB\n[[1]]\nA\n[[9]]\nignored", 2));
+        }
+
+        [TestMethod]
+        public async Task Provider_TranslatesNumberedSubtitleCues_SoTheSubtitleParserAcceptsThem()
+        {
+            using var folder = new Folder();
+            folder.SignIn();
+            using var connection = folder.Connection();
+            var provider = new CodexTranslationProvider(connection, TimeProvider.System);
+            var machine = (await provider.ChooseAsync(new TranslationSetupV1([], null), "gpt-test", default))!;
+
+            var answer = await provider.TranslateAsync(machine, "en", "de", "[1] Hello.\n[2] Bye.", default);
+
+            CollectionAssert.AreEqual(new[] { "Translated by gpt-test: Hello.", "Translated by gpt-test: Bye." }, SubtitleTranslationLogic.ParseBatch(answer, 2));
+        }
+
+        [TestMethod]
+        public async Task Provider_WhenThePlanLimitIsReached_RestsUntilCodexSaysAndNotesIt()
+        {
+            using var folder = new Folder();
+            folder.SignIn();
+            using var connection = folder.Connection();
+            var provider = new CodexTranslationProvider(connection, TimeProvider.System);
+            var setup = new TranslationSetupV1([], null);
+            var machine = (await provider.ChooseAsync(setup, "limited", default))!;
+            Assert.IsNull(connection.PlanLimitedUntil);
+
+            await Assert.ThrowsExactlyAsync<InvalidDataException>(() => provider.TranslateBlockAsync(machine, "ja", "de", "Rina went home", null, default));
+
+            // A date far ahead is capped at a day; until then nothing asks Codex again.
+            var until = connection.PlanLimitedUntil;
+            Assert.IsNotNull(until);
+            Assert.IsTrue(until > DateTimeOffset.UtcNow.AddHours(23) && until <= DateTimeOffset.UtcNow.AddDays(1).AddMinutes(1), until.ToString());
+            Assert.IsNull(await provider.ChooseAsync(setup, "gpt-test", default));
+            Assert.AreEqual((byte)3, connection.Requests().Single().State);
+
+            // Parsed from the CLI's own words: "try again at Nov 4th, 2026 7:41 AM."
+            var parsed = CodexCli.PlanLimitOf("{\"type\":\"turn.failed\",\"error\":{\"message\":\"You've hit your usage limit. Upgrade to Pro. Try again at Nov 4th, 2026 7:41 AM.\"}}\n");
+            Assert.IsNotNull(parsed);
+            Assert.AreEqual(new DateTime(2026, 11, 4, 7, 41, 0, DateTimeKind.Local).ToUniversalTime(), parsed.Until!.Value.UtcDateTime);
+            Assert.IsNull(CodexCli.PlanLimitOf("{\"type\":\"turn.failed\",\"error\":{\"message\":\"Something else.\"}}\n"));
+        }
+
+        [TestMethod]
+        public async Task Activity_ListsTheRequests_AndTheTokensPerDayAreKeptAcrossARestart()
+        {
+            using var folder = new Folder();
+            folder.SignIn();
+            using (var connection = folder.Connection())
+            {
+                var provider = new CodexTranslationProvider(connection, TimeProvider.System);
+                var machine = (await provider.ChooseAsync(new TranslationSetupV1([], null), "gpt-test", default))!;
+                await provider.TranslateBlockAsync(machine, "ja", "de", "Rina went home", null, default);
+                await provider.TranslateBlocksAsync(machine, "ja", "de", ["Rina went home", "Kai waited"], null, default);
+
+                var requests = connection.Requests();
+                Assert.AreEqual(2, requests.Length);
+                Assert.AreEqual("translate 2 blocks", requests[0].What, "newest first");
+                Assert.AreEqual("translate a block", requests[1].What);
+                Assert.IsTrue(requests.All(request => request.State == 1 && request.Tokens == 150 && request.Model == "gpt-test"));
+                Assert.AreEqual(300L, connection.History().Single().Tokens);
+            }
+
+            // The first run of a new Jularr: the earlier requests are gone, the days are not.
+            using var restarted = folder.Connection();
+            Assert.AreEqual(0, restarted.Requests().Length);
+            Assert.AreEqual(300L, restarted.History().Single().Tokens);
         }
 
         internal sealed class Folder : IDisposable

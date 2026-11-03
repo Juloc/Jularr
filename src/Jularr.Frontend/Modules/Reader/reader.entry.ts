@@ -4,6 +4,7 @@ import { progressReporter } from '../Tracking/Progress';
 import { findings, highlights } from './highlights';
 import { translator } from './Translation/translation';
 import { initializeRetranslation } from './Translation/Retranslate';
+import { codexRetranslate } from './Translation/codex';
 import { createTranslationWorker } from './Translation/worker';
 import { initializeReaderChrome, initializeReaderSettings } from './Settings';
 import { initializePaperPages } from './PaperPages';
@@ -194,6 +195,7 @@ function initializeText(reader: HTMLElement, address: URL): void {
 
     // Existing translation and annotation services remain the only data owners.
     translation = reader.dataset.localTranslationUrl ? translator(reader, content, createTranslationWorker, () => paging!.ahead()) : undefined;
+    codexRetranslate(reader);
     const translate = translation?.choose;
     if (translation) initializeRetranslation(reader, translation, () => paging!.current());
     const localModel = reader.dataset.localModel;

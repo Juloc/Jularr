@@ -97,4 +97,36 @@ namespace Jularr.Backend.Data.Admin.Ai.V1
         public string? Plan { get; } = plan;
         public CodexUsageWindowV1[] Windows { get; } = windows;
     }
+
+    // One request to Codex: what it was for, the model, how it ended (0 running, 1 done, 2 failed, 3 plan limit) and what it cost.
+    public sealed class CodexRequestV1(string what, string model, DateTimeOffset started, byte state, long tokens, double seconds)
+    {
+        public string What { get; } = what;
+        public string Model { get; } = model;
+        public DateTimeOffset Started { get; } = started;
+        public byte State { get; } = state;
+        public long Tokens { get; } = tokens;
+        public double Seconds { get; } = seconds;
+    }
+
+    public sealed class CodexDayV1(string day, long tokens)
+    {
+        public string Day { get; } = day;
+        public long Tokens { get; } = tokens;
+    }
+
+    // What Jularr's Codex translation is doing and has done: the running and the last requests, the tokens per day of the last 30 days, and until when the account's
+    // usage limit rests it (null when it is not limited).
+    public sealed class CodexActivityV1(CodexRequestV1[] requests, CodexDayV1[] days, DateTimeOffset? planLimitedUntil) : BaseResponse
+    {
+        public CodexRequestV1[] Requests { get; } = requests;
+        public CodexDayV1[] Days { get; } = days;
+        public DateTimeOffset? PlanLimitedUntil { get; } = planLimitedUntil;
+    }
+
+    // The model id ("codex:<model>") the Owner can re-translate a chapter or book with by hand; null when Codex is not connected or no model is known.
+    public sealed class CodexRetranslationV1(string? model) : BaseResponse
+    {
+        public string? Model { get; } = model;
+    }
 }

@@ -33,6 +33,9 @@ namespace Jularr.Backend.Service.Core
         private long _usedToday;
         private long _usedSinceStart;
         private bool _usageLoaded;
+        private readonly SortedDictionary<string, long> _history = [];
+        private readonly List<CodexRequest> _requests = [];
+        private DateTimeOffset _planLimitedUntil;
 
         internal CodexConnection(CodexCli cli)
         {
@@ -168,19 +171,90 @@ namespace Jularr.Backend.Service.Core
             return dailyTokens > 0 && today >= dailyTokens || runTokens > 0 && sinceStart >= runTokens;
         }
 
-        // One prompt to the chosen model; its tokens are counted against the limits whether or not the answer is used.
-        internal async Task<string> ExecAsync(string model, string? effort, string prompt, CancellationToken ct)
+        // One prompt to the chosen model; its tokens are counted against the limits whether or not the answer is used. `what` names the request on the AI page.
+        internal async Task<string> ExecAsync(string model, string? effort, string prompt, string what, CancellationToken ct)
         {
             if (!CodexSettings.IsModelName(model) || effort is not null && !CodexSettings.IsEffortName(effort)) throw new InvalidDataException("Codex model or effort is not valid.");
+            var request = new CodexRequest(what, model, DateTimeOffset.UtcNow);
+            lock (_gate)
+            {
+                _requests.Add(request);
+                var finished = _requests.Where(item => item.State != CodexRequestState.Running).OrderBy(item => item.Started).ToList();
+                foreach (var old in finished.Take(Math.Max(0, finished.Count - 20))) _requests.Remove(old);
+            }
+
             try
             {
                 var answer = await _cli.ExecAsync(model, effort, prompt, ct);
                 Record(answer.Tokens);
+                lock (_gate)
+                {
+                    _planLimitedUntil = default;
+                    request.Finish(CodexRequestState.Done, answer.Tokens);
+                }
+
                 return answer.Text;
+            }
+            catch (CodexPlanLimitException limit)
+            {
+                lock (_gate)
+                {
+                    // Codex names the time it is usable again; without one, and at most, the limit is assumed to last a short while or a day.
+                    var now = DateTimeOffset.UtcNow;
+                    _planLimitedUntil = limit.Until is { } until && until > now ? (until < now.AddDays(1) ? until : now.AddDays(1)) : now.AddMinutes(30);
+                    request.Finish(CodexRequestState.PlanLimit, 0);
+                }
+
+                throw new InvalidDataException("The Codex usage limit is reached.", limit);
             }
             catch (ProviderUnavailableException)
             {
+                lock (_gate)
+                {
+                    request.Finish(CodexRequestState.Failed, 0);
+                }
+
                 throw new InvalidDataException("Codex is not available.");
+            }
+            catch
+            {
+                lock (_gate)
+                {
+                    request.Finish(CodexRequestState.Failed, 0);
+                }
+
+                throw;
+            }
+        }
+
+        // When Codex said its usage limit is lifted; default (past) when it is not limited.
+        internal DateTimeOffset? PlanLimitedUntil
+        {
+            get
+            {
+                lock (_gate)
+                {
+                    return _planLimitedUntil > DateTimeOffset.UtcNow ? _planLimitedUntil : null;
+                }
+            }
+        }
+
+        // The running requests and the last twenty that ended, newest first.
+        internal CodexRequestV1[] Requests()
+        {
+            lock (_gate)
+            {
+                return [.. _requests.OrderByDescending(item => item.Started).Select(item => item.Snapshot())];
+            }
+        }
+
+        // The tokens per UTC day of the last 30 days, oldest first; today's count included.
+        internal (string Day, long Tokens)[] History()
+        {
+            lock (_gate)
+            {
+                LoadUsage();
+                return [.. _history.TakeLast(30).Select(pair => (pair.Key, pair.Value))];
             }
         }
 
@@ -192,9 +266,11 @@ namespace Jularr.Backend.Service.Core
                 LoadUsage();
                 _usedToday += tokens;
                 _usedSinceStart += tokens;
+                _history[_usageDay.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)] = _usedToday;
+                while (_history.Count > 60) _history.Remove(_history.Keys.First());
                 try
                 {
-                    File.WriteAllText(UsagePath(), JsonSerializer.Serialize(new UsageFile(_usageDay.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), _usedToday)));
+                    File.WriteAllText(UsagePath(), JsonSerializer.Serialize(new UsageFile(_usageDay.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), _usedToday, new Dictionary<string, long>(_history))));
                 }
                 catch (IOException)
                 {
@@ -202,22 +278,33 @@ namespace Jularr.Backend.Service.Core
             }
         }
 
-        // Called inside the lock: today's count from the file, or a new day.
+        // Called inside the lock: the history and today's count from the file, or a new day.
         private void LoadUsage()
         {
             var today = DateOnly.FromDateTime(DateTime.UtcNow);
             if (_usageLoaded && _usageDay == today) return;
             _usageDay = today;
             _usedToday = 0;
+            if (!_usageLoaded)
+            {
+                try
+                {
+                    var file = JsonSerializer.Deserialize<UsageFile>(File.ReadAllText(UsagePath()));
+                    if (file?.History is not null)
+                        foreach (var (day, tokens) in file.History)
+                            if (DateOnly.TryParseExact(day, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out _) && tokens > 0) _history[day] = tokens;
+                    if (file is not null && file.Day == today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)) _usedToday = Math.Max(0, file.Tokens);
+                }
+                catch (Exception exception) when (exception is IOException or JsonException or UnauthorizedAccessException)
+                {
+                }
+            }
+            else if (_history.TryGetValue(today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), out var known))
+            {
+                _usedToday = known;
+            }
+
             _usageLoaded = true;
-            try
-            {
-                var file = JsonSerializer.Deserialize<UsageFile>(File.ReadAllText(UsagePath()));
-                if (file is not null && file.Day == today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)) _usedToday = Math.Max(0, file.Tokens);
-            }
-            catch (Exception exception) when (exception is IOException or JsonException or UnauthorizedAccessException)
-            {
-            }
         }
 
         private string UsagePath()
@@ -226,7 +313,7 @@ namespace Jularr.Backend.Service.Core
             return Path.Combine(_cli.HomePath, "jularr-usage.json");
         }
 
-        private sealed record UsageFile(string Day, long Tokens);
+        private sealed record UsageFile(string Day, long Tokens, Dictionary<string, long>? History = null);
 
         public async Task<CodexConnectionV1> StartLoginAsync(CancellationToken ct)
         {
@@ -352,5 +439,34 @@ namespace Jularr.Backend.Service.Core
 
         [GeneratedRegex("^[a-z]{3,16}$")]
         private static partial Regex EffortPattern();
+    }
+
+    internal enum CodexRequestState : byte
+    {
+        Running = 0,
+        Done = 1,
+        Failed = 2,
+        PlanLimit = 3
+    }
+
+    // One request to Codex, as the AI page shows it while it runs and after it ended.
+    internal sealed class CodexRequest(string what, string model, DateTimeOffset started)
+    {
+        private DateTimeOffset? _finished;
+        private long _tokens;
+
+        public string What { get; } = what;
+        public string Model { get; } = model;
+        public DateTimeOffset Started { get; } = started;
+        public CodexRequestState State { get; private set; }
+
+        public void Finish(CodexRequestState state, long tokens)
+        {
+            State = state;
+            _tokens = tokens;
+            _finished = DateTimeOffset.UtcNow;
+        }
+
+        public CodexRequestV1 Snapshot() => new(What, Model, Started, (byte)State, _tokens, Math.Round(((_finished ?? DateTimeOffset.UtcNow) - Started).TotalSeconds, 1));
     }
 }

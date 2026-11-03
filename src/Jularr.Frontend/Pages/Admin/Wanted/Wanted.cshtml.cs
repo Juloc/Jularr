@@ -26,6 +26,15 @@ namespace Jularr.Frontend.Pages.Admin.Wanted
         [BindProperty(SupportsGet = true)]
         public WantedViewType View { get; set; }
 
+        // Media types as slugs of the type bar, repeated or separated by commas; none shows all of them.
+        [BindProperty(SupportsGet = true, Name = "type")]
+        public string[] Types { get; set; } = [];
+
+        private ScopeSelection? _scopes;
+
+        // Every media type is listed in the administration; none asked for shows all of them.
+        private ScopeSelection Scopes => _scopes ??= new ScopeSelection(Types, [.. LibraryScopes.All.Where(scope => scope.Slug != "all")]);
+
         protected override void Define(Page page)
         {
             page.Title("admin.wanted.title");
@@ -39,6 +48,7 @@ namespace Jularr.Frontend.Pages.Admin.Wanted
 
             if (TempData["WantedBulk"] is string done) page.Content.Add(new P(new Text(done)).Class("list-notice").Attribute("role", "status"));
             page.NoPageRow();
+            page.Content.Add(new MediaTypeBar(assets, Scopes.ListedSlugs, Scopes.ChosenSlugs, "library.scope.", types => ViewAddress(View, types)));
             page.Content.Add(new ListToolbar(AdminMenu.Row(texts, Request, [.. Enum.GetValues<WantedViewType>().Select(view => new NavigationTab("wanted.view." + view, ViewAddress(view), view == View, Count: CountOf(view), Icon: Glyph(ViewIcon(view), 14)))], ariaLabelKey: "wanted.views")));
             if (_wanted is { } wanted)
             {
@@ -202,13 +212,18 @@ namespace Jularr.Frontend.Pages.Admin.Wanted
         protected override async Task LoadDataAsync()
         {
             var ct = HttpContext.RequestAborted;
-            _wanted = await read.ExecuteAsync<PageResult<WantedDetailsV1>>(new ReadWantedParametersV1(PageNumber, wantedViewTypeId: View), ct);
-            _summary = await readSummary.ExecuteAsync<WantedSummaryV1>(new ReadWantedParametersV1(), ct);
+            var (types, subtypes) = Scopes.Filter();
+            _wanted = await read.ExecuteAsync<PageResult<WantedDetailsV1>>(new ReadWantedParametersV1(PageNumber, wantedViewTypeId: View, mediaTypeIds: types, mediaSubtypeIds: subtypes), ct);
+            _summary = await readSummary.ExecuteAsync<WantedSummaryV1>(new ReadWantedParametersV1(mediaTypeIds: types, mediaSubtypeIds: subtypes), ct);
         }
 
-        private static string ViewAddress(WantedViewType view) => "/Admin/Wanted?PageNumber=1" + (view == WantedViewType.All ? "" : "&View=" + view);
+        // A view's first page with the chosen types (or the given ones; none for all of them).
+        private string ViewAddress(WantedViewType view, IReadOnlyList<string>? types = null) =>
+            "/Admin/Wanted?PageNumber=1" + (view == WantedViewType.All ? "" : "&View=" + view) + TypeQuery(types);
 
         private string Address(int pageNumber, string? handler = null) =>
-            "/Admin/Wanted?PageNumber=" + pageNumber.ToString(CultureInfo.InvariantCulture) + (View == WantedViewType.All ? "" : "&View=" + View) + (handler is null ? "" : "&handler=" + handler);
+            "/Admin/Wanted?PageNumber=" + pageNumber.ToString(CultureInfo.InvariantCulture) + (View == WantedViewType.All ? "" : "&View=" + View) + TypeQuery(null) + (handler is null ? "" : "&handler=" + handler);
+
+        private string TypeQuery(IReadOnlyList<string>? types) => Scopes.Parameter(types ?? Scopes.Picked) is { } value ? "&type=" + value : "";
     }
 }

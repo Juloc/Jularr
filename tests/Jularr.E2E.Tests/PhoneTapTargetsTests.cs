@@ -50,7 +50,9 @@ namespace Jularr.E2E.Tests
             ("/Details/8001", "a.details-block__all", 44, 44, ""),
             ("/Details/8001?tab=related", "a.relation__title", 44, 44, ""),
             ("/Admin/Downloads", "a.downloads-icon", 38, 44, "icon buttons sit 6px apart"),
-            ("/Admin/Downloads", ".downloads-tabs a.navigation-tabs__link", 44, 44, "")
+            ("/Admin/Downloads", ".downloads-tabs a.navigation-tabs__link", 44, 44, ""),
+            ("/Settings", ".ui-section > a.button", 44, 44, ""),
+            ("/Admin/Works", "button.choice-select__control", 44, 44, "")
         ];
 
         [TestMethod]

@@ -1,5 +1,5 @@
 import { onPage } from "../../../Modules/Navigation/PageSwap";
-import { countText, listStatus, summarize } from "./MediaImport";
+import { countText, isShown, listStatus, summarize, typesOf } from "./MediaImport";
 import { initializeDurableJobs } from "./MediaImport.jobs";
 
 // Says whether the pasted text or the chosen file reads as a list; a chosen file is the list, as on the server.
@@ -30,7 +30,9 @@ function initializePreview(): void {
     const all = document.querySelector<HTMLInputElement>("[data-import-all]");
     const count = document.querySelector<HTMLElement>("[data-import-count]");
     const apply = document.querySelector<HTMLButtonElement>("[data-import-apply]");
-    const rows = Array.from(document.querySelectorAll<HTMLInputElement>("[data-import-row]"));
+    const everyRow = Array.from(document.querySelectorAll<HTMLInputElement>("[data-import-row]"));
+    // Only what the media-type bar shows is chosen, counted and imported.
+    const shown = () => everyRow.filter(row => !row.closest("tr")?.hidden);
     const form = all?.closest("form") ?? null;
     const intent = form?.querySelector<HTMLElement>("[data-import-intent]");
     // Form.Select uses segmented radio inputs for the three import actions.
@@ -42,6 +44,7 @@ function initializePreview(): void {
     if (!all || all.dataset.ready !== undefined) return;
     all.dataset.ready = "";
     const update = () => {
+        const rows = shown();
         const selection = summarize(rows);
         all.checked = selection.all;
         if (count) {
@@ -77,14 +80,66 @@ function initializePreview(): void {
     };
 
     all.addEventListener("change", () => {
-        for (const row of rows) row.checked = all.checked;
+        for (const row of shown()) row.checked = all.checked;
         update();
     });
-    for (const row of rows) row.addEventListener("change", update);
+    for (const row of everyRow) row.addEventListener("change", update);
     form?.querySelectorAll<HTMLInputElement | HTMLSelectElement>('input[name="Action"],select[name="Action"]')
         .forEach(control => control.addEventListener("change", update));
     form?.querySelectorAll<HTMLSelectElement>('select[name$=".Action"]').forEach(select => select.addEventListener("change", update));
+    initializeTypeBar(update);
     update();
+}
+
+// The media-type bar narrows the rows without reading the list again: a row of a type left out is hidden and not chosen
+// (its switch is off, so it is not imported), and comes back as it was when its type is shown again.
+function initializeTypeBar(update: () => void): void {
+    const bar = document.querySelector<HTMLElement>("[data-import-types]");
+    const stored = bar?.querySelector<HTMLInputElement>('input[name="type"]');
+    if (!bar || !stored || bar.dataset.ready !== undefined) return;
+    bar.dataset.ready = "";
+    // Every row has its type, also one with nothing to choose (a duplicate, an entry that could not be read).
+    const lines = Array.from(document.querySelectorAll<HTMLTableRowElement>("tr")).filter(line => line.querySelector("[data-import-type]"));
+    const filter = (chosen: string[]) => {
+        for (const line of lines) {
+            const row = line.querySelector<HTMLInputElement>("[data-import-row]");
+            const show = isShown(chosen, line.querySelector<HTMLElement>("[data-import-type]")?.dataset.importType);
+            if (row && show && line.hidden) {
+                row.checked = row.dataset.wasChecked === "true";
+                delete row.dataset.wasChecked;
+            } else if (row && !show && !line.hidden) {
+                row.dataset.wasChecked = String(row.checked);
+                row.checked = false;
+            }
+            line.hidden = !show;
+        }
+        stored.value = chosen.join(",");
+        update();
+    };
+
+    let latest = 0;
+    bar.addEventListener("click", async event => {
+        const link = (event.target as Element).closest<HTMLAnchorElement>("a[href*='#type=']");
+        if (!link) return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        const chosen = typesOf(link.href);
+        filter(chosen);
+        const turn = ++latest;
+        try {
+            const url = new URL(window.location.pathname, window.location.href);
+            url.searchParams.set("handler", "TypeBar");
+            url.searchParams.set("listed", bar.dataset.listed ?? "");
+            url.searchParams.set("type", chosen.join(","));
+            const response = await fetch(url, { credentials: "same-origin" });
+            if (!response.ok || turn !== latest) return;
+            const markup = new DOMParser().parseFromString(await response.text(), "text/html").body.firstElementChild;
+            if (markup) bar.querySelector(".capsule-bar")?.replaceWith(markup);
+        } catch {
+            // The rows already follow the click; the bar keeps its old look until the next one.
+        }
+    }, { capture: true });
+    filter(stored.value.split(",").filter(slug => slug !== ""));
 }
 
 // Preview is still an ordinary POST, but it shows immediate feedback while provider checks run.

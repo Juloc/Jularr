@@ -54,4 +54,10 @@ namespace Jularr.Integrations.Data.Codex
         public string Text { get; } = text;
         public long Tokens { get; } = tokens;
     }
+
+    // Codex answered that the account's usage limit is reached; Until is when Codex says it may be used again (null when it did not say).
+    internal sealed class CodexPlanLimitException(DateTimeOffset? until) : Exception("The Codex usage limit is reached.")
+    {
+        public DateTimeOffset? Until { get; } = until;
+    }
 }

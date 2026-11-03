@@ -41,3 +41,75 @@
     .codex-window__percent { font-size: var(--text-body); font-weight: 700; }
     .codex-window__reset { color: var(--muted); }
 }
+
+// Tokens per day: a short date, a bar against the busiest day, the count.
+.codex-history {
+    display: grid;
+    gap: 8px;
+    min-width: 0;
+
+    .codex-history__title { margin: 0; color: var(--muted); font-weight: 650; }
+    .codex-history__rows { display: grid; gap: 6px; min-width: 0; }
+
+    .codex-history__row {
+        display: grid;
+        grid-template-columns: 52px minmax(0, 1fr) minmax(70px, auto);
+        align-items: center;
+        gap: 10px;
+
+        progress {
+            appearance: none;
+            width: 100%;
+            height: 6px;
+            border: 0;
+            border-radius: 999px;
+            background: var(--border);
+            color: var(--accent);
+            overflow: hidden;
+
+            &::-webkit-progress-bar { background: var(--border); }
+            &::-webkit-progress-value { background: var(--accent); border-radius: 999px; }
+            &::-moz-progress-bar { background: var(--accent); }
+        }
+    }
+
+    .codex-history__day { color: var(--muted); }
+    .codex-history__tokens { text-align: end; font-variant-numeric: tabular-nums; }
+}
+
+// What Codex is doing and did last: one row per request, the time, what it was, the model, the cost and how it ended.
+.codex-requests {
+    display: grid;
+    gap: 8px;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+
+    .codex-request {
+        display: grid;
+        grid-template-columns: 64px minmax(0, 1fr) auto auto auto;
+        align-items: center;
+        gap: 12px;
+        min-width: 0;
+        padding: 10px 14px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-md, 14px);
+    }
+
+    .codex-request__time, .codex-request__cost, .codex-request__model { color: var(--muted); }
+    .codex-request__what { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .codex-request__cost { font-variant-numeric: tabular-nums; }
+
+    @media (max-width: 640px) {
+        .codex-request {
+            grid-template-columns: minmax(0, 1fr) auto;
+            row-gap: 4px;
+
+            .codex-request__time { grid-column: 1; }
+            .codex-request__what { grid-column: 1 / -1; grid-row: 2; }
+            .codex-request__model, .codex-request__cost { grid-column: 1; }
+            .state-chip { grid-column: 2; grid-row: 1; }
+        }
+    }
+}

@@ -9,12 +9,21 @@ namespace Jularr.Backend.Data.Admin.Wanted.V1
 {
     public sealed class ReadWantedParametersV1 : BaseParameters
     {
-        public ReadWantedParametersV1(int page = 1, int pageSize = 25, WantedViewType wantedViewTypeId = WantedViewType.All)
+        public ReadWantedParametersV1(int page = 1, int pageSize = 25, WantedViewType wantedViewTypeId = WantedViewType.All, MediaType[]? mediaTypeIds = null, MediaSubtype[]? mediaSubtypeIds = null)
         {
             Page = page;
             PageSize = pageSize;
             WantedViewTypeId = wantedViewTypeId;
+            MediaTypeIds = mediaTypeIds ?? [];
+            MediaSubtypeIds = mediaSubtypeIds ?? [];
         }
+
+        // A type lists its titles without subtype and a subtype lists that subtype across types; none of either lists all.
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeIds))]
+        public MediaType[] MediaTypeIds { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaSubtypeIds))]
+        public MediaSubtype[] MediaSubtypeIds { get; }
 
         public int Page { get; }
         public int PageSize { get; }
@@ -343,8 +352,11 @@ namespace Jularr.Backend.Data.Admin.Wanted.V1
     {
         public WantedReleaseCandidateV1(string candidateId, string title, string connectionName, long? sizeBytes, DateTime? publishedAt, string? qualityKey,
             ReleaseDecisionType releaseDecisionTypeId, int score, string reasonCode, string? reasonValue, BookReleaseKind? bookReleaseKindId = null, int? volumeStart = null,
-            int? volumeEnd = null, bool isComplete = false, ReleaseSizeMark? releaseSizeMarkId = null, BaseDataList<ReleaseScorePointV1>? scorePoints = null, string? releaseGroup = null)
+            int? volumeEnd = null, bool isComplete = false, ReleaseSizeMark? releaseSizeMarkId = null, BaseDataList<ReleaseScorePointV1>? scorePoints = null, string? releaseGroup = null,
+            ReleaseProtocol releaseProtocolId = ReleaseProtocol.Usenet, string[]? languages = null)
         {
+            ReleaseProtocolId = releaseProtocolId;
+            Languages = languages ?? [];
             ReleaseGroup = releaseGroup;
             BookReleaseKindId = bookReleaseKindId;
             VolumeStart = volumeStart;
@@ -417,6 +429,13 @@ namespace Jularr.Backend.Data.Admin.Wanted.V1
         // The group the release name states.
         [DataField(typeof(StoredFileFields), nameof(StoredFileFields.ReleaseGroup))]
         public string? ReleaseGroup { get; }
+
+        // How the release is fetched, and the languages it carries (audio languages, the language of a book); both are what a person filters by.
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.ReleaseProtocolId))]
+        public ReleaseProtocol ReleaseProtocolId { get; }
+
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.Languages))]
+        public string[] Languages { get; }
     }
 
     // The points of one score rule and what it saw.

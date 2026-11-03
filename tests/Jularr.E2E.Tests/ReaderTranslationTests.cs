@@ -190,7 +190,7 @@ namespace Jularr.E2E.Tests
 
         // A private loopback Ollama fixture: the test executes the real Reader UI,
         // HTTP API, profile permissions and cache without pulling a multi-GB model.
-        private sealed class FakeOllama : IAsyncDisposable
+        internal sealed class FakeOllama : IAsyncDisposable
         {
             private readonly HttpListener _listener = new();
             private readonly Task _running;

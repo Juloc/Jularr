@@ -9,7 +9,7 @@ namespace Jularr.Backend.Logic.Reading
     internal static class ReadingTranslationChoiceLogic
     {
         // Only a book the profile may open; returns the number of blocks chosen (none: no such block or book).
-        public static async Task<int> ChooseReadingTranslationAsync(this LogicContext ctx, ReadingTranslationChoiceWriteData data, long profileId, CancellationToken ct)
+        public static async Task<int> ChooseReadingTranslationAsync(this LogicContext ctx, ReadingTranslationScopeWriteData data, long profileId, CancellationToken ct)
         {
             var sql = new SqlStatement();
             sql.Statement =

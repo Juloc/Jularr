@@ -7,16 +7,29 @@ using Jularr.Integrations.Logic.Translation;
 
 namespace Jularr.Backend.Service.Core
 {
+    // A provider that can translate several blocks of a section in one request, which gives the model the whole passage as context. Answers are in the order of the
+    // blocks; null where a block's answer is missing or fails the provider's checks (the caller asks for that block alone).
+    internal interface IBatchTranslationProvider : ITranslationProvider
+    {
+        // The most source characters one request should carry.
+        int BatchCharacters { get; }
+
+        Task<string?[]> TranslateBlocksAsync(TranslationMachine machine, string source, string target, IReadOnlyList<string> blocks, string? context, CancellationToken ct);
+    }
+
     // The Owner's ChatGPT account as a translator through the provider seam, model ids "codex:<model>". It translates only when asked by name (the Owner's default
     // model or a re-translation), never as the automatic choice. The effort, fallback model and limits the Owner set ride on the machine's address (codex://local/?...):
     // the seam hands a machine to every call, and that is all a call knows.
-    internal sealed class CodexTranslationProvider(CodexConnection connection, TimeProvider time) : ITranslationProvider
+    internal sealed class CodexTranslationProvider(CodexConnection connection, TimeProvider time) : IBatchTranslationProvider
     {
         public const string ProviderKey = "codex";
         private static readonly TimeSpan Rest = TimeSpan.FromMinutes(1);
         private DateTimeOffset _restingUntil;
 
         public string Key => ProviderKey;
+
+        // About three thousand tokens of source: a chapter in a few requests, each with the passage around its blocks.
+        public int BatchCharacters => 12_000;
 
         // The models the account offered when last asked, never a guess; empty until the AI page or the first translation has asked.
         public IReadOnlyList<string> Models
@@ -32,11 +45,11 @@ namespace Jularr.Backend.Service.Core
         public bool IsAdminOnly => true;
 
         public async Task<IReadOnlyList<string>> AvailableAsync(TranslationSetupV1 setup, CancellationToken ct) =>
-            connection.LimitReached(setup.CodexDailyTokens, setup.CodexRunTokens) || !await connection.IsConnectedAsync(ct) ? [] : Models;
+            connection.PlanLimitedUntil is not null || connection.LimitReached(setup.CodexDailyTokens, setup.CodexRunTokens) || !await connection.IsConnectedAsync(ct) ? [] : Models;
 
         public async Task<TranslationMachine?> ChooseAsync(TranslationSetupV1 setup, string? model, CancellationToken ct)
         {
-            if (model is null || time.GetUtcNow() < _restingUntil || connection.LimitReached(setup.CodexDailyTokens, setup.CodexRunTokens)) return null;
+            if (model is null || time.GetUtcNow() < _restingUntil || connection.PlanLimitedUntil is not null || connection.LimitReached(setup.CodexDailyTokens, setup.CodexRunTokens)) return null;
             if (!await connection.IsConnectedAsync(ct)) return null;
             var query = new List<string>();
             if (setup.CodexEffort is not null) query.Add("effort=" + Uri.EscapeDataString(setup.CodexEffort));
@@ -51,28 +64,74 @@ namespace Jularr.Backend.Service.Core
 
         public async Task<string?> TranslateBlockAsync(TranslationMachine machine, string source, string target, string text, string? context, CancellationToken ct)
         {
-            var answer = await AskAsync(machine, Prompt(source, target, text, context), ct);
+            var answer = await AskAsync(machine, Prompt(source, target, text, context), "translate a block", ct);
             return OllamaLocalModels.LooksComplete(text, answer, target) ? answer : null;
         }
 
+        // The blocks numbered in one request: the model answers with the same numbers, and every block's answer is checked on its own.
+        public async Task<string?[]> TranslateBlocksAsync(TranslationMachine machine, string source, string target, IReadOnlyList<string> blocks, string? context, CancellationToken ct)
+        {
+            if (blocks.Count == 1) return [await TranslateBlockAsync(machine, source, target, blocks[0], context, ct)];
+            var numbered = string.Join("\n\n", blocks.Select((block, index) => "[[" + (index + 1).ToString(CultureInfo.InvariantCulture) + "]]\n" + block));
+            var extra = "The text has " + blocks.Count.ToString(CultureInfo.InvariantCulture) + " numbered parts, each starting with a line [[n]]. Answer with the same lines [[n]] and the translation of each part under its own line; "
+                + "never merge, split, skip or reorder parts.";
+            var answer = await AskAsync(machine, Prompt(source, target, numbered, context, extra), "translate " + blocks.Count.ToString(CultureInfo.InvariantCulture) + " blocks", ct);
+            var parts = Numbered(answer, blocks.Count);
+            return [.. blocks.Select((block, index) => parts[index] is { } part && OllamaLocalModels.LooksComplete(block, part, target) ? part : null)];
+        }
+
+        // The parts of an answer by their [[n]] lines; null where a part is missing.
+        internal static string?[] Numbered(string answer, int count)
+        {
+            var parts = new string?[count];
+            var lines = answer.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n');
+            var number = -1;
+            var text = new List<string>();
+            void Flush()
+            {
+                if (number is >= 1 && number <= count && parts[number - 1] is null)
+                {
+                    var joined = string.Join("\n", text).Trim();
+                    if (joined.Length > 0) parts[number - 1] = joined;
+                }
+
+                text.Clear();
+            }
+
+            foreach (var line in lines)
+            {
+                var marker = line.Trim();
+                if (marker.Length > 4 && marker.StartsWith("[[", StringComparison.Ordinal) && marker.EndsWith("]]", StringComparison.Ordinal)
+                    && int.TryParse(marker.AsSpan(2, marker.Length - 4), NumberStyles.None, CultureInfo.InvariantCulture, out var next))
+                {
+                    Flush();
+                    number = next;
+                }
+                else text.Add(line);
+            }
+
+            Flush();
+            return parts;
+        }
+
         public Task<string> TranslateAsync(TranslationMachine machine, string source, string target, string text, CancellationToken ct) =>
-            AskAsync(machine, Prompt(source, target, text, null, "Keep every cue number and line break exactly as given; translate only the spoken text."), ct);
+            AskAsync(machine, Prompt(source, target, text, null, "Keep every cue number and line break exactly as given; translate only the spoken text."), "translate subtitles", ct);
 
         public void Fail(TranslationMachine machine) => _restingUntil = time.GetUtcNow() + Rest;
 
         // The chosen model; when it fails the Owner's fallback model answers instead. Every answer's tokens count against the limits.
-        private async Task<string> AskAsync(TranslationMachine machine, string prompt, CancellationToken ct)
+        private async Task<string> AskAsync(TranslationMachine machine, string prompt, string what, CancellationToken ct)
         {
             var query = Query(machine.Address);
             if (connection.LimitReached(Number(query, "daily"), Number(query, "run"))) throw new InvalidDataException("The Codex token limit is reached.");
             query.TryGetValue("effort", out var effort);
             try
             {
-                return await connection.ExecAsync(machine.Model, effort, prompt, ct);
+                return await connection.ExecAsync(machine.Model, effort, prompt, what, ct);
             }
             catch (InvalidDataException) when (query.TryGetValue("fallback", out var fallback))
             {
-                return await connection.ExecAsync(fallback, effort, prompt, ct);
+                return await connection.ExecAsync(fallback, effort, prompt, what, ct);
             }
         }
 

@@ -93,6 +93,8 @@
     --control-height-compact: 32px;
     --icon-button: 36px;
     --field-height: 40px;
+    // On a phone a field is as high as a tap (owner's decision 2 Nov: 44px).
+    @media (max-width: 640px) { --field-height: 44px; }
     // A field's label sits above it, inset to the right so it starts where the pill's text does.
     --field-label-inset: 12px;
     --icon-size: 18px;

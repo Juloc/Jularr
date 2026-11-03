@@ -83,7 +83,7 @@ namespace Jularr.Backend.Data.User.Translation.V1
         public string[] Models { get; } = models;
     }
 
-    public sealed class LocalReadingChoiceParametersV1(long documentId, int sectionIndex, string language, string model) : BaseParameters
+    public sealed class LocalReadingSectionModelParametersV1(long documentId, int sectionIndex, string language, string model) : BaseParameters
     {
         [DataField(typeof(ReadingFields), nameof(ReadingFields.DocumentId))]
         public long DocumentId { get; } = documentId;
@@ -106,5 +106,12 @@ namespace Jularr.Backend.Data.User.Translation.V1
 
         [DataField(typeof(ReadingFields), nameof(ReadingFields.BlockIndex), false)]
         public int? BlockIndex { get; } = blockIndex;
+    }
+
+    // Translated is the number of blocks that now show the new translation; Kept those whose answer did not pass the checks and stay as they were.
+    public sealed class LocalReadingRetranslationV1(int translated, int kept) : BaseResponse
+    {
+        public int Translated { get; } = translated;
+        public int Kept { get; } = kept;
     }
 }

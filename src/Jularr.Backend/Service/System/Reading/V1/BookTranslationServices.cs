@@ -141,6 +141,9 @@ namespace Jularr.Backend.Service.System.Reading.V1
                 return true;
             }
 
+            if (machine.Provider is IBatchTranslationProvider batcher)
+                return await TranslateBatchAsync(batcher, machine, unit, nodes, texts, path, digest, only);
+
             var translated = 0;
             var stored = 0;
             for (var index = 0; index < nodes.Length && translated < BlocksPerCall; index++)
@@ -261,6 +264,57 @@ namespace Jularr.Backend.Service.System.Reading.V1
             sql.Parameters.Add(chosen);
             sql.Parameters.Add(new BookTranslationModelData(modelKey, digest));
             return sql;
+        }
+
+        // A provider that takes several blocks in one request translates the next stretch of the section together, with the passage before it as context; a block
+        // whose answer fails the checks is asked for alone, and one that still fails keeps its readable original. Only the given blocks, when given.
+        private async Task<bool?> TranslateBatchAsync(IBatchTranslationProvider batcher, TranslationMachine machine, BookTranslationUnitData unit, AngleSharp.Dom.IElement[] nodes,
+            string?[] texts, string path, string digest, IReadOnlySet<int>? only)
+        {
+            var reports = only is null;
+            var values = new Dictionary<int, string>();
+            var sources = new List<(int Index, string Text)>();
+            var characters = 0;
+            for (var index = 0; index < nodes.Length; index++)
+            {
+                if (!string.IsNullOrWhiteSpace(texts[index]) || only is not null && !only.Contains(index)) continue;
+                var source = ReadingHtml.TranslationText(nodes[index]);
+                // A block holding others, or one without text, has nothing of its own to translate; an oversized one keeps its text.
+                if (nodes[index].QuerySelector("[data-b]") is not null || source.Length == 0) { values[index] = ""; continue; }
+                if (source.Length > 20_000) { values[index] = source; continue; }
+                if (sources.Count > 0 && characters + source.Length > batcher.BatchCharacters) break;
+                sources.Add((index, source));
+                characters += source.Length;
+            }
+
+            var failed = false;
+            if (sources.Count > 0)
+            {
+                if (!await _gate.HeavyWork.WaitAsync(GateWait, CancellationToken)) return false;
+                try
+                {
+                    var answers = await batcher.TranslateBlocksAsync(machine, unit.SourceLanguage, unit.Language, [.. sources.Select(item => item.Text)], ReadingHtml.TranslationContext(nodes, sources[0].Index), CancellationToken);
+                    for (var k = 0; k < sources.Count; k++)
+                    {
+                        var (index, source) = sources[k];
+                        values[index] = answers[k] ?? await machine.Provider.TranslateBlockAsync(machine, unit.SourceLanguage, unit.Language, source, ReadingHtml.TranslationContext(nodes, index), CancellationToken) ?? source;
+                        if (reports) _progress.BlockDone();
+                    }
+                }
+                catch (Exception exception) when (exception is HttpRequestException or JsonException or InvalidDataException or TaskCanceledException && !CancellationToken.IsCancellationRequested)
+                {
+                    machine.Provider.Fail(machine);
+                    if (reports) _progress.Idle("machineFailed");
+                    // What was translated before the failure is kept; the rest waits for the next round.
+                    failed = true;
+                }
+                finally { _gate.HeavyWork.Release(); }
+            }
+
+            if (values.Count > 0)
+                texts = await Context.ExecuteBatchAsync((ctx, ct) => LocalReadingPaths.StoreAsync(ctx, unit.DocumentId, path, unit.Html, unit.SourceLanguage, digest, nodes.Length, values, ct), CancellationToken);
+            if (only is not null && values.Count == 0 && !failed) return null;
+            return !failed && (sources.Count > 0 || texts.Where((_, index) => only is null || only.Contains(index)).All(text => text is not null));
         }
 
         // The next section to translate: from a book someone is reading (most recently read first, from the chapter they are in, then

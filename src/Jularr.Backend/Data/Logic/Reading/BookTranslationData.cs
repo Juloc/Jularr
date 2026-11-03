@@ -79,9 +79,9 @@ namespace Jularr.Backend.Data.Logic.Reading
 
     // A re-translation with a model for every reader of the book: one block (both indices), every block of a section (no block) or of the whole
     // book (neither).
-    internal sealed class ReadingTranslationChoiceWriteData : BaseData
+    internal sealed class ReadingTranslationScopeWriteData : BaseData
     {
-        public ReadingTranslationChoiceWriteData(long documentId, int? sectionIndex, int? blockIndex, string language, string model)
+        public ReadingTranslationScopeWriteData(long documentId, int? sectionIndex, int? blockIndex, string language, string model)
         {
             DocumentId = documentId;
             SectionIndex = sectionIndex;
@@ -168,5 +168,24 @@ namespace Jularr.Backend.Data.Logic.Reading
 
         [DataField(typeof(TranslationFields), nameof(TranslationFields.Cache))]
         public string? Cache { get; }
+    }
+
+    // The blocks of a section (a JSON array of their indexes) that show one model's translation to every reader.
+    internal sealed class ReadingTranslationChoiceWriteData(long documentId, int sectionIndex, string language, string model, string blocks) : BaseData
+    {
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.DocumentId))]
+        public long DocumentId { get; } = documentId;
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.SectionIndex))]
+        public int SectionIndex { get; } = sectionIndex;
+
+        [DataField(typeof(TranslationFields), nameof(TranslationFields.Language))]
+        public string Language { get; } = language;
+
+        [DataField(typeof(TranslationFields), nameof(TranslationFields.Name))]
+        public string Model { get; } = model;
+
+        [DataField(typeof(TranslationFields), nameof(TranslationFields.Blocks))]
+        public string Blocks { get; } = blocks;
     }
 }

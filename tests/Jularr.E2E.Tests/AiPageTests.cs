@@ -7,11 +7,25 @@ namespace Jularr.E2E.Tests
     public sealed class AiPageTests
     {
         // A stand-in for the CLI: it signs in once the test creates `approve`.
-        private const string Cli = """
+        internal const string Cli = """
             #!/bin/sh
             case "$1" in
               --version) echo "codex-cli 0.166.0" ;;
               logout) rm -f "$CODEX_HOME/auth" ;;
+              exec)
+                prompt=$(cat)
+                while [ $# -gt 0 ]; do
+                  case "$1" in
+                    -o) out="$2"; shift ;;
+                    -m) model="$2"; shift ;;
+                  esac
+                  shift
+                done
+                case "$prompt" in
+                  *'[[1]]'*) printf '%s\n' "$prompt" | awk -v m="$model" '/^\[\[[0-9]+\]\]$/ { print; getline; print "Codex " m ": " $0; print "" }' > "$out" ;;
+                  *) printf 'Codex %s: %s' "$model" "$(printf '%s' "$prompt" | tail -n 1)" > "$out" ;;
+                esac
+                printf '{"type":"turn.completed","usage":{"input_tokens":100,"output_tokens":50}}\n' ;;
               app-server)
                 while IFS= read -r line; do
                   id=$(printf '%s' "$line" | sed -n 's/.*"id":\([0-9]*\).*/\1/p')
@@ -44,6 +58,8 @@ namespace Jularr.E2E.Tests
             var home = Path.Combine(folder, "home");
             Directory.CreateDirectory(home);
             var executable = Path.Combine(folder, "codex");
+            // Two earlier days of Codex use, as Jularr keeps them next to the sign-in.
+            File.WriteAllText(Path.Combine(home, "jularr-usage.json"), "{\"Day\":\"2000-01-01\",\"Tokens\":5,\"History\":{\"2026-11-01\":1200,\"2026-11-02\":3400}}");
             File.WriteAllText(executable, Cli.Replace("\r\n", "\n"));
             File.SetUnixFileMode(executable, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
             try
@@ -72,6 +88,9 @@ namespace Jularr.E2E.Tests
                 // Connected: the plan usage and the Owner's choices follow, and a saved choice is still there after a reload.
                 await Assertions.Expect(page.Locator("#codex-usage")).ToContainTextAsync("42 %");
                 await Assertions.Expect(page.Locator("#codex-usage")).ToContainTextAsync("Weekly window");
+                await Assertions.Expect(page.Locator("#codex-usage")).ToContainTextAsync("Tokens per day");
+                await Assertions.Expect(page.Locator("#codex-usage")).ToContainTextAsync("11-02");
+                await Assertions.Expect(page.Locator("#codex-usage")).ToContainTextAsync("3,400");
                 var settings = page.Locator("#codex-settings");
                 await settings.Locator("select[name=Model]").SelectOptionAsync("gpt-two");
                 await settings.Locator("select[name=Effort]").SelectOptionAsync("high");
