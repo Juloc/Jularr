@@ -77,6 +77,17 @@ namespace Jularr.E2E.Tests
                     if (scrolled.GetProperty("score").GetDouble() >= 0.01) shifts.Add($"{width}px /Library scrolled: {scrolled.GetProperty("score").GetDouble():0.0000} ({scrolled.GetProperty("sources").GetString()})");
                 }
 
+                // The device's choice of rows comes back with the page itself: it arrives as rows and holds still; an unknown skin is the default.
+                await page.Locator("[data-layout-toggle]").ClickAsync();
+                await Assertions.Expect(page.Locator("html")).ToHaveAttributeAsync("data-list-layout", "list");
+                await browser.Context.AddCookiesAsync([new() { Name = "jularr-ui-skin", Value = "neon", Url = jularr.Address.ToString() }]);
+                var response = await page.GotoAsync("/Library");
+                var document = await response!.TextAsync();
+                StringAssert.Contains(document, "data-list-layout=\"list\"");
+                StringAssert.Contains(document, "data-skin=\"clean\"");
+                var rows = await page.EvaluateAsync<JsonElement>(Measure);
+                if (rows.GetProperty("score").GetDouble() >= 0.01) shifts.Add($"/Library as rows: {rows.GetProperty("score").GetDouble():0.0000} ({rows.GetProperty("sources").GetString()})");
+
                 CollectionAssert.AreEqual(Array.Empty<string>(), shifts.ToArray(), string.Join("; ", shifts));
             }
             catch

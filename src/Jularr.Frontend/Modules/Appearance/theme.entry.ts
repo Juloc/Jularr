@@ -1,4 +1,5 @@
 import { buildPalette, CleanAccent, OriginalAccent } from "./Palette";
+import { rememberDevicePreference, shareDevicePreference } from "./DevicePreference";
 
 // Restore device preferences.
 const root = document.documentElement;
@@ -14,8 +15,11 @@ function preference(name: string, allowed: Set<string>, fallback: string): strin
     }
 }
 
-root.dataset.skin = preference("jularr-ui-skin", skins, "clean");
-root.dataset.mode = preference("jularr-ui-mode", modes, "system");
+// The page arrives in the choices of the device's cookies; the browser storage confirms or corrects them.
+root.dataset.skin = preference("jularr-ui-skin", skins, root.dataset.skin ?? "clean");
+root.dataset.mode = preference("jularr-ui-mode", modes, root.dataset.mode ?? "system");
+shareDevicePreference("jularr-ui-skin", root.dataset.skin);
+shareDevicePreference("jularr-ui-mode", root.dataset.mode);
 let accent = "";
 try { accent = localStorage.getItem("jularr-ui-accent") ?? ""; } catch { /* Storage is optional. */ }
 if (!/^#[a-f\d]{6}$/i.test(accent)) accent = "";
@@ -106,11 +110,7 @@ document.addEventListener("click", event => {
     if (!value || !allowed.has(value)) return;
 
     root.dataset[kind] = value;
-    try {
-        localStorage.setItem("jularr-ui-" + kind, value);
-    } catch {
-        // Storage is optional.
-    }
+    rememberDevicePreference("jularr-ui-" + kind, value);
     if (kind === "skin") applyPalette();
     else updateBrowserColor();
     refreshControls();
