@@ -9710,6 +9710,18 @@
    "Enter IP addresses or networks such as 192.168.1.10 or 10.0.0.0/8.",
    "Gib IP-Adressen oder Netzwerke wie 192.168.1.10 oder 10.0.0.0/8 ein."
   ],
+  "errors.validation.codex_model_invalid": [
+   "Enter a model name as Codex lists it, such as gpt-5.4.",
+   "Gib einen Modellnamen so ein, wie Codex ihn listet, etwa gpt-5.4."
+  ],
+  "errors.validation.codex_effort_invalid": [
+   "Choose one of the efforts the model offers.",
+   "Wähle eine der Stufen, die das Modell anbietet."
+  ],
+  "errors.validation.codex_run_over_daily": [
+   "The limit per run cannot be higher than the daily limit.",
+   "Das Limit pro Lauf darf nicht höher sein als das Tageslimit."
+  ],
   "errors.validation.translation_machine_invalid": [
    "Enter Ollama machines by their address in the private network, such as 192.168.1.20 or 192.168.1.20:11434.",
    "Ollama-Rechner mit ihrer Adresse im Heimnetz eintragen, etwa 192.168.1.20 oder 192.168.1.20:11434."
@@ -10177,6 +10189,106 @@
   "admin.ai.disconnectDone": [
    "Codex disconnected",
    "Codex getrennt"
+  ],
+  "admin.ai.usage": [
+   "Plan usage",
+   "Plan-Auslastung"
+  ],
+  "admin.ai.usageLine": [
+   "ChatGPT plan",
+   "ChatGPT-Tarif"
+  ],
+  "admin.ai.windowShort": [
+   "Short window",
+   "Kurzes Fenster"
+  ],
+  "admin.ai.windowWeek": [
+   "Weekly window",
+   "Wochenfenster"
+  ],
+  "admin.ai.resets": [
+   "Starts over",
+   "Beginnt neu"
+  ],
+  "admin.ai.settings": [
+   "Settings",
+   "Einstellungen"
+  ],
+  "admin.ai.settingsLine": [
+   "What Codex uses when it translates",
+   "Was Codex beim Übersetzen verwendet"
+  ],
+  "admin.ai.model": [
+   "Model",
+   "Modell"
+  ],
+  "admin.ai.effort": [
+   "Reasoning effort",
+   "Denkaufwand"
+  ],
+  "admin.ai.effort.minimal": [
+   "Minimal",
+   "Sehr niedrig"
+  ],
+  "admin.ai.effort.low": [
+   "Low",
+   "Niedrig"
+  ],
+  "admin.ai.effort.medium": [
+   "Medium",
+   "Mittel"
+  ],
+  "admin.ai.effort.high": [
+   "High",
+   "Hoch"
+  ],
+  "admin.ai.effort.xhigh": [
+   "Extra high",
+   "Sehr hoch"
+  ],
+  "admin.ai.fallback": [
+   "Fallback model",
+   "Ersatzmodell"
+  ],
+  "admin.ai.fallbackHint": [
+   "Takes over when the model is not available or its limit is reached.",
+   "Übernimmt, wenn das Modell nicht verfügbar ist oder sein Limit erreicht ist."
+  ],
+  "admin.ai.noFallback": [
+   "No fallback",
+   "Kein Ersatzmodell"
+  ],
+  "admin.ai.codexDefault": [
+   "Codex default",
+   "Standard von Codex"
+  ],
+  "admin.ai.notOffered": [
+   "not offered any more",
+   "wird nicht mehr angeboten"
+  ],
+  "admin.ai.dailyTokens": [
+   "Tokens per day",
+   "Tokens pro Tag"
+  ],
+  "admin.ai.limitHint": [
+   "0 means unlimited. Jularr stops Codex work when a limit is reached.",
+   "0 heißt unbegrenzt. Jularr hält Codex-Arbeit an, wenn ein Limit erreicht ist."
+  ],
+  "admin.ai.runTokens": [
+   "Tokens per run",
+   "Tokens pro Lauf"
+  ],
+  "admin.ai.warnPercent": [
+   "Warn at (% of the daily limit)",
+   "Warnen ab (% des Tageslimits)"
+  ],
+  "admin.ai.catalogUnavailable": [
+   "Codex could not be asked for its models right now. Your saved choices are kept.",
+   "Codex konnte gerade nicht nach seinen Modellen gefragt werden. Deine gespeicherten Auswahlen bleiben erhalten."
+  ],
+  "admin.ai.settingsSaved": [
+   "Settings saved",
+   "Einstellungen gespeichert"
   ],
   "errors.codex_not_installed": [
    "The Codex CLI is not available in this installation.",
