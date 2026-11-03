@@ -24,6 +24,12 @@ namespace Jularr.E2E.Tests
             {
                 await PrepareAsync(page, fakes, folders);
 
+                // Nothing else waits under Needs help: the offline keyless catalogs are switched off and earlier job notices dismissed, so no failed health check joins the queue.
+                await jularr.RunSqlAsync("""
+                    UPDATE "Providers" SET "IsEnabled" = FALSE WHERE "ProtectedSecret" IS NULL;
+                    UPDATE "Operations" SET "DismissedAt" = now() WHERE "OperationTypeId" <> 2 AND "OperationStatusTypeId" = 4 AND "DismissedAt" IS NULL;
+                    """);
+
                 // The download is still running when Jularr stops.
                 fakes.HoldDownloads = true;
                 fakes.Offer(Film with { File = video });
