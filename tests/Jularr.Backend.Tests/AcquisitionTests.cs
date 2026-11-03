@@ -2301,6 +2301,9 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.OK, dialog.StatusCode, fragment);
             StringAssert.Contains(fragment, "data-search-panel");
             StringAssert.Contains(fragment, "data-return-url=\"/Admin/Works/" + workOfWanted + "\"");
+            StringAssert.Contains(fragment, "data-filter=\"title\"");
+            StringAssert.Contains(fragment, "data-multi=\"quality\"");
+            StringAssert.Contains(fragment, "data-filter=\"decision\"");
             var indexerId = await host.ScalarAsync("SELECT \"Id\" FROM \"AcquisitionConnections\" WHERE \"AcquisitionConnectionTypeId\" = 1 ORDER BY \"Id\" LIMIT 1");
             StringAssert.Contains(fragment, "data-source=\"" + indexerId + "\"");
             using var source = await host.SendAsync(HttpMethod.Post, "/Admin/Wanted/" + wantedId + "/Search?handler=Source&connectionId=" + indexerId,
@@ -2310,6 +2313,9 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(rows, "data-state=\"done\"");
             StringAssert.Contains(rows, Feature);
             StringAssert.Contains(rows, "name=\"overridesRejection\" value=\"true\"");
+            StringAssert.Contains(rows, "data-title=\"");
+            StringAssert.Contains(rows, "data-quality=\"");
+            StringAssert.Contains(rows, "data-decision=\"");
 
             // A source that is not one of the list answers as failed, never as an empty list.
             using var unknown = await host.SendAsync(HttpMethod.Post, "/Admin/Wanted/" + wantedId + "/Search?handler=Source&connectionId=999999",

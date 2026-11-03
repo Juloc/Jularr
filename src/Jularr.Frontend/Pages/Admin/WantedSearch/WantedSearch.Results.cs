@@ -79,11 +79,24 @@ namespace Jularr.Frontend.Pages.Admin.WantedSearch
             IUiComponent Menu(string name, string labelKey, IUiComponent[] options) => new Select(options).Class("search-filter").Attribute("data-filter", name).TextAttribute("aria-label", labelKey);
             var clear = new Button(new Icon("close", assets, 14), new Span(new Text("wanted.search.filters.clear"))).Compact().Soft();
             clear.Attribute("data-filters-clear", "").Attribute("disabled", "disabled");
+            var title = new Input().Attribute("type", "search").Attribute("autocomplete", "off").Attribute("data-filter", "title").Class("search-box__input search-filter-title")
+                .TextAttribute("placeholder", "wanted.search.filter.title").TextAttribute("aria-label", "wanted.search.filter.title");
+
+            // The qualities are not known before the releases are; the script lists what was found as checkboxes in the popup.
+            var qualityButton = new Button(new Span().Class("ui-dropdown__value"));
+            qualityButton.Attribute("type", "button").Attribute("aria-haspopup", "true").Attribute("aria-expanded", "false").Attribute("data-multi-button", "")
+                .Class("search-filter ui-dropdown__button").TextAttribute("aria-label", "wanted.search.filter.quality");
+            var quality = new Div(qualityButton, new Div().Class("ui-dropdown__popup search-multi__popup").Attribute("popover", "auto").Attribute("role", "group").Attribute("data-multi-popup", "")
+                .TextAttribute("aria-label", "wanted.search.filter.quality")).Class("search-multi").Attribute("data-multi", "quality")
+                .TextAttribute("data-all", "wanted.search.filter.quality").TextAttribute("data-some", "wanted.search.quality.some").TextAttribute("data-unknown", "wanted.search.quality.unknown");
             return new Div(
+                title,
                 Menu("language", "wanted.search.filter.language", [Choice("", "wanted.search.filter.language")]),
                 Menu("protocol", "wanted.search.filter.protocol", [Choice("", "wanted.search.filter.protocol"), .. Enum.GetNames<ReleaseProtocol>().Select(name => Choice(name, "wanted.search.protocol." + name))]),
                 Menu("age", "wanted.search.filter.age", [Choice("", "wanted.search.filter.age"), .. new[] { 1, 7, 30, 90, 365 }.Select(days => Choice(Count(days), "wanted.search.age." + Count(days)))]),
                 Menu("size", "wanted.search.filter.size", [Choice("", "wanted.search.filter.size"), .. Enumerable.Range(0, 5).Select(range => Choice(Count(range), "wanted.search.size." + Count(range)))]),
+                quality,
+                Menu("decision", "wanted.search.filter.decision", [Choice("", "wanted.search.filter.decision"), .. Enum.GetNames<ReleaseDecisionType>().Select(name => Choice(name, "acquisition.decision." + name))]),
                 Menu("sort", "wanted.search.sort", [Choice("source", "wanted.search.sort.source"), Choice("score", "wanted.search.sort.score"), Choice("newest", "wanted.search.sort.newest"),
                     Choice("largest", "wanted.search.sort.largest"), Choice("smallest", "wanted.search.sort.smallest")]),
                 clear).Class("search-filters").Attribute("role", "group").TextAttribute("aria-label", "wanted.search.filters");
@@ -148,7 +161,7 @@ namespace Jularr.Frontend.Pages.Admin.WantedSearch
                 Cell("wanted.search.decision", new Div(new StateChip(new Text("acquisition.decision." + item.ReleaseDecisionTypeId), Tone(item.ReleaseDecisionTypeId)), reason.Class("search-row__reason"))),
                 new Td(rejected ? Override(item, csrf, returnUrl) : Grabs(item, csrf, returnUrl)).Class("search-row__actions"))
                 .Class("search-row" + (rejected ? " search-row--rejected" : "")).Attribute("data-decision", item.ReleaseDecisionTypeId.ToString())
-                .Attribute("data-source", Count(sourceId)).Attribute("data-index", Count(index)).Attribute("data-score", Count(item.Score))
+                .Attribute("data-source", Count(sourceId)).Attribute("data-index", Count(index)).Attribute("data-title", item.Title).Attribute("data-quality", item.QualityKey ?? "").Attribute("data-score", Count(item.Score))
                 .Attribute("data-size", item.SizeBytes is { } size ? Count(size) : "").Attribute("data-published", item.PublishedAt is { } published ? new DateTimeOffset(published, TimeSpan.Zero).ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture) : "")
                 .Attribute("data-protocol", item.ReleaseProtocolId.ToString()).Attribute("data-languages", string.Join(';', item.Languages.Select(WorkLanguages.Code).Distinct().Select(code => code + "=" + WorkLanguages.Name(code))));
         }
