@@ -27,6 +27,7 @@ builder.Services.AddHostedService<LanDiscoveryService>();
 builder.Services.AddScoped<AdminMenuCounters>();
 builder.Services.AddSingleton<ShellNavigation>();
 builder.Services.AddSingleton<FrontendAssets>();
+builder.Services.AddJularrCompression();
 
 var app = builder.Build();
 
@@ -47,6 +48,7 @@ if (!app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+app.UseResponseCompression();
 // EmulatorJS cores are .data files; pdf.js loads character maps, standard fonts and colour profiles.
 var contentTypes = new FileExtensionContentTypeProvider();
 contentTypes.Mappings[".data"] = "application/octet-stream";

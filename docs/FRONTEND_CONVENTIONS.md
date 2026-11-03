@@ -292,7 +292,10 @@ See [Frontend UX decisions](FRONTEND_UX.md) for design tokens, layout, page iden
 - **Hash by content, not release number.** Fingerprinted CSS/JS/SVG
   assets receive `Cache-Control: public,max-age=31536000,immutable`;
   unchanged assets keep their URLs/cache across Jularr updates.
-  Nonfingerprinted public files revalidate. Page HTML and
+  Nonfingerprinted public files revalidate. HTML, JSON, CSS, JS and SVG
+  leave compressed (Brotli, else gzip, fastest level;
+  `Framework/Compression.cs`); images, media and the live event stream do not.
+  Page HTML and
   account/profile-specific responses use private/no-store and must not
   share caches across users. Always deploy new assets before the
   HTML/manifest that references them, and retain old hashes during
