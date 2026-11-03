@@ -125,13 +125,21 @@ namespace Jularr.E2E.Tests
             }
         }
 
+        // A segmented choice is tapped on its label, as a person does: on a phone the 44 px label lies over its small radio.
+        public static async Task ChooseSegmentAsync(ILocator form, string name, string value)
+        {
+            var choice = $"[name={name}][value={value}]";
+            await form.Locator("label.ui-segment", new() { Has = form.Page.Locator(choice) }).ClickAsync();
+            await Assertions.Expect(form.Locator(choice)).ToBeCheckedAsync();
+        }
+
         // The local folder as a writable connection with one library path per media type folder.
         public static async Task AddLibraryAsync(IPage page, string localPath, params LibraryPath[] roots)
         {
             await page.GotoAsync("/Admin/Storage?protocol=Local");
             await page.FillAsync("form [name=Name]", "Library");
             await page.SelectOptionAsync("form [name=SharePath]", localPath);
-            await page.Locator("form [name=IsReadOnly][value=False]").CheckAsync();
+            await ChooseSegmentAsync(page.Locator("form", new() { Has = page.Locator("[name=IsReadOnly]") }), "IsReadOnly", "False");
             await SubmitAsync(page, page.Locator("form", new() { Has = page.Locator("[name=SharePath]") }));
             var connection = page.Url;
             foreach (var (folder, type, subtype) in roots)
