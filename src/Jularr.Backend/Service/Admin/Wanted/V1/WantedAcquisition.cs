@@ -110,7 +110,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                     async (source, inner) =>
                     {
                         var use = uses.GetOrAdd(source.Id, _ => new IndexerUse());
-                        if (!AcquisitionConnectionLogic.HasQueries(source, use.Queries, automatic)) return;
+                        if (!AcquisitionConnectionLogic.HasQueries(source, use.Queries)) return;
                         Interlocked.Increment(ref use.Queries);
                         if (await _nyaa.SearchAsync(source, wanted, inner) is not { } answers)
                         {
@@ -632,7 +632,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                     for (var page = 0; page < budget.MaxPages && offers.Count < budget.MaxResults; page++)
                     {
                         // The daily query limit also holds within one search.
-                        if (!AcquisitionConnectionLogic.HasQueries(indexer, use.Queries, automatic))
+                        if (!AcquisitionConnectionLogic.HasQueries(indexer, use.Queries))
                         {
                             return true;
                         }

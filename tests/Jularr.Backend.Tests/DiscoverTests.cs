@@ -76,6 +76,29 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task AdminImport_MonitorWithAndWithoutSearchNow_StartsTheTargetNowOrADayLater()
+        {
+            await using var host = await CreateHostAsync(tvdb: new FakeTvdb());
+
+            // Adding like Sonarr: a monitored target; without "search now" its first search waits a day.
+            using var added = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works/metadata", new AdminMedia.ImportMetadataWorkDataV1(MediaType.Movie, "603", monitor: true));
+            Assert.AreEqual(HttpStatusCode.OK, added.StatusCode, await added.Content.ReadAsStringAsync());
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"WantedItems\" WHERE NOT \"IsPaused\""));
+            Assert.AreEqual(true, await host.ScalarAsync("SELECT \"NextSearchAt\" > now() + interval '23 hours' FROM \"WantedItems\""));
+
+            // Without monitoring, adding stays as before.
+            await host.Fixture.RunSqlAsync("DELETE FROM \"WantedItems\"");
+            using var plain = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works/metadata", new AdminMedia.ImportMetadataWorkDataV1(MediaType.Movie, "603"));
+            Assert.AreEqual(HttpStatusCode.OK, plain.StatusCode);
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"WantedItems\""));
+
+            // With "search now" the target is due at once.
+            using var searched = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works/metadata", new AdminMedia.ImportMetadataWorkDataV1(MediaType.Movie, "603", monitor: true, searchNow: true));
+            Assert.AreEqual(HttpStatusCode.OK, searched.StatusCode);
+            Assert.AreEqual(true, await host.ScalarAsync("SELECT \"NextSearchAt\" IS NULL FROM \"WantedItems\""));
+        }
+
+        [TestMethod]
         public async Task Catalog_AniListLists_AskForTheirSeasonCountryAndOrder_AndTheGridOffersEveryOrder()
         {
             var provider = new FakeAniList();

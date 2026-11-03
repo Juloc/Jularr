@@ -8158,6 +8158,10 @@
    "Add",
    "Hinzufügen"
   ],
+  "admin.works.searchNow": [
+   "Search now",
+   "Jetzt suchen"
+  ],
   "admin.work.refreshMetadata": [
    "Update from the provider",
    "Vom Anbieter aktualisieren"

@@ -3410,6 +3410,7 @@ namespace Jularr.Frontend.Localization
             new("admin.works.noMetadata", "No match found."),
             new("admin.works.originalTitle", "Original title"),
             new("admin.works.import", "Add"),
+            new("admin.works.searchNow", "Search now"),
             new("admin.work.refreshMetadata", "Update from the provider"),
             new("admin.work.match", "Wrong match"),
             new("admin.work.useMatch", "Use this match"),
