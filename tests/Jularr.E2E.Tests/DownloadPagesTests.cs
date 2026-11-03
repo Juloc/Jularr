@@ -21,9 +21,9 @@ namespace Jularr.E2E.Tests
             {
                 await Owner.SetUpAndSignInAsync(page);
 
-                // An empty list says so; the one navigation row joins the pages.
+                // An empty list says so. Without the Subtitles module the indexers are the only page of their entry, so no navigation row stands above them.
                 await page.GotoAsync("/Admin/Acquisition");
-                await Assertions.Expect(page.Locator(".navigation-tabs")).ToHaveCountAsync(1);
+                await Assertions.Expect(page.Locator(".navigation-tabs")).ToHaveCountAsync(0);
                 await Assertions.Expect(page.Locator(".list-empty")).ToBeVisibleAsync();
 
                 // The indexer is added in a dialog and shows as not tested.

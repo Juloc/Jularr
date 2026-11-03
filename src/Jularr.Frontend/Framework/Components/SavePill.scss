@@ -34,6 +34,6 @@
     40% { scale: 1.06; }
 }
 
-// Fields that differ from the loaded page; their own save buttons give way to the pill.
+// Fields that differ from the loaded page; their own save buttons give way to the pill. A page without the pill (the reader) keeps them.
 .ui-field--changed .ui-field__control { border-color: var(--accent); }
-@media (scripting: enabled) { [data-form-save] { display: none; } }
+@media (scripting: enabled) { :root:has([data-save-pill]) [data-form-save] { display: none; } }

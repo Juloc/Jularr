@@ -11,14 +11,14 @@ namespace Jularr.E2E.Tests
         public async Task OwnerSeesTheDashboard_ChecksTheServicesAgain_AndOpensPerformanceAndLogs()
         {
             await using var jularr = await JularrInstance.StartAsync();
+
+            // The keyless catalogs are kept off the internet in these tests; switched off before the first background check, they are no service of this instance.
+            await jularr.RunSqlAsync("""UPDATE "Providers" SET "IsEnabled" = FALSE WHERE "ProtectedSecret" IS NULL;""");
             await using var browser = await BrowserSession.StartAsync(jularr);
             var page = browser.Page;
             try
             {
                 await Owner.SetUpAndSignInAsync(page);
-
-                // The keyless catalogs are kept off the internet in these tests; switched off, they are no service of this instance.
-                await jularr.RunSqlAsync("""UPDATE "Providers" SET "IsEnabled" = FALSE WHERE "ProtectedSecret" IS NULL;""");
                 await page.GotoAsync("/Admin");
 
                 // Four figures, and only the services that are set up: here the database alone.
@@ -34,6 +34,7 @@ namespace Jularr.E2E.Tests
                 // Check now asks again; the page shows the answer with the time of the check.
                 await Steps.FollowAsync(page, page.GetByRole(AriaRole.Button, new() { Name = "Check now", Exact = true }));
                 await Assertions.Expect(services.First).ToContainTextAsync("Last checked");
+                await Assertions.Expect(services).ToHaveCountAsync(1);
                 await Assertions.Expect(page.Locator(".kpi-tile", new() { HasText = "System status" })).ToContainTextAsync("Stable");
                 await Evidence.SaveAsync(page, "dashboard");
 
