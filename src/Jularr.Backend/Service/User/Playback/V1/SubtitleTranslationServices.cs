@@ -52,13 +52,13 @@ namespace Jularr.Backend.Service.User.Playback.V1
                 return new SubtitleTranslationV1(key, existing.State, existing.Done, existing.Total);
             }
 
-            var (server, model) = await _translations.ModelAsync(await Context.ExecuteBatchAsync(LocalTranslationMachines.SavedAsync, CancellationToken), CancellationToken);
+            var machine = await _translations.ModelAsync(await Context.ExecuteBatchAsync(TranslationProviders.SetupAsync, CancellationToken), CancellationToken);
             var files = _storage.Open(mount);
             var path = StoragePath.Combine(source.RootRelativePath, source.RelativePath);
             var sourceCacheKey = source.StoredFileId.ToString(global::System.Globalization.CultureInfo.InvariantCulture) + "-" + (streamIndex is { } stream ? PlaybackTracks.StreamKey(stream) : "file") + "-"
                 + source.ModifiedAt.Ticks.ToString(global::System.Globalization.CultureInfo.InvariantCulture);
             var vtt = await _subtitles.ReadAsync(files, path, streamIndex, sourceCacheKey, false, CancellationToken);
-            var started = _translations.Start(cacheKey, vtt, sourceLanguage, language, server, model);
+            var started = _translations.Start(cacheKey, vtt, sourceLanguage, language, machine);
             return new SubtitleTranslationV1(key, started.State, started.Done, started.Total);
         }
     }

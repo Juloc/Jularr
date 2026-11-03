@@ -86,21 +86,6 @@ namespace Jularr.Backend.Logic.Acquisition
         {
             if (data.TagIds is not null) await ctx.RequireAcquisitionTagsAsync(new AcquisitionTagSetData(data.TagIds), ct);
 
-            // Optimistic version validation below guards the paused state used for this transition.
-            var resumed = false;
-            if (!data.IsPaused)
-            {
-                var current = new SqlStatement();
-                current.Statement =
-                    """
-                    SELECT "IsPaused"
-                    FROM "WantedItems"
-                    WHERE "Id" = @Id AND "Version" = @Version;
-                    """;
-                current.Parameters.Add(data);
-                resumed = await ctx.ReadSql.ExecuteScalarAsync(current, ct) is true;
-            }
-
             // Do not alter request decisions; a chosen profile and library fit the type and subtype.
             var sql = new SqlStatement();
             sql.Statement =
@@ -140,13 +125,13 @@ namespace Jularr.Backend.Logic.Acquisition
                             root."Id" = @LibraryRootId
                             AND root."MediaTypeId" = work."MediaTypeId"
                             AND (root."MediaSubtypeId" IS NULL OR root."MediaSubtypeId" = work."MediaSubtypeId")
-                    ));
+                    ))
+                RETURNING
+                    OLD."IsPaused";
                 """;
             sql.Parameters.Add(data);
-            if (await ctx.ExecuteAsyncForAffectedRows(sql, ct) != 1)
-            {
-                throw new DataValidationException(nameof(data.Version), "invalid_transition");
-            }
+            var previous = await ctx.ReadOptionalAsync<WantedItemPauseData>(sql, ct) ?? throw new DataValidationException(nameof(data.Version), "invalid_transition");
+            var resumed = previous.IsPaused && !data.IsPaused;
             if (data.TagIds is null) return resumed;
             sql = new SqlStatement();
             sql.Statement =

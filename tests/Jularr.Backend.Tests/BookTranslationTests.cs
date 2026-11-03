@@ -5,6 +5,7 @@ using Jularr.Backend.Data.Admin.Translation.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.System.Reading.V1;
 using Jularr.Backend.Data.User.Reading.V1;
+using Jularr.Backend.Data.User.Translation.V1;
 using Jularr.Backend.Service.System.Reading.V1;
 using Jularr.Integrations.Logic.Translation;
 using Microsoft.Extensions.DependencyInjection;
@@ -78,7 +79,7 @@ namespace Jularr.Backend.Tests
             }
 
             // The Reader finds the chapter translated without asking the model.
-            using var translated = await host.SendAsync(HttpMethod.Get, "/api/v1/reading/documents/" + firstDocument.DocumentId + "/sections/0/local-translations/de/translategemma:4b?sourceLanguage=en");
+            using var translated = await host.SendAsync(HttpMethod.Get, "/api/v1/reading/documents/" + firstDocument.DocumentId + "/sections/0/local-translations/de/ollama:translategemma:4b?sourceLanguage=en");
             Assert.AreEqual(HttpStatusCode.OK, translated.StatusCode, await translated.Content.ReadAsStringAsync());
             var blocks = JsonSerializer.Deserialize<string[]>((await translated.Content.ReadFromJsonAsync<ReadingTranslationV1>())!.Blocks)!;
             Assert.IsTrue(blocks.Length > 0 && blocks.Any(block => block.StartsWith("DE ", StringComparison.Ordinal)), string.Join(" | ", blocks));
@@ -193,6 +194,58 @@ namespace Jularr.Backend.Tests
                     if (!started.Contains(section)) started.Add(section);
             }
             CollectionAssert.AreEqual(new[] { "00002", "00003", "00000", "00001" }, started);
+        }
+
+        [TestMethod]
+        public async Task Job_ANewModelVersion_KeepsTheEarlierTextReadableAndUnfinished_UntilItIsReplacedAfterTheMissingSections()
+        {
+            using var storage = new TemporaryDirectory();
+            var ollama = new FakeOllama();
+            await using var host = await CreateHostAsync(storage.Path, ollama);
+            var (first, second) = await ReadingTests.CreateBooksAsync(host, storage.Path, "First Book", "Second Book");
+            var recent = await ReadingTests.OpenAsync(host, first);
+            var earlier = await ReadingTests.OpenAsync(host, second);
+            await PrepareGermanReadersAsync(host);
+            await ReadAsync(host, first, "s0/b0", "1 hour");
+            await ReadAsync(host, second, "s0/b0", "3 days");
+            var rounds = 0;
+            await using var scope = host.Services.CreateAsyncScope();
+            while (await Translate(scope)) Assert.IsTrue(++rounds < 200, "The job never finishes.");
+            var translated = await ReadSectionAsync(host, recent.DocumentId, 0);
+            var generations = ollama.GenerationCount;
+
+            // A new version of the model, and one section of the book read earlier is missing.
+            ollama.Digest = new string('b', 64);
+            await host.Fixture.RunSqlAsync("DELETE FROM \"ReadingResources\" WHERE \"Path\" = ':localtranslation/v4/translategemma:4b/de/00001' AND \"ReadingDocumentId\" = " + earlier.DocumentId);
+
+            // The Reader keeps showing the earlier version's text, marked stale, without asking the model.
+            var stale = await ReadSectionAsync(host, recent.DocumentId, 0);
+            Assert.AreEqual(translated.Blocks, stale.Blocks);
+            Assert.IsTrue(stale.Stale.Length > 0 && stale.Stale.All(value => value), stale.Blocks);
+            Assert.IsTrue(stale.Models.All(model => model == "ollama:translategemma:4b"));
+            Assert.AreEqual(generations, ollama.GenerationCount);
+
+            // The missing section comes first, although the book read last is only stale; finished counts only the new version.
+            Assert.IsTrue(await Translate(scope));
+            Assert.AreEqual(new string('b', 64), await DigestAsync(host, earlier.DocumentId, "00001"));
+            Assert.AreEqual(new string('a', 64), await DigestAsync(host, recent.DocumentId, "00000"));
+            var progress = await ReadProgressAsync(host);
+            Assert.AreEqual(1, progress.Languages.Single().Done);
+            Assert.IsTrue(progress.Languages.Single().Total > 1);
+
+            // Then the stale sections are translated again with the new version, which replaces the earlier one.
+            while (await Translate(scope)) Assert.IsTrue(++rounds < 400, "The job never finishes.");
+            Assert.IsTrue(ollama.GenerationCount > generations);
+            var renewed = await ReadSectionAsync(host, recent.DocumentId, 0);
+            Assert.AreEqual(translated.Blocks, renewed.Blocks);
+            Assert.IsTrue(renewed.Stale.All(value => !value));
+            Assert.AreEqual(0L, await host.ScalarAsync("""
+                SELECT count(*) FROM "ReadingResources"
+                WHERE "Path" LIKE ':localtranslation/v4/%'
+                    AND (convert_from("Bytes", 'UTF8')::jsonb ->> 'ModelDigest' <> repeat('b', 64) OR jsonb_typeof(convert_from("Bytes", 'UTF8')::jsonb -> 'Stale') = 'object')
+                """));
+            var done = await ReadProgressAsync(host);
+            Assert.AreEqual(done.Languages.Single().Total, done.Languages.Single().Done);
         }
 
         [TestMethod]
@@ -416,6 +469,17 @@ namespace Jularr.Backend.Tests
         private static async Task<long> TranslatedSectionCountAsync(AuthenticationTests.Host host, long documentId) =>
             Convert.ToInt64(await host.ScalarAsync("SELECT count(*) FROM \"ReadingResources\" WHERE \"Path\" LIKE ':localtranslation/v4/translategemma:4b/de/%' AND \"ReadingDocumentId\" = " + documentId), System.Globalization.CultureInfo.InvariantCulture);
 
+        private static async Task<LocalReadingTranslationV1> ReadSectionAsync(AuthenticationTests.Host host, long documentId, int section)
+        {
+            using var response = await host.SendAsync(HttpMethod.Get, "/api/v1/reading/documents/" + documentId + "/sections/" + section + "/local-translations/de/ollama:translategemma:4b?sourceLanguage=en");
+            Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, await response.Content.ReadAsStringAsync());
+            return (await response.Content.ReadFromJsonAsync<LocalReadingTranslationV1>(JsonSerializerOptions.Web))!;
+        }
+
+        private static async Task<string> DigestAsync(AuthenticationTests.Host host, long documentId, string section) =>
+            Convert.ToString(await host.ScalarAsync("SELECT convert_from(\"Bytes\", 'UTF8')::jsonb ->> 'ModelDigest' FROM \"ReadingResources\" WHERE \"ReadingDocumentId\" = " + documentId
+                + " AND \"Path\" = ':localtranslation/v4/translategemma:4b/de/" + section + "'"), System.Globalization.CultureInfo.InvariantCulture)!;
+
         private static async Task<BookTranslationProgressV1> ReadProgressAsync(AuthenticationTests.Host host)
         {
             using var response = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/translation/progress");
@@ -436,6 +500,9 @@ namespace Jularr.Backend.Tests
         {
             public int GenerationCount { get; private set; }
 
+            // The version of the model; a new one makes every translation of the earlier one stale.
+            public string Digest { get; set; } = new('a', 64);
+
             // Answers with a text no translation check accepts.
             public bool Unverifiable { get; set; }
 
@@ -443,7 +510,7 @@ namespace Jularr.Backend.Tests
             {
                 string body;
                 if (request.RequestUri!.AbsolutePath == "/api/tags")
-                    body = JsonSerializer.Serialize(new { models = new[] { new { name = "translategemma:4b", digest = new string('a', 64) } } });
+                    body = JsonSerializer.Serialize(new { models = new[] { new { name = "translategemma:4b", digest = Digest } } });
                 else if (request.RequestUri.AbsolutePath == "/api/ps")
                     body = """{"models":[]}""";
                 else if (request.RequestUri.AbsolutePath == "/api/generate")

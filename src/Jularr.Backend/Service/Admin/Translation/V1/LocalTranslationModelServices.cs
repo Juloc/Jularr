@@ -35,18 +35,21 @@ namespace Jularr.Backend.Service.Admin.Translation.V1
 
         protected override async Task<IServiceOutput> OnRead()
         {
-            var saved = await LocalTranslationMachines.SavedAsync(Context, CancellationToken);
+            var setup = await TranslationProviders.SetupAsync(Context, CancellationToken);
             var freeBytes = await LocalTranslationMachines.FreeBytesAsync(Context, _options.OperatorVerifiedFreeBytes, CancellationToken);
-            var order = _machines.Order(saved);
+            var order = _machines.Order(setup.Machines);
             var progress = _downloads.Current();
             if (order.Length == 0) return new LocalTranslationModelsV1(false, OllamaLocalModels.Candidates, [], [], "Configure a local Ollama endpoint.",
-                freeBytes, progress.Model, progress.State, progress.Progress, [], progress.Machine);
+                freeBytes, progress.Model, progress.State, progress.Progress, [], progress.Machine, setup.Model, []);
             var machines = await Task.WhenAll(order.Select(StatusAsync));
             var active = machines.FirstOrDefault(machine => machine.Reachable && machine.Installed.Any(OllamaLocalModels.Supported))
                 ?? machines.FirstOrDefault(machine => machine.Reachable);
+            // The default model can be any approved model a machine that answers has installed.
+            string[] choices = [.. OllamaLocalModels.Candidates.Where(model => machines.Any(machine => machine.Installed.Contains(model, StringComparer.Ordinal)))
+                .Select(model => TranslationProviders.Id(OllamaTranslationProvider.ProviderKey, model))];
             return new LocalTranslationModelsV1(true, OllamaLocalModels.Candidates, active?.Installed ?? [], active?.Running ?? [],
                 active is null ? "Ollama is not responding correctly." : null,
-                freeBytes, progress.Model, progress.State, progress.Progress, machines, progress.Machine);
+                freeBytes, progress.Model, progress.State, progress.Progress, machines, progress.Machine, setup.Model, choices);
         }
 
         private async Task<LocalTranslationMachineV1> StatusAsync(Uri server)
@@ -87,7 +90,7 @@ namespace Jularr.Backend.Service.Admin.Translation.V1
 
         protected override async Task<IServiceOutput> OnExecute()
         {
-            var order = _machines.Order(await Context.ExecuteBatchAsync(LocalTranslationMachines.SavedAsync, CancellationToken));
+            var order = _machines.Order((await Context.ExecuteBatchAsync(TranslationProviders.SetupAsync, CancellationToken)).Machines);
             if (Parameters.Machine >= order.Length)
                 throw new ServiceUnavailableException("translation_local_unavailable");
             if (!OllamaLocalModels.Supported(Parameters.Model))
@@ -151,6 +154,36 @@ namespace Jularr.Backend.Service.Admin.Translation.V1
         }
     }
 
+    // The Owner's default model for every server translation (Reader, book job, subtitles): a provider-qualified id of an approved model, or none
+    // for the largest installed TranslateGemma as before.
+    [ServiceEndpoint("PUT", "/api/v1/admin/translation/model")]
+    public sealed class SaveTranslationModelV1 : AdminService<LocalTranslationModelsParametersV1, TranslationModelDataV1>
+    {
+        private readonly TranslationProviders _providers;
+
+        internal SaveTranslationModelV1(TranslationProviders providers)
+        {
+            _providers = providers;
+        }
+
+        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Update;
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
+        protected override ModuleRequirement GetInstanceModules(LocalTranslationModelsParametersV1 parameters) => ModuleRequirement.All("Translation");
+        protected override ServicePermission GetPermission(LocalTranslationModelsParametersV1 parameters, Type resultType) => new("instance.settings.update");
+
+        protected override async Task<IServiceOutput> OnUpdate()
+        {
+            if (Data.Model is not null && _providers.Find(Data.Model) is null)
+                throw new DataValidationException(nameof(Data.Model), "unknown_model");
+
+            var sql = new SqlStatement();
+            sql.Statement = """UPDATE "InstanceSettings" SET "TranslationModel" = @Model WHERE "Id" = 1;""";
+            sql.Parameters.Add(Data);
+            await Context.ExecuteAsyncForAffectedRows(sql, CancellationToken);
+            return new UpdateResult(true);
+        }
+    }
+
     [ServiceEndpoint("POST", "/api/v1/admin/translation/models/{model}/benchmark")]
     public sealed class BenchmarkLocalTranslationModelV1 : AdminService<LocalTranslationModelParametersV1, NoData>
     {
@@ -174,8 +207,8 @@ namespace Jularr.Backend.Service.Admin.Translation.V1
         {
             if (!OllamaLocalModels.Supported(Parameters.Model)) throw new DataValidationException(nameof(Parameters.Model), "unknown_model");
             // The machine that translates now with this model.
-            var saved = await Context.ExecuteBatchAsync(LocalTranslationMachines.SavedAsync, CancellationToken);
-            var server = (await _machines.ChooseAsync(saved, CancellationToken, Parameters.Model))?.Server
+            var setup = await Context.ExecuteBatchAsync(TranslationProviders.SetupAsync, CancellationToken);
+            var server = (await _machines.ChooseAsync(setup.Machines, CancellationToken, Parameters.Model))?.Server
                 ?? throw new ServiceUnavailableException("translation_local_not_installed");
             if (!await _gate.HeavyWork.WaitAsync(TimeSpan.Zero, CancellationToken)) throw new ServiceUnavailableException("translation_local_busy");
             try

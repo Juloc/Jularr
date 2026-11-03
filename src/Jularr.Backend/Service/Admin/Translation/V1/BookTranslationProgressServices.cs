@@ -89,10 +89,16 @@ namespace Jularr.Backend.Service.Admin.Translation.V1
                         FROM (
                             SELECT substring(cache."Path" FROM '[0-9]{5}$')::integer AS "Section"
                             FROM "ReadingResources" AS cache
+                            CROSS JOIN LATERAL (
+                                SELECT convert_from(cache."Bytes", 'UTF8')::jsonb AS value
+                            ) AS stored
                             WHERE cache."ReadingDocumentId" = book."Id"
                                 AND cache."Path" ~ ('^:localtranslation/v4/[^/]+/' || target."Language" || '/[0-9]{5}$')
+                                AND (@Model IS NULL OR split_part(cache."Path", '/', 3) = @Model)
+                                AND (@Digest IS NULL OR stored.value ->> 'ModelDigest' = @Digest)
+                                AND jsonb_typeof(stored.value -> 'Stale') IS DISTINCT FROM 'object'
                                 AND NOT EXISTS (
-                                    SELECT 1 FROM jsonb_array_elements(convert_from(cache."Bytes", 'UTF8')::jsonb -> 'Texts') AS block (value)
+                                    SELECT 1 FROM jsonb_array_elements(stored.value -> 'Texts') AS block (value)
                                     WHERE block.value = 'null'::jsonb
                                 )
                             GROUP BY 1
@@ -105,8 +111,10 @@ namespace Jularr.Backend.Service.Admin.Translation.V1
                     AND length(book."SourceLanguage") BETWEEN 2 AND 3
                     AND target."Language" <> book."SourceLanguage";
                 """;
-            var rows = await Context.ReadSql.ReadListAsync<BookTranslationProgressRowData>(sql, CancellationToken);
+            // Finished means complete in the model and version the job translates with; before its first round any complete cache counts.
             var snapshot = _progress.Snapshot();
+            sql.Parameters.Add(new BookTranslationCurrentModelData(snapshot.ModelKey, snapshot.Digest));
+            var rows = await Context.ReadSql.ReadListAsync<BookTranslationProgressRowData>(sql, CancellationToken);
 
             var languages = rows.GroupBy(row => row.Language).OrderBy(group => group.Key, StringComparer.Ordinal)
                 .Select(group => new BookTranslationLanguageV1(group.Key, group.Sum(row => row.Done), group.Sum(row => row.Total))).ToArray();
