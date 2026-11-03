@@ -117,6 +117,10 @@ namespace Jularr.Backend.Logic.Acquisition
         public static bool Serves(AcquisitionConnectionData indexer, MediaType mediaType, bool automatic) =>
             (indexer.MediaTypeIds.Length == 0 || indexer.MediaTypeIds.Contains((int)mediaType)) && (!automatic || indexer.SearchesAutomatically);
 
+        // A Newznab indexer has a recent feed for the video it serves; the feed is read for movies and series (anime among them) and never for manual-only indexers.
+        public static bool HasFeed(AcquisitionConnectionData indexer, MediaType mediaType) =>
+            indexer.AcquisitionConnectionTypeId == AcquisitionConnectionType.Newznab && mediaType is MediaType.Movie or MediaType.Series && Serves(indexer, mediaType, true);
+
         // Queries left today after the ones a search already used; only a limit the Owner set applies.
         public static bool HasQueries(AcquisitionConnectionData indexer, int used) => indexer.QueryLimit is not { } limit || indexer.QueryCount + used < limit;
 
