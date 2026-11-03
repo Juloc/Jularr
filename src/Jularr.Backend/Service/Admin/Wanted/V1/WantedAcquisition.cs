@@ -5,10 +5,12 @@ using Jularr.Backend.Data.Admin.Wanted.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Enums.Media;
+using Jularr.Backend.Data.Enums.Operation;
 using Jularr.Backend.Data.Logic.Acquisition;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Acquisition;
 using Jularr.Backend.Service.Admin.Acquisition.V1;
+using Jularr.Backend.Service.Admin.Activity.V1;
 using Jularr.Integrations.Data.Newznab;
 using Jularr.Integrations.Data.AnnasArchive;
 using Jularr.Integrations.Data.Nas;
@@ -35,6 +37,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
     internal sealed class WantedAcquisition
     {
         private const int PageLimit = 100;
+        private const int MaximumCachedOffers = 2000;
         private static readonly TimeSpan OfferLifetime = TimeSpan.FromMinutes(30);
 
         private readonly NewznabClient _newznab;
@@ -44,6 +47,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
         private readonly NyaaSources _nyaa;
         private readonly IDataProtector _protector;
         private readonly IMemoryCache _offers;
+        private readonly object _offerLock = new();
         private readonly TimeProvider _time;
         private readonly DownloadStorage _downloads;
         private readonly StorageAccess _storage;
@@ -67,6 +71,10 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             _offers = offers;
         }
 
+        // The sources a search of this target asks, as the person sees them.
+        public SearchSources ReadSources(WantedTargetData target, IReadOnlyList<AcquisitionConnectionData> connections, bool automatic = false) =>
+            SearchSources.Of(connections, AcquisitionSelectionLogic.GetKind(target.MediaTypeId, target.MediaSubtypeId), target.MediaTypeId, automatic, _time.GetUtcNow().UtcDateTime);
+
         // Automatic searches leave out manual-only, backed-off and exhausted indexers; every indexer asked records its use.
         public async Task<WantedSearchResult> SearchAsync(LogicContext context, WantedTargetData target, IReadOnlyList<AcquisitionConnectionData> indexers, SearchDepth depth, bool automatic,
             CancellationToken ct, UnitScope? scope = null, string? focusLanguage = null)
@@ -87,15 +95,12 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             var failures = 0;
             var sourceErrors = new ConcurrentBag<string>();
             using var annaSearch = new AnnasArchiveSearchContext();
-            var allNewznab = indexers.Where(indexer => indexer.AcquisitionConnectionTypeId == AcquisitionConnectionType.Newznab).ToArray();
-            var newznab = allNewznab.Where(indexer => AcquisitionConnectionLogic.CanSearch(indexer, target.MediaTypeId, automatic, now)).ToArray();
-            var skipped = allNewznab.Count(indexer => AcquisitionConnectionLogic.Serves(indexer, target.MediaTypeId, automatic)) - newznab.Length;
+            var served = SearchSources.Of(indexers, kind, target.MediaTypeId, automatic, now);
+            var newznab = served.Indexers;
+            var catalogs = served.Catalogs;
+            var torrents = served.Torrents;
+            var skipped = served.Skipped.Count;
             var uses = new ConcurrentDictionary<long, IndexerUse>();
-            var catalogs = kind is AcquisitionKind.Book or AcquisitionKind.LightNovel ? indexers.Where(indexer => DirectSources.IsDirect(indexer.AcquisitionConnectionTypeId)
-                && (kind == AcquisitionKind.LightNovel || indexer.AcquisitionConnectionTypeId != AcquisitionConnectionType.Narou)).ToArray() : [];
-            var nyaaConnections = kind is AcquisitionKind.LightNovel ? indexers.Where(indexer => indexer.AcquisitionConnectionTypeId == AcquisitionConnectionType.Nyaa).ToArray() : [];
-            var torrents = nyaaConnections.Where(indexer => AcquisitionConnectionLogic.CanSearch(indexer, target.MediaTypeId, automatic, now)).ToArray();
-            skipped += nyaaConnections.Count(indexer => AcquisitionConnectionLogic.Serves(indexer, target.MediaTypeId, automatic)) - torrents.Length;
             var plans = newznab.ToDictionary(indexer => indexer.Id, indexer => SearchPlanner.Plan(intent, ReadCapabilities(indexer), depth));
 
             // Direct book sources answer one title and author query; they are asked at the same time as the indexers.
@@ -167,9 +172,10 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                     });
             }
 
-            // One way of one source is enough when the choice already has something to take; the indexers count too.
+            // One way of one source is enough when the choice already has something to take; the indexers count too. A manual search asks every way.
             bool Enough(IReadOnlyList<ReleaseOffer> found)
             {
+                if (!automatic) return false;
                 var all = found.Concat(offers.Values).ToArray();
                 return AcquisitionSelectionLogic.Select(profile, target, kind, scope, all, focusLanguage, automatic).Ranked.Any(evaluation =>
                     evaluation.IsSelectable && (!profile.IsBook || profile.LanguageOrder.Length == 0
@@ -216,10 +222,8 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             await Task.WhenAll(direct, nyaaSearch, SearchIndexersAsync());
             selection = AcquisitionSelectionLogic.Select(profile, target, kind, scope, offers.Values, focusLanguage, automatic);
 
-            // Manual grabs pick from what was shown; the cache is bounded by offer count.
-            var grabbable = selection.Ranked.Where(evaluation => evaluation.Decision != SelectionDecision.Rejected).Select(evaluation => evaluation.Candidate.Id).ToHashSet(StringComparer.Ordinal);
-            var cached = offers.Where(pair => grabbable.Contains(pair.Key)).ToDictionary(StringComparer.Ordinal);
-            _offers.Set(CacheKey(target.WantedItemId), cached, new MemoryCacheEntryOptions { AbsoluteExpirationRelativeToNow = OfferLifetime, Size = Math.Max(1, cached.Count) });
+            // Manual grabs pick from what was shown, the rejected ones only with an explicit override.
+            CacheOffers(target.WantedItemId, indexers, offers, selection);
 
             // Every release group the search saw joins the media type's list, so it can be rated before anything is taken.
             var groups = ReleaseGroupLogic.Sightings(selection.Ranked.Select(evaluation => evaluation.Candidate.Parsed?.ReleaseGroup));
@@ -234,15 +238,55 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                 return true;
             }, ct);
 
-            // Indexers left out for backoff or limits count as unavailable, not as empty.
-            var sources = catalogs.Length + torrents.Length + newznab.Length + skipped;
-            var unavailable = sources > 0 && failures + skipped >= sources && offers.IsEmpty;
+            // Indexers left out for backoff or limits count as unavailable, not as empty; a search of one source names the reason.
+            var count = catalogs.Count + torrents.Count + newznab.Count + skipped;
+            var unavailable = count > 0 && failures + skipped >= count && offers.IsEmpty;
             var errorKey = unavailable && skipped == 0 && sourceErrors.Count == failures && sourceErrors.Distinct().Count() == 1 ? sourceErrors.First() : null;
+            if (unavailable && count == 1)
+            {
+                errorKey ??= skipped == 1 ? "acquisition_query_limit_reached" : uses.Values.Any(use => use.RetryAfterSeconds > 0) ? "acquisition_rate_limited" : null;
+            }
+
             return new WantedSearchResult(selection, offers, unavailable, AcquisitionSelectionLogic.OutcomeKey(selection.Outcome, unavailable), errorKey);
         }
 
-        public ReleaseOffer? FindOffer(long wantedItemId, string candidateId) =>
-            _offers.TryGetValue(CacheKey(wantedItemId), out Dictionary<string, ReleaseOffer>? offers) && offers!.TryGetValue(candidateId, out var offer) ? offer : null;
+        // The releases of the last searches of this target: a search replaces what its sources found before and keeps the rest, within one bound.
+        private void CacheOffers(long wantedItemId, IReadOnlyList<AcquisitionConnectionData> searched, IReadOnlyDictionary<string, ReleaseOffer> offers, SelectionResult selection)
+        {
+            var rejected = selection.Ranked.Where(evaluation => evaluation.Decision == SelectionDecision.Rejected).Select(evaluation => evaluation.Candidate.Id).ToHashSet(StringComparer.Ordinal);
+            var known = selection.Ranked.Select(evaluation => evaluation.Candidate.Id).ToHashSet(StringComparer.Ordinal);
+            var searchedIds = searched.Select(connection => connection.Id).ToHashSet();
+            lock (_offerLock)
+            {
+                var next = new OfferSet();
+                foreach (var (id, offer) in offers.Where(pair => known.Contains(pair.Key)))
+                {
+                    (rejected.Contains(id) ? next.Rejected : next.Allowed)[id] = offer;
+                }
+
+                if (_offers.TryGetValue(CacheKey(wantedItemId), out OfferSet? previous) && previous is not null)
+                {
+                    foreach (var (id, offer) in previous.Allowed.Concat(previous.Rejected).Where(pair => !searchedIds.Contains(pair.Value.ConnectionId)))
+                    {
+                        if (next.Count >= MaximumCachedOffers) break;
+                        (previous.Rejected.ContainsKey(id) ? next.Rejected : next.Allowed)[id] = offer;
+                    }
+                }
+
+                _offers.Set(CacheKey(wantedItemId), next, new MemoryCacheEntryOptions { AbsoluteExpirationRelativeToNow = OfferLifetime, Size = Math.Max(1, next.Count) });
+            }
+        }
+
+        // A rejected release is found only when the person overrides the rejection.
+        public ReleaseOffer? FindOffer(long wantedItemId, string candidateId, bool includeRejected = false)
+        {
+            if (!_offers.TryGetValue(CacheKey(wantedItemId), out OfferSet? offers) || offers is null)
+            {
+                return null;
+            }
+
+            return offers.Allowed.TryGetValue(candidateId, out var offer) || includeRejected && offers.Rejected.TryGetValue(candidateId, out offer) ? offer : null;
+        }
 
         // Now instead of on schedule: the profile chooses as the automatic search does and the best release is taken at once.
         public async Task<AutomaticSearchResultV1> SearchAutomaticallyAsync(LogicContext context, long wantedItemId, int? parentUnitNumber, int? unitNumber, string? language, long? accountId, CancellationToken ct)
@@ -332,8 +376,9 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             return grabbed ? "grabbed" : outcome;
         }
 
-        public async Task GrabAsync(LogicContext context, WantedTargetData target, ReleaseOffer offer, string? qualityKey, IReadOnlyList<AcquisitionConnectionData> clients, CancellationToken ct,
-            long? accountId = null, bool automatic = false)
+        // Returns whether the download also went first in its client's queue, when that was asked for.
+        public async Task<bool> GrabAsync(LogicContext context, WantedTargetData target, ReleaseOffer offer, string? qualityKey, IReadOnlyList<AcquisitionConnectionData> clients, CancellationToken ct,
+            long? accountId = null, bool automatic = false, bool startsNow = false)
         {
             // A direct-source book writes to Jularr's own workspace. Check the actual path
             // before creating an operation; a missing mount must never fall back to the VM.
@@ -342,17 +387,17 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                 var paths = await _downloads.OpenAsync(context, DownloadStorageArea.Direct, ct);
                 var direct = new AcquisitionGrabData(target.WantedItemId, offer.ConnectionId, Limit(offer.Identity, 600), Limit(offer.Title, 1000), qualityKey, offer.ConnectionId, null, null, null,
                     source.ToString(), accountId) { RequiresActiveMonitoring = automatic };
-                await context.ExecuteBatchAsync(async (ctx, token) =>
+                var reserved = await context.ExecuteBatchAsync(async (ctx, token) =>
                 {
                     await ctx.RequireDownloadStorageSettingsAsync(paths.Settings, token);
-                    var reserved = await ctx.ReserveDownloadAsync(direct, token);
-                    await ctx.StartDownloadAsync(new DownloadStartData(reserved, Limit(offer.Guid!, 128)), token);
-                    return true;
+                    var id = await ctx.ReserveDownloadAsync(direct, token);
+                    await ctx.StartDownloadAsync(new DownloadStartData(id, Limit(offer.Guid!, 128)), token);
+                    return id;
                 }, ct);
 
                 // Tracking and the downloader look at the new download at once.
                 _signals.Downloads.Notify();
-                return;
+                return startsNow && await PrioritizeAsync(context, reserved, ct);
             }
 
             // Select a downloader only after filtering by offer transport and media coverage.
@@ -578,6 +623,27 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             }, ct);
             _signals.Downloads.Notify();
             if (client.AcquisitionConnectionTypeId == AcquisitionConnectionType.Torrent) _signals.Torrents.Notify();
+            return startsNow && await PrioritizeAsync(context, operationId, ct);
+        }
+
+        // The download goes before the others: SABnzbd and Jularr's own downloaders take the forced priority, qBittorrent puts the torrent first. The download is queued either way.
+        private async Task<bool> PrioritizeAsync(LogicContext context, long operationId, CancellationToken ct)
+        {
+            if (await context.ExecuteBatchAsync((ctx, token) => ctx.ReadDownloadActionAsync(operationId, token), ct) is not { } download)
+            {
+                return false;
+            }
+
+            try
+            {
+                return download.AcquisitionConnectionTypeId == AcquisitionConnectionType.Qbittorrent
+                    ? await DownloadActions.MoveAsync(context, _sabnzbd, _qbittorrent, _protector, download, null, true, ct)
+                    : await DownloadActions.PrioritizeAsync(context, _sabnzbd, _protector, download, DownloadPriorityType.Force, ct);
+            }
+            catch (ServiceUnavailableException)
+            {
+                return false;
+            }
         }
 
         private async Task RequireClientImportSourceAsync(LogicContext context, AcquisitionConnectionData client, CancellationToken ct)
@@ -678,6 +744,13 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             NewznabFailure.NotFound => "acquisition_file_missing",
             _ => "acquisition_grab_failed"
         };
+
+        private sealed class OfferSet
+        {
+            public Dictionary<string, ReleaseOffer> Allowed { get; } = new(StringComparer.Ordinal);
+            public Dictionary<string, ReleaseOffer> Rejected { get; } = new(StringComparer.Ordinal);
+            public int Count => Allowed.Count + Rejected.Count;
+        }
 
         private sealed class IndexerUse
         {

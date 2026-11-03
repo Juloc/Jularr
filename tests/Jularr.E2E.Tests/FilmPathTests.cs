@@ -45,7 +45,6 @@ namespace Jularr.E2E.Tests
                 // Wanted shows every candidate with its decision; the chosen one is downloaded.
                 fakes.Offer(film, otherFilm);
                 await Steps.OpenSearchAsync(page, FakeServices.MovieTitle);
-                await Steps.SubmitAsync(page, Steps.FormWith(page, "Start search"));
                 await Assertions.Expect(page.Locator("tr", new() { HasText = otherFilm.Title })).ToContainTextAsync("Different title");
                 await Assertions.Expect(page.Locator("tr", new() { HasText = film.Title })).ToContainTextAsync("Eligible");
                 await Steps.GrabAsync(page, film);

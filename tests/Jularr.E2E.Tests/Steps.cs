@@ -221,28 +221,34 @@ namespace Jularr.E2E.Tests
             await FollowAsync(page, ListRow(page, title).GetByRole(AriaRole.Link, new() { Name = "Edit target" }));
         }
 
-        // The manual search page of a target.
+        // The manual search of a target, opened as the dialog over its page and waited for until every source has answered.
         public static async Task OpenSearchAsync(IPage page, string title)
         {
             await OpenWantedAsync(page, title);
 
             // Films open on their management page, the other types on their wanted page.
             var interactive = page.GetByRole(AriaRole.Link, new() { Name = "Interactive search", Exact = true });
-            await FollowAsync(page, interactive.Or(page.GetByRole(AriaRole.Link, new() { Name = "Search manually", Exact = true })));
+            await interactive.Or(page.GetByRole(AriaRole.Link, new() { Name = "Search manually", Exact = true })).First.ClickAsync();
+            await WaitForSearchAsync(page);
         }
+
+        // The panel of the open search is idle again once every source has answered.
+        public static async Task WaitForSearchAsync(IPage page) =>
+            await Assertions.Expect(page.Locator("[data-search-panel][aria-busy=false]")).ToBeVisibleAsync(new() { Timeout = 120_000 });
 
         // The releases of one episode, searched from its row on the series page.
         public static async Task SearchEpisodeAsync(IPage page, string title, string episodeNumber)
         {
             await OpenWantedAsync(page, title);
             var row = page.Locator("tr.work-row").Filter(new() { Has = page.Locator("td[data-col=number]").GetByText(episodeNumber, new() { Exact = true }) });
-            await SubmitAsync(page, row.Locator("form").Filter(new() { Has = page.GetByRole(AriaRole.Button, new() { Name = "Interactive search for this episode" }) }));
+            await row.GetByRole(AriaRole.Link, new() { Name = "Interactive search for this episode" }).ClickAsync();
+            await WaitForSearchAsync(page);
         }
 
         public static async Task GrabAsync(IPage page, FakeRelease release)
         {
             await SubmitAsync(page, page.Locator("tr", new() { HasText = release.Title }).Locator("form")
-                .Filter(new() { Has = page.GetByRole(AriaRole.Button, new() { Name = "Select and download" }) }));
+                .Filter(new() { Has = page.GetByRole(AriaRole.Button, new() { Name = "In queue" }) }));
         }
 
         // The details page of a work once something of it can be played or read.

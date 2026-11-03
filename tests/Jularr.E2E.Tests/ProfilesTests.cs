@@ -103,7 +103,6 @@ namespace Jularr.E2E.Tests
                     .Filter(new() { Has = page.GetByRole(AriaRole.Button, new() { Name = "Approve" }) }));
                 fakes.Offer(film);
                 await Steps.OpenSearchAsync(page, FakeServices.MovieTitle);
-                await Steps.SubmitAsync(page, Steps.FormWith(page, "Start search"));
                 await Steps.GrabAsync(page, film);
                 await Steps.WaitForAvailableAsync(page, FakeServices.MovieTitle);
                 await visitor.GotoAsync("/Requests");
