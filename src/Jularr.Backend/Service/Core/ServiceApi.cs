@@ -196,6 +196,10 @@ namespace Jularr.Backend.Service.Core
 
         private static IServiceCollection RegisterServices(IServiceCollection services, Assembly[] assemblies, ProviderOptions providers)
         {
+            // The Owner's ChatGPT sign-in that CodexTranslationProvider needs. The host registers its own with the configured paths; a bare container (tests) gets one with no
+            // Codex installed, which is "not connected" everywhere.
+            services.TryAddSingleton(_ => new CodexConnection(new CodexCli { ExecutablePath = null, HomePath = Path.Combine(Path.GetTempPath(), "jularr-codex-unconfigured") }));
+
             // Recent warnings and errors for the Owner's system page.
             services.TryAddSingleton<AcquisitionSearchSignal>();
             services.TryAddSingleton<LiveChanges>();
