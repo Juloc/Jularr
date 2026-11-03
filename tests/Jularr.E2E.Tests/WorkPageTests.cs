@@ -161,7 +161,7 @@ namespace Jularr.E2E.Tests
             }
         }
 
-        // The library list: rows with covers, a filter that leads to the fitting titles, the switch and the search of one row, the mass editor with its report, and the columns kept in the browser.
+        // The library list: posters first, rows with covers, the type bar, the search and the order that lead to the fitting titles, a filter, the switch and the search of one row, the mass editor with its report, and the columns kept in the browser.
         [TestMethod]
         [Timeout(600_000)]
         public async Task Works_ListTakesFiltersRowActionsAndTheMassEditor()
@@ -189,7 +189,9 @@ namespace Jularr.E2E.Tests
                 await Steps.RequestAsync(page, "Bunny", FakeServices.MovieTitle);
                 await Steps.RequestAsync(page, "Test Series", FakeServices.SeriesTitle);
 
-                // Both titles are rows with their cover.
+                // A first visit shows the posters; both titles are rows with their cover in the table.
+                await page.GotoAsync("/Admin/Works");
+                await Assertions.Expect(page.Locator(".works-posters .media-card")).ToHaveCountAsync(2);
                 await page.GotoAsync("/Admin/Works?view=Table");
                 var rows = page.Locator(".list-body .list-row");
                 var movie = Steps.ListRow(page, FakeServices.MovieTitle);
@@ -211,15 +213,31 @@ namespace Jularr.E2E.Tests
                 await Steps.FollowAsync(page, page.Locator(".view-switch").GetByRole(AriaRole.Link, new() { Name = "Table", Exact = true }));
                 await Assertions.Expect(page.Locator(".works-list .list-row")).ToHaveCountAsync(2);
 
-                // A filter of the drawer leads to the titles that fit and stays in the address.
-                await page.GetByRole(AriaRole.Button, new() { Name = "Filters", Exact = true }).ClickAsync();
-                await page.Locator("#works-filter select[name=type]").SelectOptionAsync("2");
-                await Steps.FollowAsync(page, page.Locator("#works-filter").GetByRole(AriaRole.Button, new() { Name = "Apply", Exact = true }));
-                await Assertions.Expect(page).ToHaveURLAsync(new System.Text.RegularExpressions.Regex("[?&]type=2"));
+                // The type bar leads to the titles of one type and stays in the address; All shows every title again.
+                var types = page.GetByRole(AriaRole.Navigation, new() { Name = "Media types", Exact = true });
+                await Steps.FollowAsync(page, types.GetByRole(AriaRole.Link, new() { Name = "Series", Exact = true }));
+                await Assertions.Expect(page).ToHaveURLAsync(new System.Text.RegularExpressions.Regex("[?&]type=series"));
                 await Assertions.Expect(rows).ToHaveCountAsync(1);
                 await Assertions.Expect(series).ToBeVisibleAsync();
-                await page.GetByRole(AriaRole.Button, new() { Name = "Filters", Exact = true }).ClickAsync();
-                await Steps.FollowAsync(page, page.Locator("#works-filter").GetByRole(AriaRole.Link, new() { Name = "Clear", Exact = true }));
+                await Steps.FollowAsync(page, types.GetByRole(AriaRole.Link, new() { Name = "All", Exact = true }));
+                await Assertions.Expect(rows).ToHaveCountAsync(2);
+
+                // The search narrows the list while typing and keeps the words in the address.
+                var search = page.GetByRole(AriaRole.Searchbox, new() { Name = "Search titles", Exact = true });
+                await search.FillAsync("Bunny");
+                await Assertions.Expect(page).ToHaveURLAsync(new System.Text.RegularExpressions.Regex("[?&]q=Bunny"));
+                await Assertions.Expect(rows).ToHaveCountAsync(1);
+                await Assertions.Expect(movie).ToBeVisibleAsync();
+                await search.FillAsync("");
+                await Assertions.Expect(rows).ToHaveCountAsync(2);
+
+                // The newest title comes first; the order by title turns that around and stays in the address.
+                await Assertions.Expect(rows.First).ToContainTextAsync(FakeServices.SeriesTitle);
+                await page.GetByRole(AriaRole.Button, new() { Name = "Sort by Added", Exact = true }).ClickAsync();
+                await Steps.FollowAsync(page, page.GetByRole(AriaRole.Listbox, new() { Name = "Sort by", Exact = true }).GetByRole(AriaRole.Option, new() { Name = "Title", Exact = true }));
+                await Assertions.Expect(page).ToHaveURLAsync(new System.Text.RegularExpressions.Regex("[?&]sort=0"));
+                await Assertions.Expect(rows.First).ToContainTextAsync(FakeServices.MovieTitle);
+                await page.GotoAsync("/Admin/Works");
                 await Assertions.Expect(rows).ToHaveCountAsync(2);
 
                 // The switch of one row is the title page's rule: the film stops being monitored and the filter finds it.
