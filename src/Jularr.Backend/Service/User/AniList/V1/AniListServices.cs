@@ -148,13 +148,14 @@ namespace Jularr.Backend.Service.User.AniList.V1
                 WHERE
                     entry."ProfileId" = @ProfileId
                     AND (
+                        -- Asked once for the profile, not again for every entry of its list.
                         entry."MediaId" IN (
                             SELECT
                                 covered."MediaId"
                             FROM
                                 "AniListEntryUnits" AS covered
                             WHERE
-                                covered."ProfileId" = entry."ProfileId"
+                                covered."ProfileId" = @ProfileId
                                 AND covered."WorkId" = @WorkId
                         )
                         OR entry."MediaId"::text IN (

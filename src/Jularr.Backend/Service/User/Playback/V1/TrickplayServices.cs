@@ -33,10 +33,10 @@ namespace Jularr.Backend.Service.User.Playback.V1
                             candidate."TrickplayFrames"
                         FROM
                             "MediaAssets" AS asset
-                            JOIN "ProfileWorks" AS visible ON visible."WorkId" = asset."WorkId" AND visible."ProfileId" = @ProfileId
                             JOIN "StoredFiles" AS candidate ON candidate."MediaAssetId" = asset."Id"
                         WHERE
                             asset."Id" = @MediaAssetId
+                            AND EXISTS (SELECT 1 FROM "ProfileWorks" AS visible WHERE visible."WorkId" = asset."WorkId" AND visible."ProfileId" = @ProfileId)
                             AND candidate."MissingSince" IS NULL
                             AND NOT candidate."IsSubtitle"
                         ORDER BY
@@ -81,10 +81,10 @@ namespace Jularr.Backend.Service.User.Playback.V1
                     candidate."TrickplayFrames"
                 FROM
                     "MediaAssets" AS asset
-                    JOIN "ProfileWorks" AS visible ON visible."WorkId" = asset."WorkId" AND visible."ProfileId" = @ProfileId
                     JOIN "StoredFiles" AS candidate ON candidate."MediaAssetId" = asset."Id"
                 WHERE
                     asset."Id" = @MediaAssetId
+                    AND EXISTS (SELECT 1 FROM "ProfileWorks" AS visible WHERE visible."WorkId" = asset."WorkId" AND visible."ProfileId" = @ProfileId)
                     AND candidate."MissingSince" IS NULL
                     AND NOT candidate."IsSubtitle"
                 ORDER BY

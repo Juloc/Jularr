@@ -26,12 +26,12 @@ namespace Jularr.Backend.Service.User.Playback.V1
                     NULL::varchar AS "Codec"
                 FROM
                     "MediaAssets" AS asset
-                    JOIN "ProfileWorks" AS visible ON visible."WorkId" = asset."WorkId" AND visible."ProfileId" = @ProfileId
                     JOIN "StoredFiles" AS file ON file."MediaAssetId" = asset."Id"
                     JOIN "LibraryRoots" AS root ON root."Id" = file."LibraryRootId"
                     JOIN "StorageMounts" AS mount ON mount."Id" = root."StorageMountId"
                 WHERE
                     asset."Id" = @MediaAssetId
+                    AND EXISTS (SELECT 1 FROM "ProfileWorks" AS visible WHERE visible."WorkId" = asset."WorkId" AND visible."ProfileId" = @ProfileId)
                     AND file."MissingSince" IS NULL
                     AND NOT file."IsSubtitle"
                 ORDER BY

@@ -62,6 +62,23 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public void Sql_ProfileWorksOfAnAsset_IsNotJoinedDirectly()
+        {
+            // Joined to an asset's Work, the view is planned apart and reads the catalog up to it (seconds with a large catalog).
+            var root = new DirectoryInfo(AppContext.BaseDirectory);
+            while (root.GetFiles("Jularr.sln").Length == 0)
+            {
+                root = root.Parent!;
+            }
+
+            var joined = Directory.EnumerateFiles(Path.Combine(root.FullName, "src", "Jularr.Backend"), "*.cs", SearchOption.AllDirectories)
+                .Where(file => !file.Contains(Path.DirectorySeparatorChar + "obj" + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+                .Where(file => Regex.IsMatch(File.ReadAllText(file), @"JOIN ""ProfileWorks"" AS (\w+) ON \1\.""WorkId"" = asset\.""WorkId"""))
+                .Select(Path.GetFileName).ToArray();
+            Assert.AreEqual(0, joined.Length, "Use EXISTS or JOIN LATERAL (... OFFSET 0) in: " + string.Join(", ", joined));
+        }
+
+        [TestMethod]
         public void ConsumerContracts_PublicAndProtectedSignatures_DoNotExposeNpgsql()
         {
             foreach (var type in typeof(ServiceApi).Assembly.GetExportedTypes())

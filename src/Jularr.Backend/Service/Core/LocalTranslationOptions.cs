@@ -27,11 +27,13 @@ namespace Jularr.Backend.Service.Core
 
     // The Ollama machines in the Owner's order (Admin, `InstanceSettings.TranslationMachines`), else the configured endpoint alone. The first
     // that answers with an approved model translates; one that fails rests a minute, so the next takes over and the first returns by itself.
+    // After its rest a machine is asked again in the background: no request waits for one that may still be away.
     internal sealed class LocalTranslationMachines(OllamaLocalModels models, IOptions<LocalTranslationOptions> options, TimeProvider time)
     {
         private static readonly TimeSpan Rest = TimeSpan.FromMinutes(1);
         private static readonly TimeSpan Answer = TimeSpan.FromSeconds(3);
         private readonly ConcurrentDictionary<Uri, DateTimeOffset> _resting = new();
+        private readonly ConcurrentDictionary<Uri, Task> _waking = new();
 
         // The free space the Owner typed on the translation page, else the configured value; 0 means no model download is allowed.
         public static async Task<long> FreeBytesAsync(LogicContext ctx, long configured, CancellationToken ct)
@@ -51,7 +53,7 @@ namespace Jularr.Backend.Service.Core
         {
             foreach (var server in Order(saved))
             {
-                if (_resting.TryGetValue(server, out var until) && until > time.GetUtcNow()) continue;
+                if (IsAway(server)) continue;
                 try
                 {
                     using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -73,7 +75,7 @@ namespace Jularr.Backend.Service.Core
         // Every model the machines that answer now have installed, asked together; a machine that does not answer rests.
         public async Task<string[]> InstalledAsync(string[] saved, CancellationToken ct)
         {
-            var awake = Order(saved).Where(server => !(_resting.TryGetValue(server, out var until) && until > time.GetUtcNow()));
+            var awake = Order(saved).Where(server => !IsAway(server)).ToArray();
             var answers = await Task.WhenAll(awake.Select(async server =>
             {
                 try
@@ -94,6 +96,37 @@ namespace Jularr.Backend.Service.Core
 
         // A machine that did not answer or failed a block rests; the next in the order takes its work.
         public void Fail(Uri server) => _resting[server] = time.GetUtcNow() + Rest;
+
+        // The background questions still open.
+        internal Task WakingAsync() => Task.WhenAll(_waking.Values);
+
+        // Resting, or asked again in the background once its rest is over: it counts again when it has answered.
+        private bool IsAway(Uri server)
+        {
+            if (!_resting.TryGetValue(server, out var until)) return false;
+            var now = time.GetUtcNow();
+            if (until <= now && _resting.TryUpdate(server, now + Rest, until))
+            {
+                _waking[server] = Task.Run(() => WakeAsync(server, now + Rest));
+            }
+
+            return true;
+        }
+
+        // A machine that failed again meanwhile keeps its new rest.
+        private async Task WakeAsync(Uri server, DateTimeOffset rest)
+        {
+            try
+            {
+                using var timeout = new CancellationTokenSource(Answer);
+                await models.InstalledAsync(server, timeout.Token);
+                _resting.TryRemove(KeyValuePair.Create(server, rest));
+            }
+            catch (Exception exception) when (exception is HttpRequestException or JsonException or InvalidDataException or OperationCanceledException)
+            {
+                Fail(server);
+            }
+        }
     }
 
     // Persist only the explicitly requested model and its last observed status, never
