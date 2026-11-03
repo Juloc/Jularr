@@ -131,7 +131,7 @@ SavePill, FolderPicker, IconInfo, TimePicker, FactList, Drawer, FilterDialog, Sh
   continued titles, then its best by rank (series from Discover's series list), then what the library added last, each title once; the types
   take turns place by place, and a type with fewer titles shows fewer. The device keeps how many per type (1–5, standard 3; no overall
   maximum), whether continued titles count and whether it turns by itself), feed chips and a rows/grid switch. The header owns the **one**
-  global Search; do not add another search field inside Discover. Owner's decision 2 Nov, the header search: large in the middle of the header, no key hint
+  global Search; do not add another search field inside Discover. Owner's decision 2 Nov, the header search: large in the middle of the header (where the header is tight it narrows before the trail, which stays whole), no key hint
   or shortcut; from two letters, after a short pause, a popup under the field lists the titles Jularr keeps (no provider is asked) grouped by type, the type
   with the best match first, in each type the typed title, then titles beginning with it, then other matches, local before trending before popular, two to
   six per type as the room allows, then All results; each group's heading (its type's icon, name and a See all pill) opens that type's results, titles show a 40×60 cover with the typed words marked and year · first genre · rating under them (what is unknown is left out), and two or more groups stand in two columns where there is room. Enter opens Discover's results: one row per type in the same order, each with See all for that type
