@@ -11,6 +11,7 @@ namespace Jularr.Backend.Data.Fields.Media
         public static readonly StringField MatchRows = new() { AllowBlank = false };
         public static readonly EnumField MediaTypeId = new(typeof(MediaType));
         public static readonly EnumField MediaSubtypeId = new(typeof(MediaSubtype)) { Required = false };
+        public static readonly EnumField CatalogFormatId = new(typeof(CatalogFormat)) { Required = false };
         public static readonly EnumArrayField MediaTypeIds = new(typeof(MediaType)) { MaximumLength = 8 };
         public static readonly EnumArrayField MediaSubtypeIds = new(typeof(MediaSubtype)) { MaximumLength = 8 };
         public static readonly EnumField ProgressStateId = new(typeof(ProgressStateType));

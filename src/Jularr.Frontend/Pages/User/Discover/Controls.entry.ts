@@ -121,7 +121,6 @@ document.addEventListener('change', event => {
     const preferences = readHeroPreferences(heroKey);
     switch (input.dataset.heroPref) {
         case 'perType': preferences.perType = Number(input.value); break;
-        case 'max': preferences.max = Number(input.value); break;
         case 'withContinue': preferences.withContinue = input.checked; break;
         case 'auto': preferences.auto = input.checked; preferences.paused = false; break;
     }

@@ -140,10 +140,10 @@ namespace Jularr.Frontend.Pages.User.Requests
             url.Length > 1 && (url[0] == '/' && url[1] != '/' || Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https" && uri.UserInfo.Length == 0);
 
         // The type and the day the request was made.
-        private IUiComponent Meta(RequestDetailsV1 item) => new Span(new ValueText(texts["library.scope." + ScopeOf(item).Slug] + " · "), new LocalTime(item.CreatedAt, "date"));
+        private IUiComponent Meta(RequestDetailsV1 item) => new Span(new ValueText(texts[TypeKey(item)] + " · "), new LocalTime(item.CreatedAt, "date"));
 
-        private static LibraryScope ScopeOf(RequestDetailsV1 item) =>
-            LibraryScopes.All.FirstOrDefault(scope => scope.Subtype is not null && scope.Subtype == item.MediaSubtypeId) ?? LibraryScopes.All.FirstOrDefault(scope => scope.Type == item.MediaTypeId && scope.Subtype is null) ?? LibraryScopes.All[0];
+        // A request's own type reads in the singular like the cards ("Book"); the filter above names the types in the plural.
+        private static string TypeKey(RequestDetailsV1 item) => item.MediaTypeId is { } type ? MediaTypeLabel.Key(type, item.MediaSubtypeId) : "library.scope.all";
 
         private IUiComponent Preferences(RequestDetailsV1 item)
         {
@@ -158,7 +158,7 @@ namespace Jularr.Frontend.Pages.User.Requests
         {
             var facts = new List<IUiComponent>
             {
-                new Dt(new Text("table.type")), new Dd(new Text("library.scope." + ScopeOf(item).Slug)),
+                new Dt(new Text("table.type")), new Dd(new Text(TypeKey(item))),
                 new Dt(new Text("request.language")), new Dd(new ValueText(item.RequestedLanguage))
             };
             if (item.QualityName is { } quality) facts.AddRange([new Dt(new Text("request.quality")), new Dd(new ValueText(quality))]);

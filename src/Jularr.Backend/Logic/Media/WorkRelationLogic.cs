@@ -45,10 +45,10 @@ namespace Jularr.Backend.Logic.Media
             _ => null
         };
 
-        // The catalog titles AniList relates a title to; a format Discover does not show (specials, music videos) stays out.
+        // The catalog titles AniList relates a title to; episodes of their own (OVAs, specials, music videos) stay out, although the catalog keeps them.
         public static IReadOnlyList<WorkRelationTarget> AniListTargets(AniListMedia media) => [.. media.Relations
             .Select(relation => (Relation: relation, Type: FromAniList(relation.RelationType), Kind: AniListMatching.CatalogType(relation.Type, relation.Format)))
-            .Where(item => item.Type is not null && item.Kind is not null)
+            .Where(item => item.Type is not null && item.Kind is not null && !AniListMatching.IsExtra(item.Relation.Format))
             .Select(item => new WorkRelationTarget("anilist", item.Relation.Id.ToString(CultureInfo.InvariantCulture), item.Type!.Value, item.Kind!.Value.Type, item.Kind.Value.Subtype,
                 TextLimit.Cut(item.Relation.Title, 500)!, item.Relation.Year is >= 1800 and <= 2200 ? item.Relation.Year : null, item.Relation.CoverUrl))
             .Where(target => target.Title.Length > 0)

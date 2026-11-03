@@ -21,7 +21,7 @@ namespace Jularr.Backend.Service.Core
 {
     // Provider search and import of every media type, for the Works page and for Discover.
     internal sealed class MetadataCatalog(WorkMetadata metadata, BookMetadata books, AniListMetadata aniList, MusicMetadata music, GameMetadata games, AniListMatcher matcher,
-        NarouMetadata narou, IMemoryCache cache, ExternalFeedCache feeds)
+        NarouMetadata narou, IMemoryCache cache, ExternalFeedCache feeds, TimeProvider time)
     {
         // Ranked lists of one provider are read one after the other.
         private static readonly SemaphoreSlim BooksGate = new(1, 1);
@@ -229,37 +229,65 @@ namespace Jularr.Backend.Service.Core
             TextLimit.Cut(AniListMetadata.Title(result), 500)!, TextLimit.Cut(result.RomajiTitle, 500), result.Year is >= 1800 and <= 2200 ? result.Year : null,
             TextLimit.Cut(result.Description, 4000), null, null, result.CoverUrl);
 
-        // Ranked catalog lists: Open Library trends books, AniList ranks manga, light novels and anime. A kept list already names its Works.
-        public async Task<IReadOnlyList<ExternalWorkData>?> ReadCachedFeedInBatchAsync(LogicContext context, MediaType mediaType, MediaSubtype? subtype, DiscoverFeedType feed, CancellationToken ct)
+        // AniList's titles of a filter page become Works by their own type (anime films as films), in AniList's order.
+        public async Task<IReadOnlyList<ExternalWorkData>> ReadFilteredAniListAsync(LogicContext context, MediaSubtype subtype, IReadOnlyCollection<string> formats, AniListListQuery list,
+            int page, CancellationToken ct)
         {
-            var ranking = Ranking(mediaType, subtype, feed);
+            var anime = subtype == MediaSubtype.Anime;
+            var found = await aniList.ReadFilteredAsync(anime ? AniListMediaType.Anime : AniListMediaType.Manga, formats, list, page, ct);
+            var kept = new Dictionary<string, ExternalWorkData>(StringComparer.Ordinal);
+            foreach (var group in found.GroupBy(media => AniListMatching.CatalogType(anime ? "ANIME" : "MANGA", media.Format)).Where(group => group.Key is not null))
+            {
+                var works = group.Select(media => ExternalWork(anime ? AniListAnime(media) : AniListBook(media), media.Format)).ToArray();
+                foreach (var work in await KeepWorksAsync(context, new ExternalWorkListData(AniListMetadata.Namespace, group.Key!.Value.Type, group.Key.Value.Subtype), works, ct))
+                {
+                    kept[work.Value] = work;
+                }
+            }
+
+            return [.. found.Select(media => kept.GetValueOrDefault(media.Id.ToString(CultureInfo.InvariantCulture))).OfType<ExternalWorkData>()];
+        }
+
+        // Open Library's books of a filter page as Works.
+        public async Task<IReadOnlyList<ExternalWorkData>> ReadFilteredBooksAsync(LogicContext context, IReadOnlyList<string> subjects, int? yearFrom, int? yearTo, string? language,
+            bool newest, int page, CancellationToken ct) =>
+            await KeepWorksAsync(context, new ExternalWorkListData(BookMetadata.Namespace, MediaType.Book, null),
+                [.. (await books.SearchFilteredAsync(subjects, yearFrom, yearTo, language, newest, page, ct)).Select(book => ExternalWork(Book(book)))], ct);
+
+        // Ranked catalog lists: Open Library trends books, AniList ranks manga, light novels and anime, page by page. A kept list already names its Works;
+        // a list in another than its own order is never kept.
+        public async Task<IReadOnlyList<ExternalWorkData>?> ReadCachedFeedInBatchAsync(LogicContext context, MediaType mediaType, MediaSubtype? subtype, DiscoverFeedType feed, int page,
+            CancellationToken ct)
+        {
+            var descriptor = Descriptor(mediaType, subtype, feed, page);
             if (!await context.KeepsDiscoverListsAsync(ct))
             {
                 return null;
             }
-            var descriptor = new ExternalFeedData(ranking is null ? BookMetadata.Namespace : AniListMetadata.Namespace, mediaType, subtype, feed, 1, null, null);
             return (await ExternalFeedCache.ReadAsync(context, descriptor, ct)).Items;
         }
 
         // Without kept lists the titles shown still become Works, so each card opens one.
-        public async Task<IReadOnlyList<ExternalWorkData>> ReadFeedAsync(LogicContext context, MediaType mediaType, MediaSubtype? subtype, DiscoverFeedType feed, CancellationToken ct)
+        public async Task<IReadOnlyList<ExternalWorkData>> ReadFeedAsync(LogicContext context, MediaType mediaType, MediaSubtype? subtype, DiscoverFeedType feed, int page, DiscoverSort? sort,
+            CancellationToken ct)
         {
-            var ranking = Ranking(mediaType, subtype, feed);
-            var descriptor = new ExternalFeedData(ranking is null ? BookMetadata.Namespace : AniListMetadata.Namespace, mediaType, subtype, feed, 1, null, null);
-            var keeps = await context.ExecuteBatchAsync((ctx, token) => ctx.KeepsDiscoverListsAsync(token), ct, mode: SqlAccessMode.ReadOnly);
+            var descriptor = Descriptor(mediaType, subtype, feed, page);
+            var keeps = sort is null && await context.ExecuteBatchAsync((ctx, token) => ctx.KeepsDiscoverListsAsync(token), ct, mode: SqlAccessMode.ReadOnly);
             if (keeps)
             {
                 return await feeds.LoadAsync(context, descriptor, FetchExternalFeedAsync, ct);
             }
 
-            return await KeepWorksAsync(context, new ExternalWorkListData(descriptor.Namespace, mediaType, subtype), await FetchExternalFeedAsync(descriptor, ct), ct);
+            return await KeepWorksAsync(context, new ExternalWorkListData(descriptor.Namespace, mediaType, subtype), await FetchAsync(descriptor, sort, ct), ct);
         }
 
-        public async Task<IReadOnlyList<ExternalWorkData>> FetchExternalFeedAsync(ExternalFeedData feed, CancellationToken ct)
+        public Task<IReadOnlyList<ExternalWorkData>> FetchExternalFeedAsync(ExternalFeedData feed, CancellationToken ct) => FetchAsync(feed, null, ct);
+
+        private async Task<IReadOnlyList<ExternalWorkData>> FetchAsync(ExternalFeedData feed, DiscoverSort? sort, CancellationToken ct)
         {
-            var ranking = Ranking(feed.MediaTypeId, feed.MediaSubtypeId, feed.DiscoverFeedTypeId!.Value);
-            var gate = ranking is null ? BooksGate : AniListGate;
-            var failedKey = ranking is null ? "metadata.catalog.failed.books" : "metadata.catalog.failed.anilist";
+            var list = feed.Namespace == AniListMetadata.Namespace ? AniListList(feed.DiscoverFeedTypeId!.Value, sort) : null;
+            var gate = list is null ? BooksGate : AniListGate;
+            var failedKey = list is null ? "metadata.catalog.failed.books" : "metadata.catalog.failed.anilist";
             await gate.WaitAsync(ct);
             try
             {
@@ -269,10 +297,11 @@ namespace Jularr.Backend.Service.Core
                 }
                 try
                 {
-                    IReadOnlyList<MetadataSearchResultV1> results = ranking is not { } order ? [.. (await books.ReadTrendingAsync(ct)).Select(Book)]
-                        : feed.MediaTypeId == MediaType.Series ? [.. (await aniList.ReadAnimeRankingAsync(order, ct)).Select(AniListAnime)]
-                        : [.. (await aniList.ReadBookRankingAsync(feed.MediaSubtypeId!.Value, order, ct)).Select(AniListBook)];
-                    return [.. results.Select(ExternalWork)];
+                    // AniList names each title's format.
+                    IReadOnlyList<ExternalWorkData> results = list is null ? [.. (await books.ReadTrendingAsync(feed.Page, ct)).Select(book => ExternalWork(Book(book)))]
+                        : feed.MediaTypeId == MediaType.Series ? [.. (await aniList.ReadAnimeRankingAsync(list, feed.Page, ct)).Select(media => ExternalWork(AniListAnime(media), media.Format))]
+                        : [.. (await aniList.ReadBookRankingAsync(feed.MediaSubtypeId!.Value, list, feed.Page, ct)).Select(media => ExternalWork(AniListBook(media), media.Format))];
+                    return results;
                 }
                 catch (ServiceUnavailableException)
                 {
@@ -286,17 +315,41 @@ namespace Jularr.Backend.Service.Core
             }
         }
 
-        private static AniListRanking? Ranking(MediaType mediaType, MediaSubtype? subtype, DiscoverFeedType feed) => (mediaType, subtype, feed) switch
+        // Open Library trends books; AniList has the lists of anime, manga and light novels.
+        private static ExternalFeedData Descriptor(MediaType mediaType, MediaSubtype? subtype, DiscoverFeedType feed, int page)
         {
-            (MediaType.Book, null, DiscoverFeedType.Trending) => null,
-            (MediaType.Book, MediaSubtype.Manga or MediaSubtype.LightNovel, DiscoverFeedType.Trending) => AniListRanking.Trending,
-            (MediaType.Book, MediaSubtype.Manga or MediaSubtype.LightNovel, DiscoverFeedType.Top) => AniListRanking.Score,
-            (MediaType.Book, MediaSubtype.Manga or MediaSubtype.LightNovel, DiscoverFeedType.New) => AniListRanking.Newest,
-            (MediaType.Series, MediaSubtype.Anime, DiscoverFeedType.Trending) => AniListRanking.Trending,
-            (MediaType.Series, MediaSubtype.Anime, DiscoverFeedType.Top) => AniListRanking.Score,
-            (MediaType.Series, MediaSubtype.Anime, DiscoverFeedType.New) => AniListRanking.Newest,
-            _ => throw new DataValidationException("DiscoverFeedTypeId", "unknown_catalog_value")
-        };
+            if (mediaType == MediaType.Book && subtype is null && feed == DiscoverFeedType.Trending)
+            {
+                return new ExternalFeedData(BookMetadata.Namespace, mediaType, subtype, feed, page, null, null);
+            }
+
+            return DiscoverScopes.IsAniList(subtype) && DiscoverScopes.All.Any(scope => scope.MediaTypeId == mediaType && scope.MediaSubtypeId == subtype && scope.Feeds.Contains(feed))
+                ? new ExternalFeedData(AniListMetadata.Namespace, mediaType, subtype, feed, page, null, null)
+                : throw new DataValidationException("DiscoverFeedTypeId", "unknown_catalog_value");
+        }
+
+        // An AniList list narrows by season or country and takes its own order unless another is chosen.
+        private AniListListQuery AniListList(DiscoverFeedType feed, DiscoverSort? sort)
+        {
+            var order = (sort ?? DiscoverScopes.OwnSort(feed)) switch
+            {
+                DiscoverSort.Trending => AniListSort.Trending,
+                DiscoverSort.Popularity => AniListSort.Popularity,
+                DiscoverSort.Score => AniListSort.Score,
+                DiscoverSort.Favourites => AniListSort.Favourites,
+                DiscoverSort.Added => AniListSort.Added,
+                DiscoverSort.Released => AniListSort.StartDate,
+                _ => AniListSort.Title
+            };
+            var today = DateOnly.FromDateTime(time.GetUtcNow().UtcDateTime);
+            return feed switch
+            {
+                DiscoverFeedType.Season or DiscoverFeedType.NextSeason when DiscoverScopes.Season(today, feed == DiscoverFeedType.Season ? 0 : 1) is var (season, year)
+                    => new AniListListQuery(order, DiscoverScopes.SeasonName(season), year),
+                DiscoverFeedType.Manhwa => new AniListListQuery(order, country: "KR"),
+                _ => new AniListListQuery(order)
+            };
+        }
 
         // Every catalog title a search showed is kept as a Work, each catalog under its own name; the titles come back in their order with their Works, named as the search named them.
         // A web novel's Work keeps its Japanese name: the edition's name a search lends it depends on the profile's language.
@@ -330,8 +383,11 @@ namespace Jularr.Backend.Service.Core
                 work.Overview, work.Creator, work.ImageUrl, work.BackdropUrl, work.FetchedAt, work.Rating, saved[work.Value].WorkId, saved[work.Value].SeasonNumber))];
         }
 
-        private static ExternalWorkData ExternalWork(MetadataSearchResultV1 result) => new(result.Namespace, result.ExternalId, result.Title, result.OriginalTitle, result.ReleaseYear,
-            result.Overview, result.Author, result.PosterUrl, null, null);
+        private static ExternalWorkData ExternalWork(MetadataSearchResultV1 result, string? aniListFormat = null) => new(result.Namespace, result.ExternalId, result.Title,
+            result.OriginalTitle, result.ReleaseYear, result.Overview, result.Author, result.PosterUrl, null, null)
+        {
+            CatalogFormatId = CatalogFactValues.Value(CatalogFactValues.AniListFormats, aniListFormat)
+        };
 
         private static MetadataSearchResultV1 Book(OpenLibraryResult result) => new(BookMetadata.Namespace, result.WorkId, TextLimit.Cut(result.Title, 500)!, null,
             result.Year is >= 1800 and <= 2200 ? result.Year : null, null, null, TextLimit.Cut(string.Join(", ", result.Authors), 4000), OpenLibraryClient.CoverUrl(result.CoverId));

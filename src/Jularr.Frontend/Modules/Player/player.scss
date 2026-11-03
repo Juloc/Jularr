@@ -169,7 +169,8 @@
         &:focus-visible { outline: none; border-color: var(--accent); }
     }
     &__offset-reset { min-height: 34px; padding: 0 12px; }
-    &__copy { justify-self: start; min-height: 26px; padding: 0 10px; font-size: .72rem; }
+    // The last control of Info: its phone tap area (HitArea) must not reach below the pane, which would make the pane scroll.
+    &__copy { --hit-gap-y: 0px; justify-self: start; min-height: 26px; padding: 0 10px; font-size: .72rem; }
     &__pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
     // Slider with its number; the dots below mark the usual speeds.
     &__speed {
@@ -348,6 +349,10 @@
 @media (max-width: 620px), (max-height: 600px) {
     .player__settings, .player__chapters { position-area: none; inset: 12px; margin: 0; width: calc(100vw - 24px); height: calc(100dvh - 24px); max-height: none; }
     .player__settings-pane { grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); }
+    // The live facts of Info change while it is open and paths are long: on a small screen each stays on one line (Copy takes them in full), so the pane keeps its size.
+    .player__info { gap: 4px; }
+    .player__facts { row-gap: 0; }
+    .player__facts dd { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
     html:has(.player__settings:popover-open, .player__chapters:popover-open) { overflow: hidden; }
 }
 

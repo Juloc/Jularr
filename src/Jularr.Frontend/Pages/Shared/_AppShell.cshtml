@@ -9,5 +9,7 @@
     var titleKey = definition?.TitleKey ?? "nav.home";
     // The figures of the administration menu are read only for an administration page.
     var counts = currentPath.StartsWith("/Admin", StringComparison.OrdinalIgnoreCase) ? await MenuCounters.ReadAsync(T, Context.RequestAborted) : null;
+    // The header search shows only its own search (Discover's text and types), never another page's filter text.
+    var discover = currentPath == "/";
 }
-@(new UiHtml(new Shell(titleKey, currentPath, Navigation, Assets, Context.Request.Query["q"].FirstOrDefault(), currentPath == "/" && Context.Request.Query["type"].ToString() is { Length: > 0 } scopes ? scopes : null, definition?.Parents, definition?.DocumentTitle, counts, Context.Request.Query), T))
+@(new UiHtml(new Shell(titleKey, currentPath, Navigation, Assets, discover ? Context.Request.Query["q"].FirstOrDefault() : null, discover && Context.Request.Query["type"].ToString() is { Length: > 0 } scopes ? scopes : null, definition?.Parents, definition?.DocumentTitle, counts, Context.Request.Query), T))

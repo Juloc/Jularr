@@ -39,5 +39,10 @@ namespace Jularr.Backend.Data.Fields.Instance
         // The Caching module's settings: days unused extended data of titles outside the library is kept, and whether Discover's lists are detailed in advance.
         public static readonly IntField CatalogDetailKeepDays = new() { Minimum = 1, Maximum = 365 };
         public static readonly BoolField DetailsDiscoverAhead = new();
+        // The Owner's Codex choices: model, reasoning effort and fallback model (empty leaves Codex's own default), token limits (0 is unlimited) and the warning percent.
+        public static readonly StringField CodexModel = new(NpgsqlDbType.Varchar) { MaximumLength = 64, Required = false, Trim = true, Format = Enums.Field.StringFormat.SingleLine };
+        public static readonly StringField CodexEffort = new(NpgsqlDbType.Varchar) { MaximumLength = 16, Required = false, Trim = true, Format = Enums.Field.StringFormat.SingleLine };
+        public static readonly LongField CodexTokens = new() { Minimum = 0, Maximum = 1_000_000_000_000 };
+        public static readonly IntField CodexWarnPercent = new() { Minimum = 1, Maximum = 100 };
     }
 }

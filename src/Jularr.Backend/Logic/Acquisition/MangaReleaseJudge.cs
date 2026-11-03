@@ -25,7 +25,7 @@ namespace Jularr.Backend.Logic.Acquisition
         [GeneratedRegex(@"(?<![a-z])v(?:ol(?:ume)?s?)?\.?\s?(\d{1,4})(?:\s?-\s?(?:v(?:ol(?:ume)?)?\.?\s?)?(?!(?:19|20)\d{2}(?!\d))(\d{1,4}))?(?!\d)", RegexOptions.IgnoreCase)]
         private static partial Regex Volumes();
 
-        [GeneratedRegex(@"(?<![a-z])(?:c|ch|chapter)\.?\s?\d{1,4}(?![a-z\d])", RegexOptions.IgnoreCase)]
+        [GeneratedRegex(@"(?<![a-z])(?:c|ch|chapter)\.?\s?(?<number>\d{1,4})(?![a-z\d])(?<more>\s?-\s?\d|\.\d)?", RegexOptions.IgnoreCase)]
         private static partial Regex Chapter();
 
         // Group and source tags in front of the series name.
@@ -87,6 +87,11 @@ namespace Jularr.Backend.Logic.Acquisition
         }
 
         // Manga names carry the series, a volume or range and the format; video fields stay empty.
+        // The one chapter a file name holds ("Chapter 12", "Ch. 12", "c012"); Marked without a number for a range or a part chapter such as 12.5.
+        public static (bool Marked, int? Number) ReadChapter(string name) => Chapter().Match(name) is { Success: true } match
+            ? (true, match.Groups["more"].Success ? null : int.Parse(match.Groups["number"].Value, CultureInfo.InvariantCulture))
+            : (false, null);
+
         public static ReleaseInfo Parse(string title)
         {
             var body = LeadingTags().Replace(title, "");

@@ -21,23 +21,75 @@ namespace Jularr.Integrations.Data.AniList
         public AniListFailure Failure { get; }
     }
 
-    // How AniList ranks a list; the newest only counts titles already out.
-    internal enum AniListRanking : byte
+    // AniList's orders of a list, as its search offers them.
+    internal enum AniListSort : byte
     {
         Trending,
+        Popularity,
         Score,
-        Newest
+        Favourites,
+        Added,
+        StartDate,
+        Title
+    }
+
+    // One name of the filter's lists: a tag (with its category) or a site.
+    internal sealed record AniListOption(int Id, string Name, string? Category, bool IsAdult);
+
+    internal sealed record AniListFilterOptions(IReadOnlyList<AniListOption> Tags, IReadOnlyList<AniListOption> AnimeSites, IReadOnlyList<AniListOption> MangaSites);
+
+    // A count from and up to, both included; either end may be open.
+    internal readonly record struct AniListRange(int? Minimum, int? Maximum);
+
+    // One ranked list: its order and what narrows it; a season needs its year.
+    internal sealed class AniListListQuery
+    {
+        public AniListListQuery(AniListSort sort, string? season = null, int? seasonYear = null, string? country = null)
+        {
+            Sort = sort;
+            Season = season;
+            SeasonYear = seasonYear;
+            Country = country;
+        }
+
+        public AniListSort Sort { get; }
+        // WINTER, SPRING, SUMMER or FALL.
+        public string? Season { get; }
+        public int? SeasonYear { get; }
+        // Two letters, KR for Korea.
+        public string? Country { get; }
+
+        // What Discover's filters narrow it by; an empty choice narrows nothing. Genres and tags must all match, the others any one.
+        public IReadOnlyList<string> Genres { get; init; } = [];
+        public IReadOnlyList<string> Tags { get; init; } = [];
+        public IReadOnlyList<string> Statuses { get; init; } = [];
+        public IReadOnlyList<string> Sources { get; init; } = [];
+        public IReadOnlyList<int> SiteIds { get; init; } = [];
+        // Years the title began in, both included.
+        public int? YearFrom { get; init; }
+        public int? YearTo { get; init; }
+        public AniListRange Episodes { get; init; }
+        public AniListRange Chapters { get; init; }
+        public AniListRange Volumes { get; init; }
+        // Minutes of one episode.
+        public AniListRange Duration { get; init; }
+        public bool IncludesAdult { get; init; }
     }
 
     // A title as the provider catalog keeps it: one entry of a page that walks AniList by id.
     internal sealed class AniListCatalogEntry
     {
         public AniListCatalogEntry(int id, string type, string? format, string title, string? originalTitle, DateOnly? releasedOn, int? year, string? description, string? coverUrl,
-            int? popularity, int? averageScore)
+            int? popularity, int? averageScore, int? favourites, string? country, string? season, int? seasonYear, AniListFacts facts)
         {
+            Favourites = favourites;
+            Country = country;
+            Season = season;
+            SeasonYear = seasonYear;
             Id = id;
             Type = type;
             Format = format;
+            Facts = facts;
             Title = title;
             OriginalTitle = originalTitle;
             ReleasedOn = releasedOn;
@@ -62,6 +114,47 @@ namespace Jularr.Integrations.Data.AniList
         public int? Popularity { get; }
         // On a scale of a hundred.
         public int? AverageScore { get; }
+        // How many AniList users made it a favourite.
+        public int? Favourites { get; }
+        // Two letters, KR for Korea.
+        public string? Country { get; }
+        // The anime season it began in, with its year.
+        public string? Season { get; }
+        public int? SeasonYear { get; }
+        public AniListFacts Facts { get; }
+    }
+
+    // What else AniList's search filters by, in AniList's own values.
+    internal sealed class AniListFacts
+    {
+        public AniListFacts(string? status, string? source, int? episodes, int? chapters, int? volumes, int? duration, IReadOnlyList<string> genres, IReadOnlyList<int> tagIds,
+            IReadOnlyList<int> siteIds, bool isAdult)
+        {
+            Status = status;
+            Source = source;
+            Episodes = episodes;
+            Chapters = chapters;
+            Volumes = volumes;
+            Duration = duration;
+            Genres = genres;
+            TagIds = tagIds;
+            SiteIds = siteIds;
+            IsAdult = isAdult;
+        }
+
+        // FINISHED, RELEASING, NOT_YET_RELEASED, CANCELLED or HIATUS.
+        public string? Status { get; }
+        public string? Source { get; }
+        public int? Episodes { get; }
+        public int? Chapters { get; }
+        public int? Volumes { get; }
+        // Minutes of one episode.
+        public int? Duration { get; }
+        public IReadOnlyList<string> Genres { get; }
+        public IReadOnlyList<int> TagIds { get; }
+        // The streaming or reading sites of its official links.
+        public IReadOnlyList<int> SiteIds { get; }
+        public bool IsAdult { get; }
     }
 
     internal enum AniListMediaType : byte

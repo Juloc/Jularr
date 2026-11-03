@@ -2,7 +2,8 @@ using System.Text.Encodings.Web;
 
 namespace Jularr.Frontend.Framework
 {
-    public sealed class MediaShelf(FrontendAssets assets, string titleKey, string? browseHref, IReadOnlyList<IUiComponent> cards) : IUiComponent
+    // The address of the shelf's next page, when its page script adds further cards at its end.
+    public sealed class MediaShelf(FrontendAssets assets, string titleKey, string? browseHref, IReadOnlyList<IUiComponent> cards, string? moreHref = null) : IUiComponent
     {
         public bool HasItems => cards.Count > 0;
 
@@ -20,10 +21,12 @@ namespace Jularr.Frontend.Framework
                     .Attribute("aria-label", texts["media.shelfNext"]).Attribute("hidden", "hidden")
             ).Class("media-shelf__controls"));
 
-            new Section(
+            var shelf = new Section(
                 new Div([.. heading]).Class("media-shelf__heading"),
                 new Div([.. cards]).Class("media-shelf__items").Attribute("tabindex", "0").Attribute("role", "region").Attribute("aria-label", texts[titleKey])
-            ).Class("media-shelf").WriteTo(writer, encoder, texts);
+            ).Class("media-shelf");
+            if (moreHref is not null) shelf.Attribute("data-shelf-more", moreHref);
+            shelf.WriteTo(writer, encoder, texts);
         }
     }
 }

@@ -11,12 +11,13 @@ namespace Jularr.Backend.Data.Admin.Media.V1
     // The library list: every filter that is left out lets all titles through.
     public sealed class ReadWorksParametersV1 : BaseParameters
     {
-        public ReadWorksParametersV1(int page = 1, int pageSize = 25, MediaType? mediaTypeId = null, bool? isMonitored = null, WorkListStatus? workListStatusId = null, long? libraryRootId = null,
-            long? acquisitionProfileId = null, string? query = null, WorkSortType workSortTypeId = WorkSortType.Title, bool isDescending = false)
+        public ReadWorksParametersV1(int page = 1, int pageSize = 25, MediaType[]? mediaTypeIds = null, MediaSubtype[]? mediaSubtypeIds = null, bool? isMonitored = null, WorkListStatus? workListStatusId = null,
+            long? libraryRootId = null, long? acquisitionProfileId = null, string? query = null, WorkSortType workSortTypeId = WorkSortType.Title, bool isDescending = false)
         {
             Page = page;
             PageSize = pageSize;
-            MediaTypeId = mediaTypeId;
+            MediaTypeIds = mediaTypeIds ?? [];
+            MediaSubtypeIds = mediaSubtypeIds ?? [];
             IsMonitored = isMonitored;
             WorkListStatusId = workListStatusId;
             LibraryRootId = libraryRootId;
@@ -29,8 +30,12 @@ namespace Jularr.Backend.Data.Admin.Media.V1
         public int Page { get; }
         public int PageSize { get; }
 
-        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId), false)]
-        public MediaType? MediaTypeId { get; }
+        // Types list their titles without subtype and subtypes list theirs across types; none lets every title through.
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeIds))]
+        public MediaType[] MediaTypeIds { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaSubtypeIds))]
+        public MediaSubtype[] MediaSubtypeIds { get; }
 
         // Monitored titles have a target that is not paused; the others have none or a paused one.
         [DataField(typeof(WorkListFields), nameof(WorkListFields.IsMonitoredFilter))]
@@ -136,8 +141,10 @@ namespace Jularr.Backend.Data.Admin.Media.V1
     // The numbers of the library list's filter chips and figures: every title that passes the type, library, profile and words of the list, by state.
     public sealed class WorksSummaryV1 : BaseResponse
     {
-        public WorksSummaryV1(int totalCount, int availableCount, int missingCount, int downloadingCount, int unmonitoredCount, int monitoredCount)
+        public WorksSummaryV1(int totalCount, int availableCount, int missingCount, int downloadingCount, int unmonitoredCount, int monitoredCount, int fileCount, long sizeBytes)
         {
+            FileCount = fileCount;
+            SizeBytes = sizeBytes;
             TotalCount = totalCount;
             AvailableCount = availableCount;
             MissingCount = missingCount;
@@ -163,6 +170,13 @@ namespace Jularr.Backend.Data.Admin.Media.V1
 
         [DataField(typeof(WorkListFields), nameof(WorkListFields.TitleCount))]
         public int MonitoredCount { get; }
+
+        // What the titles hold on disk together.
+        [DataField(typeof(WorkListFields), nameof(WorkListFields.FileCount))]
+        public int FileCount { get; }
+
+        [DataField(typeof(WorkListFields), nameof(WorkListFields.SizeBytes))]
+        public long SizeBytes { get; }
     }
 
     public sealed class WorkParametersV1 : BaseParameters

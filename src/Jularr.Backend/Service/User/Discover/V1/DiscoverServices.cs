@@ -39,9 +39,17 @@ namespace Jularr.Backend.Service.User.Discover.V1
         protected override async Task<IServiceOutput> OnExecute()
         {
             // Series have no truthful upcoming list.
-            if (Data.MediaTypeId is not (MediaType.Movie or MediaType.Series) || Data.MediaTypeId == MediaType.Series && Data.DiscoverFeedTypeId == DiscoverFeedType.Upcoming)
+            var scope = DiscoverScopes.All.FirstOrDefault(scope => !scope.IsCatalog && scope.MediaTypeId == Data.MediaTypeId);
+            if (scope is null || !scope.Feeds.Contains(Data.DiscoverFeedTypeId))
             {
                 throw new DataValidationException(nameof(ReadDiscoverFeedDataV1.DiscoverFeedTypeId), "unknown_catalog_value");
+            }
+
+            // Another order than the list's own is only Jularr's, of a whole catalog.
+            var sort = Data.DiscoverSortId == DiscoverScopes.OwnSort(Data.DiscoverFeedTypeId) ? null : Data.DiscoverSortId;
+            if (sort is { } chosen && !DiscoverScopes.LocalSorts.Contains(chosen))
+            {
+                throw new DataValidationException(nameof(ReadDiscoverFeedDataV1.DiscoverSortId), "unknown_catalog_value");
             }
 
             var list = new ExternalWorkListData(WorkMetadata.Namespace(Data.MediaTypeId), Data.MediaTypeId, null);
@@ -54,10 +62,14 @@ namespace Jularr.Backend.Service.User.Discover.V1
                 }
                 if ((await ctx.ReadWholeExternalWorkCatalogsAsync(ct)).Contains(list.Namespace))
                 {
-                    var shelf = new ExternalWorkShelfData(0, list.Namespace, Data.MediaTypeId, null, Data.DiscoverFeedTypeId);
+                    var shelf = new ExternalWorkShelfData(0, list.Namespace, Data.MediaTypeId, null, Data.DiscoverFeedTypeId, sort);
                     var rows = await ctx.ReadExternalWorkShelvesAsync(new ExternalWorkShelfQueryData([shelf], Auth.ProfileId!.Value,
                         DateOnly.FromDateTime(_time.GetUtcNow().UtcDateTime), (Data.Page - 1) * ExternalWorkLogic.ShelfSize), ct);
                     return (Keeps: true, Cached: (BaseDataList<DiscoverItemV1>?)new(rows.Select(row => DiscoverQueries.ToItem(Data.MediaTypeId, row)).ToArray()));
+                }
+                if (sort is not null)
+                {
+                    throw new DataValidationException(nameof(ReadDiscoverFeedDataV1.DiscoverSortId), "unknown_catalog_value");
                 }
                 var keeps = await ctx.KeepsDiscoverListsAsync(ct);
                 if (keeps)
@@ -353,7 +365,14 @@ namespace Jularr.Backend.Service.User.Discover.V1
         protected override ModuleRequirement GetInstanceModules(DiscoverParametersV1 parameters) => ModuleRequirement.All("Library");
         protected override ServicePermission GetPermission(DiscoverParametersV1 parameters, Type resultType) => new("profile.media.read");
 
-        protected override async Task<IServiceOutput> OnRead() => new BaseDataList<DiscoverScopeV1>(await DiscoverQueries.ReadScopesAsync(Context, Auth.ProfileId!.Value, CancellationToken));
+        // A whole catalog other than AniList's sorts by what it holds.
+        protected override async Task<IServiceOutput> OnRead()
+        {
+            var scopes = await DiscoverQueries.ReadScopesAsync(Context, Auth.ProfileId!.Value, CancellationToken);
+            var whole = await Context.ReadWholeExternalWorkCatalogsAsync(CancellationToken);
+            return new BaseDataList<DiscoverScopeV1>([.. scopes.Select(scope => scope.Sorts.Length > 0 || scope.Feeds.Length == 0 || !whole.Contains(DiscoverScopes.Namespace(scope)) ? scope
+                : new DiscoverScopeV1(scope.Slug, scope.MediaTypeId, scope.MediaSubtypeId, scope.IsCatalog, scope.Feeds, scope.FeedSorts, [.. DiscoverScopes.LocalSorts]))]);
+        }
     }
 
     // The start page's shelves of whole catalogs, all in one statement; scopes of other catalogs keep their own feeds.
@@ -418,10 +437,10 @@ namespace Jularr.Backend.Service.User.Discover.V1
             if (scopes.Length == 0) return new BaseDataList<DiscoverSuggestionV1>([]);
 
             var query = new ExternalWorkSuggestionQueryData([.. scopes.Select((scope, index) => new ExternalWorkShelfData(index, DiscoverScopes.Namespace(scope), scope.MediaTypeId,
-                scope.MediaSubtypeId))], Auth.ProfileId!.Value, terms, ExternalWorkLogic.TitlePrefix(text), ExternalWorkLogic.SuggestionCount);
+                scope.MediaSubtypeId))], Auth.ProfileId!.Value, terms, text.ToLowerInvariant(), ExternalWorkLogic.TitlePrefix(text), ExternalWorkLogic.SuggestionsPerType);
             var rows = await Context.ExecuteBatchAsync((ctx, ct) => ctx.SuggestExternalWorksAsync(query, ct), CancellationToken, mode: SqlAccessMode.ReadOnly);
             return new BaseDataList<DiscoverSuggestionV1>([.. rows.Select(row => new DiscoverSuggestionV1(scopes[row.Shelf].Slug, row.Namespace, row.Value, row.Title, row.ReleaseYear,
-                row.ImageUrl, row.WorkId))]);
+                row.ImageUrl, row.WorkId, row.MediaStateTypeId, row.Genre, row.Rating))]);
         }
     }
 
@@ -474,18 +493,35 @@ namespace Jularr.Backend.Service.User.Discover.V1
 
         protected override async Task<IServiceOutput> OnExecute()
         {
+            // The top 100 ends after its hundredth title.
+            if (Data.DiscoverFeedTypeId == DiscoverFeedType.Top100 && Data.Page > DiscoverScopes.Top100Pages)
+            {
+                return new BaseDataList<DiscoverCatalogItemV1>([]);
+            }
+
+            // AniList orders its lists every way; another catalog only when Jularr holds it whole.
+            var scope = DiscoverScopes.All.FirstOrDefault(scope => scope.MediaTypeId == Data.MediaTypeId && scope.MediaSubtypeId == Data.MediaSubtypeId);
+            var sort = Data.DiscoverSortId == DiscoverScopes.OwnSort(Data.DiscoverFeedTypeId) ? null : Data.DiscoverSortId;
+            if (sort is { } chosen && !(DiscoverScopes.IsAniList(Data.MediaSubtypeId) ? DiscoverScopes.AniListSorts : DiscoverScopes.LocalSorts).Contains(chosen))
+            {
+                throw new DataValidationException(nameof(ReadDiscoverCatalogFeedDataV1.DiscoverSortId), "unknown_catalog_value");
+            }
+
             var cached = await Context.ExecuteBatchAsync(async (ctx, ct) =>
             {
                 await DiscoverQueries.RequireCatalogTypeInBatchAsync(ctx, Data.MediaTypeId, Data.MediaSubtypeId, Auth.ProfileId!.Value, ct);
-                var scope = DiscoverScopes.All.FirstOrDefault(scope => scope.MediaTypeId == Data.MediaTypeId && scope.MediaSubtypeId == Data.MediaSubtypeId);
                 if (scope is not null && scope.Feeds.Contains(Data.DiscoverFeedTypeId) && (await ctx.ReadWholeExternalWorkCatalogsAsync(ct)).Contains(DiscoverScopes.Namespace(scope)))
                 {
-                    var shelf = new ExternalWorkShelfData(0, DiscoverScopes.Namespace(scope), Data.MediaTypeId, Data.MediaSubtypeId, Data.DiscoverFeedTypeId);
+                    var shelf = new ExternalWorkShelfData(0, DiscoverScopes.Namespace(scope), Data.MediaTypeId, Data.MediaSubtypeId, Data.DiscoverFeedTypeId, sort);
                     var rows = await ctx.ReadExternalWorkShelvesAsync(new ExternalWorkShelfQueryData([shelf], Auth.ProfileId!.Value,
-                        DateOnly.FromDateTime(_time.GetUtcNow().UtcDateTime)), ct);
+                        DateOnly.FromDateTime(_time.GetUtcNow().UtcDateTime), (Data.Page - 1) * ExternalWorkLogic.ShelfSize), ct);
                     return new BaseDataList<DiscoverCatalogItemV1>([.. rows.Select(DiscoverQueries.CatalogItem)]);
                 }
-                var items = await _catalog.ReadCachedFeedInBatchAsync(ctx, Data.MediaTypeId, Data.MediaSubtypeId, Data.DiscoverFeedTypeId, ct);
+                if (sort is not null)
+                {
+                    return null;
+                }
+                var items = await _catalog.ReadCachedFeedInBatchAsync(ctx, Data.MediaTypeId, Data.MediaSubtypeId, Data.DiscoverFeedTypeId, Data.Page, ct);
                 return items is null ? null : await DiscoverQueries.CatalogItemsInBatchAsync(ctx, items, Auth.ProfileId!.Value, ct);
             }, CancellationToken, mode: SqlAccessMode.ReadOnly);
             if (cached is not null)
@@ -493,7 +529,13 @@ namespace Jularr.Backend.Service.User.Discover.V1
                 return cached;
             }
 
-            var works = await _catalog.ReadFeedAsync(Context, Data.MediaTypeId, Data.MediaSubtypeId, Data.DiscoverFeedTypeId, CancellationToken);
+            // Open Library's trends have no other order.
+            if (sort is not null && !DiscoverScopes.IsAniList(Data.MediaSubtypeId))
+            {
+                throw new DataValidationException(nameof(ReadDiscoverCatalogFeedDataV1.DiscoverSortId), "unknown_catalog_value");
+            }
+
+            var works = await _catalog.ReadFeedAsync(Context, Data.MediaTypeId, Data.MediaSubtypeId, Data.DiscoverFeedTypeId, Data.Page, sort, CancellationToken);
             return await DiscoverQueries.CatalogItemsAsync(Context, works, Auth.ProfileId!.Value, CancellationToken);
         }
     }
@@ -549,7 +591,7 @@ namespace Jularr.Backend.Service.User.Discover.V1
             @namespace is "tmdb_movie" or "tmdb_tv" && int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var id) ? id : null;
 
         public static DiscoverCatalogItemV1 CatalogItem(ExternalWorkShelfItemData work) => new(work.Namespace, work.Value, work.Title, work.ReleaseYear, work.Creator, work.WorkId, work.ImageUrl, work.Rating,
-            work.MediaStateTypeId ?? MediaStateType.NotRequested);
+            work.MediaStateTypeId ?? MediaStateType.NotRequested, catalogFormatId: work.CatalogFormatId);
 
         // Films and series are discovered through TMDB's lists, series as TheTVDB's; anime series and the other types through their catalogs.
         public static Task RequireCatalogTypeAsync(LogicContext context, MediaType mediaType, MediaSubtype? subtype, long profileId, CancellationToken ct) =>
@@ -645,7 +687,7 @@ namespace Jularr.Backend.Service.User.Discover.V1
             {
                 var state = states.GetValueOrDefault(ids[index]);
                 return new DiscoverCatalogItemV1(work.Namespace, work.Value, work.Title, work.ReleaseYear, work.Creator, ids[index], state?.PosterUrl ?? work.ImageUrl, work.Rating,
-                    state?.MediaStateTypeId ?? MediaStateType.NotRequested, work.SeasonNumber);
+                    state?.MediaStateTypeId ?? MediaStateType.NotRequested, work.SeasonNumber, state?.CatalogFormatId ?? work.CatalogFormatId);
             })]);
         }
 
@@ -700,7 +742,8 @@ namespace Jularr.Backend.Service.User.Discover.V1
                         ORDER BY
                             fact."IsManual" DESC
                         LIMIT 1
-                    ) AS "BackdropUrl"
+                    ) AS "BackdropUrl",
+                    (SELECT work."CatalogFormatId" FROM "Works" AS work WHERE work."Id" = visible."WorkId") AS "CatalogFormatId"
                 FROM
                     (
                         SELECT

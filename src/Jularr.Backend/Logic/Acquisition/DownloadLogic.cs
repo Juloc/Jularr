@@ -1,6 +1,7 @@
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Enums.Library;
+using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Enums.Notification;
 using Jularr.Backend.Data.Enums.Operation;
 using Jularr.Backend.Data.Logic.Acquisition;
@@ -694,16 +695,16 @@ namespace Jularr.Backend.Logic.Acquisition
             return ctx.ReadSql.ReadListAsync<UnitStateData>(sql, ct);
         }
 
-        public static Task<IReadOnlyList<UnitStateData>> ReadVolumeStatesAsync(this LogicContext ctx, long wantedItemId, CancellationToken ct)
+        public static Task<IReadOnlyList<UnitStateData>> ReadBookUnitStatesAsync(this LogicContext ctx, long wantedItemId, WorkUnitType unitType, CancellationToken ct)
         {
-            // Every whole volume of a book, monitored or not, and whether a present file holds it.
+            // Every whole volume of a book, or every whole chapter with the volume it belongs to, monitored or not, and whether a present file holds it.
             var sql = new SqlStatement();
             sql.Statement =
                 """
                 SELECT
                     unit."Id" AS "WorkUnitId",
                     unit."Title",
-                    NULL::integer AS "ParentNumber",
+                    parent."Number"::integer AS "ParentNumber",
                     unit."Number"::integer AS "Number",
                     TRUE AS "IsAvailable",
                     EXISTS (
@@ -723,15 +724,17 @@ namespace Jularr.Backend.Logic.Acquisition
                 FROM
                     "WantedItems" AS wanted
                     JOIN "WorkUnits" AS unit ON unit."WorkId" = wanted."WorkId"
+                    LEFT JOIN "WorkUnits" AS parent ON parent."Id" = unit."ParentWorkUnitId"
                 WHERE
                     wanted."Id" = @WantedItemId
-                    AND unit."WorkUnitTypeId" = 3
-                    AND unit."ParentWorkUnitId" IS NULL
+                    AND unit."WorkUnitTypeId" = @WorkUnitTypeId
+                    AND (unit."WorkUnitTypeId" = 4 OR unit."ParentWorkUnitId" IS NULL)
                     AND unit."Number" = trunc(unit."Number")
+                    AND (parent."Number" IS NULL OR parent."Number" = trunc(parent."Number"))
                 ORDER BY
                     unit."Number";
                 """;
-            sql.Parameters.Add(new WantedItemParameters(wantedItemId));
+            sql.Parameters.Add(new WantedUnitTypeParameters(wantedItemId, unitType));
             return ctx.ReadSql.ReadListAsync<UnitStateData>(sql, ct);
         }
 

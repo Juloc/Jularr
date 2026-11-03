@@ -1,3 +1,5 @@
+@use "../../../Framework/Components/HitArea";
+
 // The Jobs page's part of the list kit: the grid of its columns at three widths, and the history block.
 
 .jobs-list {
@@ -12,7 +14,7 @@
     gap: 12px;
 
     h2 { margin: 0; }
-    a:not(.button) { justify-self: start; color: var(--accent-text); font-size: var(--text-control); font-weight: 700; text-decoration: none; &:hover { text-decoration: underline; } }
+    a:not(.button) { justify-self: start; color: var(--accent-text); font-size: var(--text-control); font-weight: 700; text-decoration: none; &:hover { text-decoration: underline; } @include HitArea.phone-hit-area(8px, 26px, $border: 0px); }
 }
 
 .jobs-history {

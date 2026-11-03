@@ -10,10 +10,11 @@ namespace Jularr.Backend.Data.Admin.Media.V1
 {
     public sealed class QueueWorksSearchDataV1 : BaseData
     {
-        public QueueWorksSearchDataV1(long[]? workIds = null, MediaType? mediaTypeId = null, bool? isMonitored = null, WorkListStatus? workListStatusId = null, long? libraryRootId = null, long? acquisitionProfileId = null, string? query = null)
+        public QueueWorksSearchDataV1(long[]? workIds = null, MediaType[]? mediaTypeIds = null, MediaSubtype[]? mediaSubtypeIds = null, bool? isMonitored = null, WorkListStatus? workListStatusId = null, long? libraryRootId = null, long? acquisitionProfileId = null, string? query = null)
         {
             WorkIds = workIds;
-            MediaTypeId = mediaTypeId;
+            MediaTypeIds = mediaTypeIds ?? [];
+            MediaSubtypeIds = mediaSubtypeIds ?? [];
             IsMonitored = isMonitored;
             WorkListStatusId = workListStatusId;
             LibraryRootId = libraryRootId;
@@ -24,8 +25,12 @@ namespace Jularr.Backend.Data.Admin.Media.V1
         [DataField(typeof(SearchRunFields), nameof(SearchRunFields.WorkIds))]
         public long[]? WorkIds { get; }
 
-        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId), false)]
-        public MediaType? MediaTypeId { get; }
+        // Types list their titles without subtype and subtypes list theirs across types; none lets every title through.
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeIds))]
+        public MediaType[] MediaTypeIds { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaSubtypeIds))]
+        public MediaSubtype[] MediaSubtypeIds { get; }
 
         [DataField(typeof(WorkListFields), nameof(WorkListFields.IsMonitoredFilter))]
         public bool? IsMonitored { get; }

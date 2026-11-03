@@ -58,15 +58,14 @@ namespace Jularr.E2E.Tests
                 await Assertions.Expect(page).ToHaveURLAsync(new Regex("availability=request"));
                 await Assertions.Expect(page.Locator("button[data-drawer-pane=filter] .capsule-bar__badge")).ToHaveTextAsync("1");
 
-                // The sort reorders every list; the layout toggle wraps the shelves and is remembered on the device.
-                await page.Locator("select.choice-select__control").SelectOptionAsync("az");
-                await Assertions.Expect(page).ToHaveURLAsync(new Regex("sort=az"));
+                // Shelves keep their lists' order, only a ranking's grid sorts; the layout toggle wraps the shelves and is remembered on the device.
+                await Assertions.Expect(page.Locator("select[name=sort]")).ToHaveCountAsync(0);
                 await page.Locator("[data-discover-layout]").ClickAsync();
                 await Assertions.Expect(page.Locator("html")).ToHaveAttributeAsync("data-discover-layout", "grid");
 
                 // One highlight per type leaves one slide for each of the two types: the films read whole, the series from Discover's series list.
                 await page.Locator("button[data-drawer-pane=view]").ClickAsync();
-                await page.Locator("#discover-panel .choice-group__item", new() { HasText = "1 title" }).ClickAsync();
+                await page.Locator("#discover-panel .choice-group__item", new() { HasTextRegex = new Regex("^1$") }).ClickAsync();
                 await Assertions.Expect(page.Locator(".hero-carousel__counter")).ToHaveTextAsync("1 / 2");
                 await Evidence.SaveAsync(page, "discover-layout");
             }
@@ -88,7 +87,7 @@ namespace Jularr.E2E.Tests
 
             try
             {
-                // The media types come first, then the local availability, then the release year and the rankings the chosen types have.
+                // The media types come first, then the local availability, then the type's filters (the year range) and the rankings the chosen types have.
                 await page.GotoAsync("/?type=movies");
                 await page.Locator("button[data-drawer-pane=filter]").ClickAsync();
                 var drawer = page.Locator("#discover-panel");
@@ -96,7 +95,7 @@ namespace Jularr.E2E.Tests
                 async Task<float> TopAsync(ILocator element) => (await element.BoundingBoxAsync())!.Y;
                 var types = await TopAsync(drawer.Locator(".drawer__section").First);
                 var availability = await TopAsync(drawer.Locator(".choice-group").Filter(new() { Has = page.Locator("input[name=availability]") }));
-                var year = await TopAsync(drawer.Locator(".choice-group").Filter(new() { Has = page.Locator("input[name=year]") }));
+                var year = await TopAsync(drawer.Locator(".discover-range").Filter(new() { Has = page.Locator("input[name=yearFrom]") }));
                 var rankings = drawer.Locator(".choice-group").Filter(new() { Has = page.Locator("input[name=feed]") });
                 Assert.IsTrue(types < availability && availability < year && year < await TopAsync(rankings), $"{types} {availability} {year}");
                 await Assertions.Expect(rankings.GetByText("Upcoming", new() { Exact = true })).ToBeVisibleAsync();

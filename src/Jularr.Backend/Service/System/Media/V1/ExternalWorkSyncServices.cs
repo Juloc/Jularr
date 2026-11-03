@@ -106,7 +106,7 @@ namespace Jularr.Backend.Service.System.Media.V1
                 bool more;
                 try
                 {
-                    (entries, more) = await _aniList.ReadCatalogPageAsync(cursor, CancellationToken);
+                    (entries, cursor, more) = await _aniList.ReadCatalogPageAsync(cursor, CancellationToken);
                 }
                 catch (ServiceUnavailableException)
                 {
@@ -114,8 +114,7 @@ namespace Jularr.Backend.Service.System.Media.V1
                 }
 
                 changed += await KeepAniListAsync(entries);
-                if (entries.Count > 0) cursor = entries.Max(entry => entry.Id);
-                if (!more || entries.Count == 0)
+                if (!more)
                 {
                     complete = true;
                     break;
@@ -155,7 +154,21 @@ namespace Jularr.Backend.Service.System.Media.V1
                     // AniList shows no vote count; how many people list a title stands for it.
                     Votes = item.entry.Popularity,
                     ImdbId = (string?)null,
-                    IsAdult = false
+                    item.entry.Facts.IsAdult,
+                    CountryOfOrigin = item.entry.Country,
+                    item.entry.Favourites,
+                    Season = DiscoverScopes.SeasonNumber(item.entry.Season),
+                    item.entry.SeasonYear,
+                    FormatId = CatalogFactValues.Value(CatalogFactValues.AniListFormats, item.entry.Format),
+                    StatusId = CatalogFactValues.Value(CatalogFactValues.AniListStatuses, item.entry.Facts.Status),
+                    SourceId = CatalogFactValues.Value(CatalogFactValues.AniListSources, item.entry.Facts.Source),
+                    item.entry.Facts.Episodes,
+                    item.entry.Facts.Chapters,
+                    item.entry.Facts.Volumes,
+                    DurationMinutes = item.entry.Facts.Duration,
+                    GenreIds = CatalogFactValues.Genres(item.entry.Facts.Genres),
+                    item.entry.Facts.TagIds,
+                    item.entry.Facts.SiteIds
                 }));
                 changed += await Context.ExecuteBatchAsync(async (ctx, ct) =>
                 {
@@ -229,7 +242,13 @@ namespace Jularr.Backend.Service.System.Media.V1
                 Rating = entry.VoteAverage is > 0 ? entry.VoteAverage : null,
                 Votes = entry.VoteCount,
                 entry.ImdbId,
-                entry.IsAdult
+                entry.IsAdult,
+                StatusId = CatalogFactValues.TmdbStatus(entry.Status),
+                CountryOfOrigin = entry.Country,
+                entry.Episodes,
+                DurationMinutes = entry.Runtime,
+                GenreIds = CatalogFactValues.Genres(entry.GenreIds),
+                SiteIds = entry.ProviderIds
             }));
             return (await Context.ExecuteBatchAsync((ctx, ct) => ctx.DetailExternalWorksAsync(new ExternalWorkEntriesData(list, rows, [.. gone]), ct), CancellationToken), false);
         }

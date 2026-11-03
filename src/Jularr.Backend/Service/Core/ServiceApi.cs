@@ -19,6 +19,7 @@ using Jularr.Integrations.Logic.AniBridge;
 using Jularr.Integrations.Logic.AniList;
 using Jularr.Integrations.Logic.AnnasArchive;
 using Jularr.Integrations.Logic.Browser;
+using Jularr.Integrations.Logic.Codex;
 using Jularr.Integrations.Logic.Igdb;
 using Jularr.Integrations.Logic.Libretro;
 using Jularr.Integrations.Logic.MusicBrainz;
@@ -156,6 +157,7 @@ namespace Jularr.Backend.Service.Core
             services.AddSingleton(new JxlEncoder { ExecutablePath = Executables.Resolve(configuration["Media:CjxlPath"], "cjxl") });
             services.AddHostedService<JxlStartupCheck>();
             services.AddSingleton(new AudioFingerprinter { ExecutablePath = Executables.Resolve(configuration["Media:FpcalcPath"], "fpcalc") });
+            services.AddSingleton(new CodexConnection(new CodexCli { ExecutablePath = Executables.Resolve(configuration["Ai:CodexPath"], "codex"), HomePath = Folder(configuration["Ai:CodexHome"], "codex") }));
             services.AddSingleton(new ArchiveTools
             {
                 Par2Path = Executables.Resolve(configuration["Usenet:Par2Path"], "par2"),
