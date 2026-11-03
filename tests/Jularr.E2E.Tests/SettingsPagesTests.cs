@@ -200,5 +200,32 @@ namespace Jularr.E2E.Tests
             await Assertions.Expect(page.Locator("[data-save-pill]")).ToContainTextAsync("1 change");
             await Evidence.SaveAsync(page, "naming-page");
         }
+
+        [TestMethod]
+        public async Task Naming_MediaTypeBar_NarrowsThePanelsAndTheLibraryOverviewHasIt()
+        {
+            await using var jularr = await JularrInstance.StartAsync();
+            await using var browser = await BrowserSession.StartAsync(jularr);
+            var page = browser.Page;
+            await Owner.SetUpAndSignInAsync(page);
+            await page.GotoAsync("/Admin/Instance/Naming");
+            var patterns = page.Locator("form[data-form-kind$=UpdateNamingPatternDataV1]");
+            var all = await patterns.CountAsync();
+            Assert.IsTrue(all > 1, "Every media type has a naming pattern.");
+            await Assertions.Expect(page.Locator(".capsule-bar")).ToBeVisibleAsync();
+
+            // A type of the bar leaves only its own pattern; its address keeps the choice.
+            await page.Locator(".capsule-group__item", new() { HasTextString = "Music" }).ClickAsync();
+            await Assertions.Expect(page).ToHaveURLAsync(new System.Text.RegularExpressions.Regex("type=music"));
+            await Assertions.Expect(patterns).ToHaveCountAsync(1);
+
+            // The overview of the libraries has the same bar.
+            await page.GotoAsync("/Admin/Library?type=music");
+            await Assertions.Expect(page.Locator(".capsule-bar")).ToBeVisibleAsync();
+
+            // The administration's request list too, with its status tabs beneath the bar.
+            await page.GotoAsync("/Admin/Requests?type=music");
+            await Assertions.Expect(page.Locator(".capsule-bar")).ToBeVisibleAsync();
+        }
     }
 }

@@ -1,3 +1,5 @@
+@use "../../../Framework/Components/CapsuleBar";
+
 // The requests on the list kit: the grid of its columns at three widths and the live status of a row.
 .requests-list {
     --list-columns: minmax(230px, 2.4fr) minmax(170px, 1.3fr) minmax(100px, .9fr) minmax(150px, .9fr) minmax(130px, 1fr) minmax(210px, 1.3fr);
