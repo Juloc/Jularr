@@ -12,6 +12,15 @@ namespace Jularr.E2E.Tests
             case "$1" in
               --version) echo "codex-cli 0.166.0" ;;
               logout) rm -f "$CODEX_HOME/auth" ;;
+              app-server)
+                while IFS= read -r line; do
+                  id=$(printf '%s' "$line" | sed -n 's/.*"id":\([0-9]*\).*/\1/p')
+                  case "$line" in
+                    *'"method":"initialize"'*) printf '{"id":%s,"result":{"userAgent":"codex"}}\n' "$id" ;;
+                    *'"method":"model/list"'*) printf '{"id":%s,"result":{"data":[{"model":"gpt-one","displayName":"GPT One","supportedReasoningEfforts":[{"reasoningEffort":"low"},{"reasoningEffort":"medium"},{"reasoningEffort":"high"}],"isDefault":true},{"model":"gpt-two","displayName":"GPT Two","supportedReasoningEfforts":[{"reasoningEffort":"low"},{"reasoningEffort":"high"}]}],"nextCursor":null}}\n' "$id" ;;
+                    *'"method":"account/rateLimits/read"'*) printf '{"id":%s,"result":{"rateLimits":{"limitId":"codex","planType":"plus","primary":{"usedPercent":42,"windowDurationMins":300,"resetsAt":1900000000},"secondary":{"usedPercent":8,"windowDurationMins":10080,"resetsAt":1900300000}}}}\n' "$id" ;;
+                  esac
+                done ;;
               login)
                 case "$2" in
                   status) if [ -f "$CODEX_HOME/auth" ]; then echo "Logged in using ChatGPT"; else echo "Not logged in"; exit 1; fi ;;
@@ -59,6 +68,27 @@ namespace Jularr.E2E.Tests
                 File.WriteAllText(Path.Combine(home, "approve"), "");
                 await Assertions.Expect(card.Locator(".state-chip")).ToHaveTextAsync("Connected", new() { Timeout = 15_000 });
                 await Assertions.Expect(card.GetByText("ChatGPT account", new() { Exact = true })).ToBeVisibleAsync();
+
+                // Connected: the plan usage and the Owner's choices follow, and a saved choice is still there after a reload.
+                await Assertions.Expect(page.Locator("#codex-usage")).ToContainTextAsync("42 %");
+                await Assertions.Expect(page.Locator("#codex-usage")).ToContainTextAsync("Weekly window");
+                var settings = page.Locator("#codex-settings");
+                await settings.Locator("select[name=Model]").SelectOptionAsync("gpt-two");
+                await settings.Locator("select[name=Effort]").SelectOptionAsync("high");
+                await settings.Locator("select[name=FallbackModel]").SelectOptionAsync("gpt-one");
+                await settings.Locator("input[name=DailyTokens]").FillAsync("500000");
+                await settings.Locator("input[name=RunTokens]").FillAsync("100000");
+                var response = page.WaitForResponseAsync(reply => reply.Url.Contains("handler=Settings", StringComparison.Ordinal) && reply.Request.Method == "POST");
+                await page.Locator("[data-save-pill]").GetByRole(AriaRole.Button, new() { Name = "Save changes", Exact = true }).ClickAsync();
+                await response;
+                await page.ReloadAsync();
+                await Assertions.Expect(page.Locator("#codex-settings select[name=Model]")).ToHaveValueAsync("gpt-two");
+                await Assertions.Expect(page.Locator("#codex-settings input[name=DailyTokens]")).ToHaveValueAsync("500000");
+
+                // A run limit above the daily one is refused and says why.
+                await settings.Locator("input[name=RunTokens]").FillAsync("900000");
+                await page.Locator("[data-save-pill]").GetByRole(AriaRole.Button, new() { Name = "Save changes", Exact = true }).ClickAsync();
+                await Assertions.Expect(page.Locator("#codex-settings")).ToContainTextAsync("cannot be higher than the daily limit");
 
                 // Disconnect asks first; Cancel keeps the connection, confirming removes it.
                 await card.GetByRole(AriaRole.Button, new() { Name = "Disconnect" }).ClickAsync();

@@ -1,6 +1,7 @@
 import { onPage } from "../../../Modules/Navigation/PageSwap";
 
-// A login that waits for the person: the page asks for the card again every three seconds while it is shown and swaps it once the state changed.
+// A login that waits for the person: the page asks for the card again every three seconds while it is shown and reloads once the state changed, so the cards
+// that belong to a connection (usage, settings) come and go with it.
 const Interval = 3000;
 let polling = false;
 
@@ -18,7 +19,11 @@ async function poll(): Promise<void> {
                 const template = document.createElement("template");
                 template.innerHTML = (await response.text()).trim();
                 const next = template.content.firstElementChild;
-                if (next?.id === "codex-card" && next.getAttribute("data-codex-phase") !== current.getAttribute("data-codex-phase")) current.replaceWith(next);
+                if (next?.id === "codex-card" && next.getAttribute("data-codex-phase") !== current.getAttribute("data-codex-phase")) {
+                    polling = false;
+                    location.reload();
+                    return;
+                }
             }
         } catch {
             // The next round tries again.

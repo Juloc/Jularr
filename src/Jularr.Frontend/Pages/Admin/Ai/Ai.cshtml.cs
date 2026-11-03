@@ -8,24 +8,36 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Jularr.Frontend.Pages.Admin.Ai
 {
-    // The instance's one Codex connection as a card: its state, and Connect with the address and code while a login waits, Cancel, Disconnect.
-    public sealed class AiModel(ReadCodexConnectionV1 read, StartCodexLoginV1 start, CancelCodexLoginV1 cancel, LogoutCodexV1 logout, FrontendAssets assets, IAntiforgery antiforgery,
-        UiText texts) : JularrPage
+    // The instance's one Codex connection as a card: its state, and Connect with the address and code while a login waits, Cancel, Disconnect. Once connected, the plan's usage
+    // and the Owner's choices (model, effort, fallback, token limits) follow as cards.
+    public sealed class AiModel(ReadCodexConnectionV1 read, StartCodexLoginV1 start, CancelCodexLoginV1 cancel, LogoutCodexV1 logout, ReadCodexCatalogV1 readCatalog, ReadCodexSettingsV1 readSettings,
+        SaveCodexSettingsV1 saveSettings, FrontendAssets assets, IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         private const string Address = "/Admin/Ai";
         private const string DisconnectDialog = "codex-disconnect";
         private CodexConnectionV1? _connection;
+        private CodexCatalogV1? _catalog;
+        private CodexSettingsV1? _settings;
+        private CodexSettingsDataV1? _entered;
 
         protected override void Define(Page page)
         {
             page.Title("admin.ai.title");
             page.Navigation("nav.admin");
             page.Asset("Framework/Components/Modal.entry.ts");
+            page.Asset("Pages/Admin/Ai/Ai.entry.scss");
             page.Asset("Pages/Admin/Ai/Ai.entry.ts");
             if (_connection is null) return;
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
 
-            page.Content.Add(new CardGrid(Card(_connection, csrf)));
+            var cards = new List<IUiComponent> { Card(_connection, csrf) };
+            if (_connection.Phase == CodexPhase.Connected && _catalog is not null && _settings is not null)
+            {
+                if (_catalog.Windows.Length > 0) cards.Add(UsageCard(_catalog));
+                cards.Add(SettingsCard(_catalog, _settings, csrf));
+            }
+
+            page.Content.Add(new CardGrid([.. cards]));
             page.Content.Add(Modal.Confirm(assets, DisconnectDialog, "admin.ai.disconnectTitle", "admin.ai.disconnect", Address + "?handler=Logout", csrf, new CodexConnectionParametersV1()));
         }
 
@@ -80,6 +92,53 @@ namespace Jularr.Frontend.Pages.Admin.Ai
             return card;
         }
 
+        // The ChatGPT plan's windows as bars with the time they start over.
+        private IUiComponent UsageCard(CodexCatalogV1 catalog)
+        {
+            var windows = catalog.Windows.Select(window =>
+            {
+                var percent = Math.Round(window.UsedPercent).ToString(CultureInfo.InvariantCulture);
+                var parts = new List<IUiComponent>
+                {
+                    new Div(new Span(new Text(window.Minutes is null or < 7 * 24 * 60 ? "admin.ai.windowShort" : "admin.ai.windowWeek")).Class("codex-window__label"),
+                        new Span(new ValueText(percent + " %")).Class("codex-window__percent")).Class("codex-window__head"),
+                    new Progress().Attribute("max", "100").Attribute("value", percent).TextAttribute("aria-label", "admin.ai.usage")
+                };
+                if (window.ResetsAt is { } reset) parts.Add(new Span(new Text("admin.ai.resets"), new ValueText(" "), new LocalTime(reset.UtcDateTime)).Class("codex-window__reset"));
+                return (IUiComponent)new Div([.. parts]).Class("codex-window");
+            });
+            var plan = catalog.Plan is { Length: > 0 } name ? char.ToUpperInvariant(name[0]) + name[1..] : texts["admin.ai.usageLine"];
+            return new FeatureCard(new IconTile(new Icon("pulse", assets, 18), UiTone.Accent), texts["admin.ai.usage"], plan, null, [new Div([.. windows]).Class("codex-windows")], [], null, "codex-usage").Wide();
+        }
+
+        // The Owner's choices: they apply to everything Codex translates.
+        private IUiComponent SettingsCard(CodexCatalogV1 catalog, CodexSettingsV1 saved, string? csrf)
+        {
+            var entered = _entered ?? new CodexSettingsDataV1(saved.Model, saved.Effort, saved.FallbackModel, saved.DailyTokens, saved.RunTokens, saved.WarnPercent);
+            var efforts = catalog.Models.SelectMany(model => model.Efforts).Distinct().Select(effort => new SelectOption(effort, texts.Has("admin.ai.effort." + effort) ? texts["admin.ai.effort." + effort] : effort));
+            var body = new List<IUiComponent>();
+            if (!catalog.Available) body.Add(new P(new Text("admin.ai.catalogUnavailable")).Class("feature-card__note").Attribute("role", "status"));
+            body.Add(new Form<CodexSettingsDataV1>(form =>
+            {
+                form.Select(item => item.Model, "admin.ai.model", ModelOptions(catalog, entered.Model));
+                form.Select(item => item.Effort, "admin.ai.effort", [new SelectOption("", texts["admin.ai.codexDefault"]), .. efforts]);
+                form.Select(item => item.FallbackModel, "admin.ai.fallback", ModelOptions(catalog, entered.FallbackModel, "admin.ai.noFallback"), new FieldHelp(Info: "admin.ai.fallbackHint"));
+                form.Number(item => item.DailyTokens, "admin.ai.dailyTokens", new FieldHelp(Info: "admin.ai.limitHint"));
+                form.Number(item => item.RunTokens, "admin.ai.runTokens");
+                form.Number(item => item.WarnPercent, "admin.ai.warnPercent");
+                form.Save();
+            }, Address + "?handler=Settings", csrf, entered, _entered is null ? null : FormError));
+            return new FeatureCard(new IconTile(new Icon("settings", assets, 18), UiTone.Accent), texts["admin.ai.settings"], texts["admin.ai.settingsLine"], null, body, [], null, "codex-settings").Wide();
+        }
+
+        // The account's models, with the saved one kept visible when the account no longer offers it.
+        private IEnumerable<SelectOption> ModelOptions(CodexCatalogV1 catalog, string? chosen, string noneKey = "admin.ai.codexDefault")
+        {
+            yield return new SelectOption("", texts[noneKey]);
+            foreach (var model in catalog.Models) yield return new SelectOption(model.Id, model.Name);
+            if (!string.IsNullOrEmpty(chosen) && catalog.Models.All(model => model.Id != chosen)) yield return new SelectOption(chosen, chosen + " (" + texts["admin.ai.notOffered"] + ")");
+        }
+
         private static IUiComponent Post(string handler, string? csrf, IUiComponent button) => new PostForm(Address + "?handler=" + handler, csrf, [], button);
 
         public async Task<IActionResult> OnGetAsync()
@@ -116,6 +175,14 @@ namespace Jularr.Frontend.Pages.Admin.Ai
             return Page();
         }
 
+        public async Task<IActionResult> OnPostSettingsAsync(string? model, string? effort, string? fallbackModel, long? dailyTokens, long? runTokens, int? warnPercent)
+        {
+            _entered = new CodexSettingsDataV1(model, effort, fallbackModel, dailyTokens ?? 0, runTokens ?? 0, warnPercent ?? 80);
+            await saveSettings.ExecuteAsync<UpdateResult>(new CodexConnectionParametersV1(), _entered, HttpContext.RequestAborted);
+            Hint("admin.ai.settingsSaved");
+            return LocalRedirect(Address);
+        }
+
         public async Task<IActionResult> OnPostLogoutAsync()
         {
             await logout.ExecuteAsync<UpdateResult>(new CodexConnectionParametersV1(), new NoData(), HttpContext.RequestAborted);
@@ -128,6 +195,9 @@ namespace Jularr.Frontend.Pages.Admin.Ai
         protected override async Task LoadDataAsync()
         {
             _connection = await read.ExecuteAsync<CodexConnectionV1>(new CodexConnectionParametersV1(), HttpContext.RequestAborted);
+            if (_connection.Phase != CodexPhase.Connected) return;
+            _catalog = await readCatalog.ExecuteAsync<CodexCatalogV1>(new CodexConnectionParametersV1(), HttpContext.RequestAborted);
+            _settings = await readSettings.ExecuteAsync<CodexSettingsV1>(new CodexConnectionParametersV1(), HttpContext.RequestAborted);
         }
     }
 }
