@@ -104,6 +104,10 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                         "WantedItems" AS wanted
                     INNER JOIN
                         "Works" AS work ON work."Id" = wanted."WorkId"
+                    WHERE
+                        cardinality(@MediaTypeIds::smallint[]) + cardinality(@MediaSubtypeIds::smallint[]) = 0
+                        OR work."MediaSubtypeId" IS NULL AND work."MediaTypeId" = ANY(@MediaTypeIds::smallint[])
+                        OR work."MediaSubtypeId" = ANY(@MediaSubtypeIds::smallint[])
             """;
 
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<PageResult<WantedDetailsV1>>()];
@@ -196,7 +200,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                 ORDER BY
                     wanted_page."Id" DESC;
                 """;
-            sql.Parameters.Add(new WantedViewFilterData(Parameters.WantedViewTypeId));
+            sql.Parameters.Add(new WantedViewFilterData(Parameters.WantedViewTypeId, Parameters.MediaTypeIds, Parameters.MediaSubtypeIds));
             sql.Page = Page;
             sql.DisableJit = true;
             return await Context.ReadSql.ReadPageAsync<WantedDetailsV1>(sql, CancellationToken);
@@ -226,6 +230,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                 FROM
                     wanted_state;
                 """;
+            sql.Parameters.Add(new WantedViewFilterData(Parameters.WantedViewTypeId, Parameters.MediaTypeIds, Parameters.MediaSubtypeIds));
             sql.DisableJit = true;
             return await Context.ReadSql.ReadRequiredAsync<WantedSummaryV1>(sql, CancellationToken);
         }
