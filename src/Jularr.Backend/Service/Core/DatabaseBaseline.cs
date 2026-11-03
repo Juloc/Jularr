@@ -238,7 +238,8 @@ namespace Jularr.Backend.Service.Core
                 throw new InvalidDataException("The " + name + " baseline must be exactly one BEGIN ... COMMIT block.");
             }
 
-            await using var baseline = new NpgsqlCommand(Wrapper().Replace(text, ""), connection, transaction);
+            // No command timeout: a schema step on a large database takes as long as it takes; the start's token can still cancel it.
+            await using var baseline = new NpgsqlCommand(Wrapper().Replace(text, ""), connection, transaction) { CommandTimeout = 0 };
             await baseline.ExecuteNonQueryAsync(ct);
         }
 
@@ -249,7 +250,8 @@ namespace Jularr.Backend.Service.Core
             {
                 try
                 {
-                    await using var command = new NpgsqlCommand(migration.Statement, connection, transaction);
+                    // An index or an update over a large catalog runs longer than the connection's default 30 s.
+                    await using var command = new NpgsqlCommand(migration.Statement, connection, transaction) { CommandTimeout = 0 };
                     await command.ExecuteNonQueryAsync(ct);
                     await RecordVersionAsync(connection, transaction, migration.Version, ct);
                 }
