@@ -7,6 +7,8 @@ namespace Jularr.Integrations.Logic.Usenet
     // The approved par2 and 7-Zip programs repair and unpack downloads; no shell, bounded run time.
     internal sealed class ArchiveTools
     {
+        // Without a known password a placeholder makes protected archives fail instead of waiting for input.
+        private const string PlaceholderPassword = "jularr";
         private static readonly TimeSpan MaximumRun = TimeSpan.FromHours(2);
 
         public string? Par2Path { get; set; }
@@ -14,12 +16,12 @@ namespace Jularr.Integrations.Logic.Usenet
         public bool CanRepair => !string.IsNullOrWhiteSpace(Par2Path);
         public bool CanExtract => !string.IsNullOrWhiteSpace(SevenZipPath);
 
-        public async Task<long?> ReadExtractionSizeAsync(string archive, CancellationToken ct)
+        public async Task<long?> ReadExtractionSizeAsync(string archive, string? password, CancellationToken ct)
         {
             if (!CanExtract) return null;
             long bytes = 0;
             var hasSize = false;
-            var exit = await RunAsync(SevenZipPath!, ["l", "-slt", "-ba", "-pjularr", "--", archive], Path.GetDirectoryName(archive)!, ct, null, async (stream, token) =>
+            var exit = await RunAsync(SevenZipPath!, ["l", "-slt", "-ba", "-p" + (password ?? PlaceholderPassword), "--", archive], Path.GetDirectoryName(archive)!, ct, null, async (stream, token) =>
             {
                 using var reader = new StreamReader(stream);
                 while (await reader.ReadLineAsync(token) is { } line)
@@ -40,9 +42,8 @@ namespace Jularr.Integrations.Logic.Usenet
         public async Task<bool> RepairAsync(string par2File, CancellationToken ct, Action? checkStorage = null) =>
             CanRepair && await RunAsync(Par2Path!, ["r", "-q", "--", par2File], Path.GetDirectoryName(par2File)!, ct, checkStorage) == 0;
 
-        // A placeholder password makes protected archives fail instead of waiting for input.
-        public async Task<bool> ExtractAsync(string archive, string destination, CancellationToken ct, Action? checkStorage = null) =>
-            CanExtract && await RunAsync(SevenZipPath!, ["x", "-y", "-pjularr", "-o" + destination, "--", archive], destination, ct, checkStorage) == 0;
+        public async Task<bool> ExtractAsync(string archive, string destination, string? password, CancellationToken ct, Action? checkStorage = null) =>
+            CanExtract && await RunAsync(SevenZipPath!, ["x", "-y", "-p" + (password ?? PlaceholderPassword), "-o" + destination, "--", archive], destination, ct, checkStorage) == 0;
 
         private static async Task<int> RunAsync(string executable, IReadOnlyList<string> arguments, string directory, CancellationToken ct, Action? checkStorage,
             Func<Stream, CancellationToken, Task>? readOutput = null)

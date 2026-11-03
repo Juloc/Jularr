@@ -75,11 +75,13 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             DownloadStoragePaths paths, long operationId)
         {
             var settings = paths.Settings;
-            IReadOnlyList<NzbFile> files;
+            NzbContent content;
             await using (var nzb = File.OpenRead(Path.Combine(staging, NzbName)))
             {
-                files = NzbReader.Read(nzb);
+                content = NzbReader.Read(nzb);
             }
+
+            var files = content.Files;
 
             // Check the NZB itself; indexer sizes are hints, not a trusted disk bound.
             // Unknown or overflowing sizes are not allowed to consume unbounded storage.
@@ -179,7 +181,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             long unpackBytes = 0;
             foreach (var archive in archives)
             {
-                if (await _tools.ReadExtractionSizeAsync(archive, ct) is not { } expanded || expanded > long.MaxValue - unpackBytes)
+                if (await _tools.ReadExtractionSizeAsync(archive, content.Password, ct) is not { } expanded || expanded > long.MaxValue - unpackBytes)
                 {
                     return new UsenetPassResult(UsenetPassState.Failed, 100, size, 0, "usenet_extract_failed");
                 }
@@ -197,7 +199,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
 
             foreach (var archive in archives)
             {
-                if (!await _tools.ExtractAsync(archive, output, ct, () => paths.CheckCapacity()))
+                if (!await _tools.ExtractAsync(archive, output, content.Password, ct, () => paths.CheckCapacity()))
                 {
                     return new UsenetPassResult(UsenetPassState.Failed, 100, size, 0, "usenet_extract_failed");
                 }
