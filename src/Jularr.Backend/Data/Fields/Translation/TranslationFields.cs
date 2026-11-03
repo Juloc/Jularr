@@ -12,6 +12,8 @@ namespace Jularr.Backend.Data.Fields.Translation
         public static readonly StringField Url = new() { MaximumLength = 200, AllowBlank = false };
         public static readonly StringField Precision = new() { MaximumLength = 32, Required = false };
         public static readonly StringField Name = new() { MaximumLength = 80, AllowBlank = false, Trim = true };
+        // A model or its digest where none may be known yet.
+        public static readonly StringField OptionalName = new() { MaximumLength = 80, Required = false, Trim = true };
         // A title and a count of sections as the progress view reads them.
         public static readonly LongField WorkId = new() { Minimum = 1 };
         public static readonly StringField Title = new() { MaximumLength = 500, AllowBlank = true };
@@ -23,7 +25,8 @@ namespace Jularr.Backend.Data.Fields.Translation
 
         // A section's blocks in order as a JSON array of plain texts.
         public static readonly StringField Blocks = new() { MaximumLength = 4_000_000, AllowBlank = false };
-        // A section's cached translation so far, as the background job reads it; none before its first block.
-        public static readonly StringField Cache = new() { MaximumLength = 4_000_000, Required = false };
+        // A section's cached translation so far, as the background job reads it; none before its first block. While a new version of the model
+        // replaces it, it also holds the earlier version's texts.
+        public static readonly StringField Cache = new() { MaximumLength = 8_000_000, Required = false };
     }
 }

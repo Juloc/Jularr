@@ -101,7 +101,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                     if (download.MediaTypeId == MediaType.Book && LibraryFileTypes.GetAssetType(file.RelativePath) is MediaAssetType.Ebook or MediaAssetType.Comic)
                     {
                         await using var document = await source.OpenReadAsync(StoragePath.Combine(sourceDirectory, file.RelativePath), ct);
-                        if (await LibraryFileTypes.CheckDocumentAsync(Path.GetExtension(file.RelativePath), document, ct) is { } failed)
+                        if (await LibraryFileTypes.CheckDocumentAsync(LibraryFileTypes.Extension(file.RelativePath), document, ct) is { } failed)
                         {
                             unplaced.Add(new UnplacedFile(file.RelativePath, failed));
                             continue;

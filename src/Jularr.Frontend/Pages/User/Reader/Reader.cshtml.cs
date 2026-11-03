@@ -113,10 +113,11 @@ namespace Jularr.Frontend.Pages.User.Reader
             if (_document is not { } document || _section is not { } current)
             {
                 // Offline storage and an uncached book say so.
-                page.Content.Add(new Div(
-                    new P(new Text(FormError?.ResourceKey ?? "reader.notFound")).Attribute("role", "alert"),
+                // A failed read already names its reason above.
+                page.Content.Add(new Div([
+                    .. HasReadError ? Array.Empty<IUiComponent>() : [new P(new Text(FormError?.ResourceKey ?? "reader.notFound")).Attribute("role", "alert")],
                     new A(new Text("common.back")).Class("button").Attribute("href", "/Library")
-                ).Class("reader__status"));
+                ]).Class("reader__status"));
                 return;
             }
 

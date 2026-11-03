@@ -160,11 +160,19 @@ namespace Jularr.Backend.Tests
             File.WriteAllText(Path.Combine(books, release, release + ".epub"), "book");
             Directory.CreateDirectory(Path.Combine(books, "Unknown Title Nobody Lists"));
             File.WriteAllText(Path.Combine(books, "Unknown Title Nobody Lists", "Somebody - Unknown Title Nobody Lists.epub"), "book");
+            // A text beside a book is its note; a text alone in its folder is the book.
+            File.WriteAllText(Path.Combine(books, "Pride and Prejudice", "readme.txt"), "note");
+            Directory.CreateDirectory(Path.Combine(books, "Unknown Text Nobody Lists"));
+            File.WriteAllText(Path.Combine(books, "Unknown Text Nobody Lists", "Unknown Text Nobody Lists.txt"), "a book in plain text");
+            Directory.CreateDirectory(Path.Combine(books, "Unknown Audio Nobody Lists"));
+            File.WriteAllBytes(Path.Combine(books, "Unknown Audio Nobody Lists", "01.mp3"), new byte[16]);
+            File.WriteAllText(Path.Combine(books, "Unknown Audio Nobody Lists", "info.txt"), "read by somebody");
             var rootId = await LibraryTests.CreateRootAsync(host, mountId, "Books", MediaType.Book);
 
             // The catalog names exactly one entry with the folder's title; a title it does not list stays for a person.
             await LibraryTests.ScanAsync(host, rootId);
             Assert.AreEqual(3L, await host.ScalarAsync("""SELECT count(*) FROM "StoredFiles" WHERE "MediaAssetId" IS NOT NULL """));
+            Assert.AreEqual("Unknown Text Nobody Lists/Unknown Text Nobody Lists.txt", await host.ScalarAsync("""SELECT string_agg("RelativePath", ',') FROM "StoredFiles" WHERE "RelativePath" LIKE '%.txt' """));
             Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "Works" WHERE "CanonicalTitle" = 'Pride and Prejudice' """));
             Assert.AreEqual(1L, await host.ScalarAsync("""
                 SELECT count(*) FROM "StoredFiles" AS file JOIN "MediaAssets" AS asset ON asset."Id" = file."MediaAssetId" JOIN "Works" AS work ON work."Id" = asset."WorkId"
@@ -427,10 +435,10 @@ namespace Jularr.Backend.Tests
                 Assert.AreEqual("Unmarked", Jularr.Backend.Logic.Reading.EpubReader.Read(archive).Title);
             }
 
-            // MOBI: BOOKMOBI is taken; an old PalmDOC is named, since the reader cannot open it; PDF and comics keep their signatures.
+            // MOBI: BOOKMOBI and an old PalmDOC are taken (the reader opens both); PDF and comics keep their signatures.
             byte[] Mobi(string kind) => [.. new byte[60], .. Encoding.ASCII.GetBytes(kind), .. new byte[60]];
             Assert.IsNull(await CheckAsync(".mobi", Mobi("BOOKMOBI")));
-            Assert.AreEqual("content_palmdoc", await CheckAsync(".mobi", Mobi("TEXtREAd")));
+            Assert.IsNull(await CheckAsync(".mobi", Mobi("TEXtREAd")));
             Assert.AreEqual("content_azw3", await CheckAsync(".azw3", Mobi("TEXtREAd")));
             Assert.AreEqual("content_mobi", await CheckAsync(".mobi", Mobi("XXXXXXXX")));
             Assert.AreEqual("content_pdf", await CheckAsync(".pdf", Encoding.ASCII.GetBytes("<html>")));

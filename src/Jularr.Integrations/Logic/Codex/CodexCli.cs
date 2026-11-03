@@ -49,6 +49,13 @@ namespace Jularr.Integrations.Logic.Codex
             }
         }
 
+        // The models and plan usage of the signed-in account, asked from a short app-server session.
+        public async Task<CodexCatalog> ReadCatalogAsync(CancellationToken ct)
+        {
+            if (!IsAvailable) throw new ProviderUnavailableException();
+            return await CodexAppServer.ReadCatalogAsync(Prepare(["app-server"]), ct);
+        }
+
         private ProcessStartInfo Prepare(string[] arguments)
         {
             // No shell; the CLI has no other home than the data volume's folder.

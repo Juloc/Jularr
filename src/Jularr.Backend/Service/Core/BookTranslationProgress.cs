@@ -10,6 +10,18 @@ namespace Jularr.Backend.Service.Core
         private BookTranslationUnit? _current;
         private DateTimeOffset _activityAt;
         private string? _issue;
+        private string? _modelKey;
+        private string? _digest;
+
+        // The model (its cache key) and version the job translates with: only its complete sections count as finished.
+        public void Translating(string modelKey, string digest)
+        {
+            lock (_lock)
+            {
+                _modelKey = modelKey;
+                _digest = digest;
+            }
+        }
 
         public void Picked(long documentId, int section, string language)
         {
@@ -52,7 +64,7 @@ namespace Jularr.Backend.Service.Core
                 Trim(_blocks, now);
                 var minutes = Window.TotalMinutes;
                 return new BookTranslationSnapshot(_current, _current is null ? null : (int)Math.Max(0, (now - _activityAt).TotalSeconds), _issue,
-                    Math.Round(_blocks.Count / minutes, 1));
+                    Math.Round(_blocks.Count / minutes, 1), _modelKey, _digest);
             }
         }
 
@@ -64,5 +76,5 @@ namespace Jularr.Backend.Service.Core
 
     internal sealed record BookTranslationUnit(long DocumentId, int Section, string Language);
 
-    internal sealed record BookTranslationSnapshot(BookTranslationUnit? Current, int? SecondsWithoutProgress, string? IssueKey, double BlocksPerMinute);
+    internal sealed record BookTranslationSnapshot(BookTranslationUnit? Current, int? SecondsWithoutProgress, string? IssueKey, double BlocksPerMinute, string? ModelKey, string? Digest);
 }

@@ -59,7 +59,13 @@ namespace Jularr.Backend.Logic.Acquisition
         {
             if (mediaType == MediaType.Book)
             {
+                // A text file beside other documents or an audiobook is the release's note, not the book.
                 unplaced ??= [];
+                if (files.Any(file => LibraryFileTypes.GetAssetType(file.RelativePath) is MediaAssetType.Ebook or MediaAssetType.Comic or MediaAssetType.Audio && LibraryFileTypes.Extension(file.RelativePath) != ".txt"))
+                {
+                    files = [.. files.Where(file => LibraryFileTypes.Extension(file.RelativePath) != ".txt")];
+                }
+
                 return subtype == MediaSubtype.Manga ? PlanManga(title, files, patterns, known, episodes ?? [], chapters ?? [], unplaced)
                     : PlanBook(subtype, title, year, author, files, patterns, known, episodes ?? [], unplaced);
             }
@@ -220,7 +226,7 @@ namespace Jularr.Backend.Logic.Acquisition
                     unplaced.Add(new UnplacedFile(item.File.RelativePath, item.Reason ?? UnplacedFile.Present));
                 }
 
-                foreach (var group in pack.Where(item => item.Unit is { HasFile: false }).GroupBy(item => (item.Unit!.Number, Path.GetExtension(item.File.RelativePath).ToLowerInvariant())).OrderBy(group => group.Key.Number))
+                foreach (var group in pack.Where(item => item.Unit is { HasFile: false }).GroupBy(item => (item.Unit!.Number, LibraryFileTypes.Extension(item.File.RelativePath))).OrderBy(group => group.Key.Number))
                 {
                     var volume = group.MaxBy(item => item.File.SizeBytes);
                     var stem = NamingPattern.Apply(pattern, Values(MediaType.Book, subtype, title, year, volume.File, patterns, known) with { Author = BookReleaseJudge.Authors(author).FirstOrDefault(), Volume = volume.Unit!.Number });
@@ -233,7 +239,7 @@ namespace Jularr.Backend.Logic.Acquisition
                 return placements;
             }
 
-            foreach (var format in files.Where(file => LibraryFileTypes.GetAssetType(file.RelativePath) == MediaAssetType.Ebook).GroupBy(file => Path.GetExtension(file.RelativePath).ToLowerInvariant()))
+            foreach (var format in files.Where(file => LibraryFileTypes.GetAssetType(file.RelativePath) == MediaAssetType.Ebook).GroupBy(file => LibraryFileTypes.Extension(file.RelativePath)))
             {
                 var book = format.MaxBy(file => file.SizeBytes)!;
                 var stem = NamingPattern.Apply(patterns.Pattern(MediaType.Book, subtype), Values(MediaType.Book, subtype, title, year, book, patterns, known) with { Author = BookReleaseJudge.Authors(author).FirstOrDefault() });
@@ -487,7 +493,7 @@ namespace Jularr.Backend.Logic.Acquisition
             (known ?? new NamingValues(title, year, null, null, null, null, null, null, 1)) with
             {
                 Title = title, Year = year, MediaTypeId = type, MediaSubtypeId = subtype, Rules = patterns.Rules(type),
-                OriginalFilename = Path.GetFileNameWithoutExtension(file.RelativePath), Format = Path.GetExtension(file.RelativePath).TrimStart('.').ToUpperInvariant()
+                OriginalFilename = Path.GetFileNameWithoutExtension(file.RelativePath), Format = LibraryFileTypes.FormatName(file.RelativePath)
             };
 
         // False when the name made for the file cannot be stored.
@@ -495,7 +501,7 @@ namespace Jularr.Backend.Logic.Acquisition
             decimal? parentUnitNumber, IReadOnlyList<decimal>? furtherEpisodes = null)
         {
             var group = placements.Count;
-            var extension = Path.GetExtension(media.RelativePath).ToLowerInvariant();
+            var extension = LibraryFileTypes.Extension(media.RelativePath);
             if (!LibraryNaming.IsStorable(stem + extension))
             {
                 return false;
