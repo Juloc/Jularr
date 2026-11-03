@@ -31,6 +31,9 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
   What only works with script, or only without it, shows or hides through `@media (scripting: enabled)` / `(scripting: none)`,
   which holds before the first paint, never through a class a script sets later. A control a script reveals keeps its room
   (a shelf's heading is as high as its arrows), and a native control a script replaces is as high as its replacement.
+  A device choice that changes a page's look or layout (skin, brightness, the list and Discover layouts) is also a cookie of the same name
+  ([DevicePreference.ts](../src/Jularr.Frontend/Modules/Appearance/DevicePreference.ts)); the server writes it into `<html>`
+  ([DevicePreferences.cs](../src/Jularr.Frontend/Modules/Appearance/DevicePreferences.cs), known values only), the browser storage stays its source.
 - Frontend owns UI appearance, interaction, presentation-only state.
   Backend owns permissions, identities, validation, business decisions,
   transaction boundaries, persistence, paging data and API contracts.
