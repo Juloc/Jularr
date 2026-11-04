@@ -199,10 +199,10 @@ namespace Jularr.Backend.Tests
             await SignInAsync(host);
             await host.Fixture.RunSqlAsync("""
                 INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle") VALUES (30, 1, 'Second film');
-                INSERT INTO "AcquisitionProfiles" ("Name", "MediaTypeId", "Definition") SELECT 'Movies 4K', 1, "Definition" FROM "AcquisitionProfiles" WHERE "MediaTypeId" = 1 AND "IsDefault";
+                WITH created AS (INSERT INTO "AcquisitionProfiles" ("Name", "Definition") SELECT 'Movies 4K', profile."Definition" FROM "AcquisitionProfiles" AS profile JOIN "AcquisitionProfileDefaults" AS standard ON standard."AcquisitionProfileId" = profile."Id" AND standard."AcquisitionMediaKindId" = 1 RETURNING "Id") INSERT INTO "AcquisitionProfileMediaKinds" SELECT "Id", 1 FROM created;
                 """);
             var uhd = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"AcquisitionProfiles\" WHERE \"Name\" = 'Movies 4K'"))!;
-            var standard = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"AcquisitionProfiles\" WHERE \"MediaTypeId\" = 1 AND \"IsDefault\""))!;
+            var standard = (long)(await host.ScalarAsync("SELECT \"AcquisitionProfileId\" FROM \"AcquisitionProfileDefaults\" WHERE \"AcquisitionMediaKindId\" = 1"))!;
 
             // A rule trusting its accounts with one film a month in 4K.
             using var created = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/requests/rules", new SaveRequestRuleDataV1(" Trusted ", "  ", 1, 30, true, ["Movie"], [uhd], false, null));

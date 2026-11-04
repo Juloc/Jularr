@@ -25,8 +25,9 @@ namespace Jularr.Backend.Tests
             await host.Fixture.RunSqlAsync("""
                 INSERT INTO "StorageMounts" ("Id", "Name", "StorageProtocolTypeId", "SharePath", "IsReadOnly") OVERRIDING SYSTEM VALUE VALUES (801, 'Listed', 3, '/media/listed', FALSE);
                 INSERT INTO "LibraryRoots" ("Id", "Name", "MediaTypeId", "StorageMountId", "RelativePath") VALUES (801, 'Movies A', 1, 801, 'movies-a'), (802, 'Movies B', 1, 801, 'movies-b'), (803, 'Shows', 2, 801, 'shows');
-                INSERT INTO "AcquisitionProfiles" ("Id", "Name", "MediaTypeId", "IsDefault", "Definition") OVERRIDING SYSTEM VALUE
-                    SELECT 801, 'Film listed', 1, FALSE, "Definition" FROM "AcquisitionProfiles" WHERE "MediaTypeId" = 1 AND "IsDefault" LIMIT 1;
+                INSERT INTO "AcquisitionProfiles" ("Id", "Name", "Definition") OVERRIDING SYSTEM VALUE
+                    SELECT 801, 'Film listed', profile."Definition" FROM "AcquisitionProfiles" AS profile JOIN "AcquisitionProfileDefaults" AS standard ON standard."AcquisitionProfileId" = profile."Id" AND standard."AcquisitionMediaKindId" = 1;
+                INSERT INTO "AcquisitionProfileMediaKinds" ("AcquisitionProfileId", "AcquisitionMediaKindId") VALUES (801, 1);
                 INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle", "ReleaseYear", "CreatedAt") VALUES
                     (901, 1, 'Alpha', 2020, '2026-01-01'), (902, 1, 'Beta', 2018, '2026-01-02'), (903, 2, 'Gamma', 2022, '2026-01-03'),
                     (904, 1, 'Delta', 2021, '2026-01-04'), (905, 1, 'Epsilon', 2019, '2026-01-05'), (906, 7, 'Zeta', 2017, '2026-01-06');
@@ -133,7 +134,7 @@ namespace Jularr.Backend.Tests
         {
             await using var host = await CreateAsync();
             await SeedAsync(host);
-            var seriesProfile = (long)(await host.ScalarAsync("""SELECT "Id" FROM "AcquisitionProfiles" WHERE "MediaTypeId" = 2 AND "IsDefault" LIMIT 1"""))!;
+            var seriesProfile = (long)(await host.ScalarAsync("""SELECT "AcquisitionProfileId" FROM "AcquisitionProfileDefaults" WHERE "AcquisitionMediaKindId" = 2"""))!;
 
             // The film profile fits films only; Alpha already has it, Delta has no target.
             var profiles = await PostAsync(host, "profile", new UpdateWorksProfileDataV1([901, 902, 903, 904], 801));

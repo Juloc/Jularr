@@ -4,9 +4,25 @@
  "reviewed": true,
  "enabled": true,
  "texts": {
+  "arr.size.minimum": ["Min", "Min"],
+  "arr.size.preferred": ["Preferred", "Bevorzugt"],
+  "arr.size.maximum": ["Max", "Max"],
+  "errors.validation.kind_in_use": ["Titles of this media type chose this profile. Give them another profile first.", "Titel dieses Medientyps nutzen dieses Profil. Gib ihnen zuerst ein anderes Profil."],
+  "errors.validation.default_required": ["Every media type keeps a default profile. Make another profile its default first.", "Jeder Medientyp behält ein Standardprofil. Mach zuerst ein anderes Profil zu seinem Standard."],
+  "errors.validation.mixed_quality_lists": ["These media types have different quality lists. A profile joins films, series and anime, or books and light novels, or stays with manga, music or games.", "Diese Medientypen haben verschiedene Qualitäten. Ein Profil verbindet Filme, Serien und Anime oder Bücher und Light Novels, oder es bleibt bei Manga, Musik oder Spielen."],
+  "profile.new.kind": ["Which media type is the profile for? Films, series and anime share one list of qualities, books and light novels another; the profile can add the others of its list.", "Für welchen Medientyp ist das Profil? Filme, Serien und Anime teilen sich eine Liste von Qualitäten, Bücher und Light Novels eine andere; im Profil lassen sich die anderen Typen seiner Liste hinzufügen."],
+  "profile.targets": ["Titles", "Titel"],
+  "profile.defaultFor": ["Default", "Standard"],
+  "profile.appliesTo": ["Applies to", "Gilt für"],
+  "arr.release.allTypes": ["Every media type", "Alle Medientypen"],
+  "arr.size.none": ["No limit", "Ohne Grenze"],
+  "arr.quality.Book": ["Books, manga and light novels, per volume", "Bücher, Manga und Light Novels, pro Band"],
+  "arr.quality.Series": ["Series and anime series", "Serien und Anime-Serien"],
+  "arr.quality.Movie": ["Films and anime films", "Filme und Anime-Filme"],
+  "arr.quality": ["Quality", "Qualität"],
+  "arr.profiles": ["Profiles", "Profile"],
   "form.choice.clear": ["Click again to clear", "Zum Zurücksetzen erneut klicken"],
   "arr.releaseGroups": ["Release groups", "Release-Gruppen"],
-  "arr.groups.total": ["Groups", "Gruppen"],
   "arr.groups.notRated": ["Not rated", "Nicht bewertet"],
   "arr.groups.rating": ["Rating", "Bewertung"],
   "arr.groups.rating.Good": ["Good", "Gut"],
@@ -2443,57 +2459,9 @@
    "Used by",
    "Verwendet von"
   ],
-  "profile.default": [
-   "Default",
-   "Standard"
-  ],
-  "profile.add.Movie": [
-   "Add movie profile",
-   "Filmprofil hinzufügen"
-  ],
-  "profile.add.Series": [
-   "Add series profile",
-   "Serienprofil hinzufügen"
-  ],
-  "profile.add.AnimeSeries": [
-   "Add anime series profile",
-   "Anime-Serienprofil hinzufügen"
-  ],
-  "profile.add.AnimeMovie": [
-   "Add anime film profile",
-   "Anime-Filmprofil hinzufügen"
-  ],
-  "profile.add.Book": [
-   "Add book profile",
-   "Buchprofil hinzufügen"
-  ],
-  "profile.add.LightNovel": [
-   "Add light novel profile",
-   "Light-Novel-Profil hinzufügen"
-  ],
   "profile.delete": [
    "Delete profile",
    "Profil löschen"
-  ],
-  "profile.isDefault": [
-   "Default for its media type",
-   "Standard für seinen Medientyp"
-  ],
-  "profile.isDefault.AnimeSeries": [
-   "Default for anime series",
-   "Standard für Anime-Serien"
-  ],
-  "profile.isDefault.AnimeMovie": [
-   "Default for anime films",
-   "Standard für Anime-Filme"
-  ],
-  "profile.anime.own": [
-   "{0}: Anime uses its own default, {1}.",
-   "{0}: Anime nutzt den eigenen Standard, {1}."
-  ],
-  "profile.anime.fallback": [
-   "{0}: no Anime default yet, Anime uses the default of its type ({1}).",
-   "{0}: noch kein Anime-Standard, Anime nutzt den Standard seines Typs ({1})."
   ],
   "profile.upgradeAllowed": [
    "Upgrade to better releases",
@@ -2952,10 +2920,6 @@
   "hint.acquisition.SubDl.info": [
    "Only HTTPS.",
    "Nur HTTPS."
-  ],
-  "hint.AcquisitionProfileFields.IsDefault.info": [
-   "New requests of this media type use the default profile.",
-   "Neue Anfragen dieses Medientyps nutzen das Standardprofil."
   ],
   "hint.AcquisitionProfileFields.UpgradeAllowed.info": [
    "Replaces a present file with a better quality until the cutoff is reached.",
@@ -10927,10 +10891,6 @@
    "Custom formats",
    "Eigene Formate"
   ],
-  "arr.sizes": [
-   "Quality sizes",
-   "Qualitätsgrößen"
-  ],
   "arr.releaseProfiles": [
    "Release profiles",
    "Release-Profile"
@@ -14606,38 +14566,7 @@
    "Page actions",
    "Aktionen der Seite"
   ],
-  "profile.kpi.total": [
-   "Profiles",
-   "Profile"
-  ],
-  "profile.kpi.inUse": [
-   "In use",
-   "In Benutzung"
-  ],
-  "profile.kpi.scored": [
-   "With format scores",
-   "Mit Format-Scores"
-  ],
-  "profile.kpi.upgrading": [
-   "Upgrading",
-   "Mit Upgrades"
-  ],
-  "profile.none": [
-   "No profiles for this media type yet.",
-   "Für diesen Medientyp gibt es noch keine Profile."
-  ],
-  "profile.scores": [
-   "Scores",
-   "Punkte"
-  ],
-  "profile.usedBy": [
-   "In use: {0}",
-   "In Benutzung: {0}"
-  ],
-  "profile.unused": [
-   "Unused",
-   "Unbenutzt"
-  ],
+  "profile.none": ["No profiles yet.", "Noch keine Profile."],
   "profile.new": [
    "New profile",
    "Neues Profil"
@@ -14670,10 +14599,7 @@
    "Indexer",
    "Indexer"
   ],
-  "arr.formats.none": [
-   "No custom formats for this media type yet.",
-   "Für diesen Medientyp gibt es noch keine Custom Formats."
-  ],
+  "arr.formats.none": ["No custom formats yet.", "Noch keine eigenen Formate."],
   "arr.format.used": [
    "Used",
    "Benutzt"
@@ -14725,18 +14651,6 @@
   "arr.scores": [
    "Format scores",
    "Format-Scores"
-  ],
-  "profile.add.Manga": [
-   "Add manga profile",
-   "Manga-Profil hinzufügen"
-  ],
-  "profile.add.Music": [
-   "Add music profile",
-   "Musik-Profil hinzufügen"
-  ],
-  "profile.add.Game": [
-   "Add game profile",
-   "Spiele-Profil hinzufügen"
   ],
   "setup.preset.complete.line": [
    "All modules and all media types, including optional features.",

@@ -14,7 +14,7 @@ namespace Jularr.Backend.Logic.Acquisition
         public static TakenOverProfile Map(ServarrQualityProfile profile, IReadOnlyDictionary<int, ServarrCustomFormat> formats, MediaType mediaType,
             ServarrMetadataProfile? metadata = null, ServarrFormatCatalog? catalog = null, string? displayName = null)
         {
-            var known = ProfileQualities.For(mediaType, null);
+            var known = ProfileQualities.For(AcquisitionMediaKinds.Family(AcquisitionMediaKinds.Of(mediaType, null)));
             var groups = profile.Qualities.Where(quality => quality.GroupId is not null).GroupBy(quality => quality.GroupId!.Value)
                 .Select(group =>
                 {
@@ -48,7 +48,8 @@ namespace Jularr.Backend.Logic.Acquisition
             }
 
             skipped.AddRange(profile.Qualities.Where(quality => quality.IsAllowed && Quality(quality, mediaType) is null).Select(quality => quality.Name ?? "?"));
-            var input = new AcquisitionProfileInputData(null, TextLimit.Cut(displayName ?? profile.Name, 128)!, mediaType, null, false, allowed, profile.UpgradeAllowed, cutoff, null, null, null)
+            var input = new AcquisitionProfileInputData(null, TextLimit.Cut(displayName ?? profile.Name, 128)!, [AcquisitionMediaKinds.Of(mediaType, null)], [], allowed, profile.UpgradeAllowed,
+                cutoff, null, null, null)
             {
                 QualityOrder = [.. order],
                 QualityGroups = groups.Select(group => group.Group).ToArray(),
@@ -79,8 +80,7 @@ namespace Jularr.Backend.Logic.Acquisition
                 WHERE
                     imported."SourceUrl" = @SourceUrl
                     AND imported."SourceProfileId" = @SourceProfileId
-                    AND imported."SourceMetadataProfileId" = @SourceMetadataProfileId
-                    AND profile."MediaTypeId" = @MediaTypeId;
+                    AND imported."SourceMetadataProfileId" = @SourceMetadataProfileId;
                 """;
             sql.Parameters.Add(source);
             var linked = await ctx.ReadOptionalAsync<AcquisitionProfileKeyData>(sql, ct);
@@ -94,13 +94,13 @@ namespace Jularr.Backend.Logic.Acquisition
             var keys = imported.ToDictionary(format => format.SourceId, format => format.Id);
             var original = mapped.Input;
             var name = original.Name;
-            if (existing.Any(profile => profile.MediaTypeId == source.MediaTypeId && profile.Name.Equals(name, StringComparison.OrdinalIgnoreCase)))
+            if (existing.Any(profile => profile.Name.Equals(name, StringComparison.OrdinalIgnoreCase)))
             {
                 var app = source.MediaTypeId switch { MediaType.Movie => "Radarr", MediaType.Series => "Sonarr", MediaType.Music => "Lidarr", _ => "Readarr" };
                 name = TextLimit.Cut(name, 100) + " (" + app + " " + source.SourceProfileId.ToString(CultureInfo.InvariantCulture) + ")";
             }
 
-            var input = new AcquisitionProfileInputData(null, name, original.MediaTypeId, original.MediaSubtypeId, false, original.AllowedQualities, original.UpgradeAllowed,
+            var input = new AcquisitionProfileInputData(null, name, original.MediaKinds, [], original.AllowedQualities, original.UpgradeAllowed,
                 original.UpgradeCutoffQuality, original.MinimumSizeMb, original.MaximumSizeMb, null)
             {
                 QualityOrder = original.QualityOrder, QualityGroups = original.QualityGroups,
@@ -128,7 +128,8 @@ namespace Jularr.Backend.Logic.Acquisition
             if (type == MediaType.Music) return MusicQuality(quality.Name);
             if (type == MediaType.Book) return BookQuality(quality.Name);
             var known = ProfileQualities.For(type, null);
-            if (known.FirstOrDefault(name => string.Equals(name, quality.Name, StringComparison.OrdinalIgnoreCase)) is { } named) return named;
+            var canonical = ProfileQualities.Canonical(quality.Name);
+            if (known.FirstOrDefault(name => string.Equals(name, canonical, StringComparison.OrdinalIgnoreCase)) is { } named) return named;
             if (quality.Name is not null) return null;
             var source = quality.Source?.ToLowerInvariant();
             var candidate = source switch
@@ -138,7 +139,7 @@ namespace Jularr.Backend.Logic.Acquisition
                 "television" or "hdtv" => "HDTV-" + quality.Resolution + "p",
                 "televisionraw" => "Raw-HD",
                 "bluray" => "Bluray-" + quality.Resolution + "p",
-                "blurayraw" => type == MediaType.Movie ? "Remux-" + quality.Resolution + "p" : "Bluray-" + quality.Resolution + "p Remux",
+                "blurayraw" => "Remux-" + quality.Resolution + "p",
                 "dvd" => "DVD",
                 _ => null
             };

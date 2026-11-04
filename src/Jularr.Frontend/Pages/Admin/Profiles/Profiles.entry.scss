@@ -1,10 +1,8 @@
-@use "../../../Framework/Components/CapsuleBar";
-
-// The list kit's grid of the quality rule panes, at three widths.
+// The list kit's grid of the profiles and formats, at three widths.
 .profiles-list {
-    --list-columns: minmax(220px, 2.6fr) minmax(112px, 1fr) minmax(120px, 1.1fr) minmax(95px, .8fr) minmax(80px, .7fr) minmax(60px, .5fr);
-    --list-columns-medium: minmax(200px, 2.2fr) minmax(112px, 1fr) minmax(95px, .8fr) minmax(80px, .7fr) minmax(60px, .5fr);
-    --list-columns-narrow: minmax(180px, 2fr) minmax(112px, 1fr) minmax(60px, .5fr);
+    --list-columns: minmax(220px, 2.4fr) minmax(150px, 1.4fr) minmax(110px, 1fr) minmax(110px, .9fr) minmax(70px, .5fr) minmax(60px, .5fr);
+    --list-columns-medium: minmax(200px, 2fr) minmax(140px, 1.3fr) minmax(110px, 1fr) minmax(60px, .5fr);
+    --list-columns-narrow: minmax(180px, 2fr) minmax(60px, .5fr);
 }
 
 .formats-list {
@@ -13,7 +11,41 @@
     --list-columns-narrow: minmax(180px, 2fr) minmax(112px, 1fr) minmax(60px, .5fr);
 }
 
-// The figures, the field and the list of release groups are one region that keeps the page's own spacing.
+// The media types of a profile as small chips that wrap inside their cell.
+.profile-kinds-cell { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; min-width: 0; }
+
+// The media types a new profile can start with, one link each.
+.profile-kinds {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.profile-kind {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-inner);
+    color: var(--text);
+    font-weight: 650;
+    text-decoration: none;
+    transition: border-color var(--transition), background-color var(--transition);
+
+    &:hover, &:focus-visible { border-color: var(--accent-outline); background: var(--accent-soft); }
+}
+
+// A section of a tab: its heading over its cards or list.
+.profiles-section {
+    margin-top: 28px;
+    scroll-margin-top: 80px;
+
+    &__title { margin: 0 0 12px; }
+}
+
+// The release groups: the field and the list keep the section's spacing.
 .release-groups { display: contents; }
 
 // A release group's name and its rating; the segments keep their width.
@@ -27,7 +59,7 @@
 
 // The field that finds or adds a group sits beside its button; the placeholder names it, its label is for assistive technology.
 .release-groups-bar {
-    margin: 14px 0;
+    margin: 0 0 14px;
 
     .ui-form--inline { flex-wrap: nowrap; gap: 10px; }
     .ui-form--inline > .ui-field { flex: 1; max-width: 420px; }
@@ -51,6 +83,3 @@
 
 // The editor of conditions needs room.
 #format-editor { width: min(760px, calc(100vw - 32px)); }
-
-// Which profile Anime follows, under the figures.
-.profiles-note { margin: 0 0 var(--space-3, 12px); color: var(--muted); }

@@ -1,7 +1,7 @@
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
-using Jularr.Backend.Data.Enums.Library;
 using Jularr.Backend.Data.Enums.Media;
+using Jularr.Backend.Data.Enums.Library;
 using Jularr.Backend.Data.Enums.Notification;
 using Jularr.Backend.Data.Enums.Operation;
 using Jularr.Backend.Data.Logic.Acquisition;
@@ -201,8 +201,7 @@ namespace Jularr.Backend.Logic.Acquisition
                         FROM
                             "CustomFormats" AS format
                         WHERE
-                            format."MediaTypeId" = work."MediaTypeId"
-                            AND EXISTS (
+                            EXISTS (
                                 SELECT 1
                                 FROM jsonb_array_elements(coalesce(profile."Definition"->'FormatScores', '[]'::jsonb)) AS score
                                 WHERE (score->>'FormatId')::bigint = format."Id"
@@ -235,8 +234,7 @@ namespace Jularr.Backend.Logic.Acquisition
                         FROM
                             "ReleaseGroups" AS rated
                         WHERE
-                            rated."MediaTypeId" = work."MediaTypeId"
-                            AND rated."ReleaseGroupRatingId" IS NOT NULL
+                            rated."ReleaseGroupRatingId" IS NOT NULL
                     ), '{}')::text AS "ReleaseGroupRatings"
                 FROM
                     "WantedItems" AS wanted
@@ -253,21 +251,8 @@ namespace Jularr.Backend.Logic.Acquisition
                             target."WantedItemId" = wanted."Id"
                             AND request."AcquisitionRequestStatusTypeId" BETWEEN 2 AND 6
                     ) AS requested ON TRUE
-                    LEFT JOIN LATERAL (
-                        SELECT
-                            candidate."Id",
-                            candidate."Name",
-                            candidate."Definition"
-                        FROM
-                            "AcquisitionProfiles" AS candidate
-                        WHERE
-                            candidate."MediaTypeId" = work."MediaTypeId"
-                            AND (candidate."Id" = wanted."AcquisitionProfileId"
-                                OR wanted."AcquisitionProfileId" IS NULL AND candidate."IsDefault" AND (candidate."MediaSubtypeId" IS NULL OR candidate."MediaSubtypeId" = work."MediaSubtypeId"))
-                        ORDER BY
-                            candidate."MediaSubtypeId" IS NULL
-                        LIMIT 1
-                    ) AS profile ON TRUE
+                    JOIN "WantedItemProfiles" AS resolved ON resolved."WantedItemId" = wanted."Id"
+                    LEFT JOIN "AcquisitionProfiles" AS profile ON profile."Id" = resolved."AcquisitionProfileId"
                 WHERE
                     wanted."Id" = @WantedItemId;
                 """;

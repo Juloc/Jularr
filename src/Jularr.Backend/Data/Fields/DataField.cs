@@ -403,6 +403,18 @@ namespace Jularr.Backend.Data.Fields
             }
         }
 
+        // A set: order and repeats carry no meaning, so it is kept sorted and distinct.
+        public bool IsSet { get; init; }
+
+        public override object? Normalize(object? value)
+        {
+            if (!IsSet || value is not Array values) return value;
+            var items = values.Cast<object>().Distinct().OrderBy(Convert.ToByte).ToArray();
+            var result = Array.CreateInstance(ClrType.GetElementType()!, items.Length);
+            for (var index = 0; index < items.Length; index++) result.SetValue(items[index], index);
+            return result;
+        }
+
         protected override void ValidateValue(object value, string name, int? maximumLength)
         {
             var values = (Array)value;

@@ -157,7 +157,7 @@ namespace Jularr.Backend.Tests
             var profile = (await (await host.SendAsync(HttpMethod.Get, "/api/v1/admin/acquisition/profiles")).Content.ReadFromJsonAsync<BaseDataList<AcquisitionProfileDetailsV1>>())!
                 .Single(item => item.Name == "HD-1080p");
             CollectionAssert.AreEqual(new[] { "DVD", "Bluray-1080p", "group:1002", "HDTV-1080p" }, profile.AllowedQualities);
-            Assert.AreEqual(("group:1002", MediaType.Series), (profile.UpgradeCutoffQuality, profile.MediaTypeId));
+            Assert.AreEqual(("group:1002", AcquisitionMediaKind.Series), (profile.UpgradeCutoffQuality, profile.MediaKinds.Single()));
             Assert.AreEqual("WEB 1080p", profile.QualityGroups.Single().Name);
             using var formatsResponse = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/acquisition/custom-formats?mediaTypeId=2");
             var formats = (await formatsResponse.Content.ReadFromJsonAsync<PageResult<CustomFormatDetailsV1>>())!.Items;
@@ -194,7 +194,7 @@ namespace Jularr.Backend.Tests
             var lossless = (await (await host.SendAsync(HttpMethod.Get, "/api/v1/admin/acquisition/profiles")).Content.ReadFromJsonAsync<BaseDataList<AcquisitionProfileDetailsV1>>())!
                 .Single(item => item.Name == "Lossless");
             CollectionAssert.AreEqual(new[] { "FLAC-24", "FLAC" }, lossless.AllowedQualities);
-            Assert.AreEqual(("FLAC", MediaType.Music), (lossless.UpgradeCutoffQuality, lossless.MediaTypeId));
+            Assert.AreEqual(("FLAC", AcquisitionMediaKind.Music), (lossless.UpgradeCutoffQuality, lossless.MediaKinds.Single()));
             using var losslessDetails = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/acquisition/profiles/" + lossless.Id);
             var monitoring = (await losslessDetails.Content.ReadFromJsonAsync<AcquisitionProfileDetailsV1>())!;
             CollectionAssert.AreEqual(new[] { "Album", "Studio", "Official" }, monitoring.MonitoredTypes);
@@ -310,8 +310,8 @@ namespace Jularr.Backend.Tests
             using var login = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/login", new LoginDataV1("a@example.test", "test-password-123"));
             var first = await RunAsync(host, true, TakeoverSourceType.Lidarr, "http://lidarr.example.test:8686");
             Assert.AreEqual(2, first.Count(item => item.TakeoverItemTypeId == TakeoverItemType.Profile && item.OutcomeKey == "takeover_added"));
-            using var read = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/acquisition/profiles?mediaTypeId=6");
-            var imported = (await read.Content.ReadFromJsonAsync<BaseDataList<AcquisitionProfileDetailsV1>>())!.Where(item => !item.IsDefault).ToArray();
+            using var read = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/acquisition/profiles?mediaKind=7");
+            var imported = (await read.Content.ReadFromJsonAsync<BaseDataList<AcquisitionProfileDetailsV1>>())!.Where(item => item.DefaultFor.Length == 0).ToArray();
             Assert.AreEqual(2, imported.Length);
             CollectionAssert.AreEquivalent(new[] { "Album", "Single" }, imported.Select(item => item.MonitoredTypes.Single()).ToArray());
             var repeated = await RunAsync(host, true, TakeoverSourceType.Lidarr, "http://lidarr.example.test:8686");

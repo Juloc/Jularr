@@ -357,7 +357,7 @@ namespace Jularr.Backend.Tests
         public async Task Import_AddOnlyThenMonitor_KeepsOneWorkAndGivesItATargetLater()
         {
             await using var host = await CreateHostAsync(new FakeProviders());
-            await host.Fixture.RunSqlAsync("""INSERT INTO "AcquisitionProfiles" ("Name", "MediaTypeId", "Definition") SELECT 'Movies 4K', 1, "Definition" FROM "AcquisitionProfiles" WHERE "MediaTypeId" = 1 AND "IsDefault";""");
+            await host.Fixture.RunSqlAsync("""WITH created AS (INSERT INTO "AcquisitionProfiles" ("Name", "Definition") SELECT 'Movies 4K', profile."Definition" FROM "AcquisitionProfiles" AS profile JOIN "AcquisitionProfileDefaults" AS standard ON standard."AcquisitionProfileId" = profile."Id" AND standard."AcquisitionMediaKindId" = 1 RETURNING "Id") INSERT INTO "AcquisitionProfileMediaKinds" SELECT "Id", 1 FROM created;""");
             const string list = """{"version":1,"items":[{"type":"movie","ids":{"tmdb":"603"}},{"type":"book","ids":{"openlibrary":"OL66554W"}}]}""";
             var signal = host.Services.GetRequiredService<AcquisitionSearchSignal>();
 
@@ -509,7 +509,7 @@ namespace Jularr.Backend.Tests
         public async Task ImportPage_PreviewShowsEveryRowAndTheRunHonoursTheChoices()
         {
             await using var host = await CreateHostAsync(new FakeProviders());
-            await host.Fixture.RunSqlAsync("""INSERT INTO "AcquisitionProfiles" ("Name", "MediaTypeId", "Definition") SELECT 'Movies 4K', 1, "Definition" FROM "AcquisitionProfiles" WHERE "MediaTypeId" = 1 AND "IsDefault";""");
+            await host.Fixture.RunSqlAsync("""WITH created AS (INSERT INTO "AcquisitionProfiles" ("Name", "Definition") SELECT 'Movies 4K', profile."Definition" FROM "AcquisitionProfiles" AS profile JOIN "AcquisitionProfileDefaults" AS standard ON standard."AcquisitionProfileId" = profile."Id" AND standard."AcquisitionMediaKindId" = 1 RETURNING "Id") INSERT INTO "AcquisitionProfileMediaKinds" SELECT "Id", 1 FROM created;""");
             var profile = (long)(await host.ScalarAsync("""SELECT "Id" FROM "AcquisitionProfiles" WHERE "Name" = 'Movies 4K'"""))!;
             const string list = """
                 {"version":1,"items":[

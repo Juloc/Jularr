@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.Playwright;
 
@@ -72,6 +73,70 @@ namespace Jularr.E2E.Tests
             catch
             {
                 await Evidence.SaveAsync(page, "discover-layout-failed");
+                throw;
+            }
+        }
+
+        [TestMethod]
+        [Timeout(300_000)]
+        public async Task ShelfHeadings_KeepTheirTitlesClearOfTheLink_AtEveryPhoneWidth()
+        {
+            await using var jularr = await JularrInstance.StartAsync();
+            await using var browser = await BrowserSession.StartAsync(jularr);
+            var page = browser.Page;
+            await Owner.SetUpAndSignInAsync(page);
+
+            // German has Discover's longest shelf titles, such as "Neuerscheinungen", and "Alle anzeigen".
+            await jularr.RunSqlAsync("""
+                UPDATE "Profiles" SET "UiLocaleId" = (SELECT "Id" FROM "UiLocales" WHERE "Locale" LIKE 'de%' ORDER BY "Locale" LIMIT 1);
+                UPDATE "InstanceModules" SET "IsEnabled" = TRUE WHERE "Key" = 'LocalDiscovery';
+                UPDATE "ExternalWorkSyncs" SET "CompletedAt" = now() WHERE "Namespace" = 'tmdb_movie';
+                INSERT INTO "Works" ("Id", "CatalogNamespace", "MediaTypeId", "CanonicalTitle", "ReleasedOn", "ImageUrl", "Popularity", "Rating", "Votes", "TrendingRank")
+                SELECT 21000 + rank, 'tmdb_movie', 1, 'Film ' || rank, current_date - rank, 'https://127.0.0.1/' || rank || '.jpg', 1000 - rank, 7.5, 1000, rank FROM generate_series(1, 20) AS rank;
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") SELECT "Id", 'tmdb_movie', "Id"::text FROM "Works" WHERE "Id" BETWEEN 21001 AND 21020;
+                """);
+
+            // Where each heading's title, link and visible arrows are, and the title's height; overlapping boxes are reported.
+            const string Headings = """
+                () => [...document.querySelectorAll('#discover-recommendations .media-shelf__heading')].map(heading => {
+                    const box = element => element.getBoundingClientRect();
+                    const title = box(heading.querySelector('h2'));
+                    const others = [...heading.querySelectorAll('a, .media-shelf__control:not([hidden])')].map(box).filter(other => other.width > 0);
+                    const overlap = others.some(other => title.left < other.right - 0.5 && other.left < title.right - 0.5 && title.top < other.bottom - 0.5 && other.top < title.bottom - 0.5);
+                    return { text: heading.querySelector('h2').textContent, width: Math.round(title.width), top: Math.round(title.top + scrollY), height: Math.round(title.height), overlap,
+                        inside: others.every(other => other.right <= innerWidth + 0.5) };
+                })
+                """;
+
+            try
+            {
+                foreach (var width in new[] { 320, 338, 360, 390, 430 })
+                {
+                    await page.SetViewportSizeAsync(width, 800);
+                    await page.GotoAsync("/?type=movies");
+                    var shelves = page.Locator("#discover-recommendations .media-shelf");
+                    await Assertions.Expect(shelves.GetByRole(AriaRole.Heading, new() { Name = "Neuerscheinungen" })).ToBeVisibleAsync();
+                    await Assertions.Expect(shelves.First.GetByRole(AriaRole.Link, new() { Name = "Alle anzeigen" })).ToBeVisibleAsync();
+                    var before = await page.EvaluateAsync<JsonElement>(Headings);
+                    Evidence.Log($"[test] {width}px: {before}");
+                    foreach (var heading in before.EnumerateArray())
+                    {
+                        Assert.IsFalse(heading.GetProperty("overlap").GetBoolean(), $"{width}px: {heading}");
+                        Assert.IsTrue(heading.GetProperty("inside").GetBoolean(), $"{width}px: {heading}");
+                        Assert.IsTrue(heading.GetProperty("width").GetInt32() >= 120, $"{width}px: {heading}");
+                    }
+
+                    // Swiping a shelf sideways moves none of the headings.
+                    await shelves.First.Locator(".media-shelf__items").EvaluateAsync("items => items.scrollBy({ left: 300 })");
+                    await page.WaitForTimeoutAsync(200);
+                    var after = await page.EvaluateAsync<JsonElement>(Headings);
+                    Assert.AreEqual(before.ToString(), after.ToString(), $"{width}px");
+                    if (width is 320 or 390) await Evidence.SaveAsync(page, $"discover-shelf-headings-{width}");
+                }
+            }
+            catch
+            {
+                await Evidence.SaveAsync(page, "discover-shelf-headings-failed");
                 throw;
             }
         }

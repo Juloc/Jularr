@@ -205,8 +205,8 @@ episodes; Music through MusicBrainz with the album as the Work and its tracks as
 quality groups, format conditions and score thresholds; source quality/metadata profile pairs track repeated
 imports. Missing keys are entered inline, root folders can create libraries on an explicitly
 chosen configured storage connection, and series without provider IDs are matched uniquely
-by title and year. Arr+ administration has five tabs for profiles, custom formats,
-quality sizes, release profiles and shared tags. Pasted Sonarr/Radarr/TRaSH JSON uses
+by title and year. Arr+ administration has three tabs (profiles, custom formats with release
+profiles, release groups and tags, and quality sizes; owner decision 4 Nov). Pasted Sonarr/Radarr/TRaSH JSON uses
 the same format writer. Profile fallback qualities and legacy single-field rules are removed.
 Releases are grabbed immediately; improvements use the profile's upgrade rules, including requested book languages within equal quality groups. The simpler Jularr view over the same data remains a later task. Games: IGDB metadata with shared platforms (G1), Arr+ per requested platform (G2) and
 ROM identification by hash against the libretro No-Intro DATs (G3) are connected; ScreenScraper

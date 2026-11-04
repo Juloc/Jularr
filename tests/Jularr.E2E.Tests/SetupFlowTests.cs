@@ -204,7 +204,7 @@ namespace Jularr.E2E.Tests
                 // The later steps start from what was taken over: the quality profile and the library are there.
                 await page.GetByRole(AriaRole.Button, new() { Name = "Continue", Exact = true }).ClickAsync();
                 await page.WaitForURLAsync("**/Setup/Instance");
-                await page.GotoAsync("/Setup/Profiles?MediaTypeId=Series");
+                await page.GotoAsync("/Setup/Profiles");
                 await Assertions.Expect(page.Locator(".list-row", new() { HasText = "Web 1080p" })).ToHaveCountAsync(1);
                 await page.GotoAsync("/Setup/Libraries");
                 await Assertions.Expect(page.Locator(".setup-libraries__root", new() { HasText = "Series" })).ToHaveCountAsync(1);

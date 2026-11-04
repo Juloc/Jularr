@@ -617,13 +617,17 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                 SELECT
                     profile."Id",
                     profile."Name",
-                    profile."MediaTypeId",
-                    profile."MediaSubtypeId"
+                    pair."MediaTypeId",
+                    pair."MediaSubtypeId"
                 FROM
                     "AcquisitionProfiles" AS profile
+                    JOIN "AcquisitionProfileMediaKinds" AS applies ON applies."AcquisitionProfileId" = profile."Id"
+                    JOIN (VALUES (1, 1, NULL), (2, 2, NULL), (3, 1, 1), (3, 2, 1), (4, 3, NULL), (5, 3, 2), (6, 3, 3), (7, 6, NULL), (8, 7, NULL))
+                        AS pair ("AcquisitionMediaKindId", "MediaTypeId", "MediaSubtypeId") ON pair."AcquisitionMediaKindId" = applies."AcquisitionMediaKindId"
                 ORDER BY
                     profile."Name",
-                    profile."Id"
+                    profile."Id",
+                    pair."MediaTypeId"
                 LIMIT 200;
                 """;
             return ctx.ReadSql.ReadListAsync<MediaImportOptionV1>(sql, ct);

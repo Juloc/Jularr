@@ -27,7 +27,7 @@ namespace Jularr.Backend.Tests
         [DataRow("Example.Show.S01E01.1080p.WEB-DL.DDP5.1.H.264-GRP", "WEBDL-1080p", "WEBDL-1080p")]
         [DataRow("Example.Show.S01E01.1080p.WEBRip.x264-GRP", "WEBRip-1080p", "WEBRip-1080p")]
         [DataRow("Example.Show.S01E01.WEB-DL.x264-GRP", "WEBDL-480p", "WEBDL-480p")]
-        [DataRow("Example.Movie.2020.1080p.BluRay.REMUX.AVC.DTS-HD.MA.5.1-GRP", "Bluray-1080p Remux", "Remux-1080p")]
+        [DataRow("Example.Movie.2020.1080p.BluRay.REMUX.AVC.DTS-HD.MA.5.1-GRP", "Remux-1080p", "Remux-1080p")]
         [DataRow("Example.Movie.2020.2160p.UHD.BluRay.x265-GRP", "Bluray-2160p", "Bluray-2160p")]
         [DataRow("Example.Movie.2020.576p.BluRay.x264-GRP", "Bluray-576p", "Bluray-576p")]
         [DataRow("Example.Movie.2020.COMPLETE.UHD.BLURAY-GRP", "Bluray-720p", "BR-DISK")]

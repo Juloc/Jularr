@@ -2,6 +2,7 @@ using System.Text.Json;
 using Jularr.Backend.Data.Admin.Acquisition.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
+using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Enums.Service;
 using Jularr.Backend.Logic.Acquisition;
 using Jularr.Backend.Service.Core;
@@ -27,8 +28,9 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                 var catalog = ServarrFormatCatalog.Portable(Data.TakeoverSourceTypeId == TakeoverSourceType.Radarr);
                 var parsed = ServarrApiClient.ParseCustomFormats(document.RootElement);
                 if (parsed.Count == 0) throw new DataValidationException(nameof(Data.Json), "required");
-                var mapped = parsed.Select(format => ServarrFormatMapping.Map(format, catalog, Data.MediaTypeId)).ToArray();
-                var result = await Context.ImportCustomFormatsAsync(Data.MediaTypeId, mapped, CancellationToken);
+                var type = Data.TakeoverSourceTypeId == TakeoverSourceType.Radarr ? MediaType.Movie : MediaType.Series;
+                var mapped = parsed.Select(format => ServarrFormatMapping.Map(format, catalog, type)).ToArray();
+                var result = await Context.ImportCustomFormatsAsync(type, mapped, CancellationToken);
                 return new BaseDataList<SavedCustomFormatV1>(result.Select(format => new SavedCustomFormatV1(format.Id, format.Version)));
             }
             catch (JsonException)

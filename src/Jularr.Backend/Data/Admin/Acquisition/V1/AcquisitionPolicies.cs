@@ -7,15 +7,16 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
 {
     public sealed class ReadAcquisitionPolicyParametersV1 : BaseParameters
     {
-        public ReadAcquisitionPolicyParametersV1(MediaType mediaTypeId, int page = 1, int pageSize = 25)
+        public ReadAcquisitionPolicyParametersV1(MediaType? mediaTypeId = null, int page = 1, int pageSize = 25)
         {
             MediaTypeId = mediaTypeId;
             Page = page;
             PageSize = pageSize;
         }
 
-        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId))]
-        public MediaType MediaTypeId { get; }
+        // Only the release profiles that apply to one media type; none lists them all.
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId), false)]
+        public MediaType? MediaTypeId { get; }
 
         public int Page { get; }
 

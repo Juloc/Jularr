@@ -95,7 +95,11 @@ namespace Jularr.Backend.Data.Fields.Acquisition
         public static readonly LongField Id = new() { Minimum = 1 };
         public static readonly StringField Name = new(NpgsqlDbType.Varchar) { MaximumLength = 128, AllowBlank = false, Trim = true };
         public static readonly StringField Definition = new() { MaximumLength = 65536, AllowBlank = false };
-        public static readonly BoolField IsDefault = new();
+        // The media types a profile applies to (at least one, of one quality list) and those it is the default of.
+        public static readonly EnumArrayField MediaKinds = new(typeof(AcquisitionMediaKind)) { MaximumLength = 8, IsSet = true };
+        public static readonly EnumArrayField DefaultFor = new(typeof(AcquisitionMediaKind)) { MaximumLength = 8, IsSet = true };
+        public static readonly EnumField MediaKind = new(typeof(AcquisitionMediaKind));
+        public static readonly BoolField IsInUse = new();
         public static readonly StringArrayField AllowedQualities = new() { ItemMaximumLength = 128, MaximumLength = 32 };
         public static readonly BoolField UpgradeAllowed = new();
         public static readonly StringField UpgradeCutoffQuality = new() { MaximumLength = 128, Required = false };
