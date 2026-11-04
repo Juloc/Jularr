@@ -177,6 +177,89 @@ namespace Jularr.E2E.Tests
             }
         }
 
+        [TestMethod]
+        [Timeout(300_000)]
+        public async Task SeasonDialog_SearchesTheWholeSeason_CountsInTheSingular_AndKeepsItsHeadClear()
+        {
+            await using var sources = await Catalogs.StartAsync();
+            await using var jularr = await JularrInstance.StartAsync();
+            await using var session = await BrowserSession.StartAsync(jularr);
+            var page = session.Page;
+            await Owner.SetUpAndSignInAsync(page);
+
+            // Season 6 of a series, all three episodes aired and missing; one indexer answers with the season pack, two of its episodes and one of season 5.
+            await jularr.RunSqlAsync($$"""
+                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle", "ReleaseYear") VALUES (601, 2, 'Jularr Season Show', 2020);
+                INSERT INTO "WorkUnits" ("Id", "WorkId", "WorkUnitTypeId", "Number") VALUES (6010, 601, 1, 6);
+                INSERT INTO "WorkUnits" ("WorkId", "ParentWorkUnitId", "WorkUnitTypeId", "Number", "ReleasedOn")
+                SELECT 601, 6010, 2, episode."Number", date '2020-01-01' + episode."Number" FROM generate_series(1, 3) AS episode ("Number");
+                INSERT INTO "WantedItems" ("Id", "WorkId", "NextSearchAt") VALUES (601, 601, now() + interval '3 days');
+                INSERT INTO "AcquisitionConnections" ("Name", "AcquisitionConnectionTypeId", "BaseUrl") VALUES ('Season indexer', 1, '{{sources.Address}}/newznab/');
+                """);
+
+            try
+            {
+                await page.SetViewportSizeAsync(1280, 900);
+                await page.GotoAsync("/Admin/Works/601");
+                await page.GetByRole(AriaRole.Link, new() { Name = "Interactive search for this season" }).ClickAsync();
+                var dialog = page.Locator("dialog.search-dialog[open]");
+                await Assertions.Expect(dialog.GetByRole(AriaRole.Heading, new() { Name = "Jularr Season Show" })).ToBeVisibleAsync();
+
+                // The season is asked, no episode: the empty field reads "All", not an example number.
+                await Assertions.Expect(dialog.Locator("[name=ParentUnitNumber]")).ToHaveValueAsync("6");
+                var episode = dialog.Locator("[name=UnitNumber]");
+                await Assertions.Expect(episode).ToHaveValueAsync("");
+                await Assertions.Expect(episode).ToHaveAttributeAsync("placeholder", "All");
+
+                // The X has the first focus, so no field's tip opens by itself; an opened one does not cover the title, and nothing covers it.
+                await Assertions.Expect(dialog.GetByRole(AriaRole.Button, new() { Name = "Close" })).ToBeFocusedAsync();
+                await Assertions.Expect(dialog.Locator(".ui-field__tip:visible")).ToHaveCountAsync(0);
+                await dialog.Locator(".search-scope .ui-field__info").First.HoverAsync();
+                var tip = dialog.Locator(".ui-field__tip:visible");
+                await Assertions.Expect(tip).ToHaveCountAsync(1);
+                var title = await dialog.GetByRole(AriaRole.Heading, new() { Name = "Jularr Season Show" }).BoundingBoxAsync();
+                var box = await tip.BoundingBoxAsync();
+                Assert.IsFalse(box!.X < title!.X + title.Width && title.X < box.X + box.Width && box.Y < title.Y + title.Height && title.Y < box.Y + box.Height, "The tip covers the dialog's title.");
+                Assert.IsTrue(await tip.EvaluateAsync<bool>("tip => { const box = tip.getBoundingClientRect(); return document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2)?.closest('.ui-field__tip') === tip; }"),
+                    "Something covers the tip.");
+                await Evidence.SaveAsync(page, "wanted-search-season-tip-desktop");
+                await page.Mouse.MoveAsync(5, 5);
+
+                // Every episode of the season is a release for it, the season pack too; only the other season is wrong. One source is counted in the singular.
+                await Assertions.Expect(dialog.Locator("tbody[data-state=done]")).ToHaveCountAsync(1);
+                await Assertions.Expect(dialog.GetByRole(AriaRole.Status).First).ToHaveTextAsync("4 releases from 1 source");
+                var rows = dialog.Locator("tr.search-row[data-index]");
+                await Assertions.Expect(rows).ToHaveCountAsync(4);
+                await Assertions.Expect(rows.Filter(new() { HasText = "Wrong episode" })).ToHaveCountAsync(0);
+                await Assertions.Expect(rows.Filter(new() { HasText = "S05E01" })).ToContainTextAsync("Wrong season");
+                await Evidence.SaveAsync(page, "wanted-search-season-desktop");
+
+                CollectionAssert.AreEqual(Array.Empty<string>(), session.Problems.ToArray());
+
+                // On a touch phone the dialog fits, no tip opens by itself, and a tap on the (i) opens it.
+                await using var phone = await session.Context.Browser!.NewContextAsync(new()
+                {
+                    BaseURL = jularr.Address.ToString(), ViewportSize = new() { Width = 390, Height = 844 }, HasTouch = true, IsMobile = true, StorageState = await session.Context.StorageStateAsync()
+                });
+                var touch = await phone.NewPageAsync();
+                await touch.GotoAsync("/Admin/Works/601");
+                await touch.GetByRole(AriaRole.Link, new() { Name = "Interactive search for this season" }).TapAsync();
+                var small = touch.Locator("dialog.search-dialog[open]");
+                await Assertions.Expect(small.Locator("tbody[data-state=done]")).ToHaveCountAsync(1);
+                await Assertions.Expect(small.Locator(".ui-field__tip:visible")).ToHaveCountAsync(0);
+                Assert.IsFalse(await small.EvaluateAsync<bool>("element => element.scrollWidth > element.clientWidth + 1 || document.body.scrollWidth > innerWidth + 1"));
+                await Evidence.SaveAsync(touch, "wanted-search-season-phone");
+                await small.Locator(".search-scope .ui-field__info").First.TapAsync();
+                await Assertions.Expect(small.Locator(".ui-field__tip:visible")).ToHaveCountAsync(1);
+                await Evidence.SaveAsync(touch, "wanted-search-season-tip-phone");
+            }
+            catch
+            {
+                await Evidence.SaveAsync(page, nameof(SeasonDialog_SearchesTheWholeSeason_CountsInTheSingular_AndKeepsItsHeadClear));
+                throw;
+            }
+        }
+
         private sealed class Catalogs(WebApplication app) : IAsyncDisposable
         {
             private int _calls;
@@ -205,6 +288,23 @@ namespace Jularr.E2E.Tests
                     return Results.Text("""
                         {"results":[{"id":1343,"title":"Pride and Prejudice","authors":[{"name":"Austen, Jane"}],"languages":["en"],"formats":{"application/epub+zip":"https://www.gutenberg.org/ebooks/1343.epub3.images"}}]}
                         """, "application/json");
+                });
+                // A Newznab indexer of TV releases: its capabilities, and the same releases for every search.
+                app.MapGet("/newznab/api", (HttpContext http) =>
+                {
+                    if (http.Request.Query["t"] == "caps")
+                    {
+                        return Results.Text("""
+                            <caps><server title="E2E" /><limits max="100" default="100" />
+                              <searching><search available="yes" supportedParams="q" /><tv-search available="yes" supportedParams="q,season,ep" /></searching>
+                              <categories><category id="5000" name="TV"><subcat id="5040" name="HD" /></category></categories></caps>
+                            """, "application/xml");
+                    }
+
+                    Interlocked.Increment(ref sources._calls);
+                    var items = string.Concat(new[] { "S06", "S06E01", "S06E02", "S05E01" }.Select((name, index) =>
+                        $"""<item><title>Jularr.Season.Show.{name}.1080p.WEB-DL-GRP</title><guid>season-{index}</guid><pubDate>Mon, 05 Oct 2026 10:00:00 +0000</pubDate><category>5040</category><enclosure url="{sources.Address}/newznab/get/{index}" length="2000000000" /></item>"""));
+                    return Results.Text("<rss><channel>" + items + "</channel></rss>", "application/xml");
                 });
                 app.MapGet("/broken/books", () =>
                 {
