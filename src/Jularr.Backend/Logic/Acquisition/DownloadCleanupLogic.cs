@@ -154,7 +154,7 @@ namespace Jularr.Backend.Logic.Acquisition
                       SELECT version."AppliedAt" FROM "DatabaseSchemaVersions" AS version WHERE version."Version" = 5
                   )
                   AND connection."AcquisitionConnectionTypeId" = 2
-                  AND operation."ErrorKey" = 'download_failed'
+                  AND (operation."ErrorKey" = 'download_failed' OR operation."ErrorKey" LIKE 'import\_%')
                   AND connection."RemovesFailed"
                   AND NOT EXISTS (
                     SELECT 1 FROM "DownloadClientCleanups" AS cleanup
@@ -200,7 +200,8 @@ namespace Jularr.Backend.Logic.Acquisition
                 WHERE operation."Id" = @OperationId
                   AND operation."OperationTypeId" = 2
                   AND operation."OperationStatusTypeId" = 4
-                  AND operation."ErrorKey" = 'download_failed'
+                  -- The client failed it, or the import found nothing of use in it (no video, only extras, another title): a fault of the release, which goes like Sonarr's.
+                  AND (operation."ErrorKey" = 'download_failed' OR operation."ErrorKey" LIKE 'import\_%')
                   AND operation."ExternalId" IS NOT NULL
                   AND connection."AcquisitionConnectionTypeId" = 2
                   AND connection."RemovesFailed"

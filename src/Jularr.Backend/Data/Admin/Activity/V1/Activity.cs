@@ -9,6 +9,7 @@ using Jularr.Backend.Data.Fields.Live;
 using Jularr.Backend.Data.Fields.Media;
 using Jularr.Backend.Data.Fields.Operation;
 using Jularr.Backend.Data.Fields.Storage;
+using Jularr.Backend.Logic.Acquisition;
 
 namespace Jularr.Backend.Data.Admin.Activity.V1
 {
@@ -16,7 +17,7 @@ namespace Jularr.Backend.Data.Admin.Activity.V1
     {
         public ReadActivityParametersV1(ActivityFilterType activityFilterTypeId = ActivityFilterType.All, int page = 1, int pageSize = 25, bool torrentOnly = false, bool downloadsOnly = false,
             bool failedOnly = false, DownloadClientKind? downloadClientKindId = null, long? acquisitionConnectionId = null, MediaType? mediaTypeId = null,
-            DownloadPriorityType? downloadPriorityTypeId = null, MediaType[]? mediaTypeIds = null, MediaSubtype[]? mediaSubtypeIds = null, bool tasksOnly = false)
+            DownloadPriorityType? downloadPriorityTypeId = null, MediaType[]? mediaTypeIds = null, MediaSubtype[]? mediaSubtypeIds = null, bool tasksOnly = false, bool queueOnly = false)
         {
             MediaTypeIds = mediaTypeIds ?? [];
             MediaSubtypeIds = mediaSubtypeIds ?? [];
@@ -25,6 +26,7 @@ namespace Jularr.Backend.Data.Admin.Activity.V1
             TorrentOnly = torrentOnly;
             DownloadsOnly = downloadsOnly;
             TasksOnly = tasksOnly;
+            QueueOnly = queueOnly;
             FailedOnly = failedOnly;
             DownloadClientKindId = downloadClientKindId;
             AcquisitionConnectionId = acquisitionConnectionId;
@@ -49,6 +51,10 @@ namespace Jularr.Backend.Data.Admin.Activity.V1
         // Only Jularr's own tasks, as the Jobs entry's Tasks lists them: scans, backups, media imports, searches and the notices of failed background jobs, no downloads.
         [DataField(typeof(OperationFields), nameof(OperationFields.TasksOnly))]
         public bool TasksOnly { get; }
+
+        // The Queue, as Sonarr's: the open downloads and a grab that waits for its indexer's pause; a failed download is the History's.
+        [DataField(typeof(OperationFields), nameof(OperationFields.QueueOnly))]
+        public bool QueueOnly { get; }
 
         // One client's downloads: a kind, and for SABnzbd and qBittorrent the connection.
         [DataField(typeof(OperationFields), nameof(OperationFields.DownloadClientKindId), false)]
@@ -161,8 +167,16 @@ namespace Jularr.Backend.Data.Admin.Activity.V1
         public ActivityItemV1(long id, OperationType operationTypeId, OperationStatusType operationStatusTypeId, string title, long? workId, string? workTitle, int? progressPercent,
             string? reasonKey, DateTime createdAt, DateTime? finishedAt, string? connectionName, long? sizeBytes, long? remainingBytes, int? etaSeconds, DownloadStateType? downloadStateTypeId, string? manualUrl = null, bool canPause = false, bool canRetryImport = false, bool isWaiting = false, bool canImportManually = false, string? indexerName = null, long? bytesPerSecond = null, bool canBrowseFiles = false, long? sabnzbdConnectionId = null,
             long? acquisitionConnectionId = null, DownloadClientKind? downloadClientKindId = null, MediaType? mediaTypeId = null, bool canRetry = false,
-            DownloadPriorityType downloadPriorityTypeId = DownloadPriorityType.Normal, string[]? unmatchedFiles = null, string[]? unmatchedFileReasons = null)
+            DownloadPriorityType downloadPriorityTypeId = DownloadPriorityType.Normal, string[]? unmatchedFiles = null, string[]? unmatchedFileReasons = null,
+            string? qualityKey = null, int? parentUnitNumber = null, int? unitStart = null, int? unitEnd = null, string? unitTitle = null, DateTime? waitUntil = null)
         {
+            QualityKey = qualityKey;
+            ParentUnitNumber = parentUnitNumber;
+            UnitStart = unitStart;
+            UnitEnd = unitEnd;
+            UnitTitle = unitTitle;
+            WaitUntil = waitUntil;
+            Languages = operationTypeId == OperationType.Download ? ReleaseWords.ReadLanguages(title) : [];
             UnmatchedFiles = unmatchedFiles;
             UnmatchedFileReasons = unmatchedFileReasons;
             DownloadPriorityTypeId = downloadPriorityTypeId;
@@ -302,6 +316,29 @@ namespace Jularr.Backend.Data.Admin.Activity.V1
         // How soon its client takes it.
         [DataField(typeof(OperationFields), nameof(OperationFields.DownloadPriorityTypeId))]
         public DownloadPriorityType DownloadPriorityTypeId { get; }
+
+        // What the release is, as the queue's columns show it: its quality, the season (or volume) and the episodes it holds, the title of a single episode, and the languages its name says.
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.QualityKey))]
+        public string? QualityKey { get; }
+
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.ParentUnitNumber))]
+        public int? ParentUnitNumber { get; }
+
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.UnitStart))]
+        public int? UnitStart { get; }
+
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.UnitEnd))]
+        public int? UnitEnd { get; }
+
+        [DataField(typeof(WorkUnitFields), nameof(WorkUnitFields.Title))]
+        public string? UnitTitle { get; }
+
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.Languages))]
+        public string[] Languages { get; }
+
+        // A grab the indexer limited waits, not failed: it is tried again when the indexer's pause ends.
+        [DataField(typeof(OperationFields), nameof(OperationFields.DownloadWaitUntil))]
+        public DateTime? WaitUntil { get; }
     }
 
     public sealed class ReadDownloadClientsParametersV1 : BaseParameters

@@ -100,9 +100,18 @@ SavePill, FolderPicker, IconInfo, TimePicker, FactList, Drawer, FilterDialog, Sh
   Where the last part equals a heading under it, that heading is dropped (kept visually hidden for assistive technology).
 - Owner's decision 4 Nov (Sonarr's Activity and System → Tasks, replacing the Activity entry of #1881): the ARR group starts with **Queue** (`/Admin/Queue`, the default), whose views are
   **History** (`/Admin/Queue/History`) and **Blocked** (`/Admin/Queue/Blocked`), each under the normal media-type capsule (`type=a,b` stays in every view's address), then **Wanted**, the indexers,
-  the quality profiles and the sources. The Queue holds downloads and their own imports only, in four groups, what needs the owner first, each with its count: *Needs your help* (a check
-  at the source such as Anna's Archive, a failed download), *To import* (also what is imported by hand), *Downloading* (with the live pace) and *Waiting in the downloader*; a group without
-  entries is left out; its menu figure is the open downloads. Blocked lists the releases that are not taken again (blocked by hand or by a fault) with **Allow again**. The old addresses
+  the quality profiles and the sources. The Queue holds downloads and their own imports only; its menu figure is the open downloads. Owner's decision 5 Nov ("genau wie Sonarr"): the Queue
+  is **one table**, no tiles and no groups, with Sonarr's columns: the state as an icon in its phase's tone (its word for assistive technology and on the phone card), the title (the Work,
+  under it the release), the episode (`S01E05`, `S01E05–E07`, the season of a pack; volume and chapter for books), the episode's title, quality, the languages the release names,
+  protocol (Usenet, Torrent, Direct by the client), time left, progress (bar and percent) and the actions; the medium width drops episode title, language and protocol, the narrow one
+  episode and quality; on a phone each row is a card with the bar and time left under the title and the facts in one line. What waits for a person comes first. A **failed download
+  is not in the Queue**: a fault of the release (the client failed it, Jularr's Usenet could not repair or unpack it, the import found no video, only extras or another title) blocks
+  the release, removes the client's job where the connection removes failed ones, makes the target due again and keeps "Download failed" with its reason in the History; an
+  interruption or a grab problem not caused by the release (client unreachable or refusing, link gone, indexer limit) goes to the History too and is searched again later. An
+  **import that waits for a person** (unclear title, quality not allowed by the profile, other episodes, unreadable names, nothing placeable, partial import, a check at the source,
+  a storage or setup problem) stays as a row with the orange warning icon and its reason under the title, with import by hand, read again or the source check. A **grab its indexer
+  limited** is no failure: it waits as a row ("Waiting until 14:20") until the indexer's pause ends, then the next search takes over. Failed rows from before are settled once by
+  the same rule by the download monitor's cleanup pass. Blocked lists the releases that are not taken again (blocked by hand or by a fault) with **Allow again**. The old addresses
   (`/Admin/Activity` with its query, `/Admin/History`, `/Admin/Activity/Blocked`) lead there permanently. The **Jobs** entry (Operations) has **Tasks** (`/Admin/Jobs/Tasks`, first) and
   **Schedule** (`/Admin/Jobs`, the background jobs with pause and run now, and the history of finished tasks): Tasks lists Jularr's own work, scans, backups, media list imports, searches,
   the book being translated (read-only, leading to the book) and the notices of failed background jobs (a failed "Discover cache" or "Subtitles" job), in *Needs your help* (Retry where

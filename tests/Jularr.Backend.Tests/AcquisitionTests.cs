@@ -1615,16 +1615,15 @@ namespace Jularr.Backend.Tests
             await RunAsync<MonitorDownloadsV1>(host);
             Assert.AreEqual("download_failed", await host.ScalarAsync("SELECT \"ReasonKey\" FROM \"AcquisitionReleases\""));
 
-            // The failure waits in the queue until it is retried.
+            // As Sonarr's, the failure needs no person: it leaves the queue at once, the History keeps it with its reason, and its target is due again.
             using var todo = await host.SendAsync(HttpMethod.Get, "/Admin/Queue");
             var html = await todo.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, todo.StatusCode, html);
-            StringAssert.Contains(html, "Download failed");
-            var failedId = (await ReadActivityAsync(host, ActivityFilterType.All)).Single().Id;
-            using var retried = await host.SendAsync(HttpMethod.Post, "/Admin/Queue?handler=Retry&operationId=" + failedId,
-                new Dictionary<string, string> { ["__RequestVerificationToken"] = LibraryTests.Token(html) });
-            Assert.AreEqual(HttpStatusCode.Redirect, retried.StatusCode, await retried.Content.ReadAsStringAsync());
+            Assert.IsFalse(html.Contains("Download failed", StringComparison.Ordinal));
             Assert.AreEqual(0, (await ReadActivityAsync(host, ActivityFilterType.All)).Count);
+            var failedId = (await ReadActivityAsync(host, ActivityFilterType.History)).Single().Id;
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"ActivityEvents\" WHERE \"ActivityEventTypeId\" = 2 AND \"ReasonKey\" = 'download_failed'"));
+            Assert.AreEqual(true, await host.ScalarAsync("SELECT \"NextSearchAt\" <= now() FROM \"WantedItems\""));
 
             // A failed backup is no download: the Jobs entry's Tasks show it with the tool's reason, the queue does not.
             await host.Fixture.RunSqlAsync("INSERT INTO \"Operations\" (\"OperationTypeId\", \"OperationStatusTypeId\", \"ErrorKey\", \"FinishedAt\") VALUES (3, 4, 'backup_version_mismatch', now())");
@@ -1764,7 +1763,7 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
-        public async Task Retry_AfterAClientFault_TakesTheSameReleaseAgain()
+        public async Task AClientFault_LeavesTheQueue_AndTheNextSearchTakesTheSameReleaseAgain()
         {
             using var storage = new TemporaryDirectory();
             using var downloads = new TemporaryDirectory();
@@ -1773,13 +1772,14 @@ namespace Jularr.Backend.Tests
             await CreateWantedMovieAsync(host);
             await RunAsync<SearchDueWantedV1>(host);
 
-            // A client fault keeps the release; Retry searches now and reuses its operation.
+            // A client fault keeps the release: the download leaves the queue for the History, and once its wait is over the next search reuses its operation.
             usenet.History = """{"history":{"slots":[{"nzo_id":"SABnzbd_nzo_1","name":"Example","status":"Failed","fail_message":"Post-processing script failed"}]}}""";
             await RunAsync<MonitorDownloadsV1>(host);
-            var failed = (await ReadActivityAsync(host, ActivityFilterType.All)).Single();
+            Assert.AreEqual(0, (await ReadActivityAsync(host, ActivityFilterType.All)).Count);
+            var failed = (await ReadActivityAsync(host, ActivityFilterType.History)).Single();
             Assert.AreEqual("download_interrupted", failed.ReasonKey);
-            using var retried = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/" + failed.Id + "/retry");
-            Assert.AreEqual(HttpStatusCode.OK, retried.StatusCode, await retried.Content.ReadAsStringAsync());
+            Assert.AreEqual(true, await host.ScalarAsync("SELECT \"NextSearchAt\" > now() FROM \"WantedItems\""), "An interruption is tried again later, not at once.");
+            await host.Fixture.RunSqlAsync("UPDATE \"WantedItems\" SET \"NextSearchAt\" = now()");
             usenet.History = """{"history":{"slots":[]}}""";
             await RunAsync<SearchDueWantedV1>(host);
             CollectionAssert.AreEqual(new[] { "https://indexer.example.test/getnzb/feature", "https://indexer.example.test/getnzb/feature" }, usenet.Grabbed);
@@ -2894,22 +2894,31 @@ namespace Jularr.Backend.Tests
             var summary = (await response.Content.ReadFromJsonAsync<ActivitySummaryV1>())!;
             Assert.AreEqual((2, 50L, 2, 1), (summary.ActiveCount, summary.BytesPerSecond, summary.ImportCount, summary.ErrorCount));
 
-            // The page: the type bar, the entry's views in one row, the four groups with what needs a person first, the failed entry with its retry, and the panel of one entry.
+            // A grab its indexer limited is no failure: it waits in the queue until the indexer's pause ends; its release has a quality the queue shows.
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "AcquisitionReleases" ("Id", "WantedItemId", "ReleaseIdentity", "Title", "AcquisitionReleaseStatusTypeId") VALUES (9, 801, 'queue-9', 'Release 9', 3);
+                INSERT INTO "Operations" ("Id", "OperationTypeId", "OperationStatusTypeId", "AcquisitionReleaseId", "ErrorKey", "DismissedAt", "FinishedAt") VALUES (9, 2, 4, 9, 'acquisition_rate_limited', now(), now());
+                UPDATE "WantedItems" SET "NextSearchAt" = now() + interval '20 minutes' WHERE "Id" = 801;
+                UPDATE "AcquisitionReleases" SET "QualityKey" = 'WEBDL-1080p' WHERE "Id" = 1;
+                """);
+
+            // The page, as Sonarr's: the type bar, the entry's views in one row, then one table, no tiles or groups; what needs a person first with its orange warning and reason,
+            // the failed download not at all (it is the History's), the limited grab waiting for its indexer, the panel of one entry.
             using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Queue");
             var html = await page.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
-            StringAssert.Contains(html, "data-live=\"queue\" data-live-text=\"speed\"");
             StringAssert.Contains(html, "class=\"capsule-bar");
-            var groups = new[] { "Help", "Import", "Running", "Queued" };
-            var positions = groups.Select(group => html.IndexOf("id=\"activity-group-" + group + "\"", StringComparison.Ordinal)).ToArray();
-            CollectionAssert.AreEqual(positions.Order().ToArray(), positions, "What needs the owner is first: help, import, running, queued.");
-            Assert.IsTrue(positions.All(position => position > 0), "All four groups are there.");
-            string Group(string name) => html[html.IndexOf("id=\"activity-group-" + name + "\"", StringComparison.Ordinal)..];
-            StringAssert.Contains(Group("Help")[..Group("Help").IndexOf("id=\"activity-group-Import\"", StringComparison.Ordinal)], "handler=Retry&amp;operationId=5");
-            StringAssert.Contains(Group("Import")[..Group("Import").IndexOf("id=\"activity-group-Running\"", StringComparison.Ordinal)], "Release 4");
-            StringAssert.Contains(Group("Import")[..Group("Import").IndexOf("id=\"activity-group-Running\"", StringComparison.Ordinal)], "Release 3");
-            StringAssert.Contains(Group("Running")[..Group("Running").IndexOf("id=\"activity-group-Queued\"", StringComparison.Ordinal)], "Release 1");
-            StringAssert.Contains(Group("Queued"), "Release 2");
+            Assert.AreEqual(1, System.Text.RegularExpressions.Regex.Matches(html, "class=\"list-panel[ \"]").Count, "One table.");
+            Assert.IsFalse(html.Contains("id=\"activity-group-", StringComparison.Ordinal) || html.Contains("kpi-tile", StringComparison.Ordinal), "No groups and no tiles.");
+            foreach (var column in new[] { "Episode", "Episode title", "Quality", "Language", "Protocol", "Time left", "Progress" }) StringAssert.Contains(html, ">" + column + "<", column);
+            Assert.IsFalse(html.Contains("operation=5\"", StringComparison.Ordinal), "A failed download is not in the queue.");
+            StringAssert.Contains(html, "queue-reason queue-reason--warning");
+            StringAssert.Contains(html, "Library space is insufficient or could not be checked");
+            StringAssert.Contains(html, "list-row--warning");
+            StringAssert.Contains(html, "Waiting until");
+            Assert.IsTrue(html.IndexOf("operation=9\"", StringComparison.Ordinal) > 0, "The limited grab waits in the queue.");
+            StringAssert.Contains(html, "WEBDL-1080p");
+            Assert.IsTrue(html.IndexOf("operation=4\"", StringComparison.Ordinal) < html.IndexOf("operation=1\"", StringComparison.Ordinal), "What needs a person comes first.");
             Assert.IsFalse(html.Contains("operationId=8\"", StringComparison.Ordinal) || html.Contains("id=\"activity-8\"", StringComparison.Ordinal), "A background job is not part of the queue.");
 
             // The Jobs entry's Tasks hold it instead: under Needs help, leading to the schedule and put aside by Dismiss; it is the figure of the Jobs entry.
@@ -2920,7 +2929,7 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(help, "handler=Dismiss&amp;operationId=8");
             Assert.IsFalse(tasksHtml.Contains("Release 1", StringComparison.Ordinal), "Downloads are the queue's.");
             Assert.AreEqual(1, summary.TaskHelpCount);
-            StringAssert.Contains(html, "href=\"/Admin/Queue?operation=5\"");
+            StringAssert.Contains(html, "href=\"/Admin/Queue?operation=1\"");
             StringAssert.Contains(html, "href=\"/Admin/Queue/History\"");
             Assert.AreEqual(1, System.Text.RegularExpressions.Regex.Matches(html, "navigation-tabs\"|navigation-tabs ").Count, "One row of views only.");
             StringAssert.Contains(html, "class=\"view-switch\"");
@@ -2930,17 +2939,17 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.OK, filesView.StatusCode, filesViewHtml);
             StringAssert.Contains(filesViewHtml, "class=\"view-switch\"");
             Assert.IsFalse(System.Text.RegularExpressions.Regex.IsMatch(html, "<dialog[^>]* open=\"open\""), "Only the entry the address names is open.");
-            using var panel = await host.SendAsync(HttpMethod.Get, "/Admin/Queue?operation=5");
+            using var panel = await host.SendAsync(HttpMethod.Get, "/Admin/Queue?operation=1");
             var panelHtml = await panel.Content.ReadAsStringAsync();
             StringAssert.Matches(panelHtml, new System.Text.RegularExpressions.Regex("<dialog[^>]* open=\"open\""));
-            StringAssert.Contains(panelHtml, "handler=Dismiss&amp;operationId=5");
+            StringAssert.Contains(panelHtml, "handler=RemoveAndBlock&amp;operationId=1");
 
-            // An entry that says why it failed has no bar, as the stream sets it: a bar here would vanish with the first snapshot and the rows below would jump.
-            await host.Fixture.RunSqlAsync("UPDATE \"Operations\" SET \"ProgressPercent\" = 30 WHERE \"Id\" = 5");
+            // An entry that says why it waits has no bar, as the stream sets it: a bar here would vanish with the first snapshot and the rows below would jump.
+            await host.Fixture.RunSqlAsync("UPDATE \"Operations\" SET \"ProgressPercent\" = 30 WHERE \"Id\" = 4");
             using var withProgress = await host.SendAsync(HttpMethod.Get, "/Admin/Queue");
             var progressHtml = await withProgress.Content.ReadAsStringAsync();
-            var helpGroup = progressHtml[progressHtml.IndexOf("id=\"activity-group-Help\"", StringComparison.Ordinal)..progressHtml.IndexOf("id=\"activity-group-Import\"", StringComparison.Ordinal)];
-            Assert.IsFalse(System.Text.RegularExpressions.Regex.IsMatch(helpGroup, "<progress(?![^>]*hidden)[^>]*>"), "A failed entry shows no bar.");
+            var waitingRow = progressHtml[progressHtml.IndexOf("Library space is insufficient", StringComparison.Ordinal)..progressHtml.IndexOf("operation=4\"", StringComparison.Ordinal)];
+            Assert.IsFalse(System.Text.RegularExpressions.Regex.IsMatch(waitingRow, "<progress(?![^>]*hidden)[^>]*>"), "A waiting entry shows no bar.");
 
             // The type bar narrows the queue: the films' downloads stay for movies, none is left for books, and the choice stays in the views' addresses.
             using var movies = await host.SendAsync(HttpMethod.Get, "/Admin/Queue?type=movies");
@@ -2952,7 +2961,55 @@ namespace Jularr.Backend.Tests
             var booksHtml = await books.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, books.StatusCode, booksHtml);
             Assert.IsFalse(booksHtml.Contains("Release 1", StringComparison.Ordinal));
-            Assert.IsFalse(booksHtml.Contains("id=\"activity-group-", StringComparison.Ordinal));
+        }
+
+        // As Sonarr's: a failed download needs no person. Failures from before (or left by an interrupted batch) are settled once by the monitor's pass as new ones are:
+        // out of the queue, the target of a release fault due again, one History event each. A download that waits for a person stays with its reason, and a grab the indexer
+        // limited waits in the queue until the pause ends, without a failure in the History.
+        [TestMethod]
+        public async Task FailedDownloads_LeaveTheQueueOnce_IntoTheHistory_WhileADoubtAndALimitedGrabWait()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, new FakeUsenet());
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle") VALUES (811, 1, 'Broken Film'), (812, 1, 'Interrupted Film'), (813, 1, 'Doubtful Film');
+                INSERT INTO "WantedItems" ("Id", "WorkId", "NextSearchAt") VALUES (811, 811, now() + interval '1 day'), (812, 812, now() + interval '1 day'), (813, 813, NULL);
+                INSERT INTO "AcquisitionReleases" ("Id", "WantedItemId", "ReleaseIdentity", "Title", "AcquisitionReleaseStatusTypeId", "ReasonKey")
+                VALUES (11, 811, 'broken', 'Broken.Film.2020.1080p', 3, 'usenet_incomplete'), (12, 812, 'interrupted', 'Interrupted.Film.2020.1080p', 3, 'download_interrupted'),
+                    (13, 813, 'doubtful', 'Doubtful.Film.2020.1080p', 1, NULL), (14, 812, 'limited', 'Interrupted.Film.2020.720p', 3, 'acquisition_rate_limited');
+                INSERT INTO "Operations" ("Id", "OperationTypeId", "OperationStatusTypeId", "AcquisitionReleaseId", "ErrorKey", "AttentionKey", "FinishedAt")
+                VALUES (11, 2, 4, 11, 'usenet_incomplete', NULL, now()), (12, 2, 4, 12, 'download_interrupted', NULL, now()), (13, 2, 2, 13, NULL, 'import_ambiguous_title', NULL),
+                    (14, 2, 4, 14, 'acquisition_rate_limited', NULL, now());
+                """);
+
+            async Task<long[]> QueueAsync()
+            {
+                using var response = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/activity?queueOnly=true&pageSize=100");
+                Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, await response.Content.ReadAsStringAsync());
+                return [.. (await response.Content.ReadFromJsonAsync<PageResult<ActivityItemV1>>())!.Items.Select(item => item.Id).Order()];
+            }
+
+            await RunAsync<MonitorDownloadsV1>(host);
+            CollectionAssert.AreEqual(new long[] { 13, 14 }, await QueueAsync(), "The doubt and the limited grab wait; the failures are gone.");
+            Assert.AreEqual(3L, await host.ScalarAsync("SELECT count(*) FROM \"Operations\" WHERE \"Id\" IN (11, 12, 14) AND \"DismissedAt\" IS NOT NULL"));
+            Assert.AreEqual(true, await host.ScalarAsync("SELECT \"NextSearchAt\" <= now() FROM \"WantedItems\" WHERE \"Id\" = 811"), "A release fault searches its target again.");
+            Assert.AreEqual(true, await host.ScalarAsync("SELECT \"NextSearchAt\" > now() FROM \"WantedItems\" WHERE \"Id\" = 812"), "An interruption keeps its later try.");
+            Assert.AreEqual("download_interrupted,usenet_incomplete", await host.ScalarAsync("SELECT string_agg(\"ReasonKey\", ',' ORDER BY \"ReasonKey\") FROM \"ActivityEvents\" WHERE \"ActivityEventTypeId\" = 2"));
+            using (var queue = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/activity?queueOnly=true&pageSize=100"))
+            {
+                var items = (await queue.Content.ReadFromJsonAsync<PageResult<ActivityItemV1>>())!.Items;
+                Assert.IsNotNull(items.Single(item => item.Id == 14).WaitUntil, "The limited grab says until when it waits.");
+                Assert.IsNull(items.Single(item => item.Id == 13).WaitUntil);
+            }
+
+            // The pass settles each failure once.
+            await RunAsync<MonitorDownloadsV1>(host);
+            Assert.AreEqual(2L, await host.ScalarAsync("SELECT count(*) FROM \"ActivityEvents\" WHERE \"ActivityEventTypeId\" = 2"));
+
+            // Once the indexer's pause is over, the next search takes over and the limited grab leaves the queue.
+            await host.Fixture.RunSqlAsync("UPDATE \"WantedItems\" SET \"NextSearchAt\" = now() - interval '1 minute' WHERE \"Id\" = 812");
+            CollectionAssert.AreEqual(new long[] { 13 }, await QueueAsync());
         }
 
         // The Activity entry's other views follow the type bar too: History lists the events of the chosen types, Blocked the blocked releases (by hand or by a fault) with the button that allows one again.

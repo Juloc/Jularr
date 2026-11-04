@@ -38,6 +38,7 @@ namespace Jularr.Backend.Data.Fields.Operation
         public static readonly EnumField DownloadBulkActionTypeId = new(typeof(DownloadBulkActionType));
         public static readonly BoolField DownloadsOnly = new();
         public static readonly BoolField TasksOnly = new();
+        public static readonly BoolField QueueOnly = new();
         public static readonly BoolField FailedOnly = new();
         public static readonly EnumField DownloadPriorityTypeId = new(typeof(DownloadPriorityType));
         public static readonly IntField QueuePosition = new() { Minimum = 0, Required = false };

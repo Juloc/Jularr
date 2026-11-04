@@ -1,14 +1,63 @@
 @use "../../../Framework/Components/CapsuleBar";
 
-// The queue on the list kit: the grid of its columns at three widths, the live status of a row and the drawer's parts.
+// The queue on the list kit, as Sonarr's one table: the grid of its columns at three widths (state, title, episode, its title, quality, language, protocol, time left,
+// progress, actions; the medium width drops the episode title, language and protocol, the narrow one also the episode and quality), the state icon, the line under
+// the title and the progress; then the drawer's parts. The groups and the live status below belong to the Jobs entry's Tasks, which load this sheet too.
 
 .activity-queue {
-    --list-columns: minmax(220px, 2.4fr) minmax(150px, 1.3fr) minmax(130px, 1fr) minmax(130px, 1fr) minmax(110px, .8fr);
-    --list-columns-medium: minmax(220px, 2.4fr) minmax(150px, 1.3fr) minmax(130px, 1fr) minmax(110px, .8fr);
-    --list-columns-narrow: minmax(200px, 2.2fr) minmax(150px, 1.3fr) minmax(110px, .8fr);
+    --list-columns: 36px minmax(190px, 2.2fr) minmax(72px, .5fr) minmax(90px, .9fr) minmax(92px, .6fr) minmax(84px, .4fr) minmax(72px, .4fr) minmax(84px, .4fr) minmax(96px, .8fr) minmax(76px, auto);
+    --list-columns-medium: 36px minmax(190px, 2.2fr) minmax(72px, .5fr) minmax(92px, .6fr) minmax(84px, .4fr) minmax(96px, .8fr) minmax(76px, auto);
+    --list-columns-narrow: 36px minmax(180px, 2.2fr) minmax(84px, .4fr) minmax(96px, .8fr) minmax(76px, auto);
 }
 
-// The groups of the queue: a heading with the count (and the running group's pace) at its end, then the group's rows.
+// The state as a round icon in its phase's tone (an import that waits for a person is the orange warning); its word is for assistive technology, the phone card shows it.
+.queue-state {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-width: 32px;
+    height: 32px;
+    border-radius: 999px;
+    background: var(--phase-soft, var(--field));
+    color: var(--phase, var(--muted));
+
+    &__label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+}
+
+// Under the title: why it waits (orange) or until when the indexer pauses; else the release.
+.queue-reason {
+    display: block;
+    color: var(--muted);
+    font-size: var(--text-small);
+    overflow-wrap: anywhere;
+
+    &--warning { color: var(--warning); font-weight: 650; }
+}
+
+.queue-progress {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 4ch;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+
+    .live-progress__bar { width: 100%; height: 6px; }
+    &__percent { color: var(--muted); font-size: var(--text-small); font-weight: 650; text-align: right; }
+    [hidden] { visibility: hidden; display: block; }
+}
+
+// The progress under the title is the phone card's; wider lists have its column.
+.queue-progress-phone { display: none; }
+
+// Phone card: the state with its word beside the title, the bar and the time left under it.
+@container list (max-width: 690px) {
+    .queue-progress-phone { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; margin-top: 6px; .queue-eta { color: var(--muted); font-weight: 650; } }
+    .activity-queue .queue-state { padding: 0 10px; }
+    .activity-queue .queue-state__label { position: static; width: auto; height: auto; clip-path: none; font-size: var(--text-small); font-weight: 780; }
+}
+
+// The groups of the Tasks: a heading with the count at its end, then the group's rows.
 .activity-group {
     scroll-margin-top: 16px;
 

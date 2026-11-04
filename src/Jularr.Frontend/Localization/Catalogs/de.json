@@ -337,10 +337,6 @@
   "acquisition.connection.downloadPathWarning": ["Select a folder that Jularr can read. Until a download path is mapped, grabs from this client cannot start.","Wähle einen Ordner aus, auf den Jularr zugreifen kann. Ohne zugeordneten Downloadpfad können keine Downloads über diesen Client gestartet werden."],
   "admin.blocked.title": ["Blocked","Gesperrt"],
   "activity.limit": ["The first 100 entries are shown, what needs you first.","Die ersten 100 Einträge werden gezeigt, zuerst was dich braucht."],
-  "activity.group.Help": ["Needs your help","Braucht Hilfe"],
-  "activity.group.Import": ["To import","Zu importieren"],
-  "activity.group.Running": ["Downloading","Lädt gerade"],
-  "activity.group.Queued": ["Waiting in the downloader","Wartet im Downloader"],
   "blocked.list": ["Blocked releases","Gesperrte Releases"],
   "blocked.actions": ["Blocked releases actions","Aktionen für gesperrte Releases"],
   "blocked.release": ["Release","Release"],
@@ -16587,6 +16583,50 @@
   "tasks.translation": [
    "Book translation",
    "Buchübersetzung"
+  ],
+  "queue.episode": [
+   "Episode",
+   "Episode"
+  ],
+  "queue.episodeTitle": [
+   "Episode title",
+   "Episodentitel"
+  ],
+  "queue.quality": [
+   "Quality",
+   "Qualität"
+  ],
+  "queue.language": [
+   "Language",
+   "Sprache"
+  ],
+  "queue.protocol": [
+   "Protocol",
+   "Protokoll"
+  ],
+  "queue.timeLeft": [
+   "Time left",
+   "Restzeit"
+  ],
+  "queue.progress": [
+   "Progress",
+   "Fortschritt"
+  ],
+  "queue.limited": [
+   "Waiting for the indexer's pause",
+   "Wartet auf die Pause des Indexers"
+  ],
+  "queue.limitedUntil": [
+   "Waiting until",
+   "Wartet bis"
+  ],
+  "queue.volume": [
+   "Vol. {0}",
+   "Bd. {0}"
+  ],
+  "queue.chapter": [
+   "Ch. {0}",
+   "Kap. {0}"
   ]
  }
 }

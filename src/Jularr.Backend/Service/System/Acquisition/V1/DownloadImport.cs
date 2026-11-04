@@ -418,10 +418,11 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
         // Retry only terminal history jobs. This never removes a job that remains in SABnzbd's active queue.
         public async Task<int> ProcessCleanupAsync(LogicContext context, CancellationToken ct)
         {
-            // Reconcile the durable download outcome after an interrupted enqueue.
+            // Reconcile the durable download outcome after an interrupted enqueue; failed downloads still in the queue are settled as new failures are.
             await context.ExecuteBatchAsync(async (ctx, token) =>
             {
                 await ctx.QueueMissedDownloadCleanupsAsync(token);
+                await ctx.SettleFailedDownloadsAsync(token);
                 return true;
             }, ct);
             var due = await context.ExecuteBatchAsync((ctx, token) => ctx.ReadDueDownloadCleanupsAsync(token), ct);

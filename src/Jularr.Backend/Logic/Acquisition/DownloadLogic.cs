@@ -870,7 +870,8 @@ namespace Jularr.Backend.Logic.Acquisition
 
         public static async Task FailDownloadAsync(this LogicContext ctx, DownloadFailureData data, CancellationToken ct)
         {
-            // The target is searched again; only release faults exclude the release.
+            // The target is searched again; only release faults exclude the release. As Sonarr's, a failed download leaves the queue at once (it needs no person) and stays in the history;
+            // a grab the indexer limited is no failure: it waits in the queue until the target's next search.
             var sql = new SqlStatement();
             sql.Statement =
                 """
@@ -881,6 +882,7 @@ namespace Jularr.Backend.Logic.Acquisition
                         "OperationStatusTypeId" = 4,
                         "ErrorKey" = @ReasonKey,
                         "FinishedAt" = now(),
+                        "DismissedAt" = now(),
                         "AttentionKey" = NULL,
                         "AttentionUrl" = NULL,
                         "AttentionProposal" = NULL,
@@ -921,7 +923,7 @@ namespace Jularr.Backend.Logic.Acquisition
                     (SELECT work."CanonicalTitle" FROM "Works" AS work WHERE work."Id" = wanted."WorkId") AS "Title";
                 """;
             sql.Parameters.Add(data);
-            if (await ctx.ReadOptionalAsync<FailedWorkData>(sql, ct) is { } failed)
+            if (await ctx.ReadOptionalAsync<FailedWorkData>(sql, ct) is { } failed && data.ReasonKey != RateLimitedReasonKey)
             {
                 await ctx.RecordActivityAsync(new ActivityEventData(ActivityEventType.DownloadFailed, operationId: data.OperationId, reasonKey: data.ReasonKey), ct);
                 await ctx.NotifyStaffAsync(new StaffNotificationData(NotificationType.DownloadFailed, failed.WorkId, failed.Title, "/Admin/Queue"), ct);
@@ -929,6 +931,90 @@ namespace Jularr.Backend.Logic.Acquisition
         }
 
         public const string RemovedReasonKey = "download_removed";
+
+        public const string RateLimitedReasonKey = "acquisition_rate_limited";
+
+        // Failed downloads from before the queue held open downloads only (or left behind by an interrupted batch) are settled by the same rule once, by the cleanup pass:
+        // out of the queue, the target of a release fault due now unless it downloads or is paused (the search keeps its indexers' pauses), and the history's event where it has none.
+        public static async Task SettleFailedDownloadsAsync(this LogicContext ctx, CancellationToken ct)
+        {
+            // What is still to settle, a pass at a time, and which of it the history has no event of yet (a limited grab is no failure and gets none).
+            var read = new SqlStatement();
+            read.Statement =
+                $"""
+                SELECT
+                    operation."Id" AS "OperationId",
+                    operation."ErrorKey" AS "ReasonKey",
+                    operation."ErrorKey" IS DISTINCT FROM '{RateLimitedReasonKey}' AND NOT EXISTS (
+                        SELECT
+                            1
+                        FROM
+                            "ActivityEvents" AS event
+                        WHERE
+                            event."ActivityEventTypeId" = 2
+                            AND event."AcquisitionReleaseId" = operation."AcquisitionReleaseId"
+                    ) AS "IsUnrecorded"
+                FROM
+                    "Operations" AS operation
+                WHERE
+                    operation."OperationTypeId" = 2
+                    AND operation."OperationStatusTypeId" = 4
+                    AND operation."DismissedAt" IS NULL
+                ORDER BY
+                    operation."Id"
+                LIMIT 64;
+                """;
+            var unsettled = await ctx.ReadSql.ReadListAsync<SettledDownloadData>(read, ct);
+            if (unsettled.Count == 0) return;
+
+            var sql = new SqlStatement();
+            sql.Statement =
+                $"""
+                WITH settled AS (
+                    UPDATE
+                        "Operations" AS operation
+                    SET
+                        "DismissedAt" = now()
+                    WHERE
+                        operation."Id" = ANY(@OperationIds)
+                        AND operation."OperationStatusTypeId" = 4
+                        AND operation."DismissedAt" IS NULL
+                    RETURNING
+                        operation."AcquisitionReleaseId"
+                )
+                UPDATE
+                    "WantedItems" AS wanted
+                SET
+                    "NextSearchAt" = now()
+                FROM
+                    settled
+                    JOIN "AcquisitionReleases" AS release ON release."Id" = settled."AcquisitionReleaseId"
+                WHERE
+                    wanted."Id" = release."WantedItemId"
+                    AND release."AcquisitionReleaseStatusTypeId" = 3
+                    AND {ReleaseFaultSql}
+                    AND NOT wanted."IsPaused"
+                    AND (wanted."NextSearchAt" IS NULL OR wanted."NextSearchAt" > now())
+                    AND NOT EXISTS (
+                        SELECT
+                            1
+                        FROM
+                            "Operations" AS open
+                            JOIN "AcquisitionReleases" AS sibling ON sibling."Id" = open."AcquisitionReleaseId"
+                        WHERE
+                            sibling."WantedItemId" = wanted."Id"
+                            AND open."OperationTypeId" = 2
+                            AND open."OperationStatusTypeId" IN (1, 2)
+                    );
+                """;
+            sql.Parameters.Add(new SettledOperationsData([.. unsettled.Select(item => item.OperationId)]));
+            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+
+            foreach (var unrecorded in unsettled.Where(item => item.IsUnrecorded))
+            {
+                await ctx.RecordActivityAsync(new ActivityEventData(ActivityEventType.DownloadFailed, operationId: unrecorded.OperationId, reasonKey: unrecorded.ReasonKey), ct);
+            }
+        }
 
         // The open downloads of one client in the order it takes them: priority first, then the order a person gave, then the oldest.
         public static Task<IReadOnlyList<DownloadQueueEntryData>> ReadDownloadQueueAsync(this LogicContext ctx, DownloadQueueScopeData scope, CancellationToken ct)

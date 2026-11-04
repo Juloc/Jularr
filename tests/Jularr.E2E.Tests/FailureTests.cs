@@ -41,18 +41,18 @@ namespace Jularr.E2E.Tests
                 await page.GotoAsync("/Admin/Queue");
                 var queued = Steps.ListRow(page, FakeServices.MovieTitle);
                 await Assertions.Expect(queued).ToContainTextAsync("Downloading");
-                await Assertions.Expect(queued).ToContainTextAsync("40 %");
+                await Assertions.Expect(queued).ToContainTextAsync("40%");
 
                 // The client moves on: the queue and the request show it without a reload.
                 await page.EvaluateAsync("window.liveMarker = 1");
                 fakes.HeldPercent = 70;
                 var slow = new LocatorAssertionsToContainTextOptions { Timeout = 30_000 };
-                await Assertions.Expect(queued).ToContainTextAsync("70 %", slow);
-                await Assertions.Expect(queued.Locator("progress")).ToHaveAttributeAsync("value", "70");
+                await Assertions.Expect(queued).ToContainTextAsync("70%", slow);
+                await Assertions.Expect(queued.Locator("progress").First).ToHaveAttributeAsync("value", "70");
 
-                // The running download sits in its group; nothing needs help.
-                await Assertions.Expect(page.Locator("#activity-group-Running")).ToContainTextAsync(FakeServices.MovieTitle, slow);
-                await Assertions.Expect(page.Locator("#activity-group-Help")).ToHaveCountAsync(0);
+                // The running download is the queue's one row; nothing waits for a person.
+                await Assertions.Expect(page.Locator(".activity-queue .list-body .list-row")).ToHaveCountAsync(1);
+                await Assertions.Expect(page.Locator(".activity-queue .list-row--warning")).ToHaveCountAsync(0);
                 Assert.AreEqual(1, await page.EvaluateAsync<int>("window.liveMarker ?? 0"), "The queue was reloaded instead of updated.");
                 await page.GotoAsync("/Requests");
                 var request = page.Locator(".request-row", new() { HasText = FakeServices.MovieTitle });
@@ -99,30 +99,27 @@ namespace Jularr.E2E.Tests
             {
                 await PrepareAsync(page, fakes, folders);
 
-                // A broken download lands in the queue; after Retry the broken release is blocked and the next good one is taken.
-                // Needs help counts downloads only: failed health checks of the offline keyless catalogs stay on the Jobs page.
+                // As Sonarr's: a broken download needs no person. It leaves the queue for the History, its release is blocked and the next good one is taken.
 
                 // The good one is offered only once downloads work again: taken by the search in the background while they still fail, it would fail as well.
                 fakes.FailDownloads = true;
                 fakes.Offer(Film with { File = video });
                 await Steps.OpenSearchAsync(page, FakeServices.MovieTitle);
                 await Steps.GrabAsync(page, Film);
-                var failed = await WaitForFailedDownloadAsync(page);
+                await WaitForFailureInHistoryAsync(page);
                 fakes.FailDownloads = false;
                 fakes.Offer(LowerFilm with { File = video });
 
-                // The failure needs help, so it is the first group of the queue with its count; the views of the entry sit next to it.
-                var help = page.Locator("#activity-group-Help");
-                await Assertions.Expect(Steps.ListRow(help, "Download failed")).ToHaveCountAsync(1);
-                await Assertions.Expect(help.Locator(".activity-group__count")).ToHaveTextAsync("1");
+                // The queue holds nothing of it; the views of the entry sit next to it.
+                await page.GotoAsync("/Admin/Queue");
+                await Assertions.Expect(page.Locator("main")).Not.ToContainTextAsync("Download failed");
                 var views = page.GetByRole(AriaRole.Navigation, new() { Name = "Pages of this area", Exact = true });
                 await Assertions.Expect(views.Locator("a[href='/Admin/Queue/History']")).ToHaveCountAsync(1);
                 await Assertions.Expect(views.Locator("a[href='/Admin/Queue/Blocked']")).ToHaveCountAsync(1);
-                await Steps.SubmitAsync(page, failed.Locator("form").Filter(new() { Has = page.GetByRole(AriaRole.Button, new() { Name = "Retry" }) }));
                 await Steps.OpenSearchAsync(page, FakeServices.MovieTitle);
                 await Assertions.Expect(page.Locator("tr", new() { HasText = Film.Title })).ToContainTextAsync("Failed or blocked before");
 
-                // The retried search may take it in the background first; then the page says it is already downloading.
+                // The search, due again at once, may take it in the background first; then the page says it is already downloading.
                 if (!fakes.Grabbed.Contains(fakes.NzbAddress(LowerFilm).ToString()))
                 {
                     await Steps.FollowAsync(page, page.Locator("tr", new() { HasText = LowerFilm.Title }).Locator("form")
@@ -292,23 +289,23 @@ namespace Jularr.E2E.Tests
         }
 
         // The queue row once the download monitor reports the failure.
-        private static async Task<ILocator> WaitForFailedDownloadAsync(IPage page)
+        // The failure reaches the History (and leaves the queue) with the download monitor's next pass.
+        private static async Task WaitForFailureInHistoryAsync(IPage page)
         {
             var deadline = DateTime.UtcNow.AddMinutes(2);
             while (DateTime.UtcNow < deadline)
             {
-                await page.GotoAsync("/Admin/Queue");
-                var row = Steps.ListRow(page, "Download failed");
-                if (await row.CountAsync() > 0)
+                await page.GotoAsync("/Admin/Queue/History");
+                if (await Steps.ListRow(page, "Download failed").CountAsync() > 0)
                 {
-                    return row.First;
+                    return;
                 }
 
                 // The download monitor runs every fifteen seconds.
                 await page.WaitForTimeoutAsync(3000);
             }
 
-            throw new AssertFailedException("No failed download in the queue within two minutes.");
+            throw new AssertFailedException("No failed download in the History within two minutes.");
         }
 
         // Another process may hold a file inside for a moment.

@@ -491,6 +491,38 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         public DateTime NextSearchAt { get; }
     }
 
+    // The failed downloads one cleanup pass settles.
+    internal sealed class SettledOperationsData : BaseData
+    {
+        public SettledOperationsData(long[] operationIds)
+        {
+            OperationIds = operationIds;
+        }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.Ids))]
+        public long[] OperationIds { get; }
+    }
+
+    // A failed download the cleanup pass settles, and whether the history still lacks its event.
+    internal sealed class SettledDownloadData : BaseData
+    {
+        public SettledDownloadData(long operationId, string? reasonKey, bool isUnrecorded)
+        {
+            OperationId = operationId;
+            ReasonKey = reasonKey;
+            IsUnrecorded = isUnrecorded;
+        }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.Id))]
+        public long OperationId { get; }
+
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.ReasonKey))]
+        public string? ReasonKey { get; }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.IsFinished))]
+        public bool IsUnrecorded { get; }
+    }
+
     internal sealed class DownloadOperationParameters : BaseData
     {
         public DownloadOperationParameters(long operationId)
