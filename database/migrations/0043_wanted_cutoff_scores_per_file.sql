@@ -20,16 +20,8 @@ WITH present_assets AS MATERIALIZED (
 SELECT wanted."Id" AS "WantedItemId", asset."WorkUnitId"
 FROM "WantedItems" AS wanted
     JOIN "Works" AS work ON work."Id" = wanted."WorkId"
-    JOIN LATERAL (
-        SELECT candidate."Id", candidate."Definition"
-        FROM "AcquisitionProfiles" AS candidate
-        WHERE candidate."MediaTypeId" = work."MediaTypeId"
-            AND (candidate."Id" = wanted."AcquisitionProfileId"
-                OR wanted."AcquisitionProfileId" IS NULL AND candidate."IsDefault"
-                    AND (candidate."MediaSubtypeId" IS NULL OR candidate."MediaSubtypeId" = work."MediaSubtypeId"))
-        ORDER BY candidate."MediaSubtypeId" IS NULL
-        LIMIT 1
-    ) AS profile ON TRUE
+    JOIN "WantedItemProfiles" AS resolved ON resolved."WantedItemId" = wanted."Id"
+    JOIN "AcquisitionProfiles" AS profile ON profile."Id" = resolved."AcquisitionProfileId"
     JOIN present_assets AS asset ON asset."WorkId" = work."Id"
     JOIN jsonb_array_elements_text(profile."Definition" -> 'QualityOrder') WITH ORDINALITY AS quality ("Key", "Position")
         ON lower(quality."Key") = lower(asset."QualityKey")
@@ -79,4 +71,3 @@ OR work."MediaTypeId" = 3 AND work."MediaSubtypeId" IS DISTINCT FROM 2
         WHERE target."WantedItemId" = wanted."Id" AND request."AcquisitionRequestStatusTypeId" BETWEEN 2 AND 6
     )
     AND NOT (array_agg(preferred."IsRequestedLanguage" ORDER BY quality."Position", scores."FormatScore" DESC, preferred."IsRequestedLanguage" DESC))[1];
-
