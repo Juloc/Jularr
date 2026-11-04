@@ -39,14 +39,18 @@ namespace Jularr.Backend.Tests
         [TestMethod]
         public void DirectCatalogLanguage_UsesVerifiedIsoCodesOnly()
         {
-            Assert.AreEqual("DE", DirectSources.TrustedLanguageCode("deu"));
-            Assert.AreEqual("DE", DirectSources.TrustedLanguageCode("ger"));
-            Assert.AreEqual("JA", DirectSources.TrustedLanguageCode("ja-JP"));
-            Assert.AreEqual("EN", DirectSources.TrustedLanguageCode("eng"));
-            Assert.IsNull(DirectSources.TrustedLanguageCode(null));
-            Assert.IsNull(DirectSources.TrustedLanguageCode(""));
-            Assert.IsNull(DirectSources.TrustedLanguageCode("pdf"));
-            Assert.IsNull(DirectSources.TrustedLanguageCode("unknown-language"));
+            CollectionAssert.AreEqual(new[] { "DE" }, DirectSources.TrustedLanguageCodes("deu").ToArray());
+            CollectionAssert.AreEqual(new[] { "DE" }, DirectSources.TrustedLanguageCodes("ger").ToArray());
+            CollectionAssert.AreEqual(new[] { "JA" }, DirectSources.TrustedLanguageCodes("ja-JP").ToArray());
+            CollectionAssert.AreEqual(new[] { "EN" }, DirectSources.TrustedLanguageCodes("eng").ToArray());
+            Assert.AreEqual(0, DirectSources.TrustedLanguageCodes(null).Count);
+            Assert.AreEqual(0, DirectSources.TrustedLanguageCodes("").Count);
+            Assert.AreEqual(0, DirectSources.TrustedLanguageCodes("pdf").Count);
+            Assert.AreEqual(0, DirectSources.TrustedLanguageCodes("unknown-language").Count);
+
+            // A file in several languages names each of them; an unknown one is left out.
+            CollectionAssert.AreEqual(new[] { "DE", "EN" }, DirectSources.TrustedLanguageCodes("de, en").ToArray());
+            CollectionAssert.AreEqual(new[] { "PL" }, DirectSources.TrustedLanguageCodes("pl; xx-unknown").ToArray());
         }
 
 

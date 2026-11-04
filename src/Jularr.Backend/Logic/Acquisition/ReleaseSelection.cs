@@ -109,12 +109,13 @@ namespace Jularr.Backend.Logic.Acquisition
                 return new CandidateEvaluation(candidate, SelectionDecision.ManualReview, score, reliability, reasons);
             }
 
-            // An unrequested language needs a deliberate manual choice; fallback is not an unrestricted download.
+            // An unrequested language, or one the release does not state, needs a deliberate manual choice; no fallback is an unrestricted download.
             if (profile.IsBook && (profile.LanguageOrder.Length > 0 || profile.LanguageFallback == LanguageFallbackType.None)
                 && (candidate.Identity.Confidence != IdentityConfidence.Ambiguous || profile.AllowAmbiguousIdentity)
                 && !UpgradePolicy.IsRequested(profile, candidate.Languages) && !UpgradePolicy.IsFallback(profile, candidate.Languages))
             {
-                reasons.Add(new SelectionReason(SelectionReasonKind.Profile, candidate.Languages.Count == 0 ? "LanguageUnknown" : "LanguageNotAllowed"));
+                reasons.Add(candidate.Languages.Count == 0 ? new SelectionReason(SelectionReasonKind.Profile, "LanguageUnknown")
+                    : new SelectionReason(SelectionReasonKind.Profile, "LanguageNotAllowed", string.Join(", ", candidate.Languages.Select(language => language.ToUpperInvariant()).Distinct())));
                 return new CandidateEvaluation(candidate, SelectionDecision.ManualReview, score, reliability, reasons);
             }
 

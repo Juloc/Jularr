@@ -182,17 +182,20 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
-        public void Selection_FlexibleFallbackAcceptsOtherKnownLanguages()
+        public void Selection_FlexibleFallbackLeavesOtherKnownLanguagesToAPerson()
         {
             var result = ReleaseSelectionEngine.Select(ProfileWithFallback(LanguageFallbackType.Any, "JA"),
                 [Candidate("Héctor García - IKIGAI (ES) (epub)")]);
 
-            Assert.IsNotNull(result.Winner);
-            Assert.AreEqual(SelectionDecision.Eligible, result.Winner.Decision);
+            Assert.IsNull(result.Winner);
+            var row = result.Ranked.Single();
+            Assert.AreEqual(SelectionDecision.ManualReview, row.Decision);
+            Assert.AreEqual("LanguageNotAllowed", row.Reasons[^1].Code);
+            Assert.AreEqual("ES", row.Reasons[^1].Value);
         }
 
         [TestMethod]
-        public void Selection_FlexibleFallbackPrefersOriginalBeforeOtherSources()
+        public void Selection_FlexibleFallbackTakesTheOriginalNotAnotherSource()
         {
             var result = ReleaseSelectionEngine.Select(ProfileWithFallback(LanguageFallbackType.Any, "JA"),
                 [Candidate("Héctor García - IKIGAI (ES) (epub)", false, 1, "Usenet"),
@@ -200,22 +203,22 @@ namespace Jularr.Backend.Tests
 
             Assert.IsNotNull(result.Winner);
             Assert.AreEqual("Héctor García - IKIGAI (JA) (epub)", result.Winner.Candidate.Parsed!.RawTitle);
+            Assert.AreEqual(SelectionDecision.ManualReview, result.Ranked.Single(row => row.Candidate.Languages.Contains("ES")).Decision);
+        }
+
+        [TestMethod]
+        public void Selection_FlexibleFallbackRanksUnknownAfterTheOriginal()
+        {
+            var result = ReleaseSelectionEngine.Select(ProfileWithFallback(LanguageFallbackType.Any, "JA"),
+                [Candidate("Héctor García - IKIGAI (epub)", false, 1, "Usenet"),
+                 Candidate("Héctor García - IKIGAI (JA) (epub)", false, 50, "Anna")]);
+
+            Assert.AreEqual("Héctor García - IKIGAI (JA) (epub)", result.Winner!.Candidate.Parsed!.RawTitle);
             Assert.AreEqual("PreferredLanguage", result.WinnerReason!.Code);
         }
 
         [TestMethod]
-        public void Selection_FlexibleFallbackRanksUnknownLast()
-        {
-            var result = ReleaseSelectionEngine.Select(ProfileWithFallback(LanguageFallbackType.Any, "JA"),
-                [Candidate("Héctor García - IKIGAI (epub)", false, 1, "Usenet"),
-                 Candidate("Héctor García - IKIGAI (ES) (epub)", false, 50, "Anna")]);
-
-            Assert.IsNotNull(result.Winner);
-            Assert.AreEqual("Héctor García - IKIGAI (ES) (epub)", result.Winner.Candidate.Parsed!.RawTitle);
-        }
-
-        [TestMethod]
-        public void Selection_FlexibleAnyLanguageFallbackPrefersQualityOverIndexerPriority()
+        public void Selection_FlexibleAnyLanguageFallbackPrefersQualityOverIndexerPriorityAmongUnknownLanguages()
         {
             var profile = new QualityProfile("profile", "Profile", ["EPUB", "PDF"], ["EPUB", "PDF"], false, null, null, null)
             {
@@ -225,11 +228,11 @@ namespace Jularr.Backend.Tests
                 LanguageFallback = LanguageFallbackType.Any
             };
             var result = ReleaseSelectionEngine.Select(profile,
-                [Candidate("Héctor García - IKIGAI (ES) (pdf)", false, 1, "Usenet"),
-                 Candidate("Héctor García - IKIGAI (FR) (epub)", false, 50, "Anna")]);
+                [Candidate("Héctor García - IKIGAI (pdf)", false, 1, "Usenet"),
+                 Candidate("Héctor García - IKIGAI (epub)", false, 50, "Anna")]);
 
             Assert.IsNotNull(result.Winner);
-            Assert.AreEqual("Héctor García - IKIGAI (FR) (epub)", result.Winner.Candidate.Parsed!.RawTitle);
+            Assert.AreEqual("Héctor García - IKIGAI (epub)", result.Winner.Candidate.Parsed!.RawTitle);
             Assert.AreEqual("HigherQuality", result.WinnerReason!.Code);
         }
 

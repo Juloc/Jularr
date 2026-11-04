@@ -327,15 +327,16 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
 
         // Only documented ISO 639 codes from the source become language evidence. An unknown
         // catalog field must not be disguised as a real language or guessed from the title.
-        internal static string? TrustedLanguageCode(string? language) =>
-            LanguageCodes.ToTwoLetter(language?.Trim())?.ToUpperInvariant();
+        // A file in several languages ("de, en") names each of them.
+        internal static IReadOnlyList<string> TrustedLanguageCodes(string? language) =>
+            [.. (language ?? "").Split([',', ';', '/', '|'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(code => LanguageCodes.ToTwoLetter(code)?.ToUpperInvariant()).OfType<string>().Distinct(StringComparer.Ordinal)];
 
         private static ReleaseOffer Offer(AcquisitionConnectionData source, string guid, string[] authors, string title, string? language, string format, Uri download, long? sizeBytes, bool isPart = false,
             string stage = "title")
         {
-            var verifiedLanguage = TrustedLanguageCode(language);
             var name = (authors.Length > 0 ? string.Join(", ", authors) + " - " : "") + title
-                + (verifiedLanguage is null ? "" : " (" + verifiedLanguage + ")") + " (" + format + ")";
+                + string.Concat(TrustedLanguageCodes(language).Select(code => " (" + code + ")")) + " (" + format + ")";
             return new ReleaseOffer(name.Length <= 1000 ? name : name[..1000], source.Id, source.Name, source.Priority, guid, download, download.ToString(), sizeBytes, null, [stage]) { IsPart = isPart };
         }
 

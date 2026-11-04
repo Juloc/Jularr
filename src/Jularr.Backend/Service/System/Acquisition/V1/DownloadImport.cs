@@ -66,7 +66,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                 parsedFacts?.Edition, parsedFacts?.Revision ?? 1);
 
             // A clear film or episode imports by itself, one of no use is excluded and searched again at once, a doubt waits for a person with its reason.
-            var verdict = ImportJudgement.Judge(download.MediaTypeId, download.MediaSubtypeId, download.CanonicalTitle, download.ReleaseYear, download.Title, download.ExpectedParentUnitNumber,
+            var verdict = ImportJudgement.Judge(download.MediaTypeId, download.MediaSubtypeId, [download.CanonicalTitle, .. target.Titles], download.ReleaseYear, download.Title, download.ExpectedParentUnitNumber,
                 download.ExpectedUnitStart, download.ExpectedUnitEnd, files, known, target.Definition is null ? null : AcquisitionSelectionLogic.ReadProfile(target));
             if (verdict.Kind == ImportVerdictKind.Discard)
             {

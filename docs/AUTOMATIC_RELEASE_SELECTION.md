@@ -23,6 +23,19 @@ rules (`ContextPoints`).
 Each rule names its points; the manual search shows the sum and every rule on hover. A rejected row keeps its points and names
 the rule that rejected it.
 
+## Series and anime identity
+
+`VideoReleaseJudge` ([VideoReleaseJudge.cs](../src/Jularr.Backend/Logic/Acquisition/VideoReleaseJudge.cs)) decides a series release with `TitleMatcher.Compare`
+([TitleMatcher.cs](../src/Jularr.Backend/Logic/Acquisition/TitleMatcher.cs)), as Sonarr's parser does: the parsed series title must **equal** the canonical
+title or one of the series' known titles (aliases) after cleaning (no case or accents, `&` is "and", apostrophes vanish, any other mark separates, a leading
+"the/a/an" is dropped, letters spelled apart by dots are one word). A release that only contains the title's words is another series and a Conflict
+(`WrongTitle`, the parsed title as its value): "Peaky Blinders - Gangs of Birmingham", "My Hero Academia Memories" or "Vigilantes" for "My Hero Academia",
+"Great Pretender razbliuto", "BanG Dream! It's MyGO!!!!!". A year the release adds ("Doctor Who 2005") must be the series' own year (or the year in the
+requested title) give or take one, else `WrongYear`; a country ("Shameless US") is part of the title. Found by id, a release with a different name stays
+Ambiguous (a person decides, never automatic). Season and episode numbering (also absolute and dated) is checked after the title as before. The import
+judges the files of a download with the same rule and the same titles (`ImportJudgement`, `import_wrong_series`). Films keep their word test with extra words
+ambiguous. `TitleMatcher.Matches` (all words contained) remains only for metadata lookups and feed targets.
+
 ## Fixed tie-break order
 
 Equal input gives the same ranking whatever order the indexers answered in:
@@ -94,8 +107,19 @@ and only marked (Manual review, still grabbable) in a manual search. Audiobooks 
 volume beats a pack, because every further volume costs coverage. The table shows the volumes of every row. Volume-scoped checks
 (a pack that misses the wanted volume) are done for Manga by `MangaReleaseJudge`.
 
+## Book language
+
+A book request's languages are the profile's language order, else the request's language. The profile's fallback decides what an **automatic** search may
+take beyond them: Original the original language of the work, English English, None nothing, Flexible (Any) the original language and a file that states no
+language (ranked after every known one). A known language that is neither asked for nor allowed (Polish, Chinese or English for a German request of an Almond
+without that fallback) is Manual review with the reason "Language not allowed by the request · PL"; an unknown language under another fallback is "File
+language is unknown". The manual search shows every language, ranked: asked languages in the profile's order, original, other known, unknown. Direct sources
+state their languages (Anna's Archive names every language of a file, `de, en` counts for both); a source that states none gives an unknown language. Manga
+has no language rule yet.
+
 ## Tests
 
+`SeriesTitleIdentityTests` (confusable series and anime titles, aliases, years, import), `BookLanguageSelectionTests` (multi-language result sets), `ReleaseSelectionTests`.
 `BookReleaseCorpusTests` reads the golden corpus
 [book-releases.tsv](../tests/Jularr.Backend.Tests/Fixtures/ReleaseNames/book-releases.tsv): the eleven Nyaa answers for
 "Mushoku Tensei: Jobless Reincarnation" plus Sonarr, Radarr, Readarr and Lidarr style names, each with the expected parse, size

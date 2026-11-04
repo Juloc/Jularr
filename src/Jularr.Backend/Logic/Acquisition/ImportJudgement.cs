@@ -42,7 +42,7 @@ namespace Jularr.Backend.Logic.Acquisition
 
         private static readonly string[] ExtraFolders = ["extras", "featurettes", "featurette", "behind the scenes", "deleted scenes", "trailers", "bonus", "interviews", "shorts", "scenes", "other"];
 
-        public static ImportVerdict Judge(MediaType mediaType, MediaSubtype? subtype, string title, int? year, string releaseTitle, int? expectedSeason, int? expectedStart, int? expectedEnd,
+        public static ImportVerdict Judge(MediaType mediaType, MediaSubtype? subtype, IReadOnlyList<string> titles, int? year, string releaseTitle, int? expectedSeason, int? expectedStart, int? expectedEnd,
             IReadOnlyList<StorageFile> files, IReadOnlyList<TargetUnit> units, QualityProfile? profile)
         {
             // Other media types keep their own rules.
@@ -64,8 +64,8 @@ namespace Jularr.Backend.Logic.Acquisition
             }
 
             return mediaType == MediaType.Movie
-                ? JudgeMovie(title, year, videos, profile)
-                : JudgeSeries(subtype == MediaSubtype.Anime ? AcquisitionKind.Anime : AcquisitionKind.Tv, title, releaseTitle, expectedSeason, expectedStart, expectedEnd, videos, units, profile);
+                ? JudgeMovie(titles[0], year, videos, profile)
+                : JudgeSeries(subtype == MediaSubtype.Anime ? AcquisitionKind.Anime : AcquisitionKind.Tv, titles, year, releaseTitle, expectedSeason, expectedStart, expectedEnd, videos, units, profile);
         }
 
         // A file in a folder of extras, or named as one, is no episode or feature.
@@ -85,7 +85,7 @@ namespace Jularr.Backend.Logic.Acquisition
             var parsed = Parse(stem);
             if (parsed is not null && HasEvidence(parsed))
             {
-                switch (VideoReleaseJudge.JudgeTitle(AcquisitionKind.Movie, title, year, parsed))
+                switch (VideoReleaseJudge.JudgeTitle(AcquisitionKind.Movie, [title], year, parsed))
                 {
                     case VideoIdentityMatch.WrongTitle:
                         return new ImportVerdict(ImportVerdictKind.Discard, WrongTitle);
@@ -99,7 +99,7 @@ namespace Jularr.Backend.Logic.Acquisition
                 : ImportVerdict.Clear;
         }
 
-        private static ImportVerdict JudgeSeries(AcquisitionKind kind, string title, string releaseTitle, int? expectedSeason, int? expectedStart, int? expectedEnd, StorageFile[] videos,
+        private static ImportVerdict JudgeSeries(AcquisitionKind kind, IReadOnlyList<string> titles, int? year, string releaseTitle, int? expectedSeason, int? expectedStart, int? expectedEnd, StorageFile[] videos,
             IReadOnlyList<TargetUnit> units, QualityProfile? profile)
         {
             var candidates = videos.Select(video =>
@@ -107,8 +107,8 @@ namespace Jularr.Backend.Logic.Acquisition
                 var stem = Path.GetFileNameWithoutExtension(video.RelativePath);
                 var parsed = Parse(stem);
 
-                // A name of another series is no episode of this one, but a name without evidence of its own (a bare number) is not against it.
-                var conflicts = parsed is not null && HasEvidence(parsed) && parsed.SeriesTitle.Length > 0 && !TitleMatcher.Matches(title, parsed.SeriesTitle);
+                // A name of another series (also one that only contains this one's title) is no episode of this one, but a name without evidence of its own (a bare number) is not against it.
+                var conflicts = parsed is not null && HasEvidence(parsed) && parsed.SeriesTitle.Length > 0 && TitleMatcher.Compare(titles, parsed.SeriesTitle, year) != TitleComparison.Same;
                 return (Video: video, Parsed: parsed, Conflicts: conflicts, Mapped: parsed is null ? null : EpisodeNumbering.Resolve(parsed, units));
             }).ToArray();
 

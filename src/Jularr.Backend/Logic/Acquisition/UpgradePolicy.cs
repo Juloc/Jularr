@@ -104,12 +104,14 @@ namespace Jularr.Backend.Logic.Acquisition
         public static bool IsOriginal(QualityProfile profile, IReadOnlyList<string> languages) =>
             profile.OriginalLanguage is { } original && languages.Any(language => Same(original, language));
 
-        // The fallback when no file carries an asked language: the original language, English, or nothing.
+        // The fallback when no file carries an asked language: the original language, English, or nothing. Flexible (Any) also takes a file that states no language
+        // (it ranks after every file of a known language) and shows every other language to a person in the manual search; no automatic choice takes a language
+        // that is known and neither asked for nor allowed.
         public static bool IsFallback(QualityProfile profile, IReadOnlyList<string> languages) => profile.LanguageFallback switch
         {
             LanguageFallbackType.English => languages.Any(language => Same("EN", language)),
             LanguageFallbackType.None => false,
-            LanguageFallbackType.Any => true,
+            LanguageFallbackType.Any => languages.Count == 0 || IsOriginal(profile, languages),
             _ => IsOriginal(profile, languages)
         };
 
