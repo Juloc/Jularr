@@ -54,7 +54,7 @@ namespace Jularr.E2E.Tests
                 // Sonarr monitors the series, so it is wanted as Sonarr wanted it, also after a restart.
                 await page.GotoAsync("about:blank");
                 await jularr.RestartAsync();
-                await page.GotoAsync("/Admin/Wanted");
+                await page.GotoAsync("/Admin/Wanted?View=All");
                 await Assertions.Expect(Steps.ListRow(page, FakeServices.SeriesTitle)).Not.ToContainTextAsync("Paused");
 
                 // The automatic search takes only what the imported profile allows.
@@ -110,7 +110,7 @@ namespace Jularr.E2E.Tests
                 // Nothing is on offer yet: both searches find nothing and the titles wait for their next time.
                 await Steps.RequestAsync(page, "Bunny", FakeServices.MovieTitle);
                 await Steps.RequestAsync(page, "Test Series", FakeServices.SeriesTitle);
-                await page.GotoAsync("/Admin/Wanted");
+                await page.GotoAsync("/Admin/Wanted?View=All");
                 var filmRow = Steps.ListRow(page, FakeServices.MovieTitle);
                 var seriesRow = Steps.ListRow(page, FakeServices.SeriesTitle);
                 await Assertions.Expect(filmRow).ToBeVisibleAsync();

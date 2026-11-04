@@ -335,7 +335,7 @@ namespace Jularr.E2E.Tests
                     await Assertions.Expect(page.Locator("main .list-row", new() { HasText = title })).ToHaveCountAsync(1);
                 }
 
-                await page.GotoAsync("/Admin/Wanted");
+                await page.GotoAsync("/Admin/Wanted?View=All");
                 foreach (var title in new[] { FakeServices.MovieTitle, FakeServices.SeriesTitle, FakeServices.BookTitle, FakeServices.AlbumTitle })
                 {
                     await Assertions.Expect(page.Locator("main .list-row", new() { HasText = title })).ToHaveCountAsync(1);

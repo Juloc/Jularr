@@ -218,9 +218,10 @@ namespace Jularr.E2E.Tests
         // The same inside one part of the page (a group of the queue).
         public static ILocator ListRow(ILocator within, string text) => within.Locator(".list-body .list-row", new() { HasText = text });
 
+        // A target in any state (Missing, the list's default, leaves out what is already there): the All view lists every one.
         public static async Task OpenWantedAsync(IPage page, string title)
         {
-            await page.GotoAsync("/Admin/Wanted");
+            await page.GotoAsync("/Admin/Wanted?View=All");
             await FollowAsync(page, ListRow(page, title).GetByRole(AriaRole.Link, new() { Name = "Edit target" }));
         }
 
