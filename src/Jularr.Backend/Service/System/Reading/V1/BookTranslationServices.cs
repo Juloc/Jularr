@@ -238,8 +238,10 @@ namespace Jularr.Backend.Service.System.Reading.V1
                         AND text."Path" = ':section/' || section."Key"
                     LEFT JOIN "ReadingResources" AS cache ON cache."ReadingDocumentId" = section."ReadingDocumentId"
                         AND cache."Path" = ':localtranslation/v4/' || @Model || '/' || section."Language" || '/' || section."Key"
+                    -- Parsed once (OFFSET 0), not again for every condition and sort key on it.
                     CROSS JOIN LATERAL (
                         SELECT convert_from(cache."Bytes", 'UTF8')::jsonb AS value
+                        OFFSET 0
                     ) AS stored
                 WHERE
                     length(section."SourceLanguage") BETWEEN 2 AND 3
@@ -399,8 +401,10 @@ namespace Jularr.Backend.Service.System.Reading.V1
                         AND text."Path" = section."Path"
                     LEFT JOIN "ReadingResources" AS cache ON cache."ReadingDocumentId" = book."Id"
                         AND cache."Path" = ':localtranslation/v4/' || @Model || '/' || target."Language" || '/' || section."Key"
+                    -- Parsed once (OFFSET 0), not again for every condition and sort key on it.
                     CROSS JOIN LATERAL (
                         SELECT convert_from(cache."Bytes", 'UTF8')::jsonb AS value
+                        OFFSET 0
                     ) AS stored
                     CROSS JOIN LATERAL (
                         SELECT

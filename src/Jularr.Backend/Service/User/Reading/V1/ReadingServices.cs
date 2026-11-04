@@ -151,16 +151,21 @@ namespace Jularr.Backend.Service.User.Reading.V1
                             FROM (
                                 SELECT
                                     split_part(cache."Path", '/', 4) AS "Language",
-                                    max(jsonb_array_length(stored.value -> 'Texts')) AS "Blocks",
-                                    count(DISTINCT block.position) FILTER (
-                                        WHERE block.value <> 'null'::jsonb OR coalesce(stored.value -> 'Stale' -> 'Texts' -> (block.position::integer - 1), 'null'::jsonb) <> 'null'::jsonb
-                                    ) AS "Visible"
+                                    max(block."Blocks") AS "Blocks",
+                                    count(DISTINCT block.position) FILTER (WHERE block."IsVisible") AS "Visible"
                                 FROM
                                     "ReadingResources" AS cache
+                                    -- Each stored section is parsed once (OFFSET 0), not again for every block of it.
                                     CROSS JOIN LATERAL (
-                                        SELECT convert_from(cache."Bytes", 'UTF8')::jsonb AS value
-                                    ) AS stored
-                                    CROSS JOIN LATERAL jsonb_array_elements(stored.value -> 'Texts') WITH ORDINALITY AS block (value, position)
+                                        SELECT
+                                            jsonb_array_length(stored.value -> 'Texts') AS "Blocks",
+                                            block.position,
+                                            block.value <> 'null'::jsonb OR coalesce(stored.value -> 'Stale' -> 'Texts' -> (block.position::integer - 1), 'null'::jsonb) <> 'null'::jsonb AS "IsVisible"
+                                        FROM
+                                            (SELECT convert_from(cache."Bytes", 'UTF8')::jsonb AS value OFFSET 0) AS stored
+                                            CROSS JOIN LATERAL jsonb_array_elements(stored.value -> 'Texts') WITH ORDINALITY AS block (value, position)
+                                        OFFSET 0
+                                    ) AS block
                                 WHERE
                                     cache."ReadingDocumentId" = document."Id"
                                     AND cache."Path" ~ '^:localtranslation/v4/[^/]+/[a-z]{2,3}/[0-9]{5}$'
