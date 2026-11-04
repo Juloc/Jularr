@@ -113,6 +113,9 @@
 
 @media (max-width: 760px) {
     .discover-results .media-shelf__heading { margin: 27px 0 14px; h2 { font-size: 18px; } }
+
+    // Phones swipe the rows; without arrows the title keeps its full width, also when a swipe would show them.
+    .discover-results .media-shelf__controls { display: none; }
 }
 
 @media (scripting: none) { [data-discover-layout] { display: none; } }

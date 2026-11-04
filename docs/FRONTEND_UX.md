@@ -140,7 +140,8 @@ SavePill, FolderPicker, IconInfo, TimePicker, FactList, Drawer, FilterDialog, Sh
   loads, grey skeleton cards stand where it arrives (a row under the grid, three at the end of a shelf); no Next button shows while pages load by themselves,
   and a failed page offers *Try again*. Owner's decision 4 Nov: the shelves themselves arrive the same way, four at a time (about two screens):
   the first ones right after the page, the next ones as the page nears them, with a row of grey cards where they arrive; each type is named once,
-  above its first shelf, and a failed part offers *Try again*.
+  above its first shelf, and a failed part offers *Try again*. On a phone (up to 760 px) the shelves have no arrows (rows are swiped);
+  a shelf's title keeps the rest of its row beside *See all*, wraps between words, hyphenates a long word and otherwise ends in "…", never under the link.
   Owner's decision 2 Nov: anime, manga and light novels have AniList's lists (anime: Trending, Popular this season, Upcoming next season,
   All time popular, Top 100; manga and light novels: Trending, All time popular, Popular manhwa (manga only, Korea), Top 100); films,
   series and books keep theirs. Only a ranking's grid has a sort: AniList's orders (trending, popularity, average score, favorites, date
