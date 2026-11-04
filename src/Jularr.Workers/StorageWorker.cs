@@ -9,7 +9,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Jularr.Workers
 {
-    // Failed storage is checked again and libraries rescan in the background.
+    // Storage is checked again (failed soon, available hourly) and libraries rescan in the background.
     internal sealed class StorageWorker(TimeProvider time, WorkerJobs jobs, WorkerJobRunner runner) : PeriodicWorker(time, jobs, runner, WorkerGroupType.Storage)
     {
         protected override async Task RunOnceAsync(CancellationToken ct)

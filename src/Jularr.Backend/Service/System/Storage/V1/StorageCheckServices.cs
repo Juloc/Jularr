@@ -8,7 +8,8 @@ using Jularr.Backend.Service.Core;
 
 namespace Jularr.Backend.Service.System.Storage.V1
 {
-    // Looks again at mounts that failed once their pause is over.
+    // Looks again at mounts that failed once their pause is over, and once an hour at every other mount, also one no library or download uses.
+    // A mount that is woken on demand is left to sleep until it is used.
     public sealed class CheckStorageMountsV1 : SystemService<StorageChecksParametersV1, NoData>
     {
         private readonly StorageAccess _storage;
@@ -31,14 +32,19 @@ namespace Jularr.Backend.Service.System.Storage.V1
                 sql.Statement =
                     """
                     SELECT
-                        state."StorageMountId"
+                        mount."Id" AS "StorageMountId"
                     FROM
-                        "StorageMountStates" AS state
+                        "StorageMounts" AS mount
+                        LEFT JOIN "StorageMountStates" AS state ON state."StorageMountId" = mount."Id"
                     WHERE
-                        state."FailedChecks" > 0
-                        AND state."NextCheckAt" <= now()
+                        (state."FailedChecks" > 0 AND state."NextCheckAt" <= now())
+                        OR (
+                            coalesce(state."FailedChecks", 0) = 0
+                            AND mount."WakeMacAddress" IS NULL
+                            AND (state."CheckedAt" IS NULL OR state."CheckedAt" <= now() - interval '1 hour')
+                        )
                     ORDER BY
-                        state."NextCheckAt"
+                        coalesce(state."NextCheckAt", state."CheckedAt") NULLS FIRST
                     LIMIT 20;
                     """;
                 return ctx.ReadSql.ReadListAsync<StorageCheckCandidateData>(sql, ct);
