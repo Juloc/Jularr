@@ -3,6 +3,8 @@ using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Activity.V1;
 using Jularr.Backend.Data.Admin.Browser.V1;
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Enums.Acquisition;
+using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Enums.Operation;
 using Jularr.Backend.Service.Admin.Activity.V1;
 using Jularr.Frontend.Framework;
@@ -13,14 +15,14 @@ using Microsoft.AspNetCore.Mvc.ModelBinding;
 
 namespace Jularr.Frontend.Pages.Admin.Queue
 {
-    // The queue on the list kit, as Sonarr's: the media-type bar on top, the entry's views (Queue, History, Blocked), then the open downloads in four groups, what needs the owner first (needs help, to import),
-    // then what downloads and what waits in the downloader; each entry a row with what a person can do with it and a drawer of details.
-    // Scans, imports and background jobs are no downloads: they and their failures show on the Jobs page and the Dashboard.
-    public sealed class QueueModel(ReadActivityV1 read, ReadActivitySummaryV1 summary, RetryActivityV1 retry, DismissActivityV1 dismiss, SaveActivitySourceLinkV1 sourceLink, RemoveActivityDownloadV1 remove,
+    // The queue as Sonarr's: the media-type bar on top, the entry's views (Queue, History, Blocked), then one table of the open downloads, each row with its state, title,
+    // episode, quality, language, protocol, time left and progress, what a person can do with it and a drawer of details. A failed download is not in it: it is blocked when the
+    // release was at fault, its target searched again and the failure kept in the History. An import that waits for a person stays with an orange warning and its reason,
+    // a grab its indexer limited waits until the pause ends. Scans, imports and background jobs are the Jobs entry's Tasks.
+    public sealed class QueueModel(ReadActivityV1 read, RetryActivityV1 retry, DismissActivityV1 dismiss, SaveActivitySourceLinkV1 sourceLink, RemoveActivityDownloadV1 remove,
         PauseActivityDownloadV1 pause, RetryActivityImportV1 retryImport, PauseActivityQueueV1 pauseQueue, ReadTorrentFilesV1 torrentFiles, IAntiforgery antiforgery, UiText texts, FrontendAssets assets) : JularrPage
     {
         private PageResult<ActivityItemV1>? _items;
-        private ActivitySummaryV1? _summary;
         private BaseDataList<TorrentFileV1>? _openedTorrentFiles;
         private bool _torrentFileLookupFailed;
 
@@ -46,7 +48,7 @@ namespace Jularr.Frontend.Pages.Admin.Queue
 
         private QueueViews Views => _views ??= new QueueViews(Types, texts, Request);
 
-        // The queue holds what is open, which is a few dozen entries: one read takes up to the most a read allows and sets it into its groups, what needs a person first.
+        // The queue holds what is open, which is a few dozen entries: one read takes up to the most a read allows, what needs a person first.
         private const int QueueSize = PageRequest.MaximumPageSize;
 
         protected override void Define(Page page)
@@ -60,81 +62,31 @@ namespace Jularr.Frontend.Pages.Admin.Queue
             page.Asset("Framework/Components/ActionDock.entry.ts");
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
 
-            // The media-type bar, then the row of the entry's views with the files switch, then the groups (or, in the files view, the torrent downloads).
+            // The media-type bar, then the row of the entry's views with the files switch, then the one table (or, in the files view, the torrent downloads).
             page.NoPageRow();
             page.Content.Add(new MediaTypeBar(assets, Views.Scopes.ListedSlugs, Views.Scopes.ChosenSlugs, "library.scope.", types => Address(types: types)));
             page.Content.Add(new ListToolbar(Views.Tabs(), Modes()));
 
             if (_items is { } items)
             {
-                IReadOnlyList<ActivityItemV1> downloads = [.. items.Items.Where(item => item.OperationTypeId == OperationType.Download)];
-                if (ShowFiles)
-                {
-                    var empty = new Div(new IconTile(Glyph("search", 22), UiTone.Neutral), new P(new Text("activity.files.noJobs")));
-                    page.Content.Add(new ListPanel("activity.list", QueueColumns, [.. downloads.Select(item => QueueRow(item, csrf))], empty).Modifier("activity-list activity-queue").Paged());
-                }
-                else if (downloads.Count == 0)
-                {
-                    page.Content.Add(new Div(new IconTile(Glyph("search", 22), UiTone.Neutral), new P(new Text("activity.empty.Queue"))).Class("list-empty"));
-                }
-                else
-                {
-                    var groups = Groups(downloads);
-                    page.Content.Add(Counts(groups));
-                    foreach (var group in groups.Where(entry => entry.Items.Count > 0))
-                    {
-                        page.Content.Add(GroupSection(group, csrf));
-                    }
-
-                    if (items.Items.Count == QueueSize) page.Content.Add(new P(new Text("activity.limit")).Class("list-notice"));
-                }
-
-                page.Content.AddRange(downloads.Select(item => DrawerOf(item, csrf)));
+                var empty = new Div(new IconTile(Glyph("search", 22), UiTone.Neutral), new P(new Text(ShowFiles ? "activity.files.noJobs" : "activity.empty.Queue")));
+                var list = new ListPanel("activity.list", QueueColumns, [.. items.Items.Select(item => QueueRow(item, csrf))], empty).Modifier("activity-list activity-queue");
+                page.Content.Add(ShowFiles ? list.Paged() : list);
+                if (!ShowFiles && items.Items.Count == QueueSize) page.Content.Add(new P(new Text("activity.limit")).Class("list-notice"));
+                page.Content.AddRange(items.Items.Select(item => DrawerOf(item, csrf)));
             }
 
             if (FormError is not null) page.Content.Add(new P(new Text(FormError.ResourceKey)).Attribute("role", "alert"));
             page.Content.Add(Dock(csrf));
         }
 
-        private static readonly ListColumn[] QueueColumns = [new("activity.item", ListRole.Main), new("table.status", ListRole.Status), new("activity.source", ListRole.Data, 2), new("activity.transfer", ListRole.Data, 1), new("common.actions", ListRole.Actions)];
-
-        // The four groups of the queue, what needs the owner first: a download that waits for a person or failed, what is downloaded and must be imported (also by hand), what downloads, what waits in the downloader.
-        private enum QueueGroup { Help, Import, Running, Queued }
-
-        private static QueueGroup GroupOf(ActivityItemV1 item)
-        {
-            if (item.OperationStatusTypeId == OperationStatusType.Failed) return QueueGroup.Help;
-
-            // Waiting for a person: the files are ready to be placed by hand or the import is read again; anything else (a check at the source) needs help.
-            if (item.IsWaiting) return item.ManualUrl is null && (item.CanImportManually || item.CanRetryImport) ? QueueGroup.Import : QueueGroup.Help;
-            if (item.DownloadStateTypeId == DownloadStateType.PostProcessing) return QueueGroup.Import;
-            if (item.DownloadStateTypeId is null or DownloadStateType.Queued or DownloadStateType.Paused) return QueueGroup.Queued;
-            return QueueGroup.Running;
-        }
-
-        private static (QueueGroup Group, string Icon, UiTone Tone, List<ActivityItemV1> Items)[] Groups(IReadOnlyList<ActivityItemV1> items) =>
+        // Sonarr's columns: the state, the title, the episode and its title, quality, language, protocol, time left, progress and the actions; the narrower the list, the fewer.
+        private static readonly ListColumn[] QueueColumns =
         [
-            (QueueGroup.Help, "alert", UiTone.Danger, [.. items.Where(item => GroupOf(item) == QueueGroup.Help)]),
-            (QueueGroup.Import, "sync", UiTone.Warning, [.. items.Where(item => GroupOf(item) == QueueGroup.Import)]),
-            (QueueGroup.Running, "download", UiTone.Info, [.. items.Where(item => GroupOf(item) == QueueGroup.Running)]),
-            (QueueGroup.Queued, "clock", UiTone.Neutral, [.. items.Where(item => GroupOf(item) == QueueGroup.Queued)])
+            new("table.status", ListRole.Status, Head: new Span(new Text("table.status")).Class("visually-hidden")), new("activity.item", ListRole.Main), new("queue.episode", ListRole.Data, 2), new("queue.episodeTitle", ListRole.Data, 1),
+            new("queue.quality", ListRole.Data, 2), new("queue.language", ListRole.Data, 1), new("queue.protocol", ListRole.Data, 1), new("queue.timeLeft"), new("queue.progress"),
+            new("common.actions", ListRole.Actions)
         ];
-
-        // The figures of the groups.
-        private IUiComponent Counts((QueueGroup Group, string Icon, UiTone Tone, List<ActivityItemV1> Items)[] groups) => new KpiTiles([.. groups.Select(group =>
-            new KpiTile("activity.group." + group.Group, new ValueText(group.Items.Count.ToString(CultureInfo.CurrentCulture)), Glyph(group.Icon), group.Tone))]).Strip();
-
-        // One group: its heading with the count (the running one with the live speed) and its entries.
-        private IUiComponent GroupSection((QueueGroup Group, string Icon, UiTone Tone, List<ActivityItemV1> Items) group, string? csrf)
-        {
-            IUiComponent count = new Span(new ValueText(group.Items.Count.ToString(CultureInfo.CurrentCulture))).Class("activity-group__count");
-            IUiComponent action = group.Group == QueueGroup.Running && _summary is { } numbers ? new Span(count, Live("speed", LiveFacts.Speed(numbers.BytesPerSecond))).Class("activity-group__facts") : count;
-            return new Div(new UiSection("activity.group." + group.Group, [new ListPanel("activity.group." + group.Group, QueueColumns, [.. group.Items.Select(item => QueueRow(item, csrf))]).Modifier("activity-list activity-queue")], Glyph(group.Icon, 18), action))
-                .Class("activity-group").Attribute("id", "activity-group-" + group.Group);
-        }
-
-        // The stream keeps the pace current.
-        private static IUiComponent Live(string name, string text) => new Span(new ValueText(text)).Attribute("data-live", LiveKeys.Queue).Attribute("data-live-text", name);
 
         // The queue's own switch: the queue or the torrent files of its downloads.
         private ViewSwitch Modes() => new("activity.views",
@@ -147,7 +99,7 @@ namespace Jularr.Frontend.Pages.Admin.Queue
         private ActionDock Dock(string? csrf)
         {
             var actions = new List<IUiComponent>();
-            if (!ShowFiles && _items is { } open && open.Items.Any(item => item.OperationTypeId == OperationType.Download))
+            if (!ShowFiles && _items is { Items.Count: > 0 })
             {
                 actions.Add(QueueButton("PauseAll", "pause", "activity.pauseAll", csrf));
                 actions.Add(QueueButton("ResumeAll", "play", "activity.resumeAll", csrf));
@@ -159,31 +111,108 @@ namespace Jularr.Frontend.Pages.Admin.Queue
         private IUiComponent QueueButton(string handler, string icon, string labelKey, string? csrf) =>
             new PostForm(Address(handler: handler), csrf, [], new Button(Glyph(icon, 16), new Span(new Text(labelKey)).Class("action-dock__text")).Submit());
 
-        // The work first, then the release under it.
-        private IUiComponent Identity(ActivityItemV1 item) => item.WorkId is { } workId
-            ? new ListIdentity(new IconTile(Glyph("download"), UiTone.Info), new A(new Truncated(item.WorkTitle ?? "")).Class("list-identity__title").Attribute("href", "/Admin/Works/" + workId.ToString(CultureInfo.InvariantCulture)), new Truncated(item.Title))
-            : new ListIdentity(new IconTile(Glyph("download"), UiTone.Info), new Truncated(item.Title), new Text("operation.type.Download"));
+        // A grab its indexer limited is no failure: it waits for the indexer's pause, and the stream knows nothing of it.
+        private static bool Limited(ActivityItemV1 item) => item.WaitUntil is not null;
 
-        // The client and the indexer of a download.
-        private static IUiComponent Source(ActivityItemV1 item) => new Span(new Truncated(LiveFacts.Join(item.ConnectionName, item.IndexerName))).Class("list-value list-value--fill");
+        // A download that waits for a person (an import in doubt, a check at the source, a storage to set up) wears the orange warning.
+        private static bool Warns(ActivityItemV1 item) => item.IsWaiting;
 
-        // The pace above, the size and time left below.
-        private IUiComponent Transfer(ActivityItemV1 item)
+        // The state as an icon in the phase's tone; its word stays for assistive technology and shows on the phone card. The stream keeps both current.
+        private IUiComponent State(ActivityItemV1 item)
         {
+            if (Limited(item))
+            {
+                return new Span(Glyph("clock", 16), new Span(new Text("queue.limited")).Class("queue-state__label"))
+                    .Class("queue-state list-phase").Attribute("data-phase", "queued");
+            }
+
             var says = OperationState.Says(item);
-            return new Div(
-                OperationState.LivePart("speed", says ? "" : LiveEntities.OperationSpeed(texts, item.OperationStatusTypeId, item.DownloadStateTypeId, item.BytesPerSecond), "activity-transfer__speed"),
-                OperationState.LivePart("detail", says ? "" : LiveEntities.OperationDetail(item.ProgressPercent, item.SizeBytes, item.RemainingBytes, item.EtaSeconds), "activity-transfer__detail"))
-                .Class("activity-transfer").Attribute("data-live", LiveKeys.Operation(item.Id));
+            var phase = OperationState.Phase(item);
+            return new Span(Glyph(Warns(item) ? "alert" : OperationState.PhaseIcon(phase), 16),
+                    OperationState.LivePart("status", LiveEntities.OperationStatus(texts, item.IsWaiting, item.OperationStatusTypeId, says ? null : item.DownloadStateTypeId), "queue-state__label"))
+                .Class("queue-state list-phase").Attribute("data-live", LiveKeys.Operation(item.Id)).Attribute("data-phase", phase);
+        }
+
+        // The work first; under it why it waits (orange) or until when the indexer pauses, else the release.
+        private IUiComponent Identity(ActivityItemV1 item)
+        {
+            IUiComponent title = item.WorkId is { } workId
+                ? new A(new Truncated(item.WorkTitle ?? "")).Class("list-identity__title").Attribute("href", "/Admin/Works/" + workId.ToString(CultureInfo.InvariantCulture))
+                : new Truncated(item.Title);
+            IUiComponent line = Limited(item)
+                ? new Span(new ValueText(texts["queue.limitedUntil"] + " "), new LocalTime(item.WaitUntil!.Value, "time")).Class("queue-reason")
+                : Warns(item)
+                    ? new Span(new ValueText(LiveEntities.Reason(texts, item.OperationTypeId, item.ReasonKey))).Class("queue-reason queue-reason--warning").Attribute("data-live", LiveKeys.Operation(item.Id)).Attribute("data-live-text", "reason")
+                    : item.WorkId is null ? new Text("operation.type.Download") : new Truncated(item.Title);
+            // The phone card has no progress column: the bar and the time left stand under the title there.
+            IUiComponent? phone = Limited(item) || OperationState.Says(item) || item.ProgressPercent is null ? null
+                : new Div(Progress(item), TimeLeft(item)).Class("queue-progress-phone");
+            return new ListIdentity(new IconTile(Glyph("download"), UiTone.Info), title, line, phone);
+        }
+
+        // S01E05, S01E05–E07 or the season of a pack; a volume and its chapter for books; a film has none.
+        private string Episode(ActivityItemV1 item)
+        {
+            static string Two(int number) => number.ToString("00", CultureInfo.InvariantCulture);
+            if (item.MediaTypeId == MediaType.Series)
+            {
+                if (item.ParentUnitNumber is not { } season) return "";
+                return item.UnitStart is { } first
+                    ? "S" + Two(season) + "E" + Two(first) + (item.UnitEnd is { } last && last != first ? "–E" + Two(last) : "")
+                    : "S" + Two(season);
+            }
+
+            var parts = new List<string>();
+            if (item.ParentUnitNumber is { } volume) parts.Add(string.Format(CultureInfo.CurrentCulture, texts["queue.volume"], volume));
+            if (item.UnitStart is { } start) parts.Add(string.Format(CultureInfo.CurrentCulture, texts["queue.chapter"], start + (item.UnitEnd is { } end && end != start ? "–" + end.ToString(CultureInfo.CurrentCulture) : "")));
+            return string.Join(" · ", parts);
+        }
+
+        // Usenet, torrent or a direct source, by the client that fetches it.
+        private static string? Protocol(ActivityItemV1 item) => item.DownloadClientKindId switch
+        {
+            DownloadClientKind.Usenet or DownloadClientKind.Sabnzbd => "Usenet",
+            DownloadClientKind.Qbittorrent or DownloadClientKind.Torrent => "Torrent",
+            DownloadClientKind.Direct => "Direct",
+            _ => null
+        };
+
+        private static IUiComponent Value(string? text) => string.IsNullOrEmpty(text)
+            ? new Span(new ValueText("–")).Class("list-value list-value--dim")
+            : new Span(new Truncated(text)).Class("list-value list-value--fill");
+
+        // How long it still takes; the stream keeps it current.
+        private IUiComponent TimeLeft(ActivityItemV1 item)
+        {
+            var says = Limited(item) || OperationState.Says(item);
+            var text = says ? "" : LiveFacts.Eta(item.EtaSeconds);
+            var part = new Span(new ValueText(text.Length == 0 ? "–" : text)).Class("list-value queue-eta").Attribute("data-live-text", "eta");
+            return Limited(item) ? part : new Span(part).Attribute("data-live", LiveKeys.Operation(item.Id));
+        }
+
+        // A bar of how far it is with its percent; one that says why it waits has none, as the stream sets it, so the row keeps its height.
+        private IUiComponent Progress(ActivityItemV1 item)
+        {
+            var percent = Limited(item) || OperationState.Says(item) ? null : item.ProgressPercent;
+            var cell = new Div(OperationState.LiveBar(percent), OperationState.LivePart("percent", LiveEntities.Percent(percent), "queue-progress__percent")).Class("queue-progress");
+            return Limited(item) ? cell : cell.Attribute("data-live", LiveKeys.Operation(item.Id));
         }
 
         private ListRow QueueRow(ActivityItemV1 item, string? csrf)
         {
-            // A download without a known client or indexer has no source line on the phone card.
-            var source = LiveFacts.Join(item.ConnectionName, item.IndexerName);
-            var row = new ListRow([Identity(item), OperationState.Status(item, texts, assets), Source(item), Transfer(item), RowActions(item, csrf)], string.IsNullOrEmpty(source) ? [] : [ListPanel.Fact("activity.source", new ValueText(source))]);
-            if (item.OperationStatusTypeId == OperationStatusType.Failed) row.Tinted(UiTone.Danger);
-            else if (item.IsWaiting) row.Tinted(UiTone.Warning);
+            var episode = Episode(item);
+            var languages = string.Join(", ", item.Languages);
+            var protocol = Protocol(item) is { } kind ? texts["wanted.search.protocol." + kind] : null;
+
+            // The phone card: the state beside the title, the facts of the dropped columns in one line.
+            var facts = new List<IUiComponent>();
+            if (episode.Length > 0) facts.Add(ListPanel.Fact("queue.episode", new ValueText(episode + (item.UnitTitle is { } named ? " · " + named : ""))));
+            if (item.QualityKey is { } quality) facts.Add(ListPanel.Fact("queue.quality", new ValueText(quality)));
+            if (languages.Length > 0) facts.Add(ListPanel.Fact("queue.language", new ValueText(languages)));
+            if (protocol is not null) facts.Add(ListPanel.Fact("queue.protocol", new ValueText(protocol)));
+
+            var row = new ListRow([State(item), Identity(item), Value(episode), Value(item.UnitTitle), Value(item.QualityKey), Value(languages), Value(protocol), TimeLeft(item), Progress(item), RowActions(item, csrf)], facts);
+            if (Warns(item)) row.Tinted(UiTone.Warning);
             return row;
         }
 
@@ -191,11 +220,7 @@ namespace Jularr.Frontend.Pages.Admin.Queue
         private IUiComponent RowActions(ActivityItemV1 item, string? csrf)
         {
             var actions = new List<IUiComponent>();
-            if (item.OperationStatusTypeId == OperationStatusType.Failed)
-            {
-                actions.Add(IconAction(item, "Retry", "sync", "activity.retry", csrf));
-            }
-            else
+            if (!Limited(item))
             {
                 if (item.CanRetryImport) actions.Add(IconAction(item, "RetryImport", "sync", "activity.retryImport", csrf));
                 if (item.CanImportManually) actions.Add(IconLink("folder", "activity.importManually", "/Admin/ManualImport?operationId=" + item.Id.ToString(CultureInfo.InvariantCulture)));
@@ -391,9 +416,8 @@ namespace Jularr.Frontend.Pages.Admin.Queue
         {
             var (types, subtypes) = Views.Filter;
             _items = await read.ExecuteAsync<PageResult<ActivityItemV1>>(ShowFiles
-                ? new ReadActivityParametersV1(page: Math.Max(1, PageNumber), torrentOnly: true, mediaTypeIds: types, mediaSubtypeIds: subtypes)
-                : new ReadActivityParametersV1(pageSize: QueueSize, mediaTypeIds: types, mediaSubtypeIds: subtypes), HttpContext.RequestAborted);
-            _summary = await summary.ExecuteAsync<ActivitySummaryV1>(new ReadActivitySummaryParametersV1(), HttpContext.RequestAborted);
+                ? new ReadActivityParametersV1(page: Math.Max(1, PageNumber), torrentOnly: true, mediaTypeIds: types, mediaSubtypeIds: subtypes, queueOnly: true)
+                : new ReadActivityParametersV1(pageSize: QueueSize, mediaTypeIds: types, mediaSubtypeIds: subtypes, queueOnly: true), HttpContext.RequestAborted);
             if (ShowFiles && OpenOperationId is { } id
                 && _items.Items.Any(item => item.Id == id && item.CanBrowseFiles && item.SabnzbdConnectionId is null))
             {

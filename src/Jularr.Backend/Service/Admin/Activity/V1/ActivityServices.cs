@@ -83,7 +83,25 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
                             jsonb_array_elements(operation."AttentionProposal" -> 'Files') WITH ORDINALITY AS proposed ("File", "Position")
                         ORDER BY
                             proposed."Position"
-                    ) END AS "UnmatchedFileReasons"
+                    ) END AS "UnmatchedFileReasons",
+                    release."QualityKey",
+                    release."ParentUnitNumber"::integer AS "ParentUnitNumber",
+                    release."UnitStart"::integer AS "UnitStart",
+                    release."UnitEnd"::integer AS "UnitEnd",
+                    CASE WHEN release."UnitStart" = release."UnitEnd" THEN (
+                        SELECT
+                            unit."Title"
+                        FROM
+                            "WorkUnits" AS unit
+                            LEFT JOIN "WorkUnits" AS season ON season."Id" = unit."ParentWorkUnitId"
+                        WHERE
+                            unit."WorkId" = work."Id"
+                            AND unit."WorkUnitTypeId" IN (2, 3)
+                            AND unit."Number" = release."UnitStart"
+                            AND (unit."WorkUnitTypeId" = 3 OR season."Number" IS NOT DISTINCT FROM release."ParentUnitNumber")
+                        LIMIT 1
+                    ) END AS "UnitTitle",
+                    CASE WHEN operation."OperationStatusTypeId" = 4 AND operation."ErrorKey" = 'acquisition_rate_limited' THEN wanted."NextSearchAt" END AS "WaitUntil"
                 FROM
                     "Operations" AS operation
                     LEFT JOIN "LibraryRoots" AS root ON root."Id" = operation."LibraryRootId"
@@ -95,7 +113,8 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
                     LEFT JOIN "Works" AS work ON work."Id" = wanted."WorkId"
                 WHERE
                     (
-                        NOT @DownloadsOnly AND (
+                        @QueueOnly
+                        OR NOT @DownloadsOnly AND (
                             @ActivityFilterTypeId = 1 AND state."ActivityFilterTypeId" <> 3
                             OR state."ActivityFilterTypeId" = @ActivityFilterTypeId
                         )
@@ -109,6 +128,11 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
                     AND (NOT @TorrentOnly OR connection."AcquisitionConnectionTypeId" IN (2, 9))
                     AND (NOT @FailedOnly OR operation."OperationStatusTypeId" = 4)
                     AND (NOT @TasksOnly OR operation."OperationTypeId" <> 2)
+                    -- The Queue: what is still open, and a grab the indexer limited until its pause ends (then the next search takes over).
+                    AND (NOT @QueueOnly OR operation."OperationTypeId" = 2 AND (
+                        operation."OperationStatusTypeId" IN (1, 2)
+                        OR operation."OperationStatusTypeId" = 4 AND operation."ErrorKey" = 'acquisition_rate_limited' AND wanted."NextSearchAt" > now()
+                    ))
                     AND (@AcquisitionConnectionId::bigint IS NULL OR connection."Id" = @AcquisitionConnectionId)
                     AND (@MediaTypeId::smallint IS NULL OR work."MediaTypeId" = @MediaTypeId)
                     AND (@DownloadPriorityTypeId::smallint IS NULL OR operation."DownloadPriorityTypeId" = @DownloadPriorityTypeId)
@@ -137,7 +161,7 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
                 OFFSET @Offset;
                 """;
             sql.Parameters.Add(new ActivityFilterData(Parameters.ActivityFilterTypeId, Parameters.TorrentOnly, Parameters.DownloadsOnly, Parameters.FailedOnly, Parameters.DownloadClientKindId,
-                Parameters.AcquisitionConnectionId, Parameters.MediaTypeId, Parameters.DownloadPriorityTypeId, Parameters.MediaTypeIds, Parameters.MediaSubtypeIds, Parameters.TasksOnly));
+                Parameters.AcquisitionConnectionId, Parameters.MediaTypeId, Parameters.DownloadPriorityTypeId, Parameters.MediaTypeIds, Parameters.MediaSubtypeIds, Parameters.TasksOnly, Parameters.QueueOnly));
             sql.Page = Page;
             return await Context.ReadSql.ReadPageAsync<ActivityItemV1>(sql, CancellationToken);
         }

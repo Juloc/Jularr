@@ -95,14 +95,14 @@ namespace Jularr.E2E.Tests
 
                 // The queue's rows say from the start what the stream says, and a download that starts keeps its row's height.
                 var queue = await (await page.GotoAsync("/Admin/Queue"))!.TextAsync();
-                var label = queue[queue.IndexOf("state-chip__live", queue.IndexOf("Film.5.1080p", StringComparison.Ordinal), StringComparison.Ordinal)..];
+                var label = queue[queue.LastIndexOf("queue-state__label", queue.IndexOf("Film.3.1080p", StringComparison.Ordinal), StringComparison.Ordinal)..];
                 label = label[(label.IndexOf('>') + 1)..label.IndexOf('<')];
-                Assert.AreEqual("Failed", label, "The failed download's state as the page first renders it.");
+                Assert.AreEqual("Paused", label, "The paused download's state as the page first renders it.");
                 await jularr.RunSqlAsync("""
                     UPDATE "Operations" SET "OperationStatusTypeId" = 2, "DownloadStateTypeId" = 2, "ProgressPercent" = 1
                     WHERE "AcquisitionReleaseId" = (SELECT "Id" FROM "AcquisitionReleases" WHERE "ReleaseIdentity" = 'queue-2');
                     """);
-                await Assertions.Expect(Steps.ListRow(page, "Film.2.1080p").Locator(".state-chip")).ToHaveTextAsync("Downloading");
+                await Assertions.Expect(Steps.ListRow(page, "Film.2.1080p").Locator(".queue-state__label")).ToHaveTextAsync("Downloading");
                 var live = await page.EvaluateAsync<JsonElement>(Measure);
                 if (live.GetProperty("score").GetDouble() >= 0.01) shifts.Add($"/Admin/Queue live: {live.GetProperty("score").GetDouble():0.0000} ({live.GetProperty("sources").GetString()})");
 
