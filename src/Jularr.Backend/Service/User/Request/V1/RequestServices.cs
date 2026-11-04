@@ -240,7 +240,7 @@ namespace Jularr.Backend.Service.User.Request.V1
 
         protected override async Task<IServiceOutput> OnRead()
         {
-            // The qualities the account's rule offers for this Work's type and subtype.
+            // The qualities the account's rule offers that apply to this Work's media type.
             var sql = new SqlStatement();
             sql.Statement =
                 """
@@ -250,11 +250,11 @@ namespace Jularr.Backend.Service.User.Request.V1
                 FROM
                     "EffectiveRequestRules" AS rule
                     JOIN "AcquisitionProfiles" AS profile ON profile."Id" = ANY(rule."AcquisitionProfileIds")
-                    JOIN "WorkClasses" AS class ON class."MediaTypeId" = profile."MediaTypeId" AND class."MediaSubtypeId" IS NOT DISTINCT FROM profile."MediaSubtypeId"
-                    JOIN "ProfileWorks" AS visible ON visible."WorkId" = class."WorkId" AND visible."ProfileId" = @ProfileId
+                    JOIN "WorkAcquisitionKinds" AS kind ON kind."WorkId" = @WorkId
+                    JOIN "AcquisitionProfileMediaKinds" AS applies ON applies."AcquisitionProfileId" = profile."Id" AND applies."AcquisitionMediaKindId" = kind."AcquisitionMediaKindId"
+                    JOIN "ProfileWorks" AS visible ON visible."WorkId" = @WorkId AND visible."ProfileId" = @ProfileId
                 WHERE
                     rule."AccountId" = @AccountId
-                    AND class."WorkId" = @WorkId
                 ORDER BY
                     profile."Name";
                 """;

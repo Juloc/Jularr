@@ -83,11 +83,11 @@ namespace Jularr.Backend.Logic.Acquisition
                         SELECT
                             1
                         FROM
-                            "AcquisitionProfiles" AS profile
+                            "AcquisitionProfileMediaKinds" AS profile
+                            JOIN "WorkAcquisitionKinds" AS kind ON kind."AcquisitionMediaKindId" = profile."AcquisitionMediaKindId"
                         WHERE
-                            profile."Id" = @AcquisitionProfileId
-                            AND profile."MediaTypeId" = work."MediaTypeId"
-                            AND (profile."MediaSubtypeId" IS NULL OR profile."MediaSubtypeId" = work."MediaSubtypeId")
+                            profile."AcquisitionProfileId" = @AcquisitionProfileId
+                            AND kind."WorkId" = work."Id"
                     ) AS "Fits"
                 FROM
                     "Works" AS work

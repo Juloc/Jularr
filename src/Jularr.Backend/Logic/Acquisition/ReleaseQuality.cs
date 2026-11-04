@@ -3,7 +3,7 @@ using Jularr.Backend.Data.Logic.Acquisition;
 
 namespace Jularr.Backend.Logic.Acquisition
 {
-    // A release's quality under the name Sonarr (series) or Radarr (films) gives it; books, music and games name their format.
+    // A release's quality under the name Sonarr (series) or Radarr (films, every remux) gives it; books, music and games name their format.
     internal static class ReleaseQuality
     {
         public static string GetKey(ReleaseInfo release, bool movie = false)
@@ -38,7 +38,7 @@ namespace Jularr.Backend.Logic.Acquisition
                 ReleaseSource.WebDl => "WEBDL-" + Web(resolution) + "p",
                 ReleaseSource.WebRip => "WEBRip-" + Web(resolution) + "p",
                 ReleaseSource.BluRay or ReleaseSource.BluRayRip when movie && release.Modifier == ReleaseQualityModifier.BrDisk => "BR-DISK",
-                ReleaseSource.BluRay or ReleaseSource.BluRayRip when remux && resolution is 1080 or 2160 => movie ? "Remux-" + resolution + "p" : "Bluray-" + resolution + "p Remux",
+                ReleaseSource.BluRay or ReleaseSource.BluRayRip when remux && resolution is 1080 or 2160 => "Remux-" + resolution + "p",
                 ReleaseSource.BluRay or ReleaseSource.BluRayRip => "Bluray-" + (resolution ?? 720) + "p",
                 ReleaseSource.Hdtv or ReleaseSource.Unknown when release.Modifier == ReleaseQualityModifier.RawHd => "Raw-HD",
                 ReleaseSource.Hdtv or ReleaseSource.Unknown when resolution is 720 or 1080 or 2160 => "HDTV-" + resolution + "p",

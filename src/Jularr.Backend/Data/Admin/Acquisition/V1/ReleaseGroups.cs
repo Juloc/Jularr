@@ -1,23 +1,17 @@
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
-using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Fields.Acquisition;
-using Jularr.Backend.Data.Fields.Media;
 
 namespace Jularr.Backend.Data.Admin.Acquisition.V1
 {
     public sealed class ReadReleaseGroupsParametersV1 : BaseParameters
     {
-        public ReadReleaseGroupsParametersV1(MediaType mediaTypeId, string? search = null, int page = 1, int pageSize = 25)
+        public ReadReleaseGroupsParametersV1(string? search = null, int page = 1, int pageSize = 25)
         {
-            MediaTypeId = mediaTypeId;
             Search = search;
             Page = page;
             PageSize = pageSize;
         }
-
-        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId))]
-        public MediaType MediaTypeId { get; }
 
         // Part of a group's name, in any case.
         [DataField(typeof(ReleaseGroupFields), nameof(ReleaseGroupFields.Search))]
@@ -30,10 +24,9 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
 
     public sealed class ReleaseGroupDetailsV1 : BaseResponse
     {
-        public ReleaseGroupDetailsV1(long id, MediaType mediaTypeId, string name, ReleaseGroupRating? releaseGroupRatingId, int seenCount, DateTime? lastSeenAt)
+        public ReleaseGroupDetailsV1(long id, string name, ReleaseGroupRating? releaseGroupRatingId, int seenCount, DateTime? lastSeenAt)
         {
             Id = id;
-            MediaTypeId = mediaTypeId;
             Name = name;
             ReleaseGroupRatingId = releaseGroupRatingId;
             SeenCount = seenCount;
@@ -42,9 +35,6 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
 
         [DataField(typeof(ReleaseGroupFields), nameof(ReleaseGroupFields.Id))]
         public long Id { get; }
-
-        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId))]
-        public MediaType MediaTypeId { get; }
 
         [DataField(typeof(ReleaseGroupFields), nameof(ReleaseGroupFields.Name))]
         public string Name { get; }
@@ -87,25 +77,14 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
 
     public sealed class ReleaseGroupScopeParametersV1 : BaseParameters
     {
-        public ReleaseGroupScopeParametersV1(MediaType mediaTypeId)
-        {
-            MediaTypeId = mediaTypeId;
-        }
-
-        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId))]
-        public MediaType MediaTypeId { get; }
     }
 
     public sealed class AddReleaseGroupDataV1 : BaseData
     {
-        public AddReleaseGroupDataV1(MediaType mediaTypeId, string name)
+        public AddReleaseGroupDataV1(string name)
         {
-            MediaTypeId = mediaTypeId;
             Name = name;
         }
-
-        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId))]
-        public MediaType MediaTypeId { get; }
 
         [DataField(typeof(ReleaseGroupFields), nameof(ReleaseGroupFields.Name))]
         public string Name { get; }

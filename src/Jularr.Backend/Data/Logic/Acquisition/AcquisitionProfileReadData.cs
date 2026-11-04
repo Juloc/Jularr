@@ -1,19 +1,17 @@
 using Jularr.Backend.Data.Common;
-using Jularr.Backend.Data.Enums.Media;
+using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Fields.Acquisition;
-using Jularr.Backend.Data.Fields.Media;
 
 namespace Jularr.Backend.Data.Logic.Acquisition
 {
     internal sealed class AcquisitionProfileReadData : BaseData
     {
-        public AcquisitionProfileReadData(long id, string name, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, bool isDefault, string definition, int wantedCount, long version)
+        public AcquisitionProfileReadData(long id, string name, AcquisitionMediaKind[] mediaKinds, AcquisitionMediaKind[] defaultFor, string definition, int wantedCount, long version)
         {
             Id = id;
             Name = name;
-            MediaTypeId = mediaTypeId;
-            MediaSubtypeId = mediaSubtypeId;
-            IsDefault = isDefault;
+            MediaKinds = mediaKinds;
+            DefaultFor = defaultFor;
             Definition = definition;
             WantedCount = wantedCount;
             Version = version;
@@ -25,14 +23,11 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.Name))]
         public string Name { get; }
 
-        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId))]
-        public MediaType MediaTypeId { get; }
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.MediaKinds))]
+        public AcquisitionMediaKind[] MediaKinds { get; }
 
-        [DataField(typeof(WorkFields), nameof(WorkFields.MediaSubtypeId))]
-        public MediaSubtype? MediaSubtypeId { get; }
-
-        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.IsDefault))]
-        public bool IsDefault { get; }
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.DefaultFor))]
+        public AcquisitionMediaKind[] DefaultFor { get; }
 
         [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.Definition))]
         public string Definition { get; }

@@ -72,11 +72,11 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.BadRequest, malformed.StatusCode);
 
             Task<HttpResponseMessage> ImportAsync(string json) => host.SendAsync(HttpMethod.Post, Root + "custom-formats/import",
-                new ImportCustomFormatsDataV1(MediaType.Movie, TakeoverSourceType.Radarr, json));
+                new ImportCustomFormatsDataV1(TakeoverSourceType.Radarr, json));
         }
 
         [TestMethod]
-        public async Task Groups_RenameKeepsIdentity_AndCrossMediaFormatsAreRefused()
+        public async Task Groups_RenameKeepsIdentity_AndUnknownFormatsAreRefused()
         {
             await using var host = await CreateAsync();
             using var created = await host.SendAsync(HttpMethod.Post, Root + "profiles", Input("Web group"));
@@ -90,12 +90,12 @@ namespace Jularr.Backend.Tests
             CollectionAssert.AreEqual(new[] { "group:123" }, profile.AllowedQualities);
             Assert.AreEqual("Renamed group", profile.QualityGroups.Single().Name);
             Assert.AreEqual("group:123", profile.UpgradeCutoffQuality);
-            using var wrongType = await host.SendAsync(HttpMethod.Post, Root + "profiles",
-                new SaveAcquisitionProfileDataV1("Wrong type", MediaType.Movie, false, ["WEBDL-1080p"], false, null, null, null,
-                    formatScores: new([new CustomFormatScoreV1(3, 500)])));
-            Assert.AreEqual(HttpStatusCode.BadRequest, wrongType.StatusCode);
+            using var unknown = await host.SendAsync(HttpMethod.Post, Root + "profiles",
+                new SaveAcquisitionProfileDataV1("Unknown format", [AcquisitionMediaKind.Movie], [], ["WEBDL-1080p"], false, null, null, null,
+                    formatScores: new([new CustomFormatScoreV1(999999, 500)])));
+            Assert.AreEqual(HttpStatusCode.BadRequest, unknown.StatusCode);
 
-            SaveAcquisitionProfileDataV1 Input(string groupName, long? version = null) => new("Grouped", MediaType.Series, false, ["group:123"], true, "group:123",
+            SaveAcquisitionProfileDataV1 Input(string groupName, long? version = null) => new("Grouped", [AcquisitionMediaKind.Series], [], ["group:123"], true, "group:123",
                 null, null, version, qualityGroups: new([new QualityGroupV1(123, groupName, ["WEBDL-1080p", "WEBRip-1080p"])]));
             async Task<AcquisitionProfileDetailsV1> ReadAsync()
             {
@@ -106,56 +106,59 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
-        public async Task ProfilesPage_AnimeTab_FollowsTheAnimeSwitch_ListsItsOwnProfiles_AndNamesTheDefault()
+        public async Task ProfilesPage_OneListWithItsTypesAndDefaults_OldAddressesLeadOn_AndNoAddressIsRefused()
         {
             await using var host = await CreateAsync(razor: true);
-            const string Anime = "/Admin/Acquisition/Profiles?tab=profiles&mediaTypeId=2&subtype=Anime";
+            const string Home = "/Admin/Acquisition/Profiles";
 
-            // The media type bar is a single choice with an Anime tab while Anime is on; without an Anime profile the series default applies.
-            using var seriesPage = await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Profiles?tab=profiles&mediaTypeId=2");
-            var series = await seriesPage.Content.ReadAsStringAsync();
-            Assert.AreEqual(HttpStatusCode.OK, seriesPage.StatusCode, series);
-            StringAssert.Contains(series, "capsule-group");
-            Assert.IsFalse(series.Contains("capsule-bar__all", StringComparison.Ordinal), "A single choice has no all capsule.");
-            StringAssert.Contains(series, "subtype=Anime");
-            using var animePage = await host.SendAsync(HttpMethod.Get, Anime);
-            var anime = await animePage.Content.ReadAsStringAsync();
-            Assert.AreEqual(HttpStatusCode.OK, animePage.StatusCode, anime);
-            StringAssert.Contains(anime, "Series: no Anime default yet, Anime uses the default of its type (HD - 720p/1080p).");
-            StringAssert.Contains(anime, "Movie: no Anime default yet, Anime uses the default of its type (HD - 720p/1080p).");
-            StringAssert.Contains(anime, "/Admin/Acquisition/Profiles/New?type=Series&amp;subtype=Anime");
-            StringAssert.Contains(anime, "/Admin/Acquisition/Profiles/New?type=Movie&amp;subtype=Anime");
+            // One list of every profile in three tabs, without a media-type bar; each row names the types it applies to and those it is the default of.
+            using var listPage = await host.SendAsync(HttpMethod.Get, Home);
+            var list = await listPage.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, listPage.StatusCode, list);
+            Assert.IsFalse(list.Contains("capsule-group", StringComparison.Ordinal), "No media-type bar.");
+            foreach (var tab in new[] { ">Profiles</a>", ">Custom formats</a>", ">Quality</a>" }) StringAssert.Contains(list, tab);
+            Assert.IsFalse(list.Contains(">Release profiles</a>", StringComparison.Ordinal));
+            Assert.AreEqual(2, list.Split(">HD - 720p/1080p<", StringSplitOptions.None).Length - 1, "The film and the series profile stand in one list.");
+            foreach (var type in new[] { "Movies", "Series", "Anime", "Books", "Manga", "Light novels", "Music", "Games" }) StringAssert.Contains(list, "class=\"tag tag--accent\">" + type + "<");
 
-            // An Anime profile that is the default is the one the note names, and the series list does not show it.
-            using var created = await host.SendAsync(HttpMethod.Post, Root + "profiles", new SaveAcquisitionProfileDataV1("Anime HD", MediaType.Series, true, ["WEBDL-1080p"], false, null, null, null, mediaSubtypeId: MediaSubtype.Anime));
-            Assert.AreEqual(HttpStatusCode.OK, created.StatusCode, await created.Content.ReadAsStringAsync());
-            anime = await (await host.SendAsync(HttpMethod.Get, Anime)).Content.ReadAsStringAsync();
-            StringAssert.Contains(anime, "Series: Anime uses its own default, Anime HD.");
-            StringAssert.Contains(anime, "Movie: no Anime default yet");
-            StringAssert.Contains(anime, ">Anime HD<");
-            using var film = await host.SendAsync(HttpMethod.Post, Root + "profiles", new SaveAcquisitionProfileDataV1("Anime Film", MediaType.Movie, true, ["WEBDL-1080p"], false, null, null, null, mediaSubtypeId: MediaSubtype.Anime));
-            Assert.AreEqual(HttpStatusCode.OK, film.StatusCode, await film.Content.ReadAsStringAsync());
-            anime = await (await host.SendAsync(HttpMethod.Get, Anime)).Content.ReadAsStringAsync();
-            StringAssert.Contains(anime, "Movie: Anime uses its own default, Anime Film.");
-            StringAssert.Contains(anime, ">Anime Film<");
-            Assert.IsFalse((await (await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Profiles?tab=profiles&mediaTypeId=1")).Content.ReadAsStringAsync()).Contains(">Anime Film<", StringComparison.Ordinal));
-            Assert.IsFalse(anime.Contains(">HD - 720p/1080p<", StringComparison.Ordinal));
-            series = await (await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Profiles?tab=profiles&mediaTypeId=2")).Content.ReadAsStringAsync();
-            Assert.IsFalse(series.Contains(">Anime HD<", StringComparison.Ordinal));
-            StringAssert.Contains(series, ">HD - 720p/1080p<");
+            // The addresses of the former panes and of the media-type bar lead to the tab that holds them now.
+            foreach (var (from, to) in new[]
+            {
+                ("?tab=profiles&mediaTypeId=5", Home), ("?mediaTypeId=2&subtype=Anime", Home), ("?tab=sizes&mediaTypeId=1", Home + "?tab=quality"),
+                ("?tab=release&mediaTypeId=1", Home + "?tab=formats#release-profiles"), ("?tab=groups&mediaTypeId=3", Home + "?tab=formats#release-groups"), ("?tab=tags", Home + "?tab=formats#tags")
+            })
+            {
+                using var moved = await host.SendAsync(HttpMethod.Get, Home + from);
+                Assert.AreEqual(HttpStatusCode.Redirect, moved.StatusCode, from);
+                Assert.AreEqual(to, moved.Headers.Location!.OriginalString, from);
+            }
 
-            // The editor of an Anime profile names its default and returns to the Anime tab; other panes ignore the subtype.
-            var id = (await (await host.SendAsync(HttpMethod.Get, Root + "profiles")).Content.ReadFromJsonAsync<BaseDataList<AcquisitionProfileDetailsV1>>())!.Single(item => item.Name == "Anime HD").Id;
-            var editor = await (await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Profiles/" + id)).Content.ReadAsStringAsync();
-            StringAssert.Contains(editor, "Default for anime series");
-            StringAssert.Contains(editor, "subtype=Anime");
+            // No value of the address is refused.
+            foreach (var query in new[] { "?tab=unknown", "?tab=formats&edit=abc&item=x&new=nothing&pageNumber=-3&groups=zz", "?tab=quality&pageNumber=99999999999", "?new=profile&edit=%00" })
+            {
+                using var odd = await host.SendAsync(HttpMethod.Get, Home + query);
+                Assert.AreEqual(HttpStatusCode.OK, odd.StatusCode, query);
+            }
 
-            // Anime off: its tab is gone, the series tab still works.
-            await host.Fixture.RunSqlAsync("UPDATE \"MediaSubtypes\" SET \"IsEnabled\" = FALSE WHERE \"Key\" = 'Anime'");
-            series = await (await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Profiles?tab=profiles&mediaTypeId=2")).Content.ReadAsStringAsync();
-            Assert.IsFalse(series.Contains("subtype=Anime", StringComparison.Ordinal));
-            using var wrong = await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Profiles?tab=profiles&mediaTypeId=3&subtype=Anime");
-            Assert.AreEqual(HttpStatusCode.NotFound, wrong.StatusCode);
+            // A new profile starts with its media type; the editor offers the types of its quality list.
+            var dialog = await (await host.SendAsync(HttpMethod.Get, Home + "?new=profile")).Content.ReadAsStringAsync();
+            StringAssert.Contains(dialog, "id=\"profile-new\"");
+            StringAssert.Contains(dialog, Home + "/New?kind=Anime");
+            var editor = await (await host.SendAsync(HttpMethod.Get, Home + "/New?kind=Anime")).Content.ReadAsStringAsync();
+            StringAssert.Contains(editor, "name=\"MediaKinds\" value=\"Anime\" checked=\"checked\"");
+            StringAssert.Contains(editor, "name=\"MediaKinds\" value=\"Movie\"");
+            Assert.IsFalse(editor.Contains("value=\"Book\"", StringComparison.Ordinal));
+            Assert.AreEqual(HttpStatusCode.NotFound, (await host.SendAsync(HttpMethod.Get, Home + "/New?kind=Banana")).StatusCode);
+
+            // The series profile of a new installation applies to series and anime and is the default of both.
+            var seriesId = (await (await host.SendAsync(HttpMethod.Get, Root + "profiles")).Content.ReadFromJsonAsync<BaseDataList<AcquisitionProfileDetailsV1>>())!
+                .Single(item => item.DefaultFor.Contains(AcquisitionMediaKind.Series)).Id;
+            editor = await (await host.SendAsync(HttpMethod.Get, Home + "/" + seriesId)).Content.ReadAsStringAsync();
+            foreach (var kind in new[] { "Series", "Anime" })
+            {
+                StringAssert.Contains(editor, "name=\"MediaKinds\" value=\"" + kind + "\" checked=\"checked\"");
+                StringAssert.Contains(editor, "name=\"DefaultFor\" value=\"" + kind + "\" checked=\"checked\"");
+            }
         }
 
         [TestMethod]
@@ -164,17 +167,17 @@ namespace Jularr.Backend.Tests
             await using var host = await CreateAsync(razor: true);
             using var overview = await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Profiles");
             Assert.AreEqual(HttpStatusCode.OK, overview.StatusCode, string.Join(";", overview.Headers.Select(header => header.Key + "=" + string.Join(",", header.Value))));
-            foreach (var tab in new[] { "profiles", "formats", "sizes", "release", "groups", "tags" })
+            foreach (var tab in new[] { "profiles", "formats", "quality" })
             {
-                using var response = await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Profiles?tab=" + tab + "&mediaTypeId=1");
+                using var response = await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Profiles?tab=" + tab);
                 var html = await response.Content.ReadAsStringAsync();
                 Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, html);
                 Assert.AreEqual(2, html.Split("class=\"navigation-tabs navigation-tabs--filters\"", StringSplitOptions.None).Length);
                 Assert.IsFalse(html.Contains("delay", StringComparison.OrdinalIgnoreCase), "A delay is offered on " + tab);
                 Assert.IsFalse(html.Contains("FallbackQualities", StringComparison.Ordinal));
-                if (tab == "tags")
+                if (tab == "formats")
                 {
-                    using var saved = await host.SendAsync(HttpMethod.Post, "/Admin/Acquisition/Profiles?tab=tags&mediaTypeId=1&handler=Tag",
+                    using var saved = await host.SendAsync(HttpMethod.Post, "/Admin/Acquisition/Profiles?tab=formats&handler=Tag",
                         new FormUrlEncodedContent([new("__RequestVerificationToken", LibraryTests.Token(html)), new("Label", "arr-test")]));
                     Assert.AreEqual(HttpStatusCode.Redirect, saved.StatusCode, await saved.Content.ReadAsStringAsync());
                 }
@@ -183,54 +186,53 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
-        public async Task ReleaseGroupsTab_ListsNotRatedFirst_AndSavesARatingFromItsSegments()
+        public async Task ReleaseGroupsSection_ListsEveryTypeNotRatedFirst_AndSavesARatingFromItsSegments()
         {
             await using var host = await CreateAsync(razor: true);
             await host.Fixture.RunSqlAsync("""
-                INSERT INTO "ReleaseGroups" ("Id", "MediaTypeId", "Name", "ReleaseGroupRatingId", "SeenCount", "LastSeenAt") VALUES
-                    (901, 1, 'GRP', 1, 14, now() - interval '2 hours'),
-                    (902, 1, 'FLUX', NULL, 5, now() - interval '3 days'),
-                    (903, 2, 'SeriesOnly', NULL, 1, now());
+                INSERT INTO "ReleaseGroups" ("Id", "Name", "ReleaseGroupRatingId", "SeenCount", "LastSeenAt") VALUES
+                    (901, 'GRP', 1, 14, now() - interval '2 hours'),
+                    (902, 'FLUX', NULL, 5, now() - interval '3 days'),
+                    (903, 'SeriesOnly', NULL, 1, now());
                 """);
 
-            // The media type's groups: its figures, the find-or-add field, not rated first, one segmented control per group with the rating chosen.
-            using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Profiles?tab=groups&mediaTypeId=1");
+            // One list for every media type under the custom formats: the find-or-add field, not rated first, one segmented control per group with the rating chosen.
+            using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Profiles?tab=formats");
             var html = await page.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
             Assert.AreEqual(2, html.Split("class=\"navigation-tabs navigation-tabs--filters\"", StringSplitOptions.None).Length);
-            StringAssert.Contains(html, "navigation-tabs__link navigation-tabs__link--active\" aria-current=\"page\">Release groups</a>");
+            StringAssert.Contains(html, "navigation-tabs__link navigation-tabs__link--active\" aria-current=\"page\">Custom formats</a>");
+            StringAssert.Contains(html, "id=\"release-groups\"");
             StringAssert.Contains(html, "placeholder=\"Find or add a group\"");
             StringAssert.Contains(html, "Not rated &#xB7; seen 5 times, last 3 days ago");
             StringAssert.Contains(html, "seen 14 times, last 2 hours ago");
             Assert.IsTrue(html.IndexOf(">FLUX<", StringComparison.Ordinal) < html.IndexOf(">GRP<", StringComparison.Ordinal), "Not rated groups come first.");
-            Assert.IsFalse(html.Contains("SeriesOnly", StringComparison.Ordinal));
-            Assert.AreEqual(2, html.Split("class=\"ui-segments\"", StringSplitOptions.None).Length - 1);
-            Assert.AreEqual(1, html.Split("value=\"1\" checked=\"checked\"", StringSplitOptions.None).Length - 1);
+            StringAssert.Contains(html, ">SeriesOnly<");
+            Assert.AreEqual(3, html.Split("class=\"ui-segments\"", StringSplitOptions.None).Length - 1);
             StringAssert.Contains(html, "data-form-submit=\"\"");
-            StringAssert.Contains(html, "id=\"release-groups\" data-region=\"\"");
-            Assert.AreEqual(6, html.Split("data-form-clearable=\"\"", StringSplitOptions.None).Length - 1);
+            StringAssert.Contains(html, "id=\"release-groups-region\" data-region=\"\"");
+            Assert.AreEqual(9, html.Split("data-form-clearable=\"\"", StringSplitOptions.None).Length - 1);
             Assert.AreEqual(1, html.Split("title=\"Click again to clear\"", StringSplitOptions.None).Length - 1);
-            foreach (var caption in new[] { "Groups", "Good", "Not rated", "Blocked" }) StringAssert.Contains(html, "kpi-tile__caption\">" + caption + "<");
+            Assert.IsFalse(html.Contains("kpi-tile", StringComparison.Ordinal));
 
             // A segment saves the rating at once; the field adds a group and shows it.
-            using var rated = await host.SendAsync(HttpMethod.Post, "/Admin/Acquisition/Profiles?tab=groups&mediaTypeId=1&edit=902&handler=Rate",
+            using var rated = await host.SendAsync(HttpMethod.Post, "/Admin/Acquisition/Profiles?tab=formats&edit=902&item=group&handler=Rate",
                 new FormUrlEncodedContent([new("__RequestVerificationToken", LibraryTests.Token(html)), new("ReleaseGroupRatingId", "3")]));
             Assert.AreEqual(HttpStatusCode.Redirect, rated.StatusCode, await rated.Content.ReadAsStringAsync());
             Assert.AreEqual(3, Convert.ToInt32(await host.ScalarAsync("""SELECT "ReleaseGroupRatingId" FROM "ReleaseGroups" WHERE "Id" = 902""")));
 
             // The chosen segment clicked again sends no rating: the group is not rated again.
-            using var cleared = await host.SendAsync(HttpMethod.Post, "/Admin/Acquisition/Profiles?tab=groups&mediaTypeId=1&edit=901&handler=Rate",
+            using var cleared = await host.SendAsync(HttpMethod.Post, "/Admin/Acquisition/Profiles?tab=formats&edit=901&item=group&handler=Rate",
                 new FormUrlEncodedContent([new("__RequestVerificationToken", LibraryTests.Token(html))]));
             Assert.AreEqual(HttpStatusCode.Redirect, cleared.StatusCode, await cleared.Content.ReadAsStringAsync());
             Assert.AreEqual(true, await host.ScalarAsync("""SELECT "ReleaseGroupRatingId" IS NULL FROM "ReleaseGroups" WHERE "Id" = 901"""));
-            var sorted = await (await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Profiles?tab=groups&mediaTypeId=1")).Content.ReadAsStringAsync();
+            var sorted = await (await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Profiles?tab=formats")).Content.ReadAsStringAsync();
             Assert.IsTrue(sorted.IndexOf(">GRP<", StringComparison.Ordinal) < sorted.IndexOf(">FLUX<", StringComparison.Ordinal), "The group no longer rated comes first again.");
-            StringAssert.Contains(sorted, "kpi-tile__value\">1</div><div class=\"kpi-tile__caption\">Blocked<");
-            using var added = await host.SendAsync(HttpMethod.Post, "/Admin/Acquisition/Profiles?tab=groups&mediaTypeId=1&handler=Group",
+            using var added = await host.SendAsync(HttpMethod.Post, "/Admin/Acquisition/Profiles?tab=formats&handler=Group",
                 new FormUrlEncodedContent([new("__RequestVerificationToken", LibraryTests.Token(html)), new("Name", " danke-Empire ")]));
             Assert.AreEqual(HttpStatusCode.Redirect, added.StatusCode, await added.Content.ReadAsStringAsync());
             StringAssert.Contains(added.Headers.Location!.OriginalString, "q=danke-Empire");
-            Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "ReleaseGroups" WHERE "MediaTypeId" = 1 AND "Name" = 'danke-Empire' AND "SeenCount" = 0"""));
+            Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "ReleaseGroups" WHERE "Name" = 'danke-Empire' AND "SeenCount" = 0"""));
             var found = await (await host.SendAsync(HttpMethod.Get, added.Headers.Location.OriginalString)).Content.ReadAsStringAsync();
             StringAssert.Contains(found, "Not rated &#xB7; added by hand, not seen yet");
             Assert.IsFalse(found.Contains(">GRP<", StringComparison.Ordinal));
@@ -240,13 +242,13 @@ namespace Jularr.Backend.Tests
         public async Task ProfileEditor_ScoresEveryFormat_AndKeepsOnlyScoresThatCount()
         {
             await using var host = await CreateAsync(razor: true);
-            using var imported = await host.SendAsync(HttpMethod.Post, Root + "custom-formats/import", new ImportCustomFormatsDataV1(MediaType.Movie, TakeoverSourceType.Radarr,
+            using var imported = await host.SendAsync(HttpMethod.Post, Root + "custom-formats/import", new ImportCustomFormatsDataV1(TakeoverSourceType.Radarr,
                 """{"name":"Matrix format","specifications":[{"name":"Title","implementation":"ReleaseTitleSpecification","fields":{"value":"HDR"}}]}"""));
             var format = (await imported.Content.ReadFromJsonAsync<BaseDataList<SavedCustomFormatV1>>())!.Single();
-            var profileId = (long)(await host.ScalarAsync("""SELECT "Id" FROM "AcquisitionProfiles" WHERE "MediaTypeId" = 1 AND "IsDefault" """))!;
+            var profileId = (long)(await host.ScalarAsync("""SELECT "AcquisitionProfileId" FROM "AcquisitionProfileDefaults" WHERE "AcquisitionMediaKindId" = 1"""))!;
             var version = (long)(await host.ScalarAsync("SELECT \"Version\" FROM \"AcquisitionProfiles\" WHERE \"Id\" = " + profileId))!;
 
-            // The editor lists every format of the media type with its score, not only those already scored.
+            // The editor lists every format with its score, not only those already scored.
             using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Profiles/" + profileId);
             var html = await page.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
@@ -257,8 +259,8 @@ namespace Jularr.Backend.Tests
             // A score is saved with the profile; a format left at zero is not stored.
             using var saved = await host.SendAsync(HttpMethod.Post, "/Admin/Acquisition/Profiles/" + profileId, new FormUrlEncodedContent(
             [
-                new("__RequestVerificationToken", LibraryTests.Token(html)), new("MediaTypeId", "1"), new("Version", version.ToString(System.Globalization.CultureInfo.InvariantCulture)),
-                new("Name", "Matrix"), new("IsDefault", "True"), new("AllowedQualities", "WEBDL-1080p"), new("MinimumFormatScore", "10"),
+                new("__RequestVerificationToken", LibraryTests.Token(html)), new("MediaKinds", "Movie"), new("Version", version.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                new("Name", "Matrix"), new("DefaultFor", "Movie"), new("AllowedQualities", "WEBDL-1080p"), new("MinimumFormatScore", "10"),
                 new("FormatScores[0].FormatId", format.Id.ToString(System.Globalization.CultureInfo.InvariantCulture)), new("FormatScores[0].Score", "75"),
                 new("FormatScores[1].FormatId", "999999"), new("FormatScores[1].Score", "0")
             ]));
@@ -269,7 +271,7 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual((format.Id, 75), (scores[0].FormatId, scores[0].Score));
 
             // The format list shows it as used and its editor is a dialog; no page offers a waiting time.
-            using var formats = await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Profiles?tab=formats&mediaTypeId=1&edit=" + format.Id);
+            using var formats = await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Profiles?tab=formats&item=format&edit=" + format.Id);
             var list = await formats.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, formats.StatusCode, list);
             StringAssert.Contains(list, "data-open=\"true\"");
@@ -282,7 +284,7 @@ namespace Jularr.Backend.Tests
         {
             await using var host = await CreateAsync();
             using var created = await host.SendAsync(HttpMethod.Post, Root + "profiles",
-                new SaveAcquisitionProfileDataV1("Scored group", MediaType.Movie, false, ["group:55"], true, "group:55", null, null,
+                new SaveAcquisitionProfileDataV1("Scored group", [AcquisitionMediaKind.Movie], [], ["group:55"], true, "group:55", null, null,
                     qualityGroups: new([new QualityGroupV1(55, "Web", ["WEBDL-1080p", "WEBRip-1080p"])]),
                     formatScores: new([new CustomFormatScoreV1(1, 100)]), cutoffFormatScore: 100));
             Assert.AreEqual(HttpStatusCode.OK, created.StatusCode, await created.Content.ReadAsStringAsync());
@@ -316,7 +318,7 @@ namespace Jularr.Backend.Tests
             await RefreshAsync();
             Assert.AreEqual(0L, await host.ScalarAsync("""SELECT count(*) FROM "WantedBelowCutoff" WHERE "WantedItemId" = 801 """));
             Assert.AreEqual(100, await host.ScalarAsync($"SELECT \"FormatScore\" FROM \"StoredFileProfileScores\" WHERE \"StoredFileId\" = 801 AND \"AcquisitionProfileId\" = {profile.Id}"));
-            using var changed = await host.SendAsync(HttpMethod.Put, Root + "custom-formats", new SaveCustomFormatDataV1(1, MediaType.Movie, "Prefer Proper", false,
+            using var changed = await host.SendAsync(HttpMethod.Put, Root + "custom-formats", new SaveCustomFormatDataV1(1, "Prefer Proper", false,
                 new([new FormatConditionV1("Changed", FormatConditionKind.ReleaseTitle, false, true, "^Never matches$", false, null, null, null)]), 1));
             Assert.AreEqual(HttpStatusCode.OK, changed.StatusCode, await changed.Content.ReadAsStringAsync());
             await RefreshAsync();

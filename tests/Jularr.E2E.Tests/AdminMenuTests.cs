@@ -47,8 +47,8 @@ namespace Jularr.E2E.Tests
                 await Assertions.Expect(page.Locator(".breadcrumb")).ToContainTextAsync("Settings");
                 Assert.AreEqual("same document", await page.EvaluateAsync<string>("window.menuMarker"));
 
-                // The quality rules are panes of one address and keep one row under their media type bar.
-                await page.GotoAsync("/Admin/Acquisition/Profiles?tab=formats&mediaTypeId=1");
+                // The quality rules are three tabs of one address in one row.
+                await page.GotoAsync("/Admin/Acquisition/Profiles?tab=formats");
                 await Assertions.Expect(page.Locator("main .navigation-tabs")).ToHaveCountAsync(1);
                 await Assertions.Expect(page.Locator("main .navigation-tabs [aria-current=page]")).ToHaveTextAsync("Custom formats");
                 await Assertions.Expect(menu.Locator(".menu-entry.is-active")).ToHaveAttributeAsync("href", "/Admin/Acquisition/Profiles?tab=profiles");

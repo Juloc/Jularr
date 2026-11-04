@@ -35,9 +35,9 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                 FROM
                     "ReleaseProfiles" AS item
                 WHERE
-                    item."MediaTypeId" IS NULL OR item."MediaTypeId" = @MediaTypeId
+                    @MediaTypeId::smallint IS NULL OR item."MediaTypeId" IS NULL OR item."MediaTypeId" = @MediaTypeId
                 ORDER BY
-                    item."Name",
+                    lower(item."Name"),
                     item."Id"
                 LIMIT @PageSize
                 OFFSET @Offset;

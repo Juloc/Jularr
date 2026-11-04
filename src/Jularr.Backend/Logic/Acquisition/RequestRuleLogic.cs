@@ -211,11 +211,11 @@ namespace Jularr.Backend.Logic.Acquisition
                         SELECT
                             1
                         FROM
-                            "AcquisitionProfiles" AS profile
+                            "AcquisitionProfileMediaKinds" AS applies
+                            JOIN "WorkAcquisitionKinds" AS kind ON kind."AcquisitionMediaKindId" = applies."AcquisitionMediaKindId"
                         WHERE
-                            profile."Id" = @AcquisitionProfileId
-                            AND profile."MediaTypeId" = class."MediaTypeId"
-                            AND profile."MediaSubtypeId" IS NOT DISTINCT FROM class."MediaSubtypeId"
+                            applies."AcquisitionProfileId" = @AcquisitionProfileId
+                            AND kind."WorkId" = class."WorkId"
                     ) AS "IsProfileAllowed",
                     (
                         SELECT

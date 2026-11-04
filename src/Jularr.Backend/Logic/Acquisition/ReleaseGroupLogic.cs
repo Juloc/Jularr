@@ -3,7 +3,7 @@ using Jularr.Backend.Infrastructure.Sql;
 
 namespace Jularr.Backend.Logic.Acquisition
 {
-    // The release groups of each media type: collected from search results, typed by hand and rated for every profile of the type.
+    // The release groups, one list for every media type: collected from search results, typed by hand and rated for every profile.
     internal static class ReleaseGroupLogic
     {
         // The most groups one search records; a search sees far fewer.
@@ -25,9 +25,8 @@ namespace Jularr.Backend.Logic.Acquisition
             sql.Statement =
                 """
                 INSERT INTO
-                    "ReleaseGroups" ("MediaTypeId", "Name", "SeenCount", "LastSeenAt")
+                    "ReleaseGroups" ("Name", "SeenCount", "LastSeenAt")
                 SELECT
-                    @MediaTypeId,
                     seen."Name",
                     1,
                     @SeenAt
@@ -41,7 +40,7 @@ namespace Jularr.Backend.Logic.Acquisition
                             lower(name),
                             name
                     ) AS seen
-                ON CONFLICT ("MediaTypeId", lower("Name")) DO UPDATE
+                ON CONFLICT ((lower("Name"))) DO UPDATE
                 SET
                     "SeenCount" = least("ReleaseGroups"."SeenCount", 2147483646) + 1,
                     "LastSeenAt" = greatest("ReleaseGroups"."LastSeenAt", excluded."LastSeenAt");
@@ -57,10 +56,10 @@ namespace Jularr.Backend.Logic.Acquisition
             sql.Statement =
                 """
                 INSERT INTO
-                    "ReleaseGroups" ("MediaTypeId", "Name")
+                    "ReleaseGroups" ("Name")
                 VALUES
-                    (@MediaTypeId, @Name)
-                ON CONFLICT ("MediaTypeId", lower("Name")) DO UPDATE
+                    (@Name)
+                ON CONFLICT ((lower("Name"))) DO UPDATE
                 SET
                     "Name" = "ReleaseGroups"."Name"
                 RETURNING
@@ -70,7 +69,7 @@ namespace Jularr.Backend.Logic.Acquisition
             return await ctx.ReadRequiredAsync<ReleaseGroupKeyData>(sql, ct);
         }
 
-        // The rating applies to every profile of the group's media type at the next search.
+        // The rating applies to every profile at the next search.
         public static async Task RateReleaseGroupAsync(this LogicContext ctx, ReleaseGroupRatingData data, CancellationToken ct)
         {
             var sql = new SqlStatement();

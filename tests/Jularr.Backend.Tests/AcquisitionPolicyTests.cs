@@ -21,16 +21,16 @@ namespace Jularr.Backend.Tests
             await using var host = await CreateHostAsync();
             var conditions = new BaseDataList<FormatConditionV1>([new("German", FormatConditionKind.Language, false, true, "de", false, null, null, null),
                 new("Group", FormatConditionKind.ReleaseGroup, true, false, "bad", false, null, null, null)]);
-            using var created = await host.SendAsync(HttpMethod.Put, Root + "custom-formats", new SaveCustomFormatDataV1(null, MediaType.Movie, "German", false, conditions, null));
+            using var created = await host.SendAsync(HttpMethod.Put, Root + "custom-formats", new SaveCustomFormatDataV1(null, "German", false, conditions, null));
             Assert.AreEqual(HttpStatusCode.OK, created.StatusCode, await created.Content.ReadAsStringAsync());
             var key = (await created.Content.ReadFromJsonAsync<SavedCustomFormatV1>())!;
             using var read = await host.SendAsync(HttpMethod.Get, Root + "custom-formats/" + key.Id);
             var format = (await read.Content.ReadFromJsonAsync<CustomFormatDetailsV1>())!;
             Assert.AreEqual(2, format.Conditions.Count);
             Assert.IsTrue(format.Conditions[1].Negate);
-            using var edit = await host.SendAsync(HttpMethod.Put, Root + "custom-formats", new SaveCustomFormatDataV1(key.Id, MediaType.Movie, "German release", false, conditions, key.Version));
+            using var edit = await host.SendAsync(HttpMethod.Put, Root + "custom-formats", new SaveCustomFormatDataV1(key.Id, "German release", false, conditions, key.Version));
             Assert.AreEqual(HttpStatusCode.OK, edit.StatusCode, await edit.Content.ReadAsStringAsync());
-            using var stale = await host.SendAsync(HttpMethod.Put, Root + "custom-formats", new SaveCustomFormatDataV1(key.Id, MediaType.Movie, "Stale", false, conditions, key.Version));
+            using var stale = await host.SendAsync(HttpMethod.Put, Root + "custom-formats", new SaveCustomFormatDataV1(key.Id, "Stale", false, conditions, key.Version));
             Assert.AreEqual(HttpStatusCode.BadRequest, stale.StatusCode);
 
             await host.Fixture.RunSqlAsync($"UPDATE \"AcquisitionProfiles\" SET \"Definition\" = jsonb_set(\"Definition\", '{{FormatScores}}', '[{{\"FormatId\":{key.Id},\"Score\":100}}]') WHERE \"Id\" = 1");
@@ -87,7 +87,7 @@ namespace Jularr.Backend.Tests
             {
                 await host.Fixture.RunSqlAsync($"UPDATE \"Accounts\" SET \"AccountRoleTypeId\" = {role} WHERE \"Id\" = 41");
                 var denied = role == 3 ? HttpStatusCode.Forbidden : HttpStatusCode.Unauthorized;
-                using var read = await host.SendAsync(HttpMethod.Get, Root + "custom-formats?mediaTypeId=1&page=1&pageSize=25");
+                using var read = await host.SendAsync(HttpMethod.Get, Root + "custom-formats?page=1&pageSize=25");
                 Assert.AreEqual(denied, read.StatusCode);
                 using var write = await host.SendAsync(HttpMethod.Put, Root + "tags", new SaveAcquisitionTagDataV1(null, "blocked", null));
                 Assert.AreEqual(denied, write.StatusCode);

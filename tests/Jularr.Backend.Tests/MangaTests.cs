@@ -67,15 +67,18 @@ namespace Jularr.Backend.Tests
                 INSERT INTO "RequestTargets" ("AcquisitionRequestId", "WantedItemId") VALUES (700, 800);
                 """);
 
-            // Both libraries accept Manga; a Light Novel profile does not fit, a Book profile does.
+            // Both libraries accept Manga; a Light Novel or Book profile does not fit (manga has its own qualities), the Manga profile does.
             using var listed = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/wanted/800/libraries");
             var libraries = (await listed.Content.ReadFromJsonAsync<BaseDataList<WantedLibraryV1>>())!;
             CollectionAssert.AreEqual(new[] { "Books", "Manga" }, libraries.Select(library => library.Name).ToArray());
             var novels = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"AcquisitionProfiles\" WHERE \"Name\" = 'Light Novels'"))!;
             var books = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"AcquisitionProfiles\" WHERE \"Name\" = 'Books'"))!;
+            var manga = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"AcquisitionProfiles\" WHERE \"Name\" = 'Manga'"))!;
             using var wrong = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/wanted/800", new UpdateWantedDataV1(false, 1, novels));
             Assert.AreEqual(HttpStatusCode.BadRequest, wrong.StatusCode);
-            using var chosen = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/wanted/800", new UpdateWantedDataV1(false, 1, books, libraries.Single(library => library.Name == "Manga").Id));
+            using var book = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/wanted/800", new UpdateWantedDataV1(false, 1, books));
+            Assert.AreEqual(HttpStatusCode.BadRequest, book.StatusCode);
+            using var chosen = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/wanted/800", new UpdateWantedDataV1(false, 1, manga, libraries.Single(library => library.Name == "Manga").Id));
             Assert.AreEqual(HttpStatusCode.OK, chosen.StatusCode, await chosen.Content.ReadAsStringAsync());
             using var reset = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/wanted/800", new UpdateWantedDataV1(false, 2, null, libraries.Single(library => library.Name == "Manga").Id));
             Assert.AreEqual(HttpStatusCode.OK, reset.StatusCode);

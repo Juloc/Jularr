@@ -1,8 +1,6 @@
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
-using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Fields.Acquisition;
-using Jularr.Backend.Data.Fields.Media;
 
 namespace Jularr.Backend.Data.Admin.Acquisition.V1
 {
@@ -12,15 +10,11 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
 
     public sealed class ReadCustomFormatsParametersV1 : BaseParameters
     {
-        public ReadCustomFormatsParametersV1(MediaType mediaTypeId, int page = 1, int pageSize = 25)
+        public ReadCustomFormatsParametersV1(int page = 1, int pageSize = 25)
         {
-            MediaTypeId = mediaTypeId;
             Page = page;
             PageSize = pageSize;
         }
-
-        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId))]
-        public MediaType MediaTypeId { get; }
 
         public int Page { get; }
 
@@ -94,10 +88,9 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
     }
     public sealed class SaveCustomFormatDataV1 : BaseData
     {
-        public SaveCustomFormatDataV1(long? id, MediaType mediaTypeId, string name, bool includeWhenRenaming, BaseDataList<FormatConditionV1> conditions, long? version)
+        public SaveCustomFormatDataV1(long? id, string name, bool includeWhenRenaming, BaseDataList<FormatConditionV1> conditions, long? version)
         {
             Id = id;
-            MediaTypeId = mediaTypeId;
             Name = name;
             IncludeWhenRenaming = includeWhenRenaming;
             Conditions = conditions;
@@ -106,9 +99,6 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
 
         [DataField(typeof(CustomFormatFields), nameof(CustomFormatFields.Id), false)]
         public long? Id { get; }
-
-        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId))]
-        public MediaType MediaTypeId { get; }
 
         [DataField(typeof(CustomFormatFields), nameof(CustomFormatFields.Name))]
         public string Name { get; }
@@ -130,10 +120,9 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
     }
     public sealed class CustomFormatDetailsV1 : BaseResponse
     {
-        public CustomFormatDetailsV1(long id, MediaType mediaTypeId, string name, bool includeWhenRenaming, BaseDataList<FormatConditionV1> conditions, long version)
+        public CustomFormatDetailsV1(long id, string name, bool includeWhenRenaming, BaseDataList<FormatConditionV1> conditions, long version)
         {
             Id = id;
-            MediaTypeId = mediaTypeId;
             Name = name;
             IncludeWhenRenaming = includeWhenRenaming;
             Conditions = conditions;
@@ -142,9 +131,6 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
 
         [DataField(typeof(CustomFormatFields), nameof(CustomFormatFields.Id))]
         public long Id { get; }
-
-        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId))]
-        public MediaType MediaTypeId { get; }
 
         [DataField(typeof(CustomFormatFields), nameof(CustomFormatFields.Name))]
         public string Name { get; }
