@@ -149,20 +149,27 @@ INSERT INTO "AcquisitionProfileDefaults" ("AcquisitionMediaKindId", "Acquisition
 SELECT standard."AcquisitionMediaKindId", standard."AcquisitionProfileId" FROM "NewProfileDefaults" AS standard WHERE standard."AcquisitionProfileId" IS NOT NULL;
 
 -- A target whose type now has another default keeps its profile as its own.
-UPDATE
-    "WantedItems" AS wanted
-SET
-    "AcquisitionProfileId" = previous."ProfileId",
-    "Version" = wanted."Version" + 1,
-    "UpdatedAt" = now()
-FROM
-    "PreviousTargetProfiles" AS previous
-    LEFT JOIN "AcquisitionProfileDefaults" AS standard ON standard."AcquisitionMediaKindId" = previous."AcquisitionMediaKindId"
-WHERE
-    wanted."Id" = previous."WantedItemId"
-    AND previous."OwnProfileId" IS NULL
-    AND previous."ProfileId" IS NOT NULL
-    AND previous."ProfileId" IS DISTINCT FROM standard."AcquisitionProfileId";
+CREATE TEMPORARY TABLE "PinnedTargets" ("WantedItemId" bigint PRIMARY KEY, "AcquisitionMediaKindId" smallint NOT NULL) ON COMMIT DROP;
+WITH pinned AS (
+    UPDATE
+        "WantedItems" AS wanted
+    SET
+        "AcquisitionProfileId" = previous."ProfileId",
+        "Version" = wanted."Version" + 1,
+        "UpdatedAt" = now()
+    FROM
+        "PreviousTargetProfiles" AS previous
+        LEFT JOIN "AcquisitionProfileDefaults" AS standard ON standard."AcquisitionMediaKindId" = previous."AcquisitionMediaKindId"
+    WHERE
+        wanted."Id" = previous."WantedItemId"
+        AND previous."OwnProfileId" IS NULL
+        AND previous."ProfileId" IS NOT NULL
+        AND previous."ProfileId" IS DISTINCT FROM standard."AcquisitionProfileId"
+    RETURNING
+        wanted."Id",
+        previous."AcquisitionMediaKindId"
+)
+INSERT INTO "PinnedTargets" ("WantedItemId", "AcquisitionMediaKindId") SELECT pinned."Id", pinned."AcquisitionMediaKindId" FROM pinned;
 
 -- One video list: a series remux takes the film name.
 UPDATE "AcquisitionProfiles" AS profile
@@ -254,12 +261,109 @@ DELETE FROM "CustomFormats" AS format USING "MergedCustomFormats" AS merged WHER
 
 -- Formats of the same name that differ keep it once; the others name their type.
 UPDATE "CustomFormats" AS format
-SET "Name" = left(format."Name", 110) || ' (' || CASE format."MediaTypeId" WHEN 1 THEN 'Movies' WHEN 2 THEN 'Series' WHEN 3 THEN 'Books' WHEN 6 THEN 'Music' ELSE 'Games' END || ')',
+SET "Name" = left(format."Name", 110) || ' (' || CASE format."MediaTypeId" WHEN 1 THEN 'Filme' WHEN 2 THEN 'Serien' WHEN 3 THEN 'Bücher' WHEN 6 THEN 'Musik' ELSE 'Spiele' END || ')',
     "Version" = format."Version" + 1
 WHERE EXISTS (SELECT 1 FROM "CustomFormats" AS older WHERE lower(older."Name") = lower(format."Name") AND older."Id" < format."Id");
 
 ALTER TABLE "CustomFormats" DROP COLUMN "MediaTypeId";
 CREATE UNIQUE INDEX "UX_CustomFormats_Name" ON "CustomFormats" (lower("Name"));
+
+-- Profiles of the same name with the same settings become one that applies to all their types: the settings compared after one video list and one
+-- list of formats (a series profile lists the film-only qualities last, which series never meet; the film profile's order is kept).
+CREATE TEMPORARY TABLE "MergedProfiles" ON COMMIT DROP AS
+WITH settings AS (
+    SELECT
+        profile."Id",
+        lower(btrim(profile."Name")) AS "Name",
+        profile."MediaTypeId" = 1 AS "IsFilm",
+        jsonb_set(jsonb_set(profile."Definition", '{QualityOrder}', coalesce((
+            SELECT jsonb_agg(listed.quality ORDER BY listed.position)
+            FROM jsonb_array_elements(coalesce(profile."Definition" -> 'QualityOrder', '[]'::jsonb)) WITH ORDINALITY AS listed (quality, position)
+            WHERE NOT (listed.quality #>> '{}') = ANY(ARRAY['BR-DISK', 'DVD-R', 'DVDSCR', 'REGIONAL', 'TELECINE', 'TELESYNC', 'CAM', 'WORKPRINT'])
+        ), '[]'::jsonb)), '{FormatScores}', coalesce((
+            SELECT jsonb_agg(score ORDER BY (score ->> 'FormatId')::bigint)
+            FROM jsonb_array_elements(coalesce(profile."Definition" -> 'FormatScores', '[]'::jsonb)) AS score
+        ), '[]'::jsonb)) AS "Settings"
+    FROM
+        "AcquisitionProfiles" AS profile
+)
+SELECT
+    profile."Id" AS "ProfileId",
+    kept."Id" AS "KeptId"
+FROM
+    settings AS profile
+    JOIN LATERAL (
+        SELECT
+            candidate."Id"
+        FROM
+            settings AS candidate
+        WHERE
+            candidate."Name" = profile."Name"
+            AND candidate."Settings" = profile."Settings"
+        ORDER BY
+            candidate."IsFilm" DESC,
+            candidate."Id"
+        LIMIT 1
+    ) AS kept ON kept."Id" <> profile."Id";
+
+-- The kept profile takes over their types, defaults, targets, requests, request rules, takeover links and waiting imports.
+INSERT INTO "AcquisitionProfileMediaKinds" ("AcquisitionProfileId", "AcquisitionMediaKindId")
+SELECT merged."KeptId", applies."AcquisitionMediaKindId"
+FROM "MergedProfiles" AS merged JOIN "AcquisitionProfileMediaKinds" AS applies ON applies."AcquisitionProfileId" = merged."ProfileId"
+ON CONFLICT DO NOTHING;
+UPDATE "AcquisitionProfileDefaults" AS standard SET "AcquisitionProfileId" = merged."KeptId"
+FROM "MergedProfiles" AS merged WHERE standard."AcquisitionProfileId" = merged."ProfileId";
+UPDATE "WantedItems" AS wanted SET "AcquisitionProfileId" = merged."KeptId", "Version" = wanted."Version" + 1, "UpdatedAt" = now()
+FROM "MergedProfiles" AS merged WHERE wanted."AcquisitionProfileId" = merged."ProfileId";
+UPDATE "AcquisitionRequests" AS request SET "AcquisitionProfileId" = merged."KeptId"
+FROM "MergedProfiles" AS merged WHERE request."AcquisitionProfileId" = merged."ProfileId";
+UPDATE "AcquisitionProfileImports" AS imported SET "AcquisitionProfileId" = merged."KeptId"
+FROM "MergedProfiles" AS merged WHERE imported."AcquisitionProfileId" = merged."ProfileId";
+UPDATE "RequestRules" AS rule
+SET "AcquisitionProfileIds" = ARRAY(
+    SELECT DISTINCT coalesce(merged."KeptId", item) FROM unnest(rule."AcquisitionProfileIds") AS item LEFT JOIN "MergedProfiles" AS merged ON merged."ProfileId" = item ORDER BY 1),
+    "Version" = rule."Version" + 1
+WHERE rule."AcquisitionProfileIds" && ARRAY(SELECT merged."ProfileId" FROM "MergedProfiles" AS merged);
+UPDATE "AccountRequestRules" AS rule
+SET "AcquisitionProfileIds" = ARRAY(
+    SELECT DISTINCT coalesce(merged."KeptId", item) FROM unnest(rule."AcquisitionProfileIds") AS item LEFT JOIN "MergedProfiles" AS merged ON merged."ProfileId" = item ORDER BY 1)
+WHERE rule."AcquisitionProfileIds" && ARRAY(SELECT merged."ProfileId" FROM "MergedProfiles" AS merged);
+DO $$
+DECLARE
+    merged record;
+BEGIN
+    -- A waiting import names its profile in its payload, also inside its embedded list of rows.
+    FOR merged IN SELECT "ProfileId", "KeptId" FROM "MergedProfiles" LOOP
+        UPDATE "MediaImportJobs"
+        SET "Payload" = regexp_replace("Payload"::text, '("AcquisitionProfileId\\?": ?)' || merged."ProfileId" || '(?![0-9])', '\1' || merged."KeptId", 'g')::jsonb
+        WHERE "Payload"::text ~ ('"AcquisitionProfileId\\?": ?' || merged."ProfileId" || '(?![0-9])');
+    END LOOP;
+END $$;
+DELETE FROM "AcquisitionProfiles" AS profile USING "MergedProfiles" AS merged WHERE profile."Id" = merged."ProfileId";
+
+-- A target written onto its profile above whose profile is now its type's default follows the default again.
+UPDATE "WantedItems" AS wanted SET "AcquisitionProfileId" = NULL, "Version" = wanted."Version" + 1, "UpdatedAt" = now()
+FROM "PinnedTargets" AS pinned JOIN "AcquisitionProfileDefaults" AS standard ON standard."AcquisitionMediaKindId" = pinned."AcquisitionMediaKindId"
+WHERE wanted."Id" = pinned."WantedItemId" AND wanted."AcquisitionProfileId" = standard."AcquisitionProfileId";
+
+-- Profiles of the same name that differ name their type (Deutsch (Filme), Deutsch (Serien)); one still alike adds its number.
+UPDATE "AcquisitionProfiles" AS profile
+SET "Name" = left(profile."Name", 100) || ' (' || CASE
+        WHEN profile."MediaSubtypeId" = 1 AND profile."MediaTypeId" = 1 THEN 'Anime-Filme'
+        WHEN profile."MediaSubtypeId" = 1 THEN 'Anime-Serien'
+        WHEN profile."MediaSubtypeId" = 2 THEN 'Manga'
+        WHEN profile."MediaSubtypeId" = 3 THEN 'Light Novels'
+        WHEN profile."MediaTypeId" = 1 THEN 'Filme'
+        WHEN profile."MediaTypeId" = 2 THEN 'Serien'
+        WHEN profile."MediaTypeId" = 3 THEN 'Bücher'
+        WHEN profile."MediaTypeId" = 6 THEN 'Musik'
+        ELSE 'Spiele'
+    END || ')',
+    "Version" = profile."Version" + 1
+WHERE EXISTS (SELECT 1 FROM "AcquisitionProfiles" AS other WHERE lower(btrim(other."Name")) = lower(btrim(profile."Name")) AND other."Id" <> profile."Id");
+UPDATE "AcquisitionProfiles" AS profile
+SET "Name" = left(profile."Name", 110) || ' ' || profile."Id"
+WHERE EXISTS (SELECT 1 FROM "AcquisitionProfiles" AS older WHERE lower(btrim(older."Name")) = lower(btrim(profile."Name")) AND older."Id" < profile."Id");
 
 -- Release groups once: the counts add up, the stricter rating wins (blocked over bad over good).
 UPDATE "ReleaseGroups" AS kept

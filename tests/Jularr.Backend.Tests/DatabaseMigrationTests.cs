@@ -330,23 +330,28 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
-        public async Task SharedQualityProfiles_UpgradeKeepsTheProfileOfEveryTarget_MergesFormatsAndGroups_AndNamesEveryRemuxAlike()
+        public async Task SharedQualityProfiles_UpgradeKeepsTheProfileOfEveryTarget_MergesAlikeProfilesFormatsAndGroups_AndNamesEveryRemuxAlike()
         {
             using var folder = new LibraryTests.TemporaryDirectory();
-            var cs = TestPostgres.ResolveConnectionString(nameof(SharedQualityProfiles_UpgradeKeepsTheProfileOfEveryTarget_MergesFormatsAndGroups_AndNamesEveryRemuxAlike));
+            var cs = TestPostgres.ResolveConnectionString(nameof(SharedQualityProfiles_UpgradeKeepsTheProfileOfEveryTarget_MergesAlikeProfilesFormatsAndGroups_AndNamesEveryRemuxAlike));
             var options = Backup(folder.Path, out var backups);
             var tools = Tools(cs, FakeDump(folder.Path, true), null);
             await new DatabaseBaseline(cs, migrations: DatabaseBaseline.Migrations.Where(migration => migration.Version < 42).ToArray()).StartAsync(CancellationToken.None);
 
-            // Anime series and anime films with defaults of their own, a 4K film profile, a series profile with Sonarr's remux names, formats twice (once identical,
-            // once only by name), the same release groups for films and series, and targets that follow a default, choose a profile or chose one of another type.
+            // Anime series and anime films with defaults of their own and the same settings, a 4K film profile, a series profile with Sonarr's remux names, profiles named
+            // alike for films and series (Deutsch the same, Englisch not), formats twice (once identical, once only by name), the same release groups for films and series,
+            // and targets that follow a default, choose a profile or chose one of another type.
             await ExecuteAsync(cs,
                 """
                 INSERT INTO "AcquisitionProfiles" ("Id", "Name", "MediaTypeId", "MediaSubtypeId", "IsDefault", "Definition")
-                SELECT 8, 'Anime series', 2, 1, TRUE, "Definition" FROM "AcquisitionProfiles" WHERE "Id" = 2
-                UNION ALL SELECT 9, 'Anime films', 1, 1, TRUE, "Definition" FROM "AcquisitionProfiles" WHERE "Id" = 1
+                SELECT 8, 'Anime', 2, 1, TRUE, "Definition" FROM "AcquisitionProfiles" WHERE "Id" = 2
+                UNION ALL SELECT 9, 'Anime', 1, 1, TRUE, "Definition" FROM "AcquisitionProfiles" WHERE "Id" = 1
                 UNION ALL SELECT 10, '4K films', 1, NULL, FALSE, jsonb_set("Definition", '{FormatScores}', '[{"FormatId":8,"Score":20}]') FROM "AcquisitionProfiles" WHERE "Id" = 1
-                UNION ALL SELECT 11, 'Series remux', 2, NULL, FALSE, jsonb_set(jsonb_set(jsonb_set("Definition", '{AllowedQualities}', '["Bluray-1080p Remux","WEBDL-1080p"]'), '{UpgradeCutoffQuality}', '"Bluray-1080p Remux"'), '{FormatScores}', '[{"FormatId":9,"Score":50},{"FormatId":7,"Score":-10}]') FROM "AcquisitionProfiles" WHERE "Id" = 2;
+                UNION ALL SELECT 11, 'Series remux', 2, NULL, FALSE, jsonb_set(jsonb_set(jsonb_set("Definition", '{AllowedQualities}', '["Bluray-1080p Remux","WEBDL-1080p"]'), '{UpgradeCutoffQuality}', '"Bluray-1080p Remux"'), '{FormatScores}', '[{"FormatId":9,"Score":50},{"FormatId":7,"Score":-10}]') FROM "AcquisitionProfiles" WHERE "Id" = 2
+                UNION ALL SELECT 12, 'Deutsch', 1, NULL, FALSE, jsonb_set("Definition", '{LanguageOrder}', '["de"]') FROM "AcquisitionProfiles" WHERE "Id" = 1
+                UNION ALL SELECT 13, 'Deutsch', 2, NULL, FALSE, jsonb_set("Definition", '{LanguageOrder}', '["de"]') FROM "AcquisitionProfiles" WHERE "Id" = 2
+                UNION ALL SELECT 14, 'Englisch', 1, NULL, FALSE, jsonb_set("Definition", '{LanguageOrder}', '["en"]') FROM "AcquisitionProfiles" WHERE "Id" = 1
+                UNION ALL SELECT 15, 'Englisch', 2, NULL, FALSE, jsonb_set(jsonb_set("Definition", '{LanguageOrder}', '["en"]'), '{UpgradeCutoffQuality}', '"WEBDL-720p"') FROM "AcquisitionProfiles" WHERE "Id" = 2;
                 INSERT INTO "CustomFormats" ("Id", "MediaTypeId", "Name", "Conditions") VALUES
                     (7, 3, 'Prefer Proper', '[{"Name":"Proper","Kind":"ReleaseTitle","Negate":false,"Required":true,"Value":"\\bPROPER2\\b"}]'),
                     (8, 1, 'x265', '[{"Name":"x265","Kind":"ReleaseTitle","Negate":false,"Required":true,"Value":"x265"}]'),
@@ -354,15 +359,17 @@ namespace Jularr.Backend.Tests
                 INSERT INTO "Works" ("Id", "MediaTypeId", "MediaSubtypeId", "CanonicalTitle") VALUES
                     (101, 1, NULL, 'Film'), (102, 1, NULL, 'Film 4K'), (103, 2, NULL, 'Series'), (104, 2, 1, 'Anime series A'), (105, 2, 1, 'Anime series B'),
                     (106, 1, 1, 'Anime film'), (107, 3, 2, 'Manga'), (108, 3, 3, 'Light novel'), (109, 3, NULL, 'Book'), (110, 2, NULL, 'Series on anime profile'),
-                    (111, 1, NULL, 'Film on a series profile');
+                    (111, 1, NULL, 'Film on a series profile'), (112, 1, NULL, 'German film'), (113, 2, NULL, 'German series');
                 INSERT INTO "WantedItems" ("Id", "WorkId", "AcquisitionProfileId") VALUES
                     (201, 101, NULL), (202, 102, 10), (203, 103, NULL), (204, 104, NULL), (205, 105, NULL), (206, 106, NULL), (207, 107, NULL), (208, 108, NULL), (209, 109, NULL),
-                    (210, 110, 8), (211, 111, 2);
+                    (210, 110, 8), (211, 111, 2), (212, 112, 12), (213, 113, 13);
                 INSERT INTO "AcquisitionReleases" ("WantedItemId", "ReleaseIdentity", "Title", "AcquisitionReleaseStatusTypeId", "QualityKey") VALUES
                     (203, 'a', 'Series.S01.1080p.BluRay.REMUX', 2, 'Bluray-1080p Remux'), (201, 'b', 'Film.2160p.REMUX', 2, 'Remux-2160p');
                 INSERT INTO "ReleaseGroups" ("MediaTypeId", "Name", "ReleaseGroupRatingId", "SeenCount", "LastSeenAt") VALUES
                     (1, 'NTb', 1, 3, '2026-10-01'), (2, 'ntb', 3, 2, '2026-10-05'), (1, 'FLUX', NULL, 1, NULL), (2, 'FLUX', 1, 4, '2026-09-01'), (3, 'Retail', 2, 1, NULL);
                 UPDATE "QualityDefinitions" SET "MinimumMbPerMinute" = 20, "MaximumMbPerMinute" = 400 WHERE "MediaTypeId" = 2 AND "Quality" = 'Bluray-1080p Remux';
+                INSERT INTO "RequestRules" ("Name", "PeriodDays", "IsAutomaticApproval", "AcquisitionProfileIds") VALUES ('Languages', 30, TRUE, '{12,13,15}');
+                INSERT INTO "AcquisitionProfileImports" ("SourceUrl", "SourceProfileId", "AcquisitionProfileId") VALUES ('http://sonarr.test', 7, 13);
                 """);
             const string Before =
                 """
@@ -377,23 +384,35 @@ namespace Jularr.Backend.Tests
             var before = (string)(await ScalarAsync(cs, Before))!;
             await new DatabaseBaseline(cs, options, tools).StartAsync(CancellationToken.None);
 
-            // Acquisition chooses the same profile for every target (the film on a series profile had none and now follows the film default).
+            // Acquisition chooses the same profile, or the one it was merged into, for every target (the film on a series profile had none and now follows the film default).
+            Assert.AreEqual("201:1,202:10,203:2,204:8,205:8,206:9,207:4,208:7,209:3,210:8,211:-,212:12,213:13", before);
             var after = (string)(await ScalarAsync(cs,
                 """SELECT string_agg(resolved."WantedItemId" || ':' || resolved."AcquisitionProfileId", ',' ORDER BY resolved."WantedItemId") FROM "WantedItemProfiles" AS resolved"""))!;
-            Assert.AreEqual(before.Replace("211:-", "211:1", StringComparison.Ordinal), after);
+            Assert.AreEqual("201:1,202:10,203:1,204:9,205:9,206:9,207:4,208:7,209:3,210:9,211:1,212:12,213:12", after);
 
-            // One default per type: Anime takes the profile most anime targets followed, the anime film keeps its own; every profile applies to the types of its targets.
-            Assert.AreEqual("1:1,2:2,3:8,4:3,5:4,6:7,7:5,8:6", await ScalarAsync(cs,
+            // Profiles of one name and the same settings are one, applying to all their types; the film profile stays. Alike names that differ name their type.
+            Assert.AreEqual("1:HD - 720p/1080p:1,2|3:Books:4|4:Manga:5|5:Music:7|6:Games:8|7:Light Novels:6|9:Anime:2,3|10:4K films:1|11:Series remux:2|12:Deutsch:1,2|14:Englisch (Filme):1|15:Englisch (Serien):2",
+                await ScalarAsync(cs, """
+                    SELECT string_agg(profile."Id" || ':' || profile."Name" || ':' || (
+                        SELECT string_agg(applies."AcquisitionMediaKindId"::text, ',' ORDER BY applies."AcquisitionMediaKindId")
+                        FROM "AcquisitionProfileMediaKinds" AS applies WHERE applies."AcquisitionProfileId" = profile."Id"), '|' ORDER BY profile."Id")
+                    FROM "AcquisitionProfiles" AS profile
+                    """));
+
+            // One default per type: Anime takes the profile most anime targets followed; the anime film written onto its own profile follows the default again,
+            // since both became one. Targets, request rules and takeover links name the kept profile.
+            Assert.AreEqual("1:1,2:1,3:9,4:3,5:4,6:7,7:5,8:6", await ScalarAsync(cs,
                 """SELECT string_agg("AcquisitionMediaKindId" || ':' || "AcquisitionProfileId", ',' ORDER BY "AcquisitionMediaKindId") FROM "AcquisitionProfileDefaults" """));
-            Assert.AreEqual(9L, await ScalarAsync(cs, """SELECT "AcquisitionProfileId" FROM "WantedItems" WHERE "Id" = 206"""));
-            Assert.AreEqual("2,3", await ScalarAsync(cs,
-                """SELECT string_agg("AcquisitionMediaKindId"::text, ',' ORDER BY "AcquisitionMediaKindId") FROM "AcquisitionProfileMediaKinds" WHERE "AcquisitionProfileId" = 8"""));
+            Assert.AreEqual("206:-,210:9,211:1,212:12,213:12", await ScalarAsync(cs,
+                """SELECT string_agg("Id" || ':' || coalesce("AcquisitionProfileId"::text, '-'), ',' ORDER BY "Id") FROM "WantedItems" WHERE "Id" IN (206, 210, 211, 212, 213)"""));
+            Assert.AreEqual("12,15", await ScalarAsync(cs, """SELECT array_to_string("AcquisitionProfileIds", ',') FROM "RequestRules" WHERE "Name" = 'Languages'"""));
+            Assert.AreEqual(12L, await ScalarAsync(cs, """SELECT "AcquisitionProfileId" FROM "AcquisitionProfileImports" """));
             Assert.AreEqual(0L, await ScalarAsync(cs, """SELECT count(*) FROM information_schema.columns WHERE table_name = 'AcquisitionProfiles' AND column_name IN ('MediaTypeId', 'MediaSubtypeId', 'IsDefault')"""));
 
             // Identical formats become one and keep each profile's score; a format that only shares the name names its type.
-            Assert.AreEqual("1:Prefer Proper,2:Prefer Repack,5:Prefer Retail,6:Prefer Digital,7:Prefer Proper (Books),8:x265",
+            Assert.AreEqual("1:Prefer Proper,2:Prefer Repack,5:Prefer Retail,6:Prefer Digital,7:Prefer Proper (Bücher),8:x265",
                 await ScalarAsync(cs, """SELECT string_agg("Id" || ':' || "Name", ',' ORDER BY "Id") FROM "CustomFormats" """));
-            Assert.AreEqual("""[{"Score": 5, "FormatId": 1}, {"Score": 5, "FormatId": 2}]""", await ScalarAsync(cs, """SELECT "Definition" ->> 'FormatScores' FROM "AcquisitionProfiles" WHERE "Id" = 2"""));
+            Assert.AreEqual("""[{"Score": 5, "FormatId": 1}, {"Score": 5, "FormatId": 2}]""", await ScalarAsync(cs, """SELECT "Definition" ->> 'FormatScores' FROM "AcquisitionProfiles" WHERE "Id" = 1"""));
             Assert.AreEqual("""[{"Score": -10, "FormatId": 7}, {"Score": 50, "FormatId": 8}]""", await ScalarAsync(cs, """SELECT "Definition" ->> 'FormatScores' FROM "AcquisitionProfiles" WHERE "Id" = 11"""));
 
             // Release groups once: counts add up and the stricter rating wins.
@@ -403,8 +422,8 @@ namespace Jularr.Backend.Tests
             // A series remux carries the film name in profiles, releases and sizes; a series profile lists the film-only qualities last, not allowed.
             Assert.AreEqual("Remux-1080p", await ScalarAsync(cs, """SELECT "Definition" ->> 'UpgradeCutoffQuality' FROM "AcquisitionProfiles" WHERE "Id" = 11"""));
             Assert.AreEqual("""["Remux-1080p", "WEBDL-1080p"]""", await ScalarAsync(cs, """SELECT "Definition" ->> 'AllowedQualities' FROM "AcquisitionProfiles" WHERE "Id" = 11"""));
-            Assert.AreEqual(30, await ScalarAsync(cs, """SELECT jsonb_array_length("Definition" -> 'QualityOrder') FROM "AcquisitionProfiles" WHERE "Id" = 2"""));
-            Assert.AreEqual("WORKPRINT", await ScalarAsync(cs, """SELECT "Definition" -> 'QualityOrder' ->> -1 FROM "AcquisitionProfiles" WHERE "Id" = 2"""));
+            Assert.AreEqual(30, await ScalarAsync(cs, """SELECT jsonb_array_length("Definition" -> 'QualityOrder') FROM "AcquisitionProfiles" WHERE "Id" = 15"""));
+            Assert.AreEqual("WORKPRINT", await ScalarAsync(cs, """SELECT "Definition" -> 'QualityOrder' ->> -1 FROM "AcquisitionProfiles" WHERE "Id" = 15"""));
             Assert.AreEqual(0L, await ScalarAsync(cs, """SELECT count(*) FROM "AcquisitionReleases" WHERE "QualityKey" LIKE '%Remux' """));
             Assert.AreEqual(400m, await ScalarAsync(cs, """SELECT "MaximumMbPerMinute" FROM "QualityDefinitions" WHERE "MediaTypeId" = 2 AND "Quality" = 'Remux-1080p'"""));
             Assert.AreEqual(1, Directory.GetDirectories(backups).Length);

@@ -1826,8 +1826,8 @@ namespace Jularr.Backend.Tests
             const string Profiles = "/api/v1/admin/acquisition/profiles";
             var seeded = await ReadProfilesAsync(host);
             var movies = seeded.Single(profile => profile.DefaultFor.Contains(AcquisitionMediaKind.Movie));
-            var series = seeded.Single(profile => profile.DefaultFor.Contains(AcquisitionMediaKind.Series));
-            CollectionAssert.AreEqual(new[] { AcquisitionMediaKind.Movie }, movies.MediaKinds);
+            var books = seeded.Single(profile => profile.DefaultFor.Contains(AcquisitionMediaKind.Book));
+            CollectionAssert.Contains(movies.MediaKinds, AcquisitionMediaKind.Movie);
             CollectionAssert.Contains(movies.AllowedQualities, "WEBDL-1080p");
 
             // A cutoff outside the allowed qualities is rejected.
@@ -1846,8 +1846,8 @@ namespace Jularr.Backend.Tests
             CollectionAssert.AreEqual(new[] { "Bluray-2160p", "WEBDL-2160p" }, uhd.AllowedQualities);
             Assert.AreEqual(1000, uhd.MinimumSizeMb);
             movies = current.Single(profile => profile.Id == movies.Id);
-            Assert.AreEqual(0, movies.DefaultFor.Length);
-            using var renamed = await host.SendAsync(HttpMethod.Put, Profiles + "/" + movies.Id, new SaveAcquisitionProfileDataV1("HD", [AcquisitionMediaKind.Movie], [], ["WEBDL-1080p"], false, null,
+            CollectionAssert.DoesNotContain(movies.DefaultFor, AcquisitionMediaKind.Movie);
+            using var renamed = await host.SendAsync(HttpMethod.Put, Profiles + "/" + movies.Id, new SaveAcquisitionProfileDataV1("HD", movies.MediaKinds, movies.DefaultFor, ["WEBDL-1080p"], false, null,
                 null, null, movies.Version));
             Assert.AreEqual(HttpStatusCode.OK, renamed.StatusCode, await renamed.Content.ReadAsStringAsync());
             Assert.AreEqual(0, (await ReadProfilesAsync(host)).Single(profile => profile.Id == movies.Id).FormatScores.Count);
@@ -1862,7 +1862,7 @@ namespace Jularr.Backend.Tests
             // A target takes only a profile of its media type.
             using var wantedRead = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/wanted/" + wantedId);
             var wanted = (await wantedRead.Content.ReadFromJsonAsync<WantedDetailsV1>())!;
-            using var mismatch = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/wanted/" + wantedId, new UpdateWantedDataV1(false, wanted.Version, series.Id));
+            using var mismatch = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/wanted/" + wantedId, new UpdateWantedDataV1(false, wanted.Version, books.Id));
             Assert.AreEqual(HttpStatusCode.BadRequest, mismatch.StatusCode);
             using var assigned = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/wanted/" + wantedId, new UpdateWantedDataV1(false, wanted.Version, movies.Id));
             Assert.AreEqual(HttpStatusCode.OK, assigned.StatusCode, await assigned.Content.ReadAsStringAsync());
@@ -1948,7 +1948,7 @@ namespace Jularr.Backend.Tests
             var seriesDefault = seeded.Single(profile => profile.DefaultFor.Contains(AcquisitionMediaKind.Series)).Id;
             var movieDefault = seeded.Single(profile => profile.DefaultFor.Contains(AcquisitionMediaKind.Movie)).Id;
 
-            // Every media type has exactly one default; a new installation lets Anime follow the series profile.
+            // Every media type has exactly one default; a new installation has one HD profile for films, series and anime (the two it brought were alike).
             CollectionAssert.AreEquivalent(Enum.GetValues<AcquisitionMediaKind>(), seeded.SelectMany(profile => profile.DefaultFor).ToArray());
             Assert.AreEqual(seriesDefault, seeded.Single(profile => profile.DefaultFor.Contains(AcquisitionMediaKind.Anime)).Id);
 
@@ -1984,7 +1984,7 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(animeDefault, await ResolvedAsync(animeSeries));
             Assert.AreEqual(animeDefault, await ResolvedAsync(animeFilm));
             var profiles = await ReadProfilesAsync(host);
-            CollectionAssert.AreEqual(new[] { AcquisitionMediaKind.Series }, profiles.Single(profile => profile.Id == seriesDefault).DefaultFor);
+            CollectionAssert.AreEqual(new[] { AcquisitionMediaKind.Movie, AcquisitionMediaKind.Series }, profiles.Single(profile => profile.Id == seriesDefault).DefaultFor);
 
             // One list of qualities per profile: films with books are refused, books with light novels are one list; a default must be a type the profile applies to.
             using (var mixed = await CreateAsync("Mixed", [AcquisitionMediaKind.Movie, AcquisitionMediaKind.Book], [], "EPUB"))
@@ -2057,16 +2057,16 @@ namespace Jularr.Backend.Tests
             // The page saves them through the same service; an out of range score is refused.
             using var posted = await host.SendAsync(HttpMethod.Post, "/Admin/Acquisition/Profiles/" + movies.Id, new FormUrlEncodedContent(
             [
-                new("__RequestVerificationToken", LibraryTests.Token(html)), new("MediaKinds", "Movie"), new("Version", movies.Version.ToString(System.Globalization.CultureInfo.InvariantCulture)),
-                new("Name", movies.Name), new("DefaultFor", "Movie"), new("AllowedQualities", "WEBDL-1080p"), new("GoodGroupScore", "120"), new("BadGroupScore", "-70")
+                new("__RequestVerificationToken", LibraryTests.Token(html)), new("Version", movies.Version.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                .. KindFields(movies), new("Name", movies.Name), new("AllowedQualities", "WEBDL-1080p"), new("GoodGroupScore", "120"), new("BadGroupScore", "-70")
             ]));
             Assert.AreEqual(HttpStatusCode.Redirect, posted.StatusCode, await posted.Content.ReadAsStringAsync());
             movies = (await ReadProfilesAsync(host)).Single(profile => profile.Id == movies.Id);
             Assert.AreEqual((120, -70), (movies.GoodGroupScore, movies.BadGroupScore));
             using var refused = await host.SendAsync(HttpMethod.Post, "/Admin/Acquisition/Profiles/" + movies.Id, new FormUrlEncodedContent(
             [
-                new("__RequestVerificationToken", LibraryTests.Token(html)), new("MediaKinds", "Movie"), new("Version", movies.Version.ToString(System.Globalization.CultureInfo.InvariantCulture)),
-                new("Name", movies.Name), new("DefaultFor", "Movie"), new("AllowedQualities", "WEBDL-1080p"), new("GoodGroupScore", "-5")
+                new("__RequestVerificationToken", LibraryTests.Token(html)), new("Version", movies.Version.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                .. KindFields(movies), new("Name", movies.Name), new("AllowedQualities", "WEBDL-1080p"), new("GoodGroupScore", "-5")
             ]));
             Assert.AreNotEqual(HttpStatusCode.Redirect, refused.StatusCode);
             Assert.AreEqual(120, (await ReadProfilesAsync(host)).Single(profile => profile.Id == movies.Id).GoodGroupScore);
@@ -3272,7 +3272,8 @@ namespace Jularr.Backend.Tests
             async Task<HttpResponseMessage> SaveAsync(string[] allowed)
             {
                 var version = (long)(await host.ScalarAsync($"SELECT \"Version\" FROM \"AcquisitionProfiles\" WHERE \"Id\" = {profileId}"))!;
-                return await host.SendAsync(HttpMethod.Put, "/api/v1/admin/acquisition/profiles/" + profileId, new SaveAcquisitionProfileDataV1("Movies", [AcquisitionMediaKind.Movie], [AcquisitionMediaKind.Movie], allowed,
+                return await host.SendAsync(HttpMethod.Put, "/api/v1/admin/acquisition/profiles/" + profileId, new SaveAcquisitionProfileDataV1("Movies", [AcquisitionMediaKind.Movie, AcquisitionMediaKind.Series, AcquisitionMediaKind.Anime],
+                    [AcquisitionMediaKind.Movie, AcquisitionMediaKind.Series, AcquisitionMediaKind.Anime], allowed,
                     false, null, null, null, version));
             }
 
@@ -3642,6 +3643,11 @@ namespace Jularr.Backend.Tests
 
             return host;
         }
+
+        // The editor's fields of a profile's media types and defaults, as the page posts them.
+        private static IEnumerable<KeyValuePair<string, string>> KindFields(AcquisitionProfileDetailsV1 profile) =>
+            profile.MediaKinds.Select(kind => new KeyValuePair<string, string>("MediaKinds", kind.ToString()))
+                .Concat(profile.DefaultFor.Select(kind => new KeyValuePair<string, string>("DefaultFor", kind.ToString())));
 
         private static async Task<IReadOnlyList<AcquisitionProfileDetailsV1>> ReadProfilesAsync(Host host)
         {

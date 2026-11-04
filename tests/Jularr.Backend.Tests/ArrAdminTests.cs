@@ -118,7 +118,7 @@ namespace Jularr.Backend.Tests
             Assert.IsFalse(list.Contains("capsule-group", StringComparison.Ordinal), "No media-type bar.");
             foreach (var tab in new[] { ">Profiles</a>", ">Custom formats</a>", ">Quality</a>" }) StringAssert.Contains(list, tab);
             Assert.IsFalse(list.Contains(">Release profiles</a>", StringComparison.Ordinal));
-            Assert.AreEqual(2, list.Split(">HD - 720p/1080p<", StringSplitOptions.None).Length - 1, "The film and the series profile stand in one list.");
+            Assert.AreEqual(1, list.Split(">HD - 720p/1080p<", StringSplitOptions.None).Length - 1, "The film and the series profile, alike, are one.");
             foreach (var type in new[] { "Movies", "Series", "Anime", "Books", "Manga", "Light novels", "Music", "Games" }) StringAssert.Contains(list, "class=\"tag tag--accent\">" + type + "<");
 
             // The addresses of the former panes and of the media-type bar lead to the tab that holds them now.
@@ -150,7 +150,7 @@ namespace Jularr.Backend.Tests
             Assert.IsFalse(editor.Contains("value=\"Book\"", StringComparison.Ordinal));
             Assert.AreEqual(HttpStatusCode.NotFound, (await host.SendAsync(HttpMethod.Get, Home + "/New?kind=Banana")).StatusCode);
 
-            // The series profile of a new installation applies to series and anime and is the default of both.
+            // The HD profile of a new installation applies to films, series and anime and is the default of all three.
             var seriesId = (await (await host.SendAsync(HttpMethod.Get, Root + "profiles")).Content.ReadFromJsonAsync<BaseDataList<AcquisitionProfileDetailsV1>>())!
                 .Single(item => item.DefaultFor.Contains(AcquisitionMediaKind.Series)).Id;
             editor = await (await host.SendAsync(HttpMethod.Get, Home + "/" + seriesId)).Content.ReadAsStringAsync();
@@ -259,8 +259,9 @@ namespace Jularr.Backend.Tests
             // A score is saved with the profile; a format left at zero is not stored.
             using var saved = await host.SendAsync(HttpMethod.Post, "/Admin/Acquisition/Profiles/" + profileId, new FormUrlEncodedContent(
             [
-                new("__RequestVerificationToken", LibraryTests.Token(html)), new("MediaKinds", "Movie"), new("Version", version.ToString(System.Globalization.CultureInfo.InvariantCulture)),
-                new("Name", "Matrix"), new("DefaultFor", "Movie"), new("AllowedQualities", "WEBDL-1080p"), new("MinimumFormatScore", "10"),
+                new("__RequestVerificationToken", LibraryTests.Token(html)), new("Version", version.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                new("MediaKinds", "Movie"), new("MediaKinds", "Series"), new("MediaKinds", "Anime"), new("DefaultFor", "Movie"), new("DefaultFor", "Series"), new("DefaultFor", "Anime"),
+                new("Name", "Matrix"), new("AllowedQualities", "WEBDL-1080p"), new("MinimumFormatScore", "10"),
                 new("FormatScores[0].FormatId", format.Id.ToString(System.Globalization.CultureInfo.InvariantCulture)), new("FormatScores[0].Score", "75"),
                 new("FormatScores[1].FormatId", "999999"), new("FormatScores[1].Score", "0")
             ]));
