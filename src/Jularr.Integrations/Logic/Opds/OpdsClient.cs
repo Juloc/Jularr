@@ -81,7 +81,9 @@ namespace Jularr.Integrations.Logic.Opds
             }
 
             var authors = entry.Elements(Atom + "author").Select(author => author.Element(Atom + "name")?.Value.Trim()).OfType<string>().Where(name => name.Length > 0).Take(3).ToArray();
-            var language = (entry.Element(Dc + "language") ?? entry.Element(DcElements + "language"))?.Value.Trim();
+            // A book in several languages names each of them.
+            var languages = entry.Elements(Dc + "language").Concat(entry.Elements(DcElements + "language")).Select(element => element.Value.Trim()).Where(value => value.Length > 0).Distinct().ToArray();
+            var language = languages.Length == 0 ? null : string.Join(", ", languages);
             return new OpdsBook(id.Length <= 256 ? id : id[..256], title.Length <= 500 ? title : title[..500], authors, language, links);
         }
 

@@ -68,7 +68,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                 {
                     case AcquisitionConnectionType.Gutenberg:
                         return [.. (await _gutenberg.SearchAsync(Catalog(source), query, ct)).Select(book => Offer(source, "gutenberg:" + Text(book.Id) + ":epub", book.Authors, book.Title,
-                            book.Languages.FirstOrDefault(), "epub", GutenbergClient.EpubUri(book.Id), null))];
+                            string.Join(", ", book.Languages), "epub", GutenbergClient.EpubUri(book.Id), null))];
                     case AcquisitionConnectionType.Opds:
                         return [.. (await _opds.SearchAsync(Opds(source), query, ct)).SelectMany(book => book.Links.Select(link =>
                             Offer(source, "opds:" + Hash(book.Id) + ":" + link.Format, book.Authors, book.Title, book.Language, link.Format, link.Uri, null)))];
