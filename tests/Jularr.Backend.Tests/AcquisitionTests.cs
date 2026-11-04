@@ -1626,12 +1626,13 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.Redirect, retried.StatusCode, await retried.Content.ReadAsStringAsync());
             Assert.AreEqual(0, (await ReadActivityAsync(host, ActivityFilterType.All)).Count);
 
-            // A failed backup waits there too, with the tool's reason.
+            // A failed backup is no download: it keeps the tool's reason, but the queue does not show it.
             await host.Fixture.RunSqlAsync("INSERT INTO \"Operations\" (\"OperationTypeId\", \"OperationStatusTypeId\", \"ErrorKey\", \"FinishedAt\") VALUES (3, 4, 'backup_version_mismatch', now())");
             using var backup = await host.SendAsync(HttpMethod.Get, "/Admin/Activity");
             var backupHtml = await backup.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, backup.StatusCode, backupHtml);
-            StringAssert.Contains(backupHtml, "pg_dump or pg_restore is older than the PostgreSQL server.");
+            Assert.IsFalse(backupHtml.Contains("pg_dump or pg_restore is older than the PostgreSQL server.", StringComparison.Ordinal));
+            Assert.AreEqual("backup_version_mismatch", (await ReadActivityAsync(host, ActivityFilterType.All)).Single(item => item.OperationTypeId == OperationType.Backup).ReasonKey);
             Assert.AreEqual(failedId, (await ReadActivityAsync(host, ActivityFilterType.History)).Single().Id);
             using var again = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/" + failedId + "/dismiss");
             Assert.AreEqual(HttpStatusCode.NotFound, again.StatusCode);
