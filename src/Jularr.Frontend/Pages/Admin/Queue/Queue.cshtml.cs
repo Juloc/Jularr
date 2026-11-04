@@ -147,7 +147,7 @@ namespace Jularr.Frontend.Pages.Admin.Queue
         private ActionDock Dock(string? csrf)
         {
             var actions = new List<IUiComponent>();
-            if (!ShowFiles && _items is { Items.Count: > 0 })
+            if (!ShowFiles && _items is { } open && open.Items.Any(item => item.OperationTypeId == OperationType.Download))
             {
                 actions.Add(QueueButton("PauseAll", "pause", "activity.pauseAll", csrf));
                 actions.Add(QueueButton("ResumeAll", "play", "activity.resumeAll", csrf));

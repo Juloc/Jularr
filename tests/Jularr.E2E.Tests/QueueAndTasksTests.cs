@@ -17,9 +17,17 @@ namespace Jularr.E2E.Tests
             var page = session.Page;
             await Owner.SetUpAndSignInAsync(page);
 
+            // Empty lists draw no floating bar: no empty circle under the list.
+            await jularr.RunSqlAsync("""UPDATE "InstanceModules" SET "IsEnabled" = TRUE WHERE "Key" IN ('Acquisition', 'Requests');""");
+            foreach (var empty in new[] { "/Admin/Wanted", "/Admin/Queue" })
+            {
+                await page.GotoAsync(empty);
+                await Assertions.Expect(page.Locator("main .navigation-tabs").First).ToBeVisibleAsync();
+                await Assertions.Expect(page.Locator(".floating-pill.action-dock:not(.action-dock--form)")).ToBeHiddenAsync();
+            }
+
             // A running download, a failed backup, a failed background job and a queued library search.
             await jularr.RunSqlAsync("""
-                UPDATE "InstanceModules" SET "IsEnabled" = TRUE WHERE "Key" IN ('Acquisition', 'Requests');
                 UPDATE "Operations" SET "DismissedAt" = now() WHERE "OperationStatusTypeId" = 4 AND "DismissedAt" IS NULL;
                 INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle", "ReleaseYear") VALUES (9601, 1, 'Queued Film', 2020);
                 INSERT INTO "WantedItems" ("Id", "WorkId") VALUES (9601, 9601);
