@@ -5613,6 +5613,18 @@
    "Indexer grab limit reached",
    "Grab-Limit des Indexers erreicht"
   ],
+  "acquisition.outcome.acquisition_rate_limited": [
+   "The indexer limits requests right now; it is asked again after its pause",
+   "Der Indexer begrenzt gerade die Anfragen; er wird nach seiner Pause wieder gefragt"
+  ],
+  "acquisition.outcome.in_use": [
+   "A running download already covers this release",
+   "Ein laufender Download deckt dieses Release schon ab"
+  ],
+  "acquisition.outcome.search_failed": [
+   "The search failed; it is tried again later",
+   "Die Suche ist fehlgeschlagen; sie wird später erneut versucht"
+  ],
   "acquisition.outcome.acquisition_download_path_unconfigured": [
    "Download workspace is not configured or is unavailable",
    "Download-Zwischenspeicher nicht eingerichtet oder nicht verfügbar"

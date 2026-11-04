@@ -191,6 +191,18 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual("Komödie", german["genre.comedy"].Item2);
         }
 
+        // The wanted pages show a target's last outcome by its key; a key without a text breaks them.
+        [TestMethod]
+        [DataRow("acquisition_rate_limited")]
+        [DataRow("in_use")]
+        [DataRow("search_failed")]
+        public void AcquisitionOutcome_KeysTheSearchRecords_HaveEnglishAndGermanTexts(string key)
+        {
+            var german = Jularr.Frontend.Localization.UiCatalogs.Load().Single(catalog => catalog.Locale == "de").Texts;
+            Assert.IsTrue(Jularr.Frontend.Localization.UiResources.English.Any(resource => resource.Key == "acquisition.outcome." + key));
+            Assert.IsTrue(german.TryGetValue("acquisition.outcome." + key, out var text) && !string.IsNullOrWhiteSpace(text.Item2));
+        }
+
         [TestMethod]
         public void GermanCatalog_EveryText_FollowsTheCurrentEnglish()
         {

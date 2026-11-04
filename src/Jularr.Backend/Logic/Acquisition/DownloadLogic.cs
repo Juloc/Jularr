@@ -399,8 +399,11 @@ namespace Jularr.Backend.Logic.Acquisition
                                     WHERE
                                         covering."WantedItemId" = wanted."Id"
                                         AND download."OperationStatusTypeId" IN (1, 2)
-                                        AND covering."ParentUnitNumber" IS NOT DISTINCT FROM parent."Number"
-                                        AND (covering."UnitStart" IS NULL OR unit."Number" BETWEEN covering."UnitStart" AND covering."UnitEnd")
+                                        AND (
+                                            covering."ParentUnitNumber" IS NULL AND covering."UnitStart" IS NULL
+                                            OR covering."ParentUnitNumber" IS NOT DISTINCT FROM parent."Number"
+                                            AND (covering."UnitStart" IS NULL OR unit."Number" BETWEEN covering."UnitStart" AND covering."UnitEnd")
+                                        )
                                 )
                         )
                     )
@@ -597,7 +600,7 @@ namespace Jularr.Backend.Logic.Acquisition
 
         public static Task<IReadOnlyList<UnitStateData>> ReadUnitStatesAsync(this LogicContext ctx, long wantedItemId, CancellationToken ct)
         {
-            // Episodes of regular seasons and Manga volumes; covered means a running download contains the unit.
+            // Episodes of regular seasons and Manga volumes; covered means a running download contains the unit, and one that names no season or unit holds the whole Work, as the reservation does.
             var sql = new SqlStatement();
             sql.Statement =
                 """
@@ -645,8 +648,11 @@ namespace Jularr.Backend.Logic.Acquisition
                         WHERE
                             covering."WantedItemId" = wanted."Id"
                             AND download."OperationStatusTypeId" IN (1, 2)
-                            AND covering."ParentUnitNumber" IS NOT DISTINCT FROM parent."Number"
-                            AND (covering."UnitStart" IS NULL OR unit."Number" BETWEEN covering."UnitStart" AND covering."UnitEnd")
+                            AND (
+                                covering."ParentUnitNumber" IS NULL AND covering."UnitStart" IS NULL
+                                OR covering."ParentUnitNumber" IS NOT DISTINCT FROM parent."Number"
+                                AND (covering."UnitStart" IS NULL OR unit."Number" BETWEEN covering."UnitStart" AND covering."UnitEnd")
+                            )
                     ) AS "IsCovered",
                     CASE WHEN unit."WorkUnitTypeId" = 2 AND parent."Number" > 0 THEN (
                         SELECT

@@ -43,6 +43,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
         private const int BatchSize = 5;
         private const int GroupsPerPass = 3;
         private const int GrabsPerGroup = 5;
+        private const string InUseKey = "in_use";
         private readonly WantedAcquisition _acquisition;
         private readonly TimeProvider _time;
 
@@ -73,44 +74,63 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                 // Indexers are read per search, so today's counts and backoffs stay current through the cycle.
                 (var target, indexers) = await Context.ExecuteBatchAsync(async (ctx, ct) =>
                     (await ctx.ReadWantedTargetAsync(item.WantedItemId, ct), await ctx.ReadEnabledConnectionsAsync(AcquisitionConnectionRole.Search, ct)), CancellationToken);
-                if (target.Definition is null)
-                {
-                    await RecordAsync(target.WantedItemId, "profile_missing", now.AddDays(1), now);
-                    continue;
-                }
-
-                // Series and Manga with volumes are searched by their missing units.
-                if (target.MediaTypeId == MediaType.Series || target.MediaSubtypeId == MediaSubtype.Manga)
-                {
-                    var units = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadUnitStatesAsync(target.WantedItemId, ct), CancellationToken);
-                    if (target.MediaTypeId == MediaType.Series || units.Count > 0)
-                    {
-                        await SearchUnitsAsync(target, units, indexers, clients, now);
-                        continue;
-                    }
-                }
-
-                var result = await _acquisition.SearchAsync(Context, target, indexers, SearchDepth.Normal, automatic: true, CancellationToken);
-                if (result.Selection.Winner is not { } winner)
-                {
-                    // Indexer problems retry soon; empty results back off, an upgrade is looked for at its own interval.
-                    await RecordAsync(target.WantedItemId, result.OutcomeKey, result.IndexersUnavailable ? now.AddMinutes(30)
-                        : target.HasMedia ? now + UpgradePolicy.SearchInterval : now + Backoff(target.MediaTypeId, target.WantedItemId, target.SearchCount, indexers), now);
-                    continue;
-                }
-
-                await RecordAsync(target.WantedItemId, result.OutcomeKey, now + Backoff(target.MediaTypeId, target.WantedItemId, target.SearchCount, indexers), now);
                 try
                 {
-                    await _acquisition.GrabAsync(Context, target, result.Offers[winner.Candidate.Id], winner.Score?.QualityKey, clients, CancellationToken, automatic: true);
+                    await SearchTargetAsync(target, indexers, clients, now);
                 }
-                catch (ServiceUnavailableException exception)
+                catch (Exception) when (!CancellationToken.IsCancellationRequested)
                 {
-                    await RecordAsync(target.WantedItemId, exception.Code, now.AddMinutes(30), now);
+                    // A failed search still moves its target on, so it is not searched again in every cycle; the failure is raised.
+                    await RecordAsync(target.WantedItemId, "search_failed", now.AddMinutes(30), now);
+                    throw;
                 }
             }
 
             return new UpdateResult(true);
+        }
+
+        private async Task SearchTargetAsync(WantedTargetData target, IReadOnlyList<AcquisitionConnectionData> indexers, IReadOnlyList<AcquisitionConnectionData> clients, DateTime now)
+        {
+            if (target.Definition is null)
+            {
+                await RecordAsync(target.WantedItemId, "profile_missing", now.AddDays(1), now);
+                return;
+            }
+
+            // Series and Manga with volumes are searched by their missing units.
+            if (target.MediaTypeId == MediaType.Series || target.MediaSubtypeId == MediaSubtype.Manga)
+            {
+                var units = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadUnitStatesAsync(target.WantedItemId, ct), CancellationToken);
+                if (target.MediaTypeId == MediaType.Series || units.Count > 0)
+                {
+                    await SearchUnitsAsync(target, units, indexers, clients, now);
+                    return;
+                }
+            }
+
+            var result = await _acquisition.SearchAsync(Context, target, indexers, SearchDepth.Normal, automatic: true, CancellationToken);
+            if (result.Selection.Winner is not { } winner)
+            {
+                // Indexer problems retry soon; empty results back off, an upgrade is looked for at its own interval.
+                await RecordAsync(target.WantedItemId, result.OutcomeKey, result.IndexersUnavailable ? now.AddMinutes(30)
+                    : target.HasMedia ? now + UpgradePolicy.SearchInterval : now + Backoff(target.MediaTypeId, target.WantedItemId, target.SearchCount, indexers), now);
+                return;
+            }
+
+            await RecordAsync(target.WantedItemId, result.OutcomeKey, now + Backoff(target.MediaTypeId, target.WantedItemId, target.SearchCount, indexers), now);
+            try
+            {
+                await _acquisition.GrabAsync(Context, target, result.Offers[winner.Candidate.Id], winner.Score?.QualityKey, clients, CancellationToken, automatic: true);
+            }
+            catch (ServiceUnavailableException exception)
+            {
+                await RecordAsync(target.WantedItemId, exception.Code, now.AddMinutes(30), now);
+            }
+            catch (DataValidationException exception) when (exception.Code == InUseKey)
+            {
+                // A running download holds the target; its end makes the target due again.
+                await RecordAsync(target.WantedItemId, InUseKey, now + Backoff(target.MediaTypeId, target.WantedItemId, target.SearchCount, indexers), now);
+            }
         }
 
         private async Task SearchUnitsAsync(WantedTargetData target, IReadOnlyList<UnitStateData> units, IReadOnlyList<AcquisitionConnectionData> indexers,
@@ -145,6 +165,12 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                     {
                         await RecordAsync(target.WantedItemId, exception.Code, now.AddMinutes(30), now);
                         return;
+                    }
+                    catch (DataValidationException exception) when (exception.Code == InUseKey)
+                    {
+                        // A running download already holds part of the release; the group waits for it, and its end makes the target due again.
+                        outcome ??= InUseKey;
+                        break;
                     }
 
                     grabbed++;

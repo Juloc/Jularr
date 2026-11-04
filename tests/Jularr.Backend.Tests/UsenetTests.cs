@@ -91,6 +91,35 @@ namespace Jularr.Backend.Tests
             Assert.IsFalse(Directory.EnumerateFiles(staging.Path, "*", SearchOption.AllDirectories).Any());
         }
 
+        // An NZB refused with 429 rests the whole indexer for the wait it asked for: the grab is given back and no cycle asks the indexer again before then.
+        [TestMethod]
+        public async Task Usenet_NzbRateLimited_RestsTheIndexer_AndNoCycleAsksItBeforeItsPauseEnds()
+        {
+            using var storage = new TemporaryDirectory();
+            using var staging = new TemporaryDirectory();
+            var indexer = new FakeIndexer("<nzb />")
+            {
+                NzbResponse = () => new HttpResponseMessage(HttpStatusCode.TooManyRequests) { Headers = { RetryAfter = new System.Net.Http.Headers.RetryConditionHeaderValue(TimeSpan.FromHours(2)) } }
+            };
+            await using var host = await CreateHostAsync(storage.Path, staging.Path, indexer, 1);
+            await CreateWantedMovieAsync(host);
+
+            await RunAsync<SearchDueWantedV1>(host);
+            Assert.AreEqual(1, indexer.NzbRequests);
+            Assert.AreEqual("acquisition_rate_limited", await host.ScalarAsync("SELECT \"LastOutcomeKey\" FROM \"WantedItems\""));
+            Assert.AreEqual(true, await host.ScalarAsync("SELECT \"RetryAt\" > now() + interval '110 minutes' AND \"GrabCount\" = 0 FROM \"AcquisitionConnections\" WHERE \"AcquisitionConnectionTypeId\" = 1"));
+
+            // Even a target made due at once in every cycle leaves the resting indexer alone.
+            var searches = indexer.SearchRequests;
+            for (var cycle = 0; cycle < 5; cycle++)
+            {
+                await host.Fixture.RunSqlAsync("UPDATE \"WantedItems\" SET \"NextSearchAt\" = NULL");
+                await RunAsync<SearchDueWantedV1>(host);
+            }
+
+            Assert.AreEqual((1, searches), (indexer.NzbRequests, indexer.SearchRequests));
+        }
+
         [TestMethod]
         public async Task Newznab_CallerCancellation_PropagatesWithoutBecomingAnUnavailableDownload()
         {
@@ -125,6 +154,9 @@ namespace Jularr.Backend.Tests
             Assert.IsFalse(log.Message.Contains(UsenetJob.NzbName, StringComparison.Ordinal));
             Assert.IsFalse(log.Message.Contains("private-key", StringComparison.Ordinal));
             Assert.AreEqual(1, indexer.NzbRequests);
+
+            // The failed search still moves its target on, so the next cycle does not search it again.
+            Assert.AreEqual(true, await host.ScalarAsync("SELECT \"LastOutcomeKey\" = 'search_failed' AND \"NextSearchAt\" > now() + interval '29 minutes' FROM \"WantedItems\""));
         }
 
         [TestMethod]
@@ -496,6 +528,7 @@ namespace Jularr.Backend.Tests
         private sealed class FakeIndexer(string nzb) : HttpMessageHandler
         {
             public int NzbRequests { get; private set; }
+            public int SearchRequests { get; private set; }
             public Func<HttpResponseMessage>? NzbResponse { get; init; }
 
             protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
@@ -507,6 +540,7 @@ namespace Jularr.Backend.Tests
                     return Task.FromResult(NzbResponse?.Invoke() ?? new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(nzb, Encoding.UTF8, "application/x-nzb") });
                 }
 
+                if (!uri.Query.Contains("t=caps", StringComparison.Ordinal)) SearchRequests++;
                 var body = uri.Query.Contains("t=caps", StringComparison.Ordinal)
                     ? """<caps><limits max="100" default="100" /><searching><search available="yes" supportedParams="q" /><movie-search available="yes" supportedParams="q" /></searching></caps>"""
                     : $"""<rss><channel><item><title>{Feature}</title><guid>feature</guid><link>https://indexer.example.test/getnzb/feature</link><size>2000000000</size></item></channel></rss>""";

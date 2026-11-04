@@ -433,14 +433,8 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                 nativePaths = await _downloads.OpenAsync(context, client.AcquisitionConnectionTypeId == AcquisitionConnectionType.Usenet ? DownloadStorageArea.Usenet : DownloadStorageArea.Torrent, ct);
             }
 
-            // A grab counts against its indexer's daily limit; a download added by hand (connection 0) has no indexer.
-            var manual = offer.ConnectionId <= 0;
-            if (!manual && !await context.ExecuteBatchAsync((ctx, token) => ctx.CountIndexerGrabAsync(new AcquisitionConnectionParameters(offer.ConnectionId), token), ct))
-            {
-                throw new ServiceUnavailableException("acquisition_limit_reached");
-            }
-
             // Reserve first so concurrent grabs cannot start a second download.
+            var manual = offer.ConnectionId <= 0;
             var kind = AcquisitionSelectionLogic.GetKind(target.MediaTypeId, target.MediaSubtypeId);
             var episodes = kind is AcquisitionKind.Tv or AcquisitionKind.Anime
                 ? EpisodeNumbering.Episodes(await context.ExecuteBatchAsync((ctx, token) => ctx.ReadUnitStatesAsync(target.WantedItemId, token), ct))
@@ -451,6 +445,13 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             var operationId = await context.ExecuteBatchAsync(async (ctx, token) =>
             {
                 if (nativePaths is not null) await ctx.RequireDownloadStorageSettingsAsync(nativePaths.Settings, token);
+
+                // The grab counts against its indexer's daily limit together with the reservation, so a refused reservation counts nothing; a download added by hand (connection 0) has no indexer.
+                if (!manual && !await ctx.CountIndexerGrabAsync(new AcquisitionConnectionParameters(offer.ConnectionId), token))
+                {
+                    throw new ServiceUnavailableException("acquisition_limit_reached");
+                }
+
                 return await ctx.ReserveDownloadAsync(grab, token);
             }, ct);
 
