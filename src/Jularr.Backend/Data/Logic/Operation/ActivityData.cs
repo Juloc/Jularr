@@ -12,7 +12,7 @@ namespace Jularr.Backend.Data.Logic.Operation
     internal sealed class ActivityFilterData : BaseData
     {
         public ActivityFilterData(ActivityFilterType activityFilterTypeId, bool torrentOnly = false, bool downloadsOnly = false, bool failedOnly = false, DownloadClientKind? downloadClientKindId = null,
-            long? acquisitionConnectionId = null, MediaType? mediaTypeId = null, DownloadPriorityType? downloadPriorityTypeId = null, MediaType[]? mediaTypeIds = null, MediaSubtype[]? mediaSubtypeIds = null)
+            long? acquisitionConnectionId = null, MediaType? mediaTypeId = null, DownloadPriorityType? downloadPriorityTypeId = null, MediaType[]? mediaTypeIds = null, MediaSubtype[]? mediaSubtypeIds = null, bool tasksOnly = false)
         {
             MediaTypeIds = mediaTypeIds ?? [];
             MediaSubtypeIds = mediaSubtypeIds ?? [];
@@ -20,6 +20,7 @@ namespace Jularr.Backend.Data.Logic.Operation
             ActivityFilterTypeId = activityFilterTypeId;
             TorrentOnly = torrentOnly;
             DownloadsOnly = downloadsOnly;
+            TasksOnly = tasksOnly;
             FailedOnly = failedOnly;
             DownloadClientKindId = downloadClientKindId;
             AcquisitionConnectionId = acquisitionConnectionId;
@@ -37,6 +38,9 @@ namespace Jularr.Backend.Data.Logic.Operation
 
         [DataField(typeof(OperationFields), nameof(OperationFields.FailedOnly))]
         public bool FailedOnly { get; }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.TasksOnly))]
+        public bool TasksOnly { get; }
 
         [DataField(typeof(OperationFields), nameof(OperationFields.DownloadClientKindId), false)]
         public DownloadClientKind? DownloadClientKindId { get; }

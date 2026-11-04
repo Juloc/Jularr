@@ -92,13 +92,16 @@ SavePill, FolderPicker, IconInfo, TimePicker, FactList, Drawer, FilterDialog, Sh
   group itself; a page names only what lies between with `page.Parent(key, href)` / `page.ParentName(name, href)` and its
   item as `page.Title(key, name)`. Narrow headers show only the last two parts; a longer trail scrolls, never wraps.
   Where the last part equals a heading under it, that heading is dropped (kept visually hidden for assistive technology).
-- Owner's decision (issue #1881, Activity like Sonarr): the entry **Activity** has three views, **Queue** (`/Admin/Activity`, the default), **History** (`/Admin/History`)
-  and **Blocked** (`/Admin/Activity/Blocked`), each under the normal media-type capsule (`type=a,b` stays in every view's address). The Queue lists the open downloads in four groups,
-  what needs the owner first, each with its count: *Needs your help* (a check at the source such as Anna's Archive, a failed download), *To import* (also what is imported by hand),
-  *Downloading* (with the live pace) and *Waiting in the downloader*; a group without entries is left out. Blocked lists the releases that are not taken again (blocked
-  by hand or by a fault) with **Allow again**. Owner's decision 4 Nov: the Queue, its counts and the menu figure hold downloads only, as Sonarr's; scans, media imports and background jobs
-  (a failed "Discover cache" or "Subtitles" job) show on the Jobs page and the Dashboard, never under *Needs your help*. **Wanted** (missing titles) is a menu entry of its own and no part of Activity. The Queue's old filters (All, Active, Waiting,
-  Import, Errors), its four live tiles and its list of finished operations are gone (assumptions of the implementing agent, open to correction by the Owner).
+- Owner's decision 4 Nov (Sonarr's Activity and System → Tasks, replacing the Activity entry of #1881): the ARR group starts with **Queue** (`/Admin/Queue`, the default), whose views are
+  **History** (`/Admin/Queue/History`) and **Blocked** (`/Admin/Queue/Blocked`), each under the normal media-type capsule (`type=a,b` stays in every view's address), then **Wanted**, the indexers,
+  the quality profiles and the sources. The Queue holds downloads and their own imports only, in four groups, what needs the owner first, each with its count: *Needs your help* (a check
+  at the source such as Anna's Archive, a failed download), *To import* (also what is imported by hand), *Downloading* (with the live pace) and *Waiting in the downloader*; a group without
+  entries is left out; its menu figure is the open downloads. Blocked lists the releases that are not taken again (blocked by hand or by a fault) with **Allow again**. The old addresses
+  (`/Admin/Activity` with its query, `/Admin/History`, `/Admin/Activity/Blocked`) lead there permanently. The **Jobs** entry (Operations) has **Tasks** (`/Admin/Jobs/Tasks`, first) and
+  **Schedule** (`/Admin/Jobs`, the background jobs with pause and run now, and the history of finished tasks): Tasks lists Jularr's own work, scans, backups, media list imports, searches,
+  the book being translated (read-only, leading to the book) and the notices of failed background jobs (a failed "Discover cache" or "Subtitles" job), in *Needs your help* (Retry where
+  the task can run again, Dismiss; a job leads to the Schedule), *Running* and *Waiting*; the Jobs figure counts the tasks that need help, once. **Wanted** has the views *Missing*
+  (the default), *Cutoff unmet* and *All* (last, the only one that also lists available targets). The Queue's old filters, live tiles and list of finished operations stay gone.
 - Owner's decision 20 Oct, sidebar modes: on `/Admin/*` the sidebar shows only the administration menu, all groups open; the user
   entries are not shown, and the Jularr logo (linking to the user home) is the way back. No extra back button.
   The user menu has one entry, Administration, that opens the first allowed entry. On a narrow header a breadcrumb part with sub-pages opens them as a menu, the first part stays whole and a long last part (the title) ends in an ellipsis with its full text in a tip.

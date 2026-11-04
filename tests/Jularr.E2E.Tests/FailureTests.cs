@@ -38,7 +38,7 @@ namespace Jularr.E2E.Tests
                 await jularr.RestartAsync();
 
                 // Still signed in; the running job, not a new one, is picked up again and imported once it finishes.
-                await page.GotoAsync("/Admin/Activity");
+                await page.GotoAsync("/Admin/Queue");
                 var queued = Steps.ListRow(page, FakeServices.MovieTitle);
                 await Assertions.Expect(queued).ToContainTextAsync("Downloading");
                 await Assertions.Expect(queued).ToContainTextAsync("40 %");
@@ -116,8 +116,8 @@ namespace Jularr.E2E.Tests
                 await Assertions.Expect(Steps.ListRow(help, "Download failed")).ToHaveCountAsync(1);
                 await Assertions.Expect(help.Locator(".activity-group__count")).ToHaveTextAsync("1");
                 var views = page.GetByRole(AriaRole.Navigation, new() { Name = "Pages of this area", Exact = true });
-                await Assertions.Expect(views.Locator("a[href='/Admin/History']")).ToHaveCountAsync(1);
-                await Assertions.Expect(views.Locator("a[href='/Admin/Activity/Blocked']")).ToHaveCountAsync(1);
+                await Assertions.Expect(views.Locator("a[href='/Admin/Queue/History']")).ToHaveCountAsync(1);
+                await Assertions.Expect(views.Locator("a[href='/Admin/Queue/Blocked']")).ToHaveCountAsync(1);
                 await Steps.SubmitAsync(page, failed.Locator("form").Filter(new() { Has = page.GetByRole(AriaRole.Button, new() { Name = "Retry" }) }));
                 await Steps.OpenSearchAsync(page, FakeServices.MovieTitle);
                 await Assertions.Expect(page.Locator("tr", new() { HasText = Film.Title })).ToContainTextAsync("Failed or blocked before");
@@ -224,7 +224,7 @@ namespace Jularr.E2E.Tests
 
                 var details = await Steps.WaitForAvailableAsync(page, FakeServices.MovieTitle);
                 CollectionAssert.AreEqual(new[] { fakes.NzbAddress(Film).ToString(), fakes.NzbAddress(LowerFilm).ToString() }, fakes.Grabbed.ToArray());
-                await page.GotoAsync("/Admin/Activity/Blocked");
+                await page.GotoAsync("/Admin/Queue/Blocked");
                 await Assertions.Expect(Steps.ListRow(page, Film.Title)).ToHaveCountAsync(1);
                 Assert.IsTrue(details.Length > 0);
             }
@@ -241,7 +241,7 @@ namespace Jularr.E2E.Tests
             var deadline = DateTime.UtcNow.AddMinutes(2);
             while (DateTime.UtcNow < deadline)
             {
-                await page.GotoAsync("/Admin/Activity");
+                await page.GotoAsync("/Admin/Queue");
                 var row = Steps.ListRow(page, reason);
                 if (await row.CountAsync() > 0)
                 {
@@ -297,7 +297,7 @@ namespace Jularr.E2E.Tests
             var deadline = DateTime.UtcNow.AddMinutes(2);
             while (DateTime.UtcNow < deadline)
             {
-                await page.GotoAsync("/Admin/Activity");
+                await page.GotoAsync("/Admin/Queue");
                 var row = Steps.ListRow(page, "Download failed");
                 if (await row.CountAsync() > 0)
                 {

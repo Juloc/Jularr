@@ -32,7 +32,7 @@ namespace Jularr.E2E.Tests
                 foreach (var width in new[] { 375, 480, 600 })
                 {
                     await page.SetViewportSizeAsync(width, 667);
-                    await page.GotoAsync("/Admin/Activity");
+                    await page.GotoAsync("/Admin/Queue");
                     var row = Steps.ListRow(page, "Phone queue library");
                     await Assertions.Expect(row).ToBeVisibleAsync();
                     await Assertions.Expect(row).ToContainTextAsync("not reachable");

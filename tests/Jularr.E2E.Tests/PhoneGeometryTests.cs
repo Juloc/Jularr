@@ -101,17 +101,16 @@ namespace Jularr.E2E.Tests
                     Assert.IsTrue(gaps.Length >= 2, $"{width}: the Settings cards have no buttons to measure.");
                     problems.AddRange(gaps.Where(gap => gap < 7.5).Select(gap => $"{width} /Settings: two card buttons are {gap}px apart."));
 
-                    // At the end of a page the floating pill leaves the last line of the content free (Jobs: All activity).
+                    // At the end of a page the floating pill leaves the last line of the content free (the schedule: its history of tasks).
                     await page.GotoAsync("/Admin/Jobs");
                     await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
                     await page.EvaluateAsync("() => window.scrollTo(0, document.documentElement.scrollHeight)");
                     await page.WaitForTimeoutAsync(300);
-                    var all = page.Locator(".jobs-history-block > a").Filter(new() { HasText = "All activity" });
-                    var allBox = (await all.BoundingBoxAsync())!;
+                    var allBox = (await page.Locator(".jobs-history-block").BoundingBoxAsync())!;
                     var dockBox = (await page.Locator(".floating-pill.action-dock").Filter(new() { Visible = true }).BoundingBoxAsync())!;
                     if (allBox.Y + allBox.Height > dockBox.Y)
                     {
-                        problems.Add($"{width} /Admin/Jobs: All activity ends at {allBox.Y + allBox.Height}, the floating pill starts at {dockBox.Y}.");
+                        problems.Add($"{width} /Admin/Jobs: the history ends at {allBox.Y + allBox.Height}, the floating pill starts at {dockBox.Y}.");
                     }
 
                     if (width == 390) await ScreenAsync(page, "phone-geometry-390-jobs-end");

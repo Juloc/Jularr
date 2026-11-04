@@ -443,7 +443,7 @@ namespace Jularr.Backend.Tests
                 Assert.AreEqual("https://annas.example.test/slow_download/0123456789abcdef0123456789abcdef/0/0", browser.Address!.AbsoluteUri);
                 Assert.IsTrue(browser.OpensPage);
             }
-            using (var page = await host.SendAsync(HttpMethod.Get, "/Admin/Activity?Filter=Waiting"))
+            using (var page = await host.SendAsync(HttpMethod.Get, "/Admin/Queue"))
             {
                 StringAssert.Contains(await page.Content.ReadAsStringAsync(), "handler=OpenDownloadView&amp;operationId=" + operationId);
             }

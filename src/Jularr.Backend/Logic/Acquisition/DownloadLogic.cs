@@ -933,7 +933,7 @@ namespace Jularr.Backend.Logic.Acquisition
             if (await ctx.ReadOptionalAsync<FailedWorkData>(sql, ct) is { } failed)
             {
                 await ctx.RecordActivityAsync(new ActivityEventData(ActivityEventType.DownloadFailed, operationId: data.OperationId, reasonKey: data.ReasonKey), ct);
-                await ctx.NotifyStaffAsync(new StaffNotificationData(NotificationType.DownloadFailed, failed.WorkId, failed.Title, "/Admin/Activity"), ct);
+                await ctx.NotifyStaffAsync(new StaffNotificationData(NotificationType.DownloadFailed, failed.WorkId, failed.Title, "/Admin/Queue"), ct);
             }
         }
 
@@ -1302,7 +1302,7 @@ namespace Jularr.Backend.Logic.Acquisition
             sql.Parameters.Add(data);
             if (await ctx.ReadOptionalAsync<FailedWorkData>(sql, ct) is { } waiting)
             {
-                await ctx.NotifyStaffAsync(new StaffNotificationData(NotificationType.DownloadWaiting, waiting.WorkId, NotificationSubject.Join(waiting.Title, data.AttentionKey), "/Admin/Activity?Filter=Waiting"), ct);
+                await ctx.NotifyStaffAsync(new StaffNotificationData(NotificationType.DownloadWaiting, waiting.WorkId, NotificationSubject.Join(waiting.Title, data.AttentionKey), "/Admin/Queue"), ct);
             }
         }
 

@@ -23,7 +23,7 @@ namespace Jularr.Frontend.Pages.Admin.Work
                     .. _work?.WantedItemId is { } wanted && texts.CanManageWanted()
                         ? new IUiComponent[] { new A(new Text("admin.work.wanted")).Class("button").Attribute("href", "/Admin/Wanted/" + wanted.ToString(CultureInfo.InvariantCulture)) }
                         : [],
-                    new A(new Text("admin.history.title")).Class("button").Attribute("href", "/Admin/History?WorkId=" + Id.ToString(CultureInfo.InvariantCulture))]).Class("page-actions"));
+                    new A(new Text("admin.history.title")).Class("button").Attribute("href", "/Admin/Queue/History?WorkId=" + Id.ToString(CultureInfo.InvariantCulture))]).Class("page-actions"));
             }
 
             // Edit real identity metadata.

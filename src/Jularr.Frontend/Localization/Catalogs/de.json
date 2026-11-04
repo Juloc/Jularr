@@ -1947,7 +1947,7 @@
    "Imported media and file availability",
    "Importierte Medien und Dateiverfügbarkeit"
   ],
-  "admin.activity.title": [
+  "admin.queue.title": [
    "Queue",
    "Warteschlange"
   ],
@@ -3536,10 +3536,6 @@
   "admin.menu.group.maintenance": [
    "Maintenance",
    "Wartung"
-  ],
-  "admin.menu.activity": [
-   "Activity",
-   "Aktivität"
   ],
   "admin.menu.downloads": [
    "Downloads",
@@ -12237,10 +12233,6 @@
    "When",
    "Zeit"
   ],
-  "jobs.allActivity": [
-   "All activity",
-   "Gesamte Aktivität"
-  ],
   "jobs.history.empty": [
    "No finished operations yet.",
    "Noch keine abgeschlossenen Vorgänge."
@@ -16617,6 +16609,38 @@
   "library.naming.token.PlexId": [
    "Plex ID",
    "Plex-ID"
+  ],
+  "admin.tasks.title": [
+   "Tasks",
+   "Aufgaben"
+  ],
+  "admin.schedule.title": [
+   "Schedule",
+   "Zeitplan"
+  ],
+  "tasks.task": [
+   "Task",
+   "Aufgabe"
+  ],
+  "tasks.group.Help": [
+   "Needs your help",
+   "Braucht Hilfe"
+  ],
+  "tasks.group.Running": [
+   "Running",
+   "Läuft"
+  ],
+  "tasks.group.Queued": [
+   "Waiting",
+   "Wartet"
+  ],
+  "tasks.empty": [
+   "Nothing is running and nothing needs you.",
+   "Nichts läuft und nichts braucht dich."
+  ],
+  "tasks.translation": [
+   "Book translation",
+   "Buchübersetzung"
   ]
  }
 }
