@@ -3931,6 +3931,53 @@ namespace Jularr.Backend.Tests
             Assert.IsTrue(Enumerable.Range(1, 5000).All(id => SearchDueWantedV1.Backoff(MediaType.Book, id, 0, []) is { } wait && wait >= TimeSpan.FromHours(24) && wait < TimeSpan.FromHours(48)));
         }
 
+        // A grab that a running download already holds ends the search of that season: the target moves on, the refused grab is not counted, and the next cycles ask the indexer nothing.
+        [TestMethod]
+        public async Task SearchDue_AGrabARunningDownloadHolds_MovesTheTargetOn_AndLaterCyclesAskTheIndexerNothing()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            var usenet = new FakeUsenet { Results = FakeUsenet.SeriesResults };
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, usenet);
+            await host.Fixture.RunSqlAsync("UPDATE \"LibraryRoots\" SET \"MediaTypeId\" = 2");
+            using var created = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works", new CreateWorkDataV1(MediaType.Series, "Example Show"));
+            var series = (await created.Content.ReadFromJsonAsync<WorkDetailsV1>())!.Id;
+
+            // Two aired seasons; episode 1 of season 1 is downloading, and the season pack, the best release for episode 2, overlaps it.
+            await host.Fixture.RunSqlAsync($"""
+                INSERT INTO "WorkUnits" ("WorkId", "WorkUnitTypeId", "Number") VALUES ({series}, 1, 1), ({series}, 1, 2);
+                INSERT INTO "WorkUnits" ("WorkId", "ParentWorkUnitId", "WorkUnitTypeId", "Number", "ReleasedOn")
+                SELECT {series}, season."Id", 2, episode."Number", current_date - 100
+                FROM "WorkUnits" AS season CROSS JOIN generate_series(1, 3) AS episode ("Number")
+                WHERE season."WorkId" = {series} AND season."WorkUnitTypeId" = 1 AND (season."Number" = 1 OR episode."Number" = 1);
+                INSERT INTO "WantedItems" ("Id", "WorkId") VALUES (720, {series});
+                INSERT INTO "AcquisitionReleases" ("Id", "WantedItemId", "AcquisitionConnectionId", "ReleaseIdentity", "Title", "ParentUnitNumber", "UnitStart", "UnitEnd", "AcquisitionReleaseStatusTypeId")
+                SELECT 900, 720, connection."Id", 'running', 'Example.Show.S01E01.720p.WEB-DL.H264-GRP', 1, 1, 1, 1 FROM "AcquisitionConnections" AS connection WHERE connection."Name" = 'Indexer';
+                INSERT INTO "Operations" ("OperationTypeId", "OperationStatusTypeId", "AcquisitionReleaseId", "AcquisitionConnectionId")
+                SELECT 2, 2, 900, connection."Id" FROM "AcquisitionConnections" AS connection WHERE connection."Name" = 'SAB';
+                """);
+            int Asked() { lock (usenet.IndexerHosts) return usenet.IndexerHosts.Count(asked => asked == "indexer.example.test"); }
+            Task<object?> GrabCount() => host.ScalarAsync("SELECT \"GrabCount\" FROM \"AcquisitionConnections\" WHERE \"Name\" = 'Indexer'");
+
+            // Season 2 is taken; season 1 waits for its running download, and only the real grab counts against the indexer.
+            await RunAsync<SearchDueWantedV1>(host);
+            Assert.IsFalse(usenet.Grabbed.Contains("https://indexer.example.test/getnzb/s1"), string.Join(", ", usenet.Grabbed));
+            Assert.AreEqual(1, usenet.Grabbed.Count, string.Join(", ", usenet.Grabbed));
+            Assert.AreEqual(1, await GrabCount());
+            Assert.AreEqual(true, await host.ScalarAsync("SELECT \"NextSearchAt\" > now() FROM \"WantedItems\" WHERE \"Id\" = 720"));
+
+            // The cycles every two minutes leave the target alone until its next search.
+            var asked = Asked();
+            for (var cycle = 0; cycle < 5; cycle++) await RunAsync<SearchDueWantedV1>(host);
+            Assert.AreEqual(asked, Asked());
+
+            // A running download whose release names no season holds the whole series, so the target is not searched while it runs.
+            await host.Fixture.RunSqlAsync("UPDATE \"AcquisitionReleases\" SET \"ParentUnitNumber\" = NULL, \"UnitStart\" = NULL, \"UnitEnd\" = NULL WHERE \"Id\" = 900; UPDATE \"WantedItems\" SET \"NextSearchAt\" = NULL");
+            for (var cycle = 0; cycle < 5; cycle++) await RunAsync<SearchDueWantedV1>(host);
+            Assert.AreEqual(asked, Asked());
+            Assert.AreEqual(1, await GrabCount());
+        }
+
         // When a missing episode or movie has had its release day and the feed found nothing, one search runs; the day's end counts, as releases come out during the day.
         [TestMethod]
         public async Task ReleaseDay_NextSearchOfAMissingEpisodeOrMovie_IsTheEndOfItsDay()
