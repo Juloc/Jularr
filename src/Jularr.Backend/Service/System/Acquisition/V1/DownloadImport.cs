@@ -22,6 +22,8 @@ using Jularr.Integrations.Data.Media;
 using Jularr.Integrations.Data.Storage;
 using Jularr.Integrations.Logic.Media;
 using Jularr.Integrations.Data.Sabnzbd;
+using Jularr.Integrations.Data.Qbittorrent;
+using Jularr.Integrations.Logic.Qbittorrent;
 using Jularr.Integrations.Logic.Sabnzbd;
 using Jularr.Integrations.Logic.Storage;
 using Microsoft.AspNetCore.DataProtection;
@@ -30,7 +32,8 @@ using OperationKind = Jularr.Backend.Data.Enums.Operation.OperationType;
 namespace Jularr.Backend.Service.System.Acquisition.V1
 {
     // Shared by every downloader: plan, check, link or copy and assign; waits and failures are recorded the same way.
-    internal sealed class DownloadImport(PlexServer plex, LibraryReplacements replacements, StorageAccess storage, TimeProvider time, SabnzbdClient sabnzbd, IDataProtectionProvider protection, WorkSignals signals)
+    internal sealed class DownloadImport(PlexServer plex, LibraryReplacements replacements, StorageAccess storage, TimeProvider time, SabnzbdClient sabnzbd, QbittorrentClient qbittorrent, DownloadStorage downloads,
+        IDataProtectionProvider protection, WorkSignals signals)
     {
         public const string UnmatchedFilesKey = "import_unmatched_files";
         public const string NothingPlaceableKey = "import_nothing_placeable";
@@ -436,6 +439,37 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                 try
                 {
                     var connection = await context.ExecuteBatchAsync((ctx, token) => ctx.ReadAcquisitionConnectionAsync(task.AcquisitionConnectionId, token), ct);
+
+                    // A failed release elsewhere goes with its files too: qBittorrent deletes the torrent and its data, Jularr's own Usenet and torrent downloaders clear the job's folders.
+                    if (connection.AcquisitionConnectionTypeId is AcquisitionConnectionType.Qbittorrent or AcquisitionConnectionType.Usenet or AcquisitionConnectionType.Torrent)
+                    {
+                        if (task.Reason != "failed")
+                        {
+                            await RescheduleAsync(task.Id, "cleanup_status_mismatch");
+                            continue;
+                        }
+
+                        if (connection.AcquisitionConnectionTypeId == AcquisitionConnectionType.Qbittorrent)
+                        {
+                            // A client without a login of its own (a trusted network) has no password stored.
+                            var password = connection.ProtectedPassword is null ? null
+                                : AcquisitionConnectionInput.Unprotect(protection.CreateProtector(AcquisitionConnectionInput.ProtectorPurpose), connection.ProtectedPassword);
+                            await qbittorrent.RemoveAsync(new QbittorrentConnection(connection.HttpAddress, connection.Username, password), task.ExternalId, true, ct);
+                        }
+                        else if (task.OperationId is { } operationId)
+                        {
+                            var area = connection.AcquisitionConnectionTypeId == AcquisitionConnectionType.Usenet ? DownloadStorageArea.Usenet : DownloadStorageArea.Torrent;
+                            (await downloads.OpenAsync(context, area, ct, skipCapacityCheck: true)).RemoveCompleted(operationId);
+                        }
+
+                        await context.ExecuteBatchAsync(async (ctx, token) =>
+                        {
+                            await ctx.MarkDownloadCleanupDoneAsync(new DownloadCleanupAttemptData(task.Id), token);
+                            return true;
+                        }, ct);
+                        continue;
+                    }
+
                     if (connection.AcquisitionConnectionTypeId != AcquisitionConnectionType.Sabnzbd)
                     {
                         await RescheduleAsync(task.Id, "cleanup_invalid_client");
@@ -491,8 +525,8 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                     // and leave the durable cleanup available for explicit reconciliation.
                     await RescheduleAsync(task.Id, "cleanup_source_unverified");
                 }
-                catch (Exception exception) when (exception is HttpRequestException or SabnzbdException or JsonException
-                    or IOException or UnauthorizedAccessException or NasMountException
+                catch (Exception exception) when (exception is HttpRequestException or SabnzbdException or QbittorrentException or JsonException
+                    or IOException or UnauthorizedAccessException or NasMountException or ServiceUnavailableException
                     || exception is TaskCanceledException && !ct.IsCancellationRequested)
                 {
                     await RescheduleAsync(task.Id, "cleanup_client_unavailable");

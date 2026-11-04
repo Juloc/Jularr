@@ -3012,6 +3012,62 @@ namespace Jularr.Backend.Tests
             CollectionAssert.AreEqual(new long[] { 13 }, await QueueAsync());
         }
 
+        // As Sonarr's Remove, a fault of the release takes the job with its files in every client: qBittorrent removes the torrent with its data, Jularr's own Usenet and
+        // torrent downloaders clear the job's folders (SABnzbd by its job, as before). A failure that is not the release's (an interruption) keeps the job and its files.
+        [TestMethod]
+        public async Task ReleaseFaults_RemoveTheJobAndItsFiles_InEveryClient_WhileAnInterruptionKeepsThem()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            using var usenetArea = new TemporaryDirectory();
+            using var torrentArea = new TemporaryDirectory();
+            var usenetRoot = usenetArea.Path;
+            var torrentRoot = torrentArea.Path;
+            var usenet = new FakeUsenet();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, usenet, downloadAreas: [usenetRoot, torrentRoot]);
+            await DownloadStorageTests.ConfigureAsync(host, usenetRoot, Data.Enums.Storage.DownloadStorageArea.Usenet);
+            await DownloadStorageTests.ConfigureAsync(host, torrentRoot, Data.Enums.Storage.DownloadStorageArea.Torrent);
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "AcquisitionConnections" ("Id", "Name", "AcquisitionConnectionTypeId", "BaseUrl", "ProtectedApiKey") VALUES (951, 'qBit', 9, 'https://qbit.example.test', '\x00'::bytea);
+                INSERT INTO "AcquisitionConnections" ("Id", "Name", "AcquisitionConnectionTypeId", "Host", "Port", "UseSsl", "MaxConnections") VALUES (952, 'News', 6, 'news.example.test', 563, TRUE, 20);
+                INSERT INTO "AcquisitionConnections" ("Id", "Name", "AcquisitionConnectionTypeId") VALUES (953, 'Torrents', 12);
+                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle") SELECT 820 + n, 1, 'Film ' || n FROM generate_series(1, 5) AS n;
+                INSERT INTO "WantedItems" ("Id", "WorkId", "NextSearchAt") SELECT 820 + n, 820 + n, now() + interval '1 day' FROM generate_series(1, 5) AS n;
+                INSERT INTO "AcquisitionReleases" ("Id", "WantedItemId", "ReleaseIdentity", "Title", "AcquisitionReleaseStatusTypeId") SELECT 20 + n, 820 + n, 'release-' || n, 'Film.' || n || '.1080p', 1 FROM generate_series(1, 5) AS n;
+                INSERT INTO "Operations" ("Id", "OperationTypeId", "OperationStatusTypeId", "AcquisitionReleaseId", "AcquisitionConnectionId", "ExternalId", "StartedAt")
+                VALUES (21, 2, 2, 21, 951, 'hashfault', now()), (22, 2, 2, 22, 951, 'hashkept', now()), (23, 2, 2, 23, 952, NULL, now()), (24, 2, 2, 24, 952, NULL, now()), (25, 2, 2, 25, 953, NULL, now());
+                """);
+
+            // The jobs' folders of Jularr's own downloaders.
+            string JobFolder(string root, int area, int id) => Path.Combine(root, "Incomplete", ".jularr-" + ((Guid)host.ScalarAsync($"SELECT \"WorkspaceId\" FROM \"DownloadStorageSettings\" WHERE \"DownloadStorageAreaId\" = {area}").GetAwaiter().GetResult()!).ToString("N"), "movie", "j-" + id.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            foreach (var folder in new[] { JobFolder(usenetRoot, 1, 23), JobFolder(usenetRoot, 1, 24), JobFolder(torrentRoot, 3, 25) })
+            {
+                Directory.CreateDirectory(folder);
+                await File.WriteAllTextAsync(Path.Combine(folder, "part.bin"), "data");
+            }
+
+            // The failures, as the clients and the import report them: three release faults and two interruptions.
+            var import = host.Services.GetRequiredService<Service.System.Acquisition.V1.DownloadImport>();
+            await using var sql = new Jularr.Backend.Infrastructure.Sql.SqlContext(host.Fixture.Database);
+            var context = new Jularr.Backend.Infrastructure.Sql.LogicContext(sql);
+            context.SetTransactionalAccessCheck((_, _, _) => Task.CompletedTask);
+            foreach (var (id, reason) in new[] { (21L, "download_failed"), (22L, "download_interrupted"), (23L, "usenet_incomplete"), (24L, "download_interrupted"), (25L, "import_no_media") })
+            {
+                await import.FailAsync(context, id, reason, DateTime.UtcNow, CancellationToken.None);
+            }
+
+            await RunAsync<MonitorDownloadsV1>(host);
+            Assert.AreEqual(1, usenet.TorrentsRemoved.Count, string.Join(" | ", usenet.TorrentsRemoved));
+            StringAssert.Contains(usenet.TorrentsRemoved.Single(), "hashes=hashfault");
+            StringAssert.Contains(usenet.TorrentsRemoved.Single(), "deleteFiles=true");
+            var ledger = await host.ScalarAsync("SELECT string_agg(\"OperationId\" || ':' || \"ExternalId\" || ':' || coalesce(\"LastError\", '-') || ':' || (\"CompletedAt\" IS NOT NULL), ' | ') FROM \"DownloadClientCleanups\"");
+            Assert.IsFalse(Directory.Exists(JobFolder(usenetRoot, 1, 23)), "Jularr's Usenet clears a faulty release's job. Ledger: " + ledger);
+            Assert.IsFalse(Directory.Exists(JobFolder(torrentRoot, 3, 25)), "Jularr's torrent downloader clears a faulty release's job.");
+            Assert.IsTrue(File.Exists(Path.Combine(JobFolder(usenetRoot, 1, 24), "part.bin")), "An interruption keeps the files.");
+            Assert.AreEqual(3L, await host.ScalarAsync("SELECT count(*) FROM \"DownloadClientCleanups\" WHERE \"CompletedAt\" IS NOT NULL"));
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"DownloadClientCleanups\" WHERE \"OperationId\" IN (22, 24)"));
+        }
+
         // The Activity entry's other views follow the type bar too: History lists the events of the chosen types, Blocked the blocked releases (by hand or by a fault) with the button that allows one again.
         [TestMethod]
         public async Task ActivityViews_HistoryAndBlocked_FollowTheTypeBar_AndBlockedUnblocks()
@@ -3719,12 +3775,16 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.OK, saved.StatusCode, await saved.Content.ReadAsStringAsync());
         }
 
-        private static async Task<Host> CreateHostAsync(string storage, string downloads, FakeUsenet usenet, bool razor = false)
+        private static async Task<Host> CreateHostAsync(string storage, string downloads, FakeUsenet usenet, bool razor = false, IReadOnlyList<string>? downloadAreas = null)
         {
-            var host = await LibraryTests.CreateHostAsync(storage, razor, services: services =>
+            // Jularr's own downloaders write into areas of their own, each a local path the host allows.
+            var settings = (downloadAreas ?? []).Select((path, index) => (Key: "Storage:LocalPaths:" + (index + 2).ToString(System.Globalization.CultureInfo.InvariantCulture), Value: path))
+                .ToDictionary(entry => entry.Key, entry => entry.Value);
+            var host = await LibraryTests.CreateHostAsync(storage, razor, settings: settings, services: services =>
             {
                 services.AddHttpClient<NewznabClient>().ConfigurePrimaryHttpMessageHandler(() => usenet);
                 services.AddHttpClient<SabnzbdClient>().ConfigurePrimaryHttpMessageHandler(() => usenet);
+                services.AddHttpClient<Jularr.Integrations.Logic.Qbittorrent.QbittorrentClient>().ConfigurePrimaryHttpMessageHandler(() => usenet);
                 services.AddHttpClient<TmdbClient>().ConfigurePrimaryHttpMessageHandler(() => usenet);
                 services.AddHttpClient<Jularr.Integrations.Logic.Tvdb.TvdbClient>().ConfigurePrimaryHttpMessageHandler(() => usenet);
                 services.AddHttpClient<Jularr.Integrations.Logic.Plex.PlexServerClient>().ConfigurePrimaryHttpMessageHandler(() => usenet);
@@ -4165,6 +4225,7 @@ namespace Jularr.Backend.Tests
                 """;
 
             public List<string> Grabbed { get; } = [];
+            public List<string> TorrentsRemoved { get; } = [];
             public List<string?> GrabbedCategories { get; } = [];
 
             // What a person told SABnzbd: "queue:delete:id:1".
@@ -4185,6 +4246,25 @@ namespace Jularr.Backend.Tests
 
             protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
             {
+                // qBittorrent: a login and the removal of a torrent (which is recorded with whether its data goes too).
+                if (request.RequestUri!.Host == "qbit.example.test")
+                {
+                    if (request.RequestUri.AbsolutePath == "/api/v2/auth/login")
+                    {
+                        var login = new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("Ok.") };
+                        login.Headers.Add("Set-Cookie", "SID=session; path=/; HttpOnly");
+                        return login;
+                    }
+
+                    if (request.RequestUri.AbsolutePath == "/api/v2/torrents/delete")
+                    {
+                        TorrentsRemoved.Add(await request.Content!.ReadAsStringAsync(cancellationToken));
+                        return new HttpResponseMessage(HttpStatusCode.OK);
+                    }
+
+                    return new HttpResponseMessage(HttpStatusCode.NotFound);
+                }
+
                 if (request.RequestUri!.Host == "plex.example.test")
                 {
                     PlexRequests.Add(request.RequestUri.PathAndQuery);

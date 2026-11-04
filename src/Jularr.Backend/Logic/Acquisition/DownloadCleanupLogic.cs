@@ -7,8 +7,9 @@ namespace Jularr.Backend.Logic.Acquisition
     // The cleanup ledger is independent of finished Operations: pruning history cannot silently lose a remote deletion.
     internal sealed class DownloadCleanupTaskData : BaseData
     {
-        public DownloadCleanupTaskData(long id, long acquisitionConnectionId, string externalId, string reason, int attemptCount, string? sourceFingerprint)
+        public DownloadCleanupTaskData(long id, long acquisitionConnectionId, string externalId, string reason, int attemptCount, string? sourceFingerprint, long? operationId = null)
         {
+            OperationId = operationId;
             Id = id;
             AcquisitionConnectionId = acquisitionConnectionId;
             ExternalId = externalId;
@@ -34,6 +35,10 @@ namespace Jularr.Backend.Logic.Acquisition
 
         [DataField(typeof(DownloadClientConsoleFields), nameof(DownloadClientConsoleFields.Fingerprint), false)]
         public string? SourceFingerprint { get; }
+
+        // The download it was made for: Jularr's own downloaders name their job's folders by it.
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.Id), false)]
+        public long? OperationId { get; }
     }
 
     internal sealed class DownloadCleanupOperationData : BaseData
@@ -137,29 +142,31 @@ namespace Jularr.Backend.Logic.Acquisition
         }
 
         // Crash recovery: completion is committed before the caller can enqueue its remote cleanup.
+        // The failures that are the release's own fault, as DownloadLogic.ReleaseFaultSql names them for the release.
+        private const string ReleaseFaultKeysSql = "(operation.\"ErrorKey\" = 'download_failed' OR operation.\"ErrorKey\" LIKE 'import\\_%' OR operation.\"ErrorKey\" LIKE 'usenet\\_%')";
+
         // Rebuild missing ledger rows from finished Operations, but never touch attention/waiting imports.
         public static Task QueueMissedDownloadCleanupsAsync(this LogicContext ctx, CancellationToken ct)
         {
             var sql = new SqlStatement();
             sql.Statement =
-                """
+                $"""
                 INSERT INTO "DownloadClientCleanups" ("AcquisitionConnectionId", "ExternalId", "Reason", "OperationId")
-                SELECT operation."AcquisitionConnectionId", operation."ExternalId", 'failed', operation."Id"
+                SELECT operation."AcquisitionConnectionId", coalesce(operation."ExternalId", 'operation-' || operation."Id"), 'failed', operation."Id"
                 FROM "Operations" AS operation
                 JOIN "AcquisitionConnections" AS connection ON connection."Id" = operation."AcquisitionConnectionId"
                 WHERE operation."OperationTypeId" = 2
                   AND operation."OperationStatusTypeId" = 4
-                  AND operation."ExternalId" IS NOT NULL
                   AND operation."FinishedAt" >= (
                       SELECT version."AppliedAt" FROM "DatabaseSchemaVersions" AS version WHERE version."Version" = 5
                   )
-                  AND connection."AcquisitionConnectionTypeId" = 2
-                  AND (operation."ErrorKey" = 'download_failed' OR operation."ErrorKey" LIKE 'import\_%')
+                  AND (connection."AcquisitionConnectionTypeId" IN (2, 9) AND operation."ExternalId" IS NOT NULL OR connection."AcquisitionConnectionTypeId" IN (6, 12))
+                  AND {ReleaseFaultKeysSql}
                   AND connection."RemovesFailed"
                   AND NOT EXISTS (
                     SELECT 1 FROM "DownloadClientCleanups" AS cleanup
                     WHERE cleanup."AcquisitionConnectionId" = operation."AcquisitionConnectionId"
-                      AND cleanup."ExternalId" = operation."ExternalId"
+                      AND cleanup."ExternalId" = coalesce(operation."ExternalId", 'operation-' || operation."Id")
                   )
                 ORDER BY operation."Id" DESC
                 LIMIT 100
@@ -192,18 +199,18 @@ namespace Jularr.Backend.Logic.Acquisition
         {
             var sql = new SqlStatement();
             sql.Statement =
-                """
+                $"""
                 INSERT INTO "DownloadClientCleanups" ("AcquisitionConnectionId", "ExternalId", "Reason", "OperationId")
-                SELECT connection."Id", operation."ExternalId", 'failed', operation."Id"
+                SELECT connection."Id", coalesce(operation."ExternalId", 'operation-' || operation."Id"), 'failed', operation."Id"
                 FROM "Operations" AS operation
                 JOIN "AcquisitionConnections" AS connection ON connection."Id" = operation."AcquisitionConnectionId"
                 WHERE operation."Id" = @OperationId
                   AND operation."OperationTypeId" = 2
                   AND operation."OperationStatusTypeId" = 4
-                  -- The client failed it, or the import found nothing of use in it (no video, only extras, another title): a fault of the release, which goes like Sonarr's.
-                  AND (operation."ErrorKey" = 'download_failed' OR operation."ErrorKey" LIKE 'import\_%')
-                  AND operation."ExternalId" IS NOT NULL
-                  AND connection."AcquisitionConnectionTypeId" = 2
+                  -- A fault of the release goes like Sonarr's, with the job and its files: the client failed it, Jularr's Usenet could not repair or unpack it,
+                  -- or the import found nothing of use in it (no video, only extras, another title). SABnzbd and qBittorrent by their job, Jularr's own downloaders by the operation.
+                  AND {ReleaseFaultKeysSql}
+                  AND (connection."AcquisitionConnectionTypeId" IN (2, 9) AND operation."ExternalId" IS NOT NULL OR connection."AcquisitionConnectionTypeId" IN (6, 12))
                   AND connection."RemovesFailed"
                 ON CONFLICT ("AcquisitionConnectionId", "ExternalId") DO NOTHING;
                 """;
@@ -216,7 +223,7 @@ namespace Jularr.Backend.Logic.Acquisition
             var sql = new SqlStatement();
             sql.Statement =
                 """
-                SELECT "Id", "AcquisitionConnectionId", "ExternalId", "Reason", "AttemptCount", "SourceFingerprint"
+                SELECT "Id", "AcquisitionConnectionId", "ExternalId", "Reason", "AttemptCount", "SourceFingerprint", "OperationId"
                 FROM "DownloadClientCleanups"
                 WHERE "CompletedAt" IS NULL
                   AND "RetryAt" <= now()

@@ -106,7 +106,7 @@ SavePill, FolderPicker, IconInfo, TimePicker, FactList, Drawer, FilterDialog, Sh
   protocol (Usenet, Torrent, Direct by the client), time left, progress (bar and percent) and the actions; the medium width drops episode title, language and protocol, the narrow one
   episode and quality; on a phone each row is a card with the bar and time left under the title and the facts in one line. What waits for a person comes first. A **failed download
   is not in the Queue**: a fault of the release (the client failed it, Jularr's Usenet could not repair or unpack it, the import found no video, only extras or another title) blocks
-  the release, removes the client's job where the connection removes failed ones, makes the target due again and keeps "Download failed" with its reason in the History; an
+  the release, removes the job with its files (SABnzbd where the connection removes failed ones, qBittorrent with its data, Jularr's own Usenet and torrent downloaders by clearing the job's folders), makes the target due again and keeps "Download failed" with its reason in the History; an
   interruption or a grab problem not caused by the release (client unreachable or refusing, link gone, indexer limit) goes to the History too and is searched again later. An
   **import that waits for a person** (unclear title, quality not allowed by the profile, other episodes, unreadable names, nothing placeable, partial import, a check at the source,
   a storage or setup problem) stays as a row with the orange warning icon and its reason under the title, with import by hand, read again or the source check. A **grab its indexer

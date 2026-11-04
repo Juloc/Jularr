@@ -486,8 +486,9 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                     await WaitAsync(download, staging, pass.ReasonKey!);
                     return false;
                 case UsenetPassState.Failed:
+                    // The cleanup pass clears the job's folders of a release fault; nothing is marked as waiting in them.
                     await _import.FailAsync(Context, download.OperationId, pass.ReasonKey ?? DownloadLogic.FailedReasonKey, _time.GetUtcNow().UtcDateTime, CancellationToken);
-                    break;
+                    return false;
                 default:
                     try
                     {
