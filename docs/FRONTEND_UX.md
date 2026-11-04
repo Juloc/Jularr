@@ -47,6 +47,8 @@ adds none of its own colours, radii, shadows or font sizes. Design follows the o
   floating pill (centred, well above the bottom edge, above the floating bar on a phone, always in view) with two optional zones as slots: actions (icon and short
   label; a phone keeps the icons, so two actions never share one) and bulk (shown instead of the actions while rows marked `data-dock-select` are chosen, with their count); the pager of the page's list joins it by itself
   (see Paging). **No infinite scroll on admin pages**: lists are paged, 25 rows by default. With a visible save pill the dock stacks above it.
+  Owner's decision 4 Nov: the pill keeps floating, and every list below it ends with room for it: scrolled to the end, no row stays under the pill, which itself floats
+  above the bar of the book being read and above the minimized player (one rule, `--floating-bottom` in [FloatingPill](../src/Jularr.Frontend/Framework/Components/FloatingPill.scss)).
 - **Paging: set `.Paged()` on the list.** `Table`, `ListPanel` (`.Paged(pageSize: 25, key: "pageNumber", primary: false)`) and any other component (`content.Paged(rows, pageSize, key)`, e.g. a grid of cards)
   take paging as an option; the page never builds a dock, a pager or an address for it. The rule is the same everywhere (see [Paging.cs](../src/Jularr.Frontend/Framework/Components/Paging.cs)):
   a page is up to `pageSize` rows read without a count and without looking ahead, the pager says "Page 2", **Next is on iff the page is full**, Previous from page 2 on, and a page behind the last one shows
@@ -59,6 +61,8 @@ adds none of its own colours, radii, shadows or font sizes. Design follows the o
   and a grid says *No more titles.* where it ends. Nothing above the row moves while pages arrive.
   The Library defaults to actual present files (no metadata-only, Plex-only or Wanted-only titles). Optional availability choices union Available files, My requests and Other requests; active requests of all profiles are shared for now, under the existing profile/media visibility rules. Genre, audio/subtitle language, progress and minimum-rating filters combine with media type/year; choices within a multi-select combine with OR, different filters with AND. A separate request-sharing model is deferred.
 - Owner's decision 2 Nov: the catalog of titles is called "Works" (German "Werke") everywhere in the interface: the admin menu group and breadcrumb, the user menu, the Dashboard figure, the jobs area and the Works pages. "Media type(s)" (Film, Series, Book, ...), "media server" and "media files" are other concepts and keep their wording. The type filters (Library, Requests, Discover) name the types in the plural ("Books"); a title's or request's own type reads in the singular ("Book"), as on the cards.
+- Owner's decision 4 Nov: a Wanted row's state pill is a short word (*Requested* while nothing came); why the last search found nothing (the download storage is unavailable, nothing fits the profile)
+  stands whole in a small muted line under the pill, never cut off inside it. A target's own page keeps the whole sentence as its state.
 - Owner's decision 3 Nov (#1880): the media-type bar is also the type filter of the administration's Requests list (it narrows the list and its tab counts), the library overview, the Naming panels and the AniList matches, the Wanted list (its view counts follow it, and its Search all searches the chosen types' targets) (`?type=a,b`) and the Media import preview. There the bar lists the types the list holds and narrows without reading the list again: rows of a type left out are hidden and not chosen (they are not imported, and Select all and the count follow the rows shown); after Update preview they stay unchosen.
 - Owner's decision 2 Nov: a list's search keeps its words. The search fields of the admin Works list and the Library show their results shortly after typing (`SearchBox(..., live: true)`,
   [LiveSearch](../src/Jularr.Frontend/Framework/Components/LiveSearch.entry.ts): the page with the query replaces the history entry, the field keeps its focus); on these pages and Discover
@@ -89,10 +93,11 @@ SavePill, FolderPicker, IconInfo, TimePicker, FactList, Drawer, FilterDialog, Sh
   item as `page.Title(key, name)`. Narrow headers show only the last two parts; a longer trail scrolls, never wraps.
   Where the last part equals a heading under it, that heading is dropped (kept visually hidden for assistive technology).
 - Owner's decision (issue #1881, Activity like Sonarr): the entry **Activity** has three views, **Queue** (`/Admin/Activity`, the default), **History** (`/Admin/History`)
-  and **Blocked** (`/Admin/Activity/Blocked`), each under the normal media-type capsule (`type=a,b` stays in every view's address). The Queue lists what is open in four groups,
-  what needs the owner first, each with its count: *Needs your help* (a check at the source such as Anna's Archive, a failure), *To import* (also what is imported by hand),
+  and **Blocked** (`/Admin/Activity/Blocked`), each under the normal media-type capsule (`type=a,b` stays in every view's address). The Queue lists the open downloads in four groups,
+  what needs the owner first, each with its count: *Needs your help* (a check at the source such as Anna's Archive, a failed download), *To import* (also what is imported by hand),
   *Downloading* (with the live pace) and *Waiting in the downloader*; a group without entries is left out. Blocked lists the releases that are not taken again (blocked
-  by hand or by a fault) with **Allow again**. **Wanted** (missing titles) is a menu entry of its own and no part of Activity. The Queue's old filters (All, Active, Waiting,
+  by hand or by a fault) with **Allow again**. Owner's decision 4 Nov: the Queue, its counts and the menu figure hold downloads only, as Sonarr's; scans, media imports and background jobs
+  (a failed "Discover cache" or "Subtitles" job) show on the Jobs page and the Dashboard, never under *Needs your help*. **Wanted** (missing titles) is a menu entry of its own and no part of Activity. The Queue's old filters (All, Active, Waiting,
   Import, Errors), its four live tiles and its list of finished operations are gone (assumptions of the implementing agent, open to correction by the Owner).
 - Owner's decision 20 Oct, sidebar modes: on `/Admin/*` the sidebar shows only the administration menu, all groups open; the user
   entries are not shown, and the Jularr logo (linking to the user home) is the way back. No extra back button.

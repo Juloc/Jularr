@@ -298,7 +298,7 @@
 .player-active:not(.player-mini) .app-layout { display: none; }
 .player-mini {
     .player-main { position: fixed; inset: auto 12px calc(12px + env(safe-area-inset-bottom)) auto; z-index: var(--z-shell); width: min(720px, calc(100% - 24px)); min-height: 0; }
-    .app-main { padding-bottom: 110px; }
+    .app-main { --main-end: 110px; }
     @media (max-width: 780px) { .player-main { bottom: calc(84px + env(safe-area-inset-bottom)); } }
 }
 .player--mini {

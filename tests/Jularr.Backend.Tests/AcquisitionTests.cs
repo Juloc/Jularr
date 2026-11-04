@@ -1626,12 +1626,13 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.Redirect, retried.StatusCode, await retried.Content.ReadAsStringAsync());
             Assert.AreEqual(0, (await ReadActivityAsync(host, ActivityFilterType.All)).Count);
 
-            // A failed backup waits there too, with the tool's reason.
+            // A failed backup is no download: it keeps the tool's reason, but the queue does not show it.
             await host.Fixture.RunSqlAsync("INSERT INTO \"Operations\" (\"OperationTypeId\", \"OperationStatusTypeId\", \"ErrorKey\", \"FinishedAt\") VALUES (3, 4, 'backup_version_mismatch', now())");
             using var backup = await host.SendAsync(HttpMethod.Get, "/Admin/Activity");
             var backupHtml = await backup.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, backup.StatusCode, backupHtml);
-            StringAssert.Contains(backupHtml, "pg_dump or pg_restore is older than the PostgreSQL server.");
+            Assert.IsFalse(backupHtml.Contains("pg_dump or pg_restore is older than the PostgreSQL server.", StringComparison.Ordinal));
+            Assert.AreEqual("backup_version_mismatch", (await ReadActivityAsync(host, ActivityFilterType.All)).Single(item => item.OperationTypeId == OperationType.Backup).ReasonKey);
             Assert.AreEqual(failedId, (await ReadActivityAsync(host, ActivityFilterType.History)).Single().Id);
             using var again = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/" + failedId + "/dismiss");
             Assert.AreEqual(HttpStatusCode.NotFound, again.StatusCode);
@@ -2865,6 +2866,12 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(50L, (await ReadActivityAsync(host, ActivityFilterType.Active)).Single(item => item.Id == 1).BytesPerSecond);
             Assert.IsNull((await ReadActivityAsync(host, ActivityFilterType.Active)).Single(item => item.Id == 2).BytesPerSecond);
 
+            // A failed background job is no download: the tiles do not count it and the queue does not show it (the Jobs page does).
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "WorkerJobs" ("Key", "LastResultTypeId", "LastFinishedAt") VALUES ('operations', 2, now()) ON CONFLICT ("Key") DO NOTHING;
+                INSERT INTO "Operations" ("Id", "OperationTypeId", "OperationStatusTypeId", "WorkerJobKey", "ErrorKey", "FinishedAt") VALUES (8, 4, 4, 'operations', 'metadata_unavailable', now());
+                """);
+
             // Tiles: what runs, the pace, what is downloaded but not yet imported, what failed.
             using var response = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/activity/summary");
             Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, await response.Content.ReadAsStringAsync());
@@ -2887,6 +2894,7 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(Group("Import")[..Group("Import").IndexOf("id=\"activity-group-Running\"", StringComparison.Ordinal)], "Release 3");
             StringAssert.Contains(Group("Running")[..Group("Running").IndexOf("id=\"activity-group-Queued\"", StringComparison.Ordinal)], "Release 1");
             StringAssert.Contains(Group("Queued"), "Release 2");
+            Assert.IsFalse(html.Contains("operationId=8\"", StringComparison.Ordinal) || html.Contains("id=\"activity-8\"", StringComparison.Ordinal), "A background job is not part of the queue.");
             StringAssert.Contains(html, "href=\"/Admin/Activity?operation=5\"");
             StringAssert.Contains(html, "href=\"/Admin/History\"");
             Assert.AreEqual(1, System.Text.RegularExpressions.Regex.Matches(html, "navigation-tabs\"|navigation-tabs ").Count, "One row of views only.");

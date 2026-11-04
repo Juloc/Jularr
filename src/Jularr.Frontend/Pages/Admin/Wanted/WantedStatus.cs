@@ -20,8 +20,13 @@ namespace Jularr.Frontend.Pages.Admin.Wanted
 
             if (item.IsPaused) return new Text("wanted.paused");
 
-            return new Text(item.OutcomeKey is { } outcome ? "acquisition.outcome." + outcome : "wanted.requested");
+            return new Text(ReasonKey(item) ?? "wanted.requested");
         }
+
+        // The list's pill says it in a short word; what the last search said stays whole in a line under it (ReasonKey).
+        public static IUiComponent Short(WantedDetailsV1 item) => ReasonKey(item) is null ? Of(item) : new Text("wanted.requested");
+
+        public static string? ReasonKey(WantedDetailsV1 item) => item.HasMedia || item.IsDownloading || item.IsPaused || item.OutcomeKey is not { } outcome ? null : "acquisition.outcome." + outcome;
 
         public static string Home(long wantedItemId) => "/Admin/Wanted/" + wantedItemId.ToString(CultureInfo.InvariantCulture);
 

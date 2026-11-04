@@ -24,10 +24,10 @@ namespace Jularr.E2E.Tests
             {
                 await PrepareAsync(page, fakes, folders);
 
-                // Nothing else waits under Needs help: the offline keyless catalogs are switched off and earlier job notices dismissed, so no failed health check joins the queue.
+                // A failed background job stays on the Jobs page: the queue holds downloads only, so nothing below waits under Needs help.
                 await jularr.RunSqlAsync("""
-                    UPDATE "Providers" SET "IsEnabled" = FALSE WHERE "ProtectedSecret" IS NULL;
-                    UPDATE "Operations" SET "DismissedAt" = now() WHERE "OperationTypeId" <> 2 AND "OperationStatusTypeId" = 4 AND "DismissedAt" IS NULL;
+                    INSERT INTO "WorkerJobs" ("Key") VALUES ('operations') ON CONFLICT ("Key") DO NOTHING;
+                    INSERT INTO "Operations" ("OperationTypeId", "OperationStatusTypeId", "WorkerJobKey", "ErrorKey", "FinishedAt") VALUES (4, 4, 'operations', 'metadata_unavailable', now()) ON CONFLICT DO NOTHING;
                     """);
 
                 // The download is still running when Jularr stops.
@@ -100,11 +100,7 @@ namespace Jularr.E2E.Tests
                 await PrepareAsync(page, fakes, folders);
 
                 // A broken download lands in the queue; after Retry the broken release is blocked and the next good one is taken.
-                // The error tile counts every failed operation: the offline keyless catalogs are switched off and earlier job notices dismissed, so only the broken download counts.
-                await jularr.RunSqlAsync("""
-                    UPDATE "Providers" SET "IsEnabled" = FALSE WHERE "ProtectedSecret" IS NULL;
-                    UPDATE "Operations" SET "DismissedAt" = now() WHERE "OperationTypeId" <> 2 AND "OperationStatusTypeId" = 4 AND "DismissedAt" IS NULL;
-                    """);
+                // Needs help counts downloads only: failed health checks of the offline keyless catalogs stay on the Jobs page.
 
                 // The good one is offered only once downloads work again: taken by the search in the background while they still fail, it would fail as well.
                 fakes.FailDownloads = true;

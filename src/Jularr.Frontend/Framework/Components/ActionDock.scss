@@ -34,8 +34,4 @@
 }
 
 // A page that also has a save pill: the dock stacks above it, they never overlap.
-.app-main:has(.save-pill:not([hidden])) .action-dock:not(.action-dock--form) {
-    bottom: calc(40px + 64px + env(safe-area-inset-bottom));
-
-    @media (max-width: 780px) { bottom: calc(96px + 64px + env(safe-area-inset-bottom)); }
-}
+.app-main:has(.save-pill:not([hidden])) .action-dock:not(.action-dock--form) { bottom: calc(var(--floating-bottom) + 64px + env(safe-area-inset-bottom)); }
