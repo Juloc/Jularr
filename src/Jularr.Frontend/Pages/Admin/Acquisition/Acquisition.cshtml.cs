@@ -20,7 +20,8 @@ using Microsoft.AspNetCore.Mvc.ModelBinding;
 
 namespace Jularr.Frontend.Pages.Admin.Acquisition
 {
-    // Indexers, download clients and subtitle providers, each kind on its own page: a card per connection whose settings are inputs inside it, saved by the page's pill; adding opens a dialog.
+    // Indexers, download clients and subtitle providers, each kind on its own page: indexers and subtitle providers as a compact list whose rows open an edit dialog
+    // (Acquisition.Indexers.cs), download clients as a list with the opened one below it, the setup as cards whose settings are inputs saved by the pill; adding opens a dialog.
     public sealed partial class AcquisitionModel(ReadAcquisitionConnectionsV1 connections, ReadAcquisitionConnectionV1 connection, CreateAcquisitionConnectionV1 create,
         UpdateAcquisitionConnectionV1 update, DeleteAcquisitionConnectionV1 delete, TestAcquisitionConnectionV1 test, SearchAcquisitionConnectionV1 search, ReadDownloadStorageSettingsV1 downloadStorage, FrontendAssets assets,
         IAntiforgery antiforgery, UiText texts, ReadStorageMountsV1 mounts, ReadStorageDirectoriesV1 directories, InspectDownloadClientV1 inspect, ManageDownloadClientJobV1 manage,
@@ -198,13 +199,10 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                 new KpiTile("acquisition.kpi.failing", Number(failing), Glyph("alert"), UiTone.Danger),
                 new KpiTile("acquisition.kpi.disabled", Number(items.Count(item => !item.IsEnabled)), Glyph("power"), UiTone.Neutral)).Strip();
 
-            // The connections as cards with their settings inside; an action on a card swaps the figures and the cards together.
+            // The figures and the list are one region: a row's test swaps both.
             if (_connections is { } list)
             {
-                IUiComponent cards = items.Count == 0
-                    ? new Div(new Div(new IconTile(Glyph("search", 22), UiTone.Neutral), new P(new Text("acquisition.connection.none." + Scope)).Attribute("role", "status")).Class("list-empty")).Class("list")
-                    : new CardGrid([.. items.Select(item => Card(item, csrf))]);
-                page.Content.Add(new Region("connections", figures, cards).Class("connections__cards").Paged(items.Count, list.PageSize));
+                page.Content.Add(new Region("connections", figures, ConnectionList(items, csrf)).Class("connections__cards").Paged(items.Count, list.PageSize));
             }
 
             AddDialogs(page, csrf);
@@ -248,6 +246,7 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
             {
                 if (ConfirmDelete) page.Content.Add(DeleteDialog(opened, csrf));
                 else if ((opened.AcquisitionConnectionTypeId is AcquisitionConnectionType.Newznab or AcquisitionConnectionType.Nyaa) && (ShowSearch || _searchInput is not null)) page.Content.Add(SearchDialog(opened, csrf));
+                else if (IsList && (ShowEdit || _input is not null)) page.Content.Add(EditDialog(opened, csrf));
             }
 
             if (FormError is not null && _searchInput is null && _input is null) page.Content.Add(new P(ErrorText.Of(FormError)).Attribute("role", "alert"));
@@ -280,7 +279,7 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
             AddDialogs(page, csrf);
         }
 
-        // One connection: its state in the head, the facts of its use, its settings as inputs and its direct actions (test, search, delete, the switch).
+        // One connection of the setup: its state in the head, the facts of its use, its settings as inputs and its direct actions (test, search, delete, the switch).
         private IUiComponent Card(AcquisitionConnectionDetailsV1 item, string? csrf)
         {
             var (icon, tone) = item.AcquisitionConnectionTypeId switch
@@ -305,9 +304,9 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
             }
             body.Add(new Div(new Span(new Text("acquisition.connection.lastTest")).Class("feature-card__note"), Time(item.CheckedAt)).Class("feature-card__row"));
             if (item.AcquisitionConnectionTypeId == AcquisitionConnectionType.Torrent && _torrentEngine is { } engine) body.Add(TorrentFacts(engine));
-            if (Role == AcquisitionConnectionRole.Search && (item.AcquisitionConnectionTypeId is AcquisitionConnectionType.Newznab or AcquisitionConnectionType.Nyaa))
+            if (HasLimits(item.AcquisitionConnectionTypeId))
             {
-                body.Add(new Div(new Span(new Text("acquisition.connection.today")).Class("feature-card__note"), Usage(item)).Class("feature-card__row"));
+                body.Add(new Div(new Span(new Text("acquisition.connection.today")).Class("feature-card__note"), new Span(TodayText(item)).Class("list-value")).Class("feature-card__row"));
             }
 
             if (item.AcquisitionConnectionTypeId == AcquisitionConnectionType.Sabnzbd)
@@ -505,13 +504,13 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
 
         public async Task<IActionResult> OnPostTestAsync()
         {
-            // A successful test also ends a pause after failures.
+            // A successful test also ends a pause after failures; a test from the edit dialog leaves it open.
             var result = await test.ExecuteAsync<AcquisitionConnectionTestV1>(new AcquisitionConnectionParametersV1(SelectedId()), default, HttpContext.RequestAborted);
             HintText(result.IsAvailable
                 ? string.Join(" · ", new[] { texts["acquisition.connection.healthy"], result.ServerVersion is { } version ? texts["table.version"] + " " + version : null,
                     result.SearchModes.Length > 0 ? texts["acquisition.connection.searchModes"] + " " + string.Join(", ", result.SearchModes) : null }.OfType<string>())
                 : texts["errors." + (result.ErrorKey ?? "acquisition_unavailable")]);
-            return LocalRedirect(Address());
+            return LocalRedirect(ShowEdit ? EditAddress(SelectedId()) : Address());
         }
 
         public async Task<IActionResult> OnPostSearchAsync(string? query)
@@ -604,8 +603,8 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                 selected.DownloadCategory, selected.RemotePath, selected.LocalPath, selected.Username, selected.MaxConnections, null, selected.MediaTypeIds,
                 selected.SearchesAutomatically, selected.QueryLimit, selected.GrabLimit, selected.Host, selected.Port, selected.UseSsl, selected.DownloadStorageMountId, selected.RemovesCompleted, selected.IncompleteRemotePath, selected.IncompleteLocalPath, selected.RemovesFailed);
 
-        // The inputs of a connection: a card's own (saved by the pill) or, without one, the new connection's in its dialog.
-        private Form<SaveAcquisitionConnectionDataV1> ConnectionForm(AcquisitionConnectionType type, string? csrf, AcquisitionConnectionDetailsV1? existing)
+        // The inputs of a connection: a card's own (saved by the pill), an existing one's in its edit dialog or, without one, the new connection's in its dialog.
+        private Form<SaveAcquisitionConnectionDataV1> ConnectionForm(AcquisitionConnectionType type, string? csrf, AcquisitionConnectionDetailsV1? existing, bool inDialog = false)
         {
             var submitted = _input is not null && AcquisitionConnectionId == existing?.Id;
             var input = submitted ? _input! : existing is not null ? InputOf(existing)
@@ -668,7 +667,7 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                 }
 
                 form.Number(item => item.Priority, "acquisition.connection.priority");
-                if (existing is null)
+                if (existing is null || inDialog)
                 {
                     form.Select(item => item.IsEnabled, "acquisition.connection.enabled", [new SelectOption("True", texts["acquisition.connection.on"]), new SelectOption("False", texts["acquisition.connection.off"])]);
                 }
@@ -741,7 +740,7 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                     }
                 }
 
-                if (existing is null)
+                if (existing is null || inDialog)
                 {
                     form.Cancel();
                     form.Submit("common.save");
@@ -762,11 +761,6 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
         private static IUiComponent Time(DateTime? value) => value is { } time
             ? new Span(new LocalTime(time)).Class("list-value")
             : Dim();
-
-        // Today's queries and grabs of an indexer against its limits.
-        private static IUiComponent Usage(AcquisitionConnectionDetailsV1 item) => item.AcquisitionConnectionTypeId != AcquisitionConnectionType.Newznab ? Dim()
-            : new Span(new ValueText(Count(item.QueryCount, item.QueryLimit) + " "), new Text("acquisition.connection.queries"),
-                new ValueText(" · " + Count(item.GrabCount, item.GrabLimit) + " "), new Text("acquisition.connection.grabs")).Class("list-value");
 
         private static string Count(int count, int? limit) =>
             count.ToString(CultureInfo.InvariantCulture) + (limit is { } value ? " / " + value.ToString(CultureInfo.InvariantCulture) : "");

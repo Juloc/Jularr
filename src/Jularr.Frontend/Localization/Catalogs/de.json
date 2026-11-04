@@ -3645,6 +3645,46 @@
    "grabs",
    "Grabs"
   ],
+  "acquisition.column.indexer": [
+   "Indexer",
+   "Indexer"
+  ],
+  "acquisition.column.provider": [
+   "Provider",
+   "Anbieter"
+  ],
+  "acquisition.column.for": [
+   "For",
+   "Für"
+  ],
+  "acquisition.column.today": [
+   "Today",
+   "Heute"
+  ],
+  "acquisition.source.Usenet": [
+   "Usenet",
+   "Usenet"
+  ],
+  "acquisition.source.Torrent": [
+   "Torrent",
+   "Torrent"
+  ],
+  "acquisition.source.Books": [
+   "Books",
+   "Bücher"
+  ],
+  "acquisition.connection.allTypes": [
+   "All types",
+   "Alle Typen"
+  ],
+  "acquisition.connection.noLimit": [
+   "No limit",
+   "Kein Limit"
+  ],
+  "acquisition.connection.usage": [
+   "Queries today against the daily limit",
+   "Suchen heute gegen das Tageslimit"
+  ],
   "acquisition.connection.backoff": [
    "Failing, paused until",
    "Fehlerhaft, pausiert bis"
