@@ -17,6 +17,8 @@ namespace Jularr.Backend.Service.Core
         private static readonly TimeSpan CatalogAge = TimeSpan.FromMinutes(1);
         private static readonly TimeSpan CatalogRetry = TimeSpan.FromSeconds(30);
         private static readonly TimeSpan ConnectedAge = TimeSpan.FromSeconds(30);
+        // The chapter whose requests this flow makes, if any.
+        private static readonly AsyncLocal<CodexRun?> CurrentRun = new();
         private readonly CodexCli _cli;
         private readonly object _gate = new();
         private CodexDeviceLogin? _login;
@@ -35,6 +37,7 @@ namespace Jularr.Backend.Service.Core
         private bool _usageLoaded;
         private readonly SortedDictionary<string, long> _history = [];
         private readonly List<CodexRequest> _requests = [];
+        private readonly List<CodexRun> _runs = [];
         private DateTimeOffset _planLimitedUntil;
 
         internal CodexConnection(CodexCli cli)
@@ -175,12 +178,12 @@ namespace Jularr.Backend.Service.Core
         internal async Task<string> ExecAsync(string model, string? effort, string prompt, string what, CancellationToken ct)
         {
             if (!CodexSettings.IsModelName(model) || effort is not null && !CodexSettings.IsEffortName(effort)) throw new InvalidDataException("Codex model or effort is not valid.");
-            var request = new CodexRequest(what, model, DateTimeOffset.UtcNow);
+            var request = new CodexRequest(what, model, effort, DateTimeOffset.UtcNow);
+            var run = CurrentRun.Value;
             lock (_gate)
             {
                 _requests.Add(request);
-                var finished = _requests.Where(item => item.State != CodexRequestState.Running).OrderBy(item => item.Started).ToList();
-                foreach (var old in finished.Take(Math.Max(0, finished.Count - 20))) _requests.Remove(old);
+                Trim(_requests, item => item.State != CodexRequestState.Running, item => item.Started);
             }
 
             try
@@ -191,6 +194,7 @@ namespace Jularr.Backend.Service.Core
                 {
                     _planLimitedUntil = default;
                     request.Finish(CodexRequestState.Done, answer.Tokens);
+                    run?.Add(answer.Tokens);
                 }
 
                 return answer.Text;
@@ -203,6 +207,7 @@ namespace Jularr.Backend.Service.Core
                     var now = DateTimeOffset.UtcNow;
                     _planLimitedUntil = limit.Until is { } until && until > now ? (until < now.AddDays(1) ? until : now.AddDays(1)) : now.AddMinutes(30);
                     request.Finish(CodexRequestState.PlanLimit, 0);
+                    run?.Fail(CodexRequestState.PlanLimit);
                 }
 
                 throw new InvalidDataException("The Codex usage limit is reached.", limit);
@@ -212,6 +217,7 @@ namespace Jularr.Backend.Service.Core
                 lock (_gate)
                 {
                     request.Finish(CodexRequestState.Failed, 0);
+                    run?.Fail(CodexRequestState.Failed);
                 }
 
                 throw new InvalidDataException("Codex is not available.");
@@ -221,10 +227,48 @@ namespace Jularr.Backend.Service.Core
                 lock (_gate)
                 {
                     request.Finish(CodexRequestState.Failed, 0);
+                    run?.Fail(CodexRequestState.Failed);
                 }
 
                 throw;
             }
+        }
+
+        // One chapter translated in whole-passage requests: until it is disposed, every request of this flow counts toward it, so the AI page shows what the
+        // chapter cost with that model and effort. A chapter that asked Codex nothing is not listed.
+        internal IDisposable BeginRun(int chapter, string? title, string model, string? effort)
+        {
+            var run = new CodexRun(chapter, title, model, effort, DateTimeOffset.UtcNow);
+            lock (_gate)
+            {
+                _runs.Add(run);
+                Trim(_runs, item => item.State != CodexRequestState.Running, item => item.Started);
+            }
+
+            CurrentRun.Value = run;
+            return new RunScope(this, run);
+        }
+
+        private void EndRun(CodexRun run)
+        {
+            CurrentRun.Value = null;
+            lock (_gate)
+            {
+                if (run.Requests == 0) _runs.Remove(run);
+                else run.End();
+            }
+        }
+
+        private sealed class RunScope(CodexConnection connection, CodexRun run) : IDisposable
+        {
+            public void Dispose() => connection.EndRun(run);
+        }
+
+        // Called inside the lock: the running ones and the last twenty that ended.
+        private static void Trim<T>(List<T> items, Func<T, bool> ended, Func<T, DateTimeOffset> started)
+        {
+            var finished = items.Where(ended).OrderBy(started).ToList();
+            foreach (var old in finished.Take(Math.Max(0, finished.Count - 20))) items.Remove(old);
         }
 
         // When Codex said its usage limit is lifted; default (past) when it is not limited.
@@ -245,6 +289,15 @@ namespace Jularr.Backend.Service.Core
             lock (_gate)
             {
                 return [.. _requests.OrderByDescending(item => item.Started).Select(item => item.Snapshot())];
+            }
+        }
+
+        // The running chapters and the last twenty that ended, newest first.
+        internal CodexRunV1[] Runs()
+        {
+            lock (_gate)
+            {
+                return [.. _runs.OrderByDescending(item => item.Started).Select(item => item.Snapshot())];
             }
         }
 
@@ -450,7 +503,7 @@ namespace Jularr.Backend.Service.Core
     }
 
     // One request to Codex, as the AI page shows it while it runs and after it ended.
-    internal sealed class CodexRequest(string what, string model, DateTimeOffset started)
+    internal sealed class CodexRequest(string what, string model, string? effort, DateTimeOffset started)
     {
         private DateTimeOffset? _finished;
         private long _tokens;
@@ -467,6 +520,38 @@ namespace Jularr.Backend.Service.Core
             _finished = DateTimeOffset.UtcNow;
         }
 
-        public CodexRequestV1 Snapshot() => new(What, Model, Started, (byte)State, _tokens, Math.Round(((_finished ?? DateTimeOffset.UtcNow) - Started).TotalSeconds, 1));
+        public CodexRequestV1 Snapshot() => new(What, Model, effort, Started, (byte)State, _tokens, Math.Round(((_finished ?? DateTimeOffset.UtcNow) - Started).TotalSeconds, 1));
+    }
+
+    // One chapter's requests together; changed inside the connection's lock. It ends Done unless a request failed.
+    internal sealed class CodexRun(int chapter, string? title, string model, string? effort, DateTimeOffset started)
+    {
+        private DateTimeOffset? _finished;
+        private CodexRequestState _failure;
+        private long _tokens;
+
+        public DateTimeOffset Started { get; } = started;
+        public CodexRequestState State { get; private set; }
+        public int Requests { get; private set; }
+
+        public void Add(long tokens)
+        {
+            Requests++;
+            _tokens += tokens;
+        }
+
+        public void Fail(CodexRequestState state)
+        {
+            Requests++;
+            _failure = state;
+        }
+
+        public void End()
+        {
+            State = _failure == CodexRequestState.Running ? CodexRequestState.Done : _failure;
+            _finished = DateTimeOffset.UtcNow;
+        }
+
+        public CodexRunV1 Snapshot() => new(chapter, title, model, effort, Started, (byte)State, Requests, _tokens, Math.Round(((_finished ?? DateTimeOffset.UtcNow) - Started).TotalSeconds, 1));
     }
 }

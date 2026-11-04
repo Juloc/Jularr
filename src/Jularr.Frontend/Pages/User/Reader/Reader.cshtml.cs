@@ -36,6 +36,9 @@ namespace Jularr.Frontend.Pages.User.Reader
         // The languages this book can be read in: its original first, then the profile's and the other allowed ones Mozilla's models reach.
         private string[] _languages = [];
         private string? _localTranslationModel;
+        // The model translates a chapter in whole-passage requests (Codex); Away: nothing translates because the translation machines do not answer.
+        private bool _localPassages;
+        private bool _translationAway;
 
         // A PDF without reading text, or whose reading text the profile did not ask for, opens as its original pages and says why, here, in a word.
         private string? _status;
@@ -164,7 +167,7 @@ namespace Jularr.Frontend.Pages.User.Reader
             var settings = Settings(false, _source?.HasPdf == true);
             // Without a configured language the panel says so and leads to where the profile sets it.
             var languages = _languages.Length == 0
-                ? new Div(new P(new Text("reader.language.none"))).Class("reader__panel")
+                ? new Div(new P(new Text(NoLanguageKey))).Class("reader__panel")
                     .Attribute("data-panel", "language").Attribute("hidden", "hidden").Attribute("aria-label", texts["reader.language"])
                 : new Div([.. new[] { "original" }.Concat(_languages).Select(code => new Button(new ValueText(LanguageName(code))).Class("button")
                     .Attribute("data-language-choice", code).Attribute("aria-pressed", code == Chosen(document) ? "true" : "false")),
@@ -281,6 +284,7 @@ namespace Jularr.Frontend.Pages.User.Reader
                 // A book in another language opens in the profile's, unless the profile chose another for it.
                 view.Attribute("data-translation-engine", "gemma")
                     .Attribute("data-local-model", _localTranslationModel ?? "")
+                    .Attribute("data-local-passages", _localPassages ? "true" : "false")
                     .Attribute("data-language", document.Language ?? document.OriginalLanguage ?? "")
                     .Attribute("data-reading-language", Chosen(document))
                     .Attribute("data-language-url", "/api/v1/reading/assets/" + asset + "/language")
@@ -289,7 +293,7 @@ namespace Jularr.Frontend.Pages.User.Reader
                     .Attribute("data-language-saving-label", texts["reader.language.saving"])
                     .Attribute("data-translation-failed-label", texts["reader.translationFailed"])
                     .Attribute("data-provider-original-label", texts["reader.translation.provider.original"])
-                    .Attribute("data-provider-local-label", texts["reader.translation.provider.local"]);
+                    .Attribute("data-provider-local-label", texts[_localPassages ? "reader.translation.provider.account" : "reader.translation.provider.local"]);
                 // The Mozilla module is an emergency only: with it on, a page the server cannot translate (or translates too slowly) falls back to the browser, which keeps its results in this browser.
                 if (texts.CanTranslateInBrowser())
                 {
@@ -422,7 +426,7 @@ namespace Jularr.Frontend.Pages.User.Reader
 
         // The languages the book can be read in; the choice is kept for the profile.
         private IUiComponent Languages(ReadingDocumentV1 document) => _languages.Length == 0
-            ? new Div(new P(new Text("reader.language.none"))).Class("reader__panel").Attribute("data-panel", "language").Attribute("hidden", "hidden").Attribute("aria-label", texts["reader.language"])
+            ? new Div(new P(new Text(NoLanguageKey))).Class("reader__panel").Attribute("data-panel", "language").Attribute("hidden", "hidden").Attribute("aria-label", texts["reader.language"])
             : new Div([.. new[] { "original" }.Concat(_languages).Select(code => new Button(new ValueText(LanguageName(code))).Class("button")
                 .Attribute("data-language-choice", code).Attribute("aria-pressed", code == Chosen(document) ? "true" : "false")),
                 new P().Attribute("data-role", "translation-status").Attribute("role", "status").Attribute("hidden", "hidden")])
@@ -794,7 +798,11 @@ namespace Jularr.Frontend.Pages.User.Reader
             return Page();
         }
 
-        // The profile's languages, offered where the server's TranslateGemma is installed. The Reader asks Mozilla for nothing (#1726).
+        // Without a language: the machines set up for translation do not answer, or nothing translates at all.
+        private string NoLanguageKey => _translationAway ? "reader.language.away" : "reader.language.none";
+
+        // The profile's languages, offered where a server model translates for this reader (TranslateGemma, else Codex for the Owner). The Reader asks
+        // Mozilla for nothing (#1726).
         private async Task<string[]> LanguagesAsync(CancellationToken ct)
         {
             var allowed = (await readLocales.ExecuteAsync<BaseDataList<UiLocaleDetailsV1>>(new ReadUiLocalesParametersV1(), ct))
@@ -803,12 +811,12 @@ namespace Jularr.Frontend.Pages.User.Reader
 
             try
             {
-                _localTranslationModel = (await readLocalAvailability.ExecuteAsync<LocalTranslationAvailabilityV1>(
-                    new LocalTranslationAvailabilityParametersV1(), ct)).Model;
+                var availability = await readLocalAvailability.ExecuteAsync<LocalTranslationAvailabilityV1>(new LocalTranslationAvailabilityParametersV1(), ct);
+                (_localTranslationModel, _localPassages, _translationAway) = (availability.Model, availability.Passages, availability.Away);
             }
             catch (ServiceUnavailableException)
             {
-                _localTranslationModel = null;
+                (_localTranslationModel, _localPassages, _translationAway) = (null, false, false);
             }
 
             return _localTranslationModel is not null ? candidates : [];

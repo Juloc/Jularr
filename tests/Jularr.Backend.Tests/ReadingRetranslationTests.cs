@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Jularr.Backend.Data.Admin.Ai.V1;
 using Jularr.Backend.Data.Admin.Translation.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.System.Reading.V1;
@@ -151,14 +152,84 @@ namespace Jularr.Backend.Tests
                 services: services => services.AddHttpClient<OllamaLocalModels>().ConfigurePrimaryHttpMessageHandler(() => ollama));
             await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'Translation'");
 
-            // The account's first model, else the one the Owner chose on the AI page; Codex re-translates chapters in whole passages, Ollama block by block.
-            CollectionAssert.AreEqual(new[] { Small + " False", Large + " False", "codex:gpt-test True" }, await ModelInfosAsync(host));
+            // The account's models, the one the Owner chose on the AI page first; Codex re-translates chapters in whole passages, Ollama block by block.
+            CollectionAssert.AreEqual(new[] { Small + " False", Large + " False", "codex:gpt-test True", "codex:gpt-ok True" }, await ModelInfosAsync(host));
             await host.Fixture.RunSqlAsync("UPDATE \"InstanceSettings\" SET \"CodexModel\" = 'gpt-ok' WHERE \"Id\" = 1");
-            CollectionAssert.Contains(await ModelInfosAsync(host), "codex:gpt-ok True");
+            CollectionAssert.AreEqual(new[] { Small + " False", Large + " False", "codex:gpt-ok True", "codex:gpt-test True" }, await ModelInfosAsync(host));
 
             // A Media Manager lacks instance.settings.update: Codex is not offered.
             await host.Fixture.RunSqlAsync("UPDATE \"Accounts\" SET \"AccountRoleTypeId\" = 3 WHERE \"Id\" = 41");
             CollectionAssert.AreEqual(new[] { Small + " False", Large + " False" }, await ModelInfosAsync(host));
+        }
+
+        [TestMethod]
+        public async Task Codex_WithoutAnAnsweringOllama_TranslatesTheOwnersChapterInPassages_AndOthersAreToldTheMachineIsAway()
+        {
+            using var storage = new TemporaryDirectory();
+            using var codex = new CodexTranslationTests.Folder();
+            codex.SignIn();
+            await using var host = await LibraryTests.CreateHostAsync(storage.Path, razor: true,
+                settings: new Dictionary<string, string> { ["LocalTranslation:Endpoint"] = "http://ollama:11434", ["Ai:CodexPath"] = codex.Executable, ["Ai:CodexHome"] = codex.Home },
+                services: services => services.AddHttpClient<OllamaLocalModels>().ConfigurePrimaryHttpMessageHandler(() => new AwayOllama()));
+            var (first, _) = await ReadingTests.CreateBooksAsync(host, storage.Path, "First Book", "Second Book");
+            var document = (await ReadingTests.OpenAsync(host, first)).DocumentId;
+            await host.Fixture.RunSqlAsync("UPDATE \"ReadingDocuments\" SET \"Language\" = 'en'");
+            await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'Translation'");
+            await host.Fixture.RunSqlAsync("UPDATE \"InstanceSettings\" SET \"TranslationModel\" = '" + Small + "', \"CodexModel\" = 'gpt-ok', \"CodexEffort\" = 'low' WHERE \"Id\" = 1");
+
+            // Ollama does not answer: the Owner's Reader translates with the Codex model of the AI page, in whole passages.
+            var owner = await AvailabilityAsync(host);
+            Assert.AreEqual("codex:gpt-ok", owner.Model);
+            Assert.IsTrue(owner.Passages);
+            Assert.IsFalse(owner.Away);
+
+            // The chapter's blocks in passage requests, kept as Codex's default text without a choice for other readers; asked again, nothing is missing.
+            var passages = Url(document, 0, "codex:gpt-ok") + "/passages";
+            using (var translated = await host.SendAsync(HttpMethod.Post, passages, new LocalReadingBlockDataV1("en")))
+            {
+                Assert.AreEqual(HttpStatusCode.OK, translated.StatusCode, await translated.Content.ReadAsStringAsync());
+                Assert.IsTrue((await translated.Content.ReadFromJsonAsync<LocalReadingRetranslationV1>(JsonSerializerOptions.Web))!.Translated > 0);
+            }
+            var asked = File.ReadAllLines(Path.Combine(codex.Home, "asked")).Length;
+            Assert.IsTrue(asked < Convert.ToInt64(await host.ScalarAsync("SELECT (\"Structure\" -> 'Sections' -> 0 ->> 'Blocks')::bigint FROM \"ReadingDocuments\" WHERE \"Id\" = " + document),
+                System.Globalization.CultureInfo.InvariantCulture), "fewer requests than blocks");
+            using (var read = await host.SendAsync(HttpMethod.Get, Url(document, 0, "codex:gpt-ok") + "?sourceLanguage=en"))
+            {
+                var section = (await read.Content.ReadFromJsonAsync<LocalReadingTranslationV1>(JsonSerializerOptions.Web))!;
+                Assert.IsTrue(Texts(section).Where(text => !string.IsNullOrEmpty(text)).All(text => text!.StartsWith("Translated by gpt-ok: ", StringComparison.Ordinal)), section.Blocks);
+            }
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"ReadingTranslationChoices\""));
+            using (var again = await host.SendAsync(HttpMethod.Post, passages, new LocalReadingBlockDataV1("en")))
+                Assert.AreEqual(0, (await again.Content.ReadFromJsonAsync<LocalReadingRetranslationV1>(JsonSerializerOptions.Web))!.Translated);
+            Assert.AreEqual(asked, File.ReadAllLines(Path.Combine(codex.Home, "asked")).Length);
+
+            // The AI page adds the chapter's requests up, with model and effort.
+            using (var activity = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/ai/codex/activity"))
+            {
+                var chapter = (await activity.Content.ReadFromJsonAsync<CodexActivityV1>(JsonSerializerOptions.Web))!.Chapters.Single();
+                Assert.AreEqual((1, "gpt-ok", "low", (byte)1, asked, 150L * asked), (chapter.Chapter, chapter.Model, chapter.Effort, chapter.State, chapter.Requests, chapter.Tokens));
+            }
+
+            // A Media Manager may not use Codex: nothing translates, and the Reader says the machine is away instead of hiding why.
+            await host.Fixture.RunSqlAsync("UPDATE \"Accounts\" SET \"AccountRoleTypeId\" = 3 WHERE \"Id\" = 41");
+            var manager = await AvailabilityAsync(host);
+            Assert.IsNull(manager.Model);
+            Assert.IsTrue(manager.Away);
+            using (var refused = await host.SendAsync(HttpMethod.Post, passages, new LocalReadingBlockDataV1("en")))
+                Assert.AreEqual(HttpStatusCode.Forbidden, refused.StatusCode);
+        }
+
+        private static async Task<LocalTranslationAvailabilityV1> AvailabilityAsync(Host host)
+        {
+            using var response = await host.SendAsync(HttpMethod.Get, "/api/v1/translation/local/availability");
+            Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, await response.Content.ReadAsStringAsync());
+            return (await response.Content.ReadFromJsonAsync<LocalTranslationAvailabilityV1>(JsonSerializerOptions.Web))!;
+        }
+
+        // An Ollama machine that is set up but does not answer.
+        private sealed class AwayOllama : HttpMessageHandler
+        {
+            protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) => throw new HttpRequestException("Connection refused");
         }
 
         private static async Task<string[]> ModelInfosAsync(Host host)

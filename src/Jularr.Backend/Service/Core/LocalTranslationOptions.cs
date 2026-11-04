@@ -97,6 +97,9 @@ namespace Jularr.Backend.Service.Core
         // A machine that did not answer or failed a block rests; the next in the order takes its work.
         public void Fail(Uri server) => _resting[server] = time.GetUtcNow() + Rest;
 
+        // Machines are set up, and every one of them rests after it did not answer.
+        public bool AllResting(string[] saved) => Order(saved) is { Length: > 0 } order && order.All(_resting.ContainsKey);
+
         // The background questions still open.
         internal Task WakingAsync() => Task.WhenAll(_waking.Values);
 

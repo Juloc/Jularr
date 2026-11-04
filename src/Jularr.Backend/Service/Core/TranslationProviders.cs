@@ -41,6 +41,9 @@ namespace Jularr.Backend.Service.Core
 
         // The machine dropped out: the next choice passes it over for a while.
         void Fail(TranslationMachine machine);
+
+        // Set up with machines of its own, yet none of them answers now (the Reader says so instead of offering nothing).
+        bool IsAway(TranslationSetupV1 setup) => false;
     }
 
     internal sealed record TranslationMachine(ITranslationProvider Provider, string Model, Uri Address)
@@ -86,6 +89,22 @@ namespace Jularr.Backend.Service.Core
             foreach (var provider in _providers)
                 if (await provider.ChooseAsync(setup, null, ct) is { } machine) return machine;
             return null;
+        }
+
+        // What translates a book for this caller by default: the machine above, else for a holder of the admin-only right the first model an admin-only
+        // provider offers now (Codex while no local model answers); Away when nothing translates because a provider set up with machines has none answering.
+        public async Task<(TranslationMachine? Machine, bool Away)> ChooseForAsync(TranslationSetupV1 setup, ServiceCaller caller, CancellationToken ct)
+        {
+            if (await ChooseAsync(setup, ct) is { } machine) return (machine, false);
+            if (MayUseAdminOnly(caller))
+            {
+                foreach (var provider in _providers.Where(provider => provider.IsAdminOnly))
+                {
+                    if ((await provider.AvailableAsync(setup, ct)).FirstOrDefault() is { } model && await provider.ChooseAsync(setup, model, ct) is { } admin) return (admin, false);
+                }
+            }
+
+            return (null, _providers.Any(provider => provider.IsAway(setup)));
         }
 
         // The right that admits an admin-only provider's models, the one the Owner's re-translation by whole passages needs too.
@@ -143,5 +162,7 @@ namespace Jularr.Backend.Service.Core
             (await models.TranslateAsync(machine.Address, machine.Model, source, target, text, ct)).Text;
 
         public void Fail(TranslationMachine machine) => machines.Fail(machine.Address);
+
+        public bool IsAway(TranslationSetupV1 setup) => machines.AllResting(setup.Machines);
     }
 }

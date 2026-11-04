@@ -98,13 +98,29 @@ namespace Jularr.Backend.Data.Admin.Ai.V1
         public CodexUsageWindowV1[] Windows { get; } = windows;
     }
 
-    // One request to Codex: what it was for, the model, how it ended (0 running, 1 done, 2 failed, 3 plan limit) and what it cost.
-    public sealed class CodexRequestV1(string what, string model, DateTimeOffset started, byte state, long tokens, double seconds)
+    // One request to Codex: what it was for, the model and effort (null: Codex's own), how it ended (0 running, 1 done, 2 failed, 3 plan limit) and what it cost.
+    public sealed class CodexRequestV1(string what, string model, string? effort, DateTimeOffset started, byte state, long tokens, double seconds)
     {
         public string What { get; } = what;
         public string Model { get; } = model;
+        public string? Effort { get; } = effort;
         public DateTimeOffset Started { get; } = started;
         public byte State { get; } = state;
+        public long Tokens { get; } = tokens;
+        public double Seconds { get; } = seconds;
+    }
+
+    // One chapter translated in whole passages (a re-translation, or the Reader's translation with Codex): its number from 1 and title, the model and effort,
+    // how it ended (as a request), and its requests, tokens and seconds together.
+    public sealed class CodexRunV1(int chapter, string? title, string model, string? effort, DateTimeOffset started, byte state, int requests, long tokens, double seconds)
+    {
+        public int Chapter { get; } = chapter;
+        public string? Title { get; } = title;
+        public string Model { get; } = model;
+        public string? Effort { get; } = effort;
+        public DateTimeOffset Started { get; } = started;
+        public byte State { get; } = state;
+        public int Requests { get; } = requests;
         public long Tokens { get; } = tokens;
         public double Seconds { get; } = seconds;
     }
@@ -115,10 +131,11 @@ namespace Jularr.Backend.Data.Admin.Ai.V1
         public long Tokens { get; } = tokens;
     }
 
-    // What Jularr's Codex translation is doing and has done: the running and the last requests, the tokens per day of the last 30 days, and until when the account's
+    // What Jularr's Codex translation is doing and has done: the running and the last chapters and requests, the tokens per day of the last 30 days, and until when the account's
     // usage limit rests it (null when it is not limited).
-    public sealed class CodexActivityV1(CodexRequestV1[] requests, CodexDayV1[] days, DateTimeOffset? planLimitedUntil) : BaseResponse
+    public sealed class CodexActivityV1(CodexRunV1[] chapters, CodexRequestV1[] requests, CodexDayV1[] days, DateTimeOffset? planLimitedUntil) : BaseResponse
     {
+        public CodexRunV1[] Chapters { get; } = chapters;
         public CodexRequestV1[] Requests { get; } = requests;
         public CodexDayV1[] Days { get; } = days;
         public DateTimeOffset? PlanLimitedUntil { get; } = planLimitedUntil;

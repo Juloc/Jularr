@@ -2,7 +2,7 @@ import './reader.scss';
 import '../Speech/settings.entry.scss';
 import { progressReporter } from '../Tracking/Progress';
 import { findings, highlights } from './highlights';
-import { translator } from './Translation/translation';
+import { modelName, translator } from './Translation/translation';
 import { initializeRetranslation } from './Translation/Retranslate';
 import { createTranslationWorker } from './Translation/worker';
 import { initializeReaderChrome, initializeReaderSettings } from './Settings';
@@ -203,7 +203,7 @@ function initializeText(reader: HTMLElement, address: URL): void {
         const language = reader.dataset.readingLanguage ?? 'original';
         provider.textContent = language === 'original' ? (reader.dataset.providerOriginalLabel ?? '')
             : reader.dataset.translationEngine === 'gemma'
-                ? (reader.dataset.providerLocalLabel ?? 'TranslateGemma') + ' · ' + (localModel ?? '')
+                ? (reader.dataset.providerLocalLabel ?? 'TranslateGemma') + ' · ' + modelName(localModel ?? '')
                 : reader.dataset.providerBrowserLabel ?? 'Mozilla/Bergamot';
     };
     let reading = reader.dataset.readingLanguage ?? 'original';

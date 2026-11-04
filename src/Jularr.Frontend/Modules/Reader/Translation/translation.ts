@@ -365,17 +365,21 @@ export function translator(reader: HTMLElement, content: HTMLElement, createWork
         const { list, result, bridge } = set;
         const models: (string | null)[] = list.map(() => null);
         const chosen = new Set<number>();
-        const cached = await fetch(url + "?sourceLanguage=" + encodeURIComponent(source), { credentials: "same-origin" });
-        if (cached.ok) {
+        // The server's texts of the section; each replaces what stood in for it.
+        async function load() {
+            const cached = await fetch(url + "?sourceLanguage=" + encodeURIComponent(source!), { credentials: "same-origin" });
+            if (!cached.ok) return;
             const data = await cached.json() as { blocks: string; models?: (string | null)[] };
             const saved = JSON.parse(data.blocks) as string[];
             if (Array.isArray(saved) && saved.length === result.length) saved.forEach((text, i) => {
-                if (typeof text === "string") {
+                if (typeof text === "string" && !chosen.has(i)) {
                     result[i] = text;
-                    models[i] = data.models?.[i] ?? model;
+                    models[i] = data.models?.[i] ?? model!;
+                    bridge[i] = false;
                 }
             });
         }
+        await load();
         if (!alive()) return;
         shown = { result, bridge, models, chosen };
         show(result);
@@ -385,6 +389,26 @@ export function translator(reader: HTMLElement, content: HTMLElement, createWork
         if (await recall(set)) {
             if (!alive()) return;
             show(result);
+        }
+
+        // A model that translates whole passages (Codex) is asked once for the section's missing blocks, not once per block.
+        if (reader.dataset.localPassages === "true") {
+            if (list.some((text, i) => text.trim().length > 0 && (!result[i].trim() || bridge[i]))) {
+                say(reader.dataset.translatingLabel);
+                const response = await fetch(url + "/passages", {
+                    method: "POST", credentials: "same-origin",
+                    headers: { "Content-Type": "application/json", RequestVerificationToken: reader.dataset.antiforgery! },
+                    body: JSON.stringify({ sourceLanguage: source })
+                });
+                if (!response.ok) throw new Error("The model could not translate the section.");
+                if (!alive()) return;
+                await load();
+                if (!alive()) return;
+                show(result);
+                label();
+            }
+            if (alive()) say(undefined);
+            return;
         }
 
         const total = list.filter(text => text.trim().length > 0).length;
@@ -468,7 +492,7 @@ export function translator(reader: HTMLElement, content: HTMLElement, createWork
                     reader.dataset.translationEngine = 'gemma';
                     const provider = reader.querySelector<HTMLElement>('[data-translation-provider]');
                     if (provider) provider.textContent =
-                        (reader.dataset.providerLocalLabel ?? 'TranslateGemma') + ' · ' + reader.dataset.localModel;
+                        (reader.dataset.providerLocalLabel ?? 'TranslateGemma') + ' · ' + modelName(reader.dataset.localModel);
                     await translateLocal(target, generation);
                     if (current === target && generation === revision) reader.dataset.translationState = 'ready';
                     return;
