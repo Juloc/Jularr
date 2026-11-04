@@ -135,7 +135,7 @@ namespace Jularr.Frontend.Pages.Admin.Downloads
         private IEnumerable<IUiComponent> HeadButtons(string? csrf)
         {
             var shown = Shown();
-            yield return IconLink("bell", string.Format(CultureInfo.CurrentCulture, texts["downloads.warnings"], shown.Sum(client => client.WarningCount)), "/Admin/Activity?Filter=Errors");
+            yield return IconLink("bell", string.Format(CultureInfo.CurrentCulture, texts["downloads.warnings"], shown.Sum(client => client.WarningCount)), "/Admin/Queue");
             var paused = shown.Sum(client => client.PausedCount);
             var open = shown.Sum(client => client.QueueCount);
             yield return paused > 0 && paused == open

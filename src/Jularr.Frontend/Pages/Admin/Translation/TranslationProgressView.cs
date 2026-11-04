@@ -28,6 +28,10 @@ namespace Jularr.Frontend.Pages.Admin.Translation
             return new Div([.. parts]).Class("feature-card").Attribute("data-translation-progress", "").Attribute("role", "status");
         }
 
+        // Where in its book the job works now: the volume, the section and the language it translates into.
+        public static string Where(BookTranslationCurrentV1 current, UiText texts) => (current.Volume is { } volume ? texts["translation.progress.volume"] + " " + volume + " · " : "")
+            + texts["translation.progress.section"] + " " + current.Section.ToString(CultureInfo.CurrentCulture) + " → " + Language(current.Language);
+
         // What happens now first, then the pace and the time left, then the totals per language.
         public static IReadOnlyList<IUiComponent> Summary(BookTranslationProgressV1 progress, UiText texts)
         {
@@ -36,9 +40,7 @@ namespace Jularr.Frontend.Pages.Admin.Translation
             if (progress.IssueKey is { } issue) parts.Add(new P(new Text("translation.progress.issue." + issue)).Attribute("role", "alert"));
             else if (progress.Current is { } current)
             {
-                var where = current.Title + (current.Volume is { } volume ? " · " + texts["translation.progress.volume"] + " " + volume : "") + " · "
-                    + texts["translation.progress.section"] + " " + current.Section.ToString(CultureInfo.CurrentCulture) + " → " + Language(current.Language);
-                parts.Add(new P(new ValueText(string.Format(CultureInfo.CurrentCulture, texts["translation.progress.now"], where))).Class("translation-progress__now"));
+                parts.Add(new P(new ValueText(string.Format(CultureInfo.CurrentCulture, texts["translation.progress.now"], current.Title + " · " + Where(current, texts)))).Class("translation-progress__now"));
                 if (current.SecondsWithoutProgress >= 120)
                     parts.Add(new P(new ValueText(texts["translation.progress.stalled"] + " " + Duration(current.SecondsWithoutProgress))).Attribute("role", "alert"));
             }

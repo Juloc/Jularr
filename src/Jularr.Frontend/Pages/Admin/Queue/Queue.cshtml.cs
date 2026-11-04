@@ -11,12 +11,12 @@ using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
 
-namespace Jularr.Frontend.Pages.Admin.Activity
+namespace Jularr.Frontend.Pages.Admin.Queue
 {
     // The queue on the list kit, as Sonarr's: the media-type bar on top, the entry's views (Queue, History, Blocked), then the open downloads in four groups, what needs the owner first (needs help, to import),
     // then what downloads and what waits in the downloader; each entry a row with what a person can do with it and a drawer of details.
     // Scans, imports and background jobs are no downloads: they and their failures show on the Jobs page and the Dashboard.
-    public sealed class ActivityModel(ReadActivityV1 read, ReadActivitySummaryV1 summary, RetryActivityV1 retry, DismissActivityV1 dismiss, SaveActivitySourceLinkV1 sourceLink, RemoveActivityDownloadV1 remove,
+    public sealed class QueueModel(ReadActivityV1 read, ReadActivitySummaryV1 summary, RetryActivityV1 retry, DismissActivityV1 dismiss, SaveActivitySourceLinkV1 sourceLink, RemoveActivityDownloadV1 remove,
         PauseActivityDownloadV1 pause, RetryActivityImportV1 retryImport, PauseActivityQueueV1 pauseQueue, ReadTorrentFilesV1 torrentFiles, IAntiforgery antiforgery, UiText texts, FrontendAssets assets) : JularrPage
     {
         private PageResult<ActivityItemV1>? _items;
@@ -42,18 +42,18 @@ namespace Jularr.Frontend.Pages.Admin.Activity
         [BindProperty(SupportsGet = true, Name = "files")]
         public bool ShowFiles { get; set; }
 
-        private ActivityViews? _views;
+        private QueueViews? _views;
 
-        private ActivityViews Views => _views ??= new ActivityViews(Types, texts, Request);
+        private QueueViews Views => _views ??= new QueueViews(Types, texts, Request);
 
         // The queue holds what is open, which is a few dozen entries: one read takes up to the most a read allows and sets it into its groups, what needs a person first.
         private const int QueueSize = PageRequest.MaximumPageSize;
 
         protected override void Define(Page page)
         {
-            page.Title("admin.activity.title");
+            page.Title("admin.queue.title");
             page.Navigation("nav.admin");
-            page.Asset("Pages/Admin/Activity/Activity.entry.scss");
+            page.Asset("Pages/Admin/Queue/Queue.entry.scss");
             page.Asset("Framework/Components/LiveProgress.entry.ts");
             page.Asset("Framework/Components/Truncated.entry.ts");
             page.Asset("Framework/Components/Drawer.entry.ts");
@@ -147,7 +147,7 @@ namespace Jularr.Frontend.Pages.Admin.Activity
         private ActionDock Dock(string? csrf)
         {
             var actions = new List<IUiComponent>();
-            if (!ShowFiles && _items is { Items.Count: > 0 })
+            if (!ShowFiles && _items is { } open && open.Items.Any(item => item.OperationTypeId == OperationType.Download))
             {
                 actions.Add(QueueButton("PauseAll", "pause", "activity.pauseAll", csrf));
                 actions.Add(QueueButton("ResumeAll", "play", "activity.resumeAll", csrf));
@@ -164,68 +164,24 @@ namespace Jularr.Frontend.Pages.Admin.Activity
             ? new ListIdentity(new IconTile(Glyph("download"), UiTone.Info), new A(new Truncated(item.WorkTitle ?? "")).Class("list-identity__title").Attribute("href", "/Admin/Works/" + workId.ToString(CultureInfo.InvariantCulture)), new Truncated(item.Title))
             : new ListIdentity(new IconTile(Glyph("download"), UiTone.Info), new Truncated(item.Title), new Text("operation.type.Download"));
 
-        // The stream sets this marker; the state pill takes its tone from it.
-        private static string Phase(ActivityItemV1 item)
-        {
-            var running = item.OperationStatusTypeId is OperationStatusType.Queued or OperationStatusType.Running;
-            return (item.IsWaiting ? "waiting" : (running && item.DownloadStateTypeId is { } state ? state.ToString() : item.OperationStatusTypeId.ToString())).ToLowerInvariant();
-        }
-
-        private static string PhaseIcon(string phase) => phase switch
-        {
-            "downloading" => "download",
-            "paused" => "pause",
-            "postprocessing" or "running" => "sync",
-            "completed" => "check",
-            "failed" => "alert",
-            _ => "clock"
-        };
-
-        // A waiting or failed entry says why; a running one how far it is. The stream keeps the label, the bar and the reason current; the pill's tone follows the phase.
-        private IUiComponent Status(ActivityItemV1 item)
-        {
-            var says = Says(item);
-            var phase = Phase(item);
-            var label = LivePart("status", LiveEntities.OperationStatus(texts, item.IsWaiting, item.OperationStatusTypeId, says ? null : item.DownloadStateTypeId), "state-chip__live");
-            return new Div(new StateChip(label, UiTone.Neutral, Glyph(PhaseIcon(phase), 14)),
-                LiveBar(says ? null : item.ProgressPercent),
-                LivePart("reason", says ? LiveEntities.Reason(texts, item.OperationTypeId, item.ReasonKey) : "", "live-progress__facts"))
-                .Class("live-progress list-phase activity-status").Attribute("data-live", LiveKeys.Operation(item.Id)).Attribute("data-phase", phase);
-        }
-
         // The client and the indexer of a download.
         private static IUiComponent Source(ActivityItemV1 item) => new Span(new Truncated(LiveFacts.Join(item.ConnectionName, item.IndexerName))).Class("list-value list-value--fill");
 
         // The pace above, the size and time left below.
         private IUiComponent Transfer(ActivityItemV1 item)
         {
-            var says = Says(item);
+            var says = OperationState.Says(item);
             return new Div(
-                LivePart("speed", says ? "" : LiveEntities.OperationSpeed(texts, item.OperationStatusTypeId, item.DownloadStateTypeId, item.BytesPerSecond), "activity-transfer__speed"),
-                LivePart("detail", says ? "" : LiveEntities.OperationDetail(item.ProgressPercent, item.SizeBytes, item.RemainingBytes, item.EtaSeconds), "activity-transfer__detail"))
+                OperationState.LivePart("speed", says ? "" : LiveEntities.OperationSpeed(texts, item.OperationStatusTypeId, item.DownloadStateTypeId, item.BytesPerSecond), "activity-transfer__speed"),
+                OperationState.LivePart("detail", says ? "" : LiveEntities.OperationDetail(item.ProgressPercent, item.SizeBytes, item.RemainingBytes, item.EtaSeconds), "activity-transfer__detail"))
                 .Class("activity-transfer").Attribute("data-live", LiveKeys.Operation(item.Id));
-        }
-
-        private static bool Says(ActivityItemV1 item) => item.ReasonKey is not null && (item.IsWaiting || item.OperationStatusTypeId is OperationStatusType.Failed or OperationStatusType.Queued or OperationStatusType.Running);
-
-        private static IUiComponent LivePart(string name, string text, string className)
-        {
-            var part = new Span(new ValueText(text)).Class(className).Attribute("data-live-text", name);
-            return text.Length == 0 ? part.Attribute("hidden", "hidden") : part;
-        }
-
-        // An entry that says why it waits or failed has no bar: the stream drops it too, so the row keeps its height when the first snapshot arrives.
-        private static IUiComponent LiveBar(int? percent)
-        {
-            var bar = new Progress().Attribute("max", "100").TextAttribute("aria-label", "live.progress").Class("live-progress__bar").Attribute("data-live-value", "percent");
-            return percent is { } value ? bar.Attribute("value", value.ToString(CultureInfo.InvariantCulture)) : bar.Attribute("hidden", "hidden");
         }
 
         private ListRow QueueRow(ActivityItemV1 item, string? csrf)
         {
             // A download without a known client or indexer has no source line on the phone card.
             var source = LiveFacts.Join(item.ConnectionName, item.IndexerName);
-            var row = new ListRow([Identity(item), Status(item), Source(item), Transfer(item), RowActions(item, csrf)], string.IsNullOrEmpty(source) ? [] : [ListPanel.Fact("activity.source", new ValueText(source))]);
+            var row = new ListRow([Identity(item), OperationState.Status(item, texts, assets), Source(item), Transfer(item), RowActions(item, csrf)], string.IsNullOrEmpty(source) ? [] : [ListPanel.Fact("activity.source", new ValueText(source))]);
             if (item.OperationStatusTypeId == OperationStatusType.Failed) row.Tinted(UiTone.Danger);
             else if (item.IsWaiting) row.Tinted(UiTone.Warning);
             return row;
@@ -267,13 +223,13 @@ namespace Jularr.Frontend.Pages.Admin.Activity
         // One entry from the right: how far it is, what it is, and everything a person can do with it; the drawer of the entry its address names stands open.
         private IUiComponent DrawerOf(ActivityItemV1 item, string? csrf)
         {
-            var says = Says(item);
-            var phase = Phase(item);
-            var state = new Div(new StateChip(LivePart("status", LiveEntities.OperationStatus(texts, item.IsWaiting, item.OperationStatusTypeId, says ? null : item.DownloadStateTypeId), "state-chip__live"), UiTone.Neutral, Glyph(PhaseIcon(phase), 14)),
-                LiveBar(says ? null : item.ProgressPercent),
-                LivePart("speed", says ? "" : LiveEntities.OperationSpeed(texts, item.OperationStatusTypeId, item.DownloadStateTypeId, item.BytesPerSecond), "live-progress__facts"),
-                LivePart("detail", says ? "" : LiveEntities.OperationDetail(item.ProgressPercent, item.SizeBytes, item.RemainingBytes, item.EtaSeconds), "live-progress__facts"),
-                LivePart("reason", says ? LiveEntities.Reason(texts, item.OperationTypeId, item.ReasonKey) : "", "live-progress__facts"))
+            var says = OperationState.Says(item);
+            var phase = OperationState.Phase(item);
+            var state = new Div(new StateChip(OperationState.LivePart("status", LiveEntities.OperationStatus(texts, item.IsWaiting, item.OperationStatusTypeId, says ? null : item.DownloadStateTypeId), "state-chip__live"), UiTone.Neutral, Glyph(OperationState.PhaseIcon(phase), 14)),
+                OperationState.LiveBar(says ? null : item.ProgressPercent),
+                OperationState.LivePart("speed", says ? "" : LiveEntities.OperationSpeed(texts, item.OperationStatusTypeId, item.DownloadStateTypeId, item.BytesPerSecond), "live-progress__facts"),
+                OperationState.LivePart("detail", says ? "" : LiveEntities.OperationDetail(item.ProgressPercent, item.SizeBytes, item.RemainingBytes, item.EtaSeconds), "live-progress__facts"),
+                OperationState.LivePart("reason", says ? LiveEntities.Reason(texts, item.OperationTypeId, item.ReasonKey) : "", "live-progress__facts"))
                 .Class("live-progress list-phase activity-status activity-status--drawer").Attribute("data-live", LiveKeys.Operation(item.Id)).Attribute("data-phase", phase);
 
             var facts = new List<(string, IUiComponent)>();
@@ -371,7 +327,7 @@ namespace Jularr.Frontend.Pages.Admin.Activity
         public async Task<IActionResult> OnGetAsync()
         {
             // The finished downloads are the History view now.
-            if (Filter == ActivityFilterType.History) return LocalRedirect(Views.Address("/Admin/History"));
+            if (Filter == ActivityFilterType.History) return LocalRedirect(Views.Address("/Admin/Queue/History"));
             await LoadDataAsync();
             PreparePage();
             return Page();
@@ -462,7 +418,7 @@ namespace Jularr.Frontend.Pages.Admin.Activity
             if (files ?? (types is null && ShowFiles)) more.Add("files=true");
             if (handler is not null) more.Add("handler=" + handler);
             if (operation is { } open) more.Add("operation=" + open.ToString(CultureInfo.InvariantCulture));
-            return Views.Address("/Admin/Activity", types, [.. more]);
+            return Views.Address("/Admin/Queue", types, [.. more]);
         }
     }
 }

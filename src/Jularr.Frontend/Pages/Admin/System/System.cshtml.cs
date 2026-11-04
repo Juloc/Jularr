@@ -26,8 +26,8 @@ namespace Jularr.Frontend.Pages.Admin.System
                 ("table.version", new ValueText(Version)),
                 ("system.database", new ValueText(ByteSize.Format(health.DatabaseBytes))),
                 ("system.profiles", new ValueText(health.Profiles.ToString(CultureInfo.CurrentCulture))),
-                ("system.queued", Link(health.QueuedOperations.ToString(CultureInfo.CurrentCulture), "/Admin/Activity")),
-                ("system.failed", Link(health.FailedOperations.ToString(CultureInfo.CurrentCulture), "/Admin/Activity")),
+                ("system.queued", Link(health.QueuedOperations.ToString(CultureInfo.CurrentCulture), "/Admin/Queue")),
+                ("system.failed", Link(health.FailedOperations.ToString(CultureInfo.CurrentCulture), "/Admin/Queue")),
                 ("system.catalogTitles", new ValueText(health.CatalogWorks.ToString("N0", CultureInfo.CurrentCulture))),
                 ("system.storageOffline", Link(health.StorageOffline.ToString(CultureInfo.CurrentCulture), "/Admin/Storage")),
                 ("system.lastBackup", Link(health.LastBackupAt is { } backedUp ? new LocalTime(backedUp) : new ValueText(texts["system.never"]), "/Admin/Backup"))]));

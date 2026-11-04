@@ -7,7 +7,7 @@ using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Service.Admin.Activity.V1;
 using Jularr.Backend.Service.Admin.Wanted.V1;
 using Jularr.Frontend.Framework;
-using Jularr.Frontend.Pages.Admin.Activity;
+using Jularr.Frontend.Pages.Admin.Queue;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
@@ -18,7 +18,7 @@ namespace Jularr.Frontend.Pages.Admin.Blocked
     public sealed class BlockedModel(ReadBlockedReleasesV1 read, MarkWantedReleaseV1 mark, IAntiforgery antiforgery, FrontendAssets assets, UiText texts) : JularrPage
     {
         private PageResult<BlockedReleaseV1>? _releases;
-        private ActivityViews? _views;
+        private QueueViews? _views;
 
         [BindProperty(SupportsGet = true)]
         public int PageNumber { get; set; } = 1;
@@ -27,7 +27,7 @@ namespace Jularr.Frontend.Pages.Admin.Blocked
         [BindProperty(SupportsGet = true, Name = "type")]
         public string[] Types { get; set; } = [];
 
-        private ActivityViews Views => _views ??= new ActivityViews(Types, texts, Request);
+        private QueueViews Views => _views ??= new QueueViews(Types, texts, Request);
 
         protected override void Define(Page page)
         {
@@ -39,7 +39,7 @@ namespace Jularr.Frontend.Pages.Admin.Blocked
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
 
             page.NoPageRow();
-            page.Content.Add(new MediaTypeBar(assets, Views.Scopes.ListedSlugs, Views.Scopes.ChosenSlugs, "library.scope.", types => Views.Address("/Admin/Activity/Blocked", types)));
+            page.Content.Add(new MediaTypeBar(assets, Views.Scopes.ListedSlugs, Views.Scopes.ChosenSlugs, "library.scope.", types => Views.Address("/Admin/Queue/Blocked", types)));
             page.Content.Add(new ListToolbar(Views.Tabs()));
             if (_releases is { } releases)
             {
@@ -91,6 +91,6 @@ namespace Jularr.Frontend.Pages.Admin.Blocked
             _releases = await read.ExecuteAsync<PageResult<BlockedReleaseV1>>(new ReadBlockedReleasesParametersV1(Math.Max(1, PageNumber), 25, types, subtypes), HttpContext.RequestAborted);
         }
 
-        private string Address(string? handler = null) => Views.Address("/Admin/Activity/Blocked", null, [handler is null ? null : "handler=" + handler]);
+        private string Address(string? handler = null) => Views.Address("/Admin/Queue/Blocked", null, [handler is null ? null : "handler=" + handler]);
     }
 }

@@ -2,12 +2,12 @@ using Microsoft.AspNetCore.Http;
 
 namespace Jularr.Frontend.Framework
 {
-    // The figure an entry of the administration menu wears: how many downloads are open, how many jobs failed, how many requests wait.
+    // The figure an entry of the administration menu wears: how many downloads are open, how many of Jularr's own tasks need help, how many requests wait.
     public enum AdminCounter
     {
         None,
         OpenDownloads,
-        FailedJobs,
+        TasksNeedingHelp,
         OpenRequests
     }
 
@@ -50,18 +50,13 @@ namespace Jularr.Frontend.Framework
             new("admin.menu.group.operations",
             [
                 new("dashboard", "admin.dashboard.title", "dashboard", [new("admin.dashboard.title", "/Admin/Dashboard", Admin)], UserMenu: true),
-                new("activity", "admin.menu.activity", "activity",
-                [
-                    new("admin.activity.title", "/Admin/Activity", Media, ["Library"]),
-                    new("admin.history.title", "/Admin/History", Media, ["Library"]),
-                    new("admin.blocked.title", "/Admin/Activity/Blocked", Right("wanted.update"), ["Requests"])
-                ], AdminCounter.OpenDownloads),
-                new("wanted", "admin.wanted.title", "bookmark", [new("admin.wanted.title", "/Admin/Wanted", Right("wanted.update"), ["Requests"])]),
+                // As Sonarr's System → Tasks: what Jularr's own tasks do now, then the schedule of the background jobs.
                 new("jobs", "admin.jobs.title", "pulse",
                 [
-                    new("admin.jobs.title", "/Admin/Jobs", Admin),
+                    new("admin.tasks.title", "/Admin/Jobs/Tasks", Admin),
+                    new("admin.schedule.title", "/Admin/Jobs", Admin),
                     new("admin.transcoding.title", "/Admin/Transcoding", Admin, ["Library", "Playback"])
-                ], AdminCounter.FailedJobs)
+                ], AdminCounter.TasksNeedingHelp)
             ]),
             new("admin.menu.group.content",
             [
@@ -90,6 +85,14 @@ namespace Jularr.Frontend.Framework
             ]),
             new("nav.group.acquisition",
             [
+                // As Sonarr's Activity: the downloads with their own imports, what happened to the media and the releases not taken again; then what is still missing.
+                new("queue", "admin.queue.title", "activity",
+                [
+                    new("admin.queue.title", "/Admin/Queue", Media, ["Library"]),
+                    new("admin.history.title", "/Admin/Queue/History", Media, ["Library"]),
+                    new("admin.blocked.title", "/Admin/Queue/Blocked", Right("wanted.update"), ["Requests"])
+                ], AdminCounter.OpenDownloads),
+                new("wanted", "admin.wanted.title", "bookmark", [new("admin.wanted.title", "/Admin/Wanted", Right("wanted.update"), ["Requests"])]),
                 new("acquisition", "acquisition.role.Search", "search",
                 [
                     new("acquisition.role.Search", "/Admin/Acquisition", Acquisition, ["Acquisition"]),

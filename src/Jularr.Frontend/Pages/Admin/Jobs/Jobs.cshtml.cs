@@ -21,7 +21,8 @@ using Microsoft.AspNetCore.Mvc.ModelBinding;
 
 namespace Jularr.Frontend.Pages.Admin.Jobs
 {
-    // Every background job with its state and the Owner's controls, and below it what the operations did; both are lists of the shared list kit.
+    // The Schedule of the Jobs entry: every background job with its state and the Owner's controls, and below it what Jularr's own tasks did; both are lists of the shared list kit.
+    // What runs, waits or needs help now is the entry's Tasks page.
     public sealed class JobsModel(ReadWorkerJobsV1 read, ReadBookTranslationProgressV1 readTranslation, PauseWorkerJobV1 pause, RunWorkerJobV1 run, SetWorkerJobUseV1 use, ReadActivityV1 readHistory, ReadHealthV1 readHealth, FrontendAssets assets, IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         private const string Address = "/Admin/Jobs";
@@ -82,7 +83,7 @@ namespace Jularr.Frontend.Pages.Admin.Jobs
 
         protected override void Define(Page page)
         {
-            page.Title("admin.jobs.title");
+            page.Title("admin.schedule.title");
             page.Navigation("nav.admin");
             page.Asset("Pages/Admin/Jobs/Jobs.entry.scss");
             page.Asset("Framework/Components/Drawer.entry.ts");
@@ -119,13 +120,13 @@ namespace Jularr.Frontend.Pages.Admin.Jobs
             page.Content.Add(new ListPanel("jobs.list", columns, rows, empty).Modifier("jobs-list").Paged(PageSize));
             page.Content.AddRange(visible.Select(job => Details(job, csrf, canControl)));
 
-            // What the queue did, newest first.
+            // What Jularr's own tasks did, newest first (downloads are the Queue's).
             if (_history is { } history)
             {
                 var list = history.Items.Count > 0
                     ? new ListPanel("jobs.history", [new ListColumn("jobs.job", ListRole.Main), new ListColumn("table.status", ListRole.Status), new ListColumn("jobs.when")], [.. history.Items.Select(HistoryRow)]).Modifier("jobs-history")
                     : (IUiComponent)new P(new Text("jobs.history.empty"));
-                page.Content.Add(new Div(new H2(new Text("jobs.history")), list, new A(new Text("jobs.allActivity")).Attribute("href", "/Admin/Activity?Filter=History")).Class("jobs-history-block"));
+                page.Content.Add(new Div(new H2(new Text("jobs.history")), list).Class("jobs-history-block"));
             }
 
             if (FormError is not null) page.Content.Add(new P(new Text(FormError.ResourceKey)).Attribute("role", "alert"));
@@ -408,7 +409,7 @@ namespace Jularr.Frontend.Pages.Admin.Jobs
 
             if (texts.Can("media.read"))
             {
-                _history = await readHistory.ExecuteAsync<PageResult<ActivityItemV1>>(new ReadActivityParametersV1(ActivityFilterType.History, 1, 10), ct);
+                _history = await readHistory.ExecuteAsync<PageResult<ActivityItemV1>>(new ReadActivityParametersV1(ActivityFilterType.History, 1, 10, tasksOnly: true), ct);
             }
         }
     }

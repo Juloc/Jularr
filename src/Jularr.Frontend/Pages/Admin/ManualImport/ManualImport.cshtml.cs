@@ -189,7 +189,7 @@ namespace Jularr.Frontend.Pages.Admin.ManualImport
             page.Content.Add(new PostForm(Route, csrf, hidden, [.. parts]).Class("manual-import").Attribute("id", "manual-import"));
 
             // The dock: where else to look, and the one thing to do with the chosen files.
-            var more = IsDownload ? new A(Glyph("activity", 16), new Span(new Text("manualImport.backToQueue")).Class("action-dock__text")).Class("button").Attribute("href", "/Admin/Activity")
+            var more = IsDownload ? new A(Glyph("activity", 16), new Span(new Text("manualImport.backToQueue")).Class("action-dock__text")).Class("button").Attribute("href", "/Admin/Queue")
                 : new A(Glyph("folder", 16), new Span(new Text("manualImport.changeFolder")).Class("action-dock__text")).Class("button").Attribute("href", Address(wantedItemId: _work.WantedItemId));
             var runChosen = new Button(Glyph("download", 16), new Span(new Text("manualImport.runSelected")).Class("action-dock__text")).Primary().Submit().Attribute("form", "manual-import")
                 .Attribute("name", "Intent").Attribute("value", "run");
@@ -359,7 +359,7 @@ namespace Jularr.Frontend.Pages.Admin.ManualImport
             page.Content.Add(new ListPanel("manualImport.list.report", [new ListColumn("manualImport.col.file", ListRole.Main), new ListColumn("table.status", ListRole.Status),
                 new ListColumn("manualImport.col.series", ListRole.Data, 1), new ListColumn("manualImport.col.language", ListRole.Data, 1), new ListColumn("manualImport.col.reason", ListRole.Data, 1)],
                 rows).Modifier("manual-import-report"));
-            var again = IsDownload ? new A(Glyph("activity", 16), new Span(new Text("manualImport.backToQueue")).Class("action-dock__text")).Class("button").Attribute("href", "/Admin/Activity")
+            var again = IsDownload ? new A(Glyph("activity", 16), new Span(new Text("manualImport.backToQueue")).Class("action-dock__text")).Class("button").Attribute("href", "/Admin/Queue")
                 : new A(Glyph("folder", 16), new Span(new Text("manualImport.more")).Class("action-dock__text")).Class("button").Attribute("href", Address(wantedItemId: _work!.WantedItemId, storageMountId: StorageMountId, relativePath: RelativePath));
 
             // A download that was not finished keeps waiting; the rest of its files are imported from the same page.
@@ -407,7 +407,7 @@ namespace Jularr.Frontend.Pages.Admin.ManualImport
 
         public async Task<IActionResult> OnGetAsync()
         {
-            if (!texts.Can("acquisition.manage", "Acquisition")) return LocalRedirect("/Admin/Activity");
+            if (!texts.Can("acquisition.manage", "Acquisition")) return LocalRedirect("/Admin/Queue");
             await LoadDataAsync();
             PreparePage();
             return Page();

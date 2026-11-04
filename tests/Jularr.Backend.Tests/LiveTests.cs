@@ -217,7 +217,7 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual("2", entities.GetProperty("queue").GetProperty("text").GetProperty("active").GetString());
             Assert.AreEqual("0", entities.GetProperty("queue").GetProperty("text").GetProperty("errors").GetString());
 
-            // The administration menu's figures: two downloads open, no failed job yet.
+            // The administration menu's figures: two downloads open, no task that needs help yet.
             Assert.AreEqual("2", entities.GetProperty("menu").GetProperty("text").GetProperty("downloads").GetString());
             Assert.IsFalse(entities.GetProperty("menu").GetProperty("text").TryGetProperty("jobs", out _));
 
@@ -251,8 +251,11 @@ namespace Jularr.Backend.Tests
                 }
             }
 
-            // A failed job reaches the open stream as the menu's next figure.
-            await host.Fixture.RunSqlAsync("INSERT INTO \"WorkerJobs\" (\"Key\", \"LastResultTypeId\", \"LastErrorKey\", \"LastFinishedAt\") VALUES ('downloads', 2, 'job_failed', now())");
+            // A failed job (its state and the notice the runner writes with it) reaches the open stream as the menu's next figure, the tasks that need help.
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "WorkerJobs" ("Key", "LastResultTypeId", "LastErrorKey", "LastFinishedAt") VALUES ('downloads', 2, 'job_failed', now());
+                INSERT INTO "Operations" ("OperationTypeId", "OperationStatusTypeId", "WorkerJobKey", "ErrorKey", "FinishedAt") VALUES (4, 4, 'downloads', 'job_failed', now());
+                """);
             while (true)
             {
                 var (next, changed) = await NextEventAsync(reader, ending.Token);

@@ -4,7 +4,7 @@ using Jularr.Backend.Data.Admin.Activity.V1;
 using Jularr.Backend.Data.Enums.Library;
 using Jularr.Backend.Service.Admin.Activity.V1;
 using Jularr.Frontend.Framework;
-using Jularr.Frontend.Pages.Admin.Activity;
+using Jularr.Frontend.Pages.Admin.Queue;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Jularr.Frontend.Pages.Admin.History
@@ -29,15 +29,15 @@ namespace Jularr.Frontend.Pages.Admin.History
         [BindProperty(SupportsGet = true, Name = "type")]
         public string[] Types { get; set; } = [];
 
-        private ActivityViews? _views;
+        private QueueViews? _views;
 
-        private ActivityViews Views => _views ??= new ActivityViews(Types, texts, Request);
+        private QueueViews Views => _views ??= new QueueViews(Types, texts, Request);
 
         protected override void Define(Page page)
         {
             var work = WorkId is not null ? _events?.Items.FirstOrDefault()?.WorkTitle : null;
             page.Title("admin.history.title", work);
-            if (work is not null) page.Parent("admin.history.title", "/Admin/History");
+            if (work is not null) page.Parent("admin.history.title", "/Admin/Queue/History");
             page.Navigation("nav.admin");
             if (_events is not { } events)
             {
@@ -176,7 +176,7 @@ namespace Jularr.Frontend.Pages.Admin.History
             if (group != ActivityEventGroupType.All) values.Add("group=" + group);
             if (page > 1) values.Add("PageNumber=" + page.ToString(CultureInfo.InvariantCulture));
             if (WorkId is { } work) values.Add("WorkId=" + work.ToString(CultureInfo.InvariantCulture));
-            return Views.Address("/Admin/History", types, [.. values]);
+            return Views.Address("/Admin/Queue/History", types, [.. values]);
         }
     }
 }

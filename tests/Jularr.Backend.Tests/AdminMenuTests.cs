@@ -17,7 +17,7 @@ namespace Jularr.Backend.Tests
             // The Owner with the modules on sees every entry once; each links to the first of its pages.
             var html = await GetAsync(host, "/Admin/Dashboard");
             var entries = Entries(html);
-            foreach (var address in new[] { "/Admin/Dashboard", "/Admin/Activity", "/Admin/Wanted", "/Admin/Jobs", "/Admin/Works", "/Admin/Library", "/Admin/Downloads", "/Admin/Downloads/Servers", "/Admin/Downloads/Speed",
+            foreach (var address in new[] { "/Admin/Dashboard", "/Admin/Queue", "/Admin/Wanted", "/Admin/Jobs/Tasks", "/Admin/Works", "/Admin/Library", "/Admin/Downloads", "/Admin/Downloads/Servers", "/Admin/Downloads/Speed",
                 "/Admin/Downloads/Clients", "/Admin/Acquisition", "/Admin/Acquisition/Profiles?tab=profiles", "/Admin/Acquisition/Sources", "/Admin/Providers", "/Admin/Storage", "/Admin/Accounts", "/Admin/Instance", "/Admin/Localization", "/Admin/System", "/Admin/Backup", "/Admin/Ai" })
             {
                 CollectionAssert.Contains(entries, address);
@@ -48,21 +48,21 @@ namespace Jularr.Backend.Tests
                 CollectionAssert.DoesNotContain(entries, address);
             }
 
-            // The activity entry loses its Blocked page, the users entry its requests: only the Accounts page is left, so no row of siblings. Wanted is an entry of its own, not a page of Activity.
-            var activity = await GetAsync(host, "/Admin/Activity");
-            Assert.IsFalse(activity.Contains("href=\"/Admin/Activity/Blocked\"", StringComparison.Ordinal));
+            // The queue entry loses its Blocked page, the users entry its requests: only the Accounts page is left, so no row of siblings. Wanted is an entry of its own, not a page of the Queue.
+            var queue = await GetAsync(host, "/Admin/Queue");
+            Assert.IsFalse(queue.Contains("href=\"/Admin/Queue/Blocked\"", StringComparison.Ordinal));
             var accounts = await GetAsync(host, "/Admin/Accounts");
             Assert.IsFalse(accounts.Contains("navigation-tabs--filters", StringComparison.Ordinal), "An entry with one page has no chip row.");
 
             // A media manager has no administration rights: no dashboard, jobs, settings or system entries.
             await host.Fixture.RunSqlAsync("UPDATE \"Accounts\" SET \"AccountRoleTypeId\" = 3 WHERE \"Id\" = 41");
-            var manager = Entries(await GetAsync(host, "/Admin/Activity"));
-            foreach (var address in new[] { "/Admin/Dashboard", "/Admin/Jobs", "/Admin/Instance", "/Admin/System", "/Admin/Backup" })
+            var manager = Entries(await GetAsync(host, "/Admin/Queue"));
+            foreach (var address in new[] { "/Admin/Dashboard", "/Admin/Jobs/Tasks", "/Admin/Instance", "/Admin/System", "/Admin/Backup" })
             {
                 CollectionAssert.DoesNotContain(manager, address);
             }
 
-            CollectionAssert.Contains(manager, "/Admin/Activity");
+            CollectionAssert.Contains(manager, "/Admin/Queue");
             CollectionAssert.Contains(manager, "/Admin/Works");
         }
 
@@ -86,14 +86,16 @@ namespace Jularr.Backend.Tests
             }
 
             // The system pages, the jobs and the library share the same kind of row.
-            foreach (var (address, sibling) in new[] { ("/Admin/Logs", "/Admin/System"), ("/Admin/Transcoding", "/Admin/Jobs"), ("/Admin/History", "/Admin/Activity"), ("/Admin/Library/Files", "/Admin/Library/Unmatched") })
+            foreach (var (address, sibling) in new[] { ("/Admin/Logs", "/Admin/System"), ("/Admin/Transcoding", "/Admin/Jobs"), ("/Admin/Jobs/Tasks", "/Admin/Jobs"), ("/Admin/Queue/History", "/Admin/Queue"),
+                ("/Admin/Library/Files", "/Admin/Library/Unmatched") })
             {
                 var html = await GetAsync(host, address);
                 StringAssert.Contains(Row(html), "href=\"" + sibling + "\"", address);
             }
 
-            // The jobs page merges its filter chips into the same row, after a divider.
+            // The jobs' schedule merges its filter chips into the same row, after a divider; the entry's Tasks come first.
             var jobs = Row(await GetAsync(host, "/Admin/Jobs"));
+            Assert.IsTrue(jobs.IndexOf("href=\"/Admin/Jobs/Tasks\"", StringComparison.Ordinal) is >= 0 and var tasks && tasks < jobs.IndexOf("href=\"/Admin/Jobs\"", StringComparison.Ordinal), "Tasks, then the schedule.");
             StringAssert.Contains(jobs, "href=\"/Admin/Transcoding\"");
             StringAssert.Contains(jobs, "navigation-tabs__divider");
             StringAssert.Contains(jobs, "href=\"/Admin/Jobs?state=failed\"");
@@ -121,12 +123,13 @@ namespace Jularr.Backend.Tests
                 StringAssert.Matches(quiet, new Regex("<span class=\"menu-badge\" data-live=\"menu\" data-live-text=\"" + name + "\" hidden=\"\">0</span>"));
             }
 
-            // An open request, a failed job and a running download show on their entries (and only there).
+            // An open request, a failed job's notice and a running download show on their entries (and only there).
             await host.Fixture.RunSqlAsync("""
                 INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle") VALUES (10, 1, 'Film'), (11, 1, 'Other film');
                 INSERT INTO "AcquisitionRequests" ("Id", "WorkId", "RequestedByProfileId", "RequestedByAccountId", "UiLocaleId", "AcquisitionRequestStatusTypeId")
                 VALUES (500, 10, 101, 41, 1, 1), (501, 11, 101, 41, 1, 1);
                 INSERT INTO "WorkerJobs" ("Key", "LastResultTypeId", "LastErrorKey", "LastFinishedAt") VALUES ('downloads', 2, 'job_failed', now());
+                INSERT INTO "Operations" ("OperationTypeId", "OperationStatusTypeId", "WorkerJobKey", "ErrorKey", "FinishedAt") VALUES (4, 4, 'downloads', 'job_failed', now());
                 """);
             var waiting = await GetAsync(host, "/Admin/Dashboard");
             StringAssert.Contains(waiting, "data-live-text=\"requests\">2</span>");
@@ -135,9 +138,27 @@ namespace Jularr.Backend.Tests
 
             // A media manager reads downloads but neither jobs nor requests of the administration.
             await host.Fixture.RunSqlAsync("UPDATE \"Accounts\" SET \"AccountRoleTypeId\" = 3 WHERE \"Id\" = 41");
-            var manager = await GetAsync(host, "/Admin/Activity");
+            var manager = await GetAsync(host, "/Admin/Queue");
             StringAssert.Contains(manager, "data-live-text=\"downloads\"");
             Assert.IsFalse(manager.Contains("data-live-text=\"jobs\"", StringComparison.Ordinal));
+        }
+
+        // The queue, its history and its blocked releases moved to the Queue entry: the old addresses (notifications, bookmarks) lead there with their choices.
+        [TestMethod]
+        public async Task OldActivityAddresses_LeadToTheQueue()
+        {
+            await using var host = await CreateAsync();
+            foreach (var (old, now) in new[] { ("/Admin/Activity?operation=5&type=movies", "/Admin/Queue?operation=5&type=movies"), ("/Admin/Activity?Filter=Waiting", "/Admin/Queue?Filter=Waiting"),
+                ("/Admin/History?WorkId=10", "/Admin/Queue/History?WorkId=10"), ("/Admin/Activity/Blocked?type=books", "/Admin/Queue/Blocked?type=books") })
+            {
+                using var response = await host.SendAsync(HttpMethod.Get, old);
+                Assert.AreEqual(HttpStatusCode.MovedPermanently, response.StatusCode, old);
+                Assert.AreEqual(now, response.Headers.Location!.OriginalString, old);
+            }
+
+            // The former queue filter for finished downloads opens the history.
+            using var history = await host.SendAsync(HttpMethod.Get, "/Admin/Queue?Filter=History");
+            Assert.AreEqual("/Admin/Queue/History", history.Headers.Location!.OriginalString);
         }
 
         [TestMethod]

@@ -292,7 +292,7 @@ namespace Jularr.Backend.Tests
             using var useDownloads = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/jobs/downloads/use", new WorkerJobUseDataV1(true));
             Assert.AreEqual(HttpStatusCode.BadRequest, useDownloads.StatusCode);
 
-            // A failure shows on the page and as a notice.
+            // A failure shows on the schedule, in the Tasks (leading to the schedule) and as a notice.
             var runner = host.Services.GetRequiredService<WorkerJobRunner>();
             time.Now = Start.AddHours(2);
             Assert.AreEqual(WorkerJobResultType.Failed, await runner.RunAsync("subtitles", (_, _) => throw new InvalidOperationException("No provider."), default));
@@ -310,10 +310,11 @@ namespace Jularr.Backend.Tests
             var notice = items.Single(item => item.OperationTypeId == OperationType.Job);
             Assert.AreEqual("subtitles", notice.Title);
             Assert.AreEqual("internal_error", notice.ReasonKey);
-            // The queue holds downloads only: the notice stays out of it.
-            using var activityPage = await host.SendAsync(HttpMethod.Get, "/Admin/Activity?operation=" + notice.Id);
-            var activityHtml = await activityPage.Content.ReadAsStringAsync();
-            Assert.IsFalse(activityHtml.Contains("id=\"activity-" + notice.Id + "\"", StringComparison.Ordinal));
+            // The Jobs entry's Tasks show the notice, leading back to the schedule.
+            using var tasksPage = await host.SendAsync(HttpMethod.Get, "/Admin/Jobs/Tasks");
+            var tasksHtml = await tasksPage.Content.ReadAsStringAsync();
+            StringAssert.Contains(tasksHtml, "handler=Dismiss&amp;operationId=" + notice.Id);
+            StringAssert.Contains(tasksHtml, "Open Jobs");
 
             // A Media Manager and a plain user see neither the page nor the jobs.
             foreach (var role in new[] { 3, 2 })

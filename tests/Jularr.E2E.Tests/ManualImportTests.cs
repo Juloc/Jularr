@@ -85,7 +85,7 @@ namespace Jularr.E2E.Tests
                 await Steps.WaitForAvailableAsync(page, FakeServices.MovieTitle);
 
                 // The history keeps who assigned it.
-                await page.GotoAsync("/Admin/History");
+                await page.GotoAsync("/Admin/Queue/History");
                 await Assertions.Expect(page.Locator("main")).ToContainTextAsync("Assigned by hand");
                 CollectionAssert.AreEqual(Array.Empty<string>(), session.Problems.ToArray());
             }
@@ -138,7 +138,7 @@ namespace Jularr.E2E.Tests
                 while (waiting is null)
                 {
                     Assert.IsTrue(deadline.Elapsed < TimeSpan.FromMinutes(6), "The download did not wait in the queue within six minutes.");
-                    await page.GotoAsync("/Admin/Activity");
+                    await page.GotoAsync("/Admin/Queue");
                     var row = Steps.ListRow(page, "does not clearly match the film");
                     if (await row.CountAsync() > 0) waiting = row.First;
                     else await page.WaitForTimeoutAsync(3000);
@@ -185,12 +185,12 @@ namespace Jularr.E2E.Tests
                 await Evidence.SaveAsync(page, "manual-import-multi-report");
 
                 // The download is out of the queue, both titles are in the library and the history assigns each by hand.
-                await page.GotoAsync("/Admin/Activity");
+                await page.GotoAsync("/Admin/Queue");
                 await Assertions.Expect(Steps.ListRow(page, "does not clearly match the film")).ToHaveCountAsync(0);
                 await Steps.WaitForAvailableAsync(page, FakeServices.MovieTitle);
                 Assert.AreEqual(1, Directory.EnumerateFiles(Path.Combine(folders.Library, "Movies"), "*.webm", SearchOption.AllDirectories).Count());
                 Assert.AreEqual(1, Directory.EnumerateFiles(Path.Combine(folders.Library, "Series"), "*.webm", SearchOption.AllDirectories).Count());
-                await page.GotoAsync("/Admin/History");
+                await page.GotoAsync("/Admin/Queue/History");
                 await Assertions.Expect(Steps.ListRow(page, "Assigned by hand")).ToHaveCountAsync(2);
                 CollectionAssert.AreEqual(Array.Empty<string>(), session.Problems.ToArray());
             }
@@ -242,7 +242,7 @@ namespace Jularr.E2E.Tests
                 while (waiting is null)
                 {
                     Assert.IsTrue(deadline.Elapsed < TimeSpan.FromMinutes(6), "The download did not wait in the queue within six minutes.");
-                    await page.GotoAsync("/Admin/Activity");
+                    await page.GotoAsync("/Admin/Queue");
                     var row = Steps.ListRow(page, "does not clearly match the film");
                     if (await row.CountAsync() > 0) waiting = row.First;
                     else await page.WaitForTimeoutAsync(3000);
@@ -257,7 +257,7 @@ namespace Jularr.E2E.Tests
                 await Assertions.Expect(page.Locator(".manual-import-report .list-row").First).ToContainTextAsync("Imported");
 
                 // It leaves the queue's waiting entries and the film is in the library.
-                await page.GotoAsync("/Admin/Activity");
+                await page.GotoAsync("/Admin/Queue");
                 await Assertions.Expect(Steps.ListRow(page, "does not clearly match the film")).ToHaveCountAsync(0);
                 await Steps.WaitForAvailableAsync(page, FakeServices.MovieTitle);
                 Assert.AreEqual(1, Directory.EnumerateFiles(Path.Combine(folders.Library, "Movies"), "*.webm", SearchOption.AllDirectories).Count());
@@ -309,7 +309,7 @@ namespace Jularr.E2E.Tests
                 while (waiting is null)
                 {
                     Assert.IsTrue(deadline.Elapsed < TimeSpan.FromMinutes(6), "The download did not wait in the queue within six minutes.");
-                    await page.GotoAsync("/Admin/Activity");
+                    await page.GotoAsync("/Admin/Queue");
                     var row = Steps.ListRow(page, "Nothing in the download could be placed");
                     if (await row.CountAsync() > 0) waiting = row.First;
                     else await page.WaitForTimeoutAsync(3000);
@@ -341,7 +341,7 @@ namespace Jularr.E2E.Tests
                 await Steps.FollowAsync(page, page.GetByRole(AriaRole.Button, new() { Name = "Import selected", Exact = true }));
                 await Assertions.Expect(page.Locator(".manual-import-report .list-row").First).ToContainTextAsync("Imported");
                 Assert.AreEqual(1, Directory.EnumerateFiles(Path.Combine(folders.Library, "Books", "Jane Austen"), "*.epub", SearchOption.AllDirectories).Count());
-                await page.GotoAsync("/Admin/Activity");
+                await page.GotoAsync("/Admin/Queue");
                 await Assertions.Expect(Steps.ListRow(page, "Nothing in the download could be placed")).ToHaveCountAsync(0);
                 CollectionAssert.AreEqual(Array.Empty<string>(), session.Problems.ToArray());
             }

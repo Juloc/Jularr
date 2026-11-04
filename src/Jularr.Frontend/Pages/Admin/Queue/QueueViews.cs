@@ -2,10 +2,10 @@ using Jularr.Backend.Data.Enums.Media;
 using Jularr.Frontend.Framework;
 using Microsoft.AspNetCore.Http;
 
-namespace Jularr.Frontend.Pages.Admin.Activity
+namespace Jularr.Frontend.Pages.Admin.Queue
 {
     // What the pages of the Activity entry (Queue, History, Blocked) share: the media types of the type bar, kept in the address `type=a,b` of every view, and the row of the three views.
-    public sealed class ActivityViews(IEnumerable<string> requested, UiText texts, HttpRequest request)
+    public sealed class QueueViews(IEnumerable<string> requested, UiText texts, HttpRequest request)
     {
         // Every media type is listed in the administration; none asked for shows all of them.
         public ScopeSelection Scopes { get; } = new(requested, [.. LibraryScopes.All.Where(scope => scope.Slug != "all")]);

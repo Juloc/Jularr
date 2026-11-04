@@ -108,6 +108,7 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
                     -- The Files view includes all supported external download clients.
                     AND (NOT @TorrentOnly OR connection."AcquisitionConnectionTypeId" IN (2, 9))
                     AND (NOT @FailedOnly OR operation."OperationStatusTypeId" = 4)
+                    AND (NOT @TasksOnly OR operation."OperationTypeId" <> 2)
                     AND (@AcquisitionConnectionId::bigint IS NULL OR connection."Id" = @AcquisitionConnectionId)
                     AND (@MediaTypeId::smallint IS NULL OR work."MediaTypeId" = @MediaTypeId)
                     AND (@DownloadPriorityTypeId::smallint IS NULL OR operation."DownloadPriorityTypeId" = @DownloadPriorityTypeId)
@@ -136,7 +137,7 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
                 OFFSET @Offset;
                 """;
             sql.Parameters.Add(new ActivityFilterData(Parameters.ActivityFilterTypeId, Parameters.TorrentOnly, Parameters.DownloadsOnly, Parameters.FailedOnly, Parameters.DownloadClientKindId,
-                Parameters.AcquisitionConnectionId, Parameters.MediaTypeId, Parameters.DownloadPriorityTypeId, Parameters.MediaTypeIds, Parameters.MediaSubtypeIds));
+                Parameters.AcquisitionConnectionId, Parameters.MediaTypeId, Parameters.DownloadPriorityTypeId, Parameters.MediaTypeIds, Parameters.MediaSubtypeIds, Parameters.TasksOnly));
             sql.Page = Page;
             return await Context.ReadSql.ReadPageAsync<ActivityItemV1>(sql, CancellationToken);
         }
@@ -199,23 +200,24 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
         protected override async Task<IServiceOutput> OnRead()
         {
             // The numbers of the queue's tiles, which holds downloads only; the pace is what the downloading jobs still have left over the time they still need.
+            // Jularr's own tasks add one number: those that need a person.
             var sql = new SqlStatement();
             sql.Statement =
                 """
                 SELECT
-                    count(*) FILTER (WHERE state."ActivityFilterTypeId" = 2)::integer AS "ActiveCount",
-                    coalesce(sum(operation."RemainingBytes" / operation."EtaSeconds") FILTER (WHERE operation."DownloadStateTypeId" = 2 AND operation."EtaSeconds" > 0 AND state."ActivityFilterTypeId" <> 3), 0)::bigint AS "BytesPerSecond",
-                    count(*) FILTER (WHERE state."ActivityFilterTypeId" IN (4, 5))::integer AS "ImportCount",
-                    count(*) FILTER (WHERE state."ActivityFilterTypeId" = 6)::integer AS "ErrorCount",
-                    count(*) FILTER (WHERE state."ActivityFilterTypeId" <> 3)::integer AS "AllCount",
-                    count(*) FILTER (WHERE state."ActivityFilterTypeId" = 4)::integer AS "WaitingCount",
-                    count(*) FILTER (WHERE state."ActivityFilterTypeId" = 5)::integer AS "UnpackingCount",
-                    count(*) FILTER (WHERE state."ActivityFilterTypeId" = 3)::integer AS "HistoryCount"
+                    count(*) FILTER (WHERE download AND state."ActivityFilterTypeId" = 2)::integer AS "ActiveCount",
+                    coalesce(sum(operation."RemainingBytes" / operation."EtaSeconds") FILTER (WHERE download AND operation."DownloadStateTypeId" = 2 AND operation."EtaSeconds" > 0 AND state."ActivityFilterTypeId" <> 3), 0)::bigint AS "BytesPerSecond",
+                    count(*) FILTER (WHERE download AND state."ActivityFilterTypeId" IN (4, 5))::integer AS "ImportCount",
+                    count(*) FILTER (WHERE download AND state."ActivityFilterTypeId" = 6)::integer AS "ErrorCount",
+                    count(*) FILTER (WHERE download AND state."ActivityFilterTypeId" <> 3)::integer AS "AllCount",
+                    count(*) FILTER (WHERE download AND state."ActivityFilterTypeId" = 4)::integer AS "WaitingCount",
+                    count(*) FILTER (WHERE download AND state."ActivityFilterTypeId" = 5)::integer AS "UnpackingCount",
+                    count(*) FILTER (WHERE download AND state."ActivityFilterTypeId" = 3)::integer AS "HistoryCount",
+                    count(*) FILTER (WHERE NOT download AND state."ActivityFilterTypeId" IN (4, 6))::integer AS "TaskHelpCount"
                 FROM
                     "OperationQueueStates" AS state
                     JOIN "Operations" AS operation ON operation."Id" = state."OperationId"
-                WHERE
-                    operation."OperationTypeId" = 2;
+                    CROSS JOIN LATERAL (SELECT operation."OperationTypeId" = 2 AS download) AS kind;
                 """;
             return await Context.ReadSql.ReadRequiredAsync<ActivitySummaryV1>(sql, CancellationToken);
         }

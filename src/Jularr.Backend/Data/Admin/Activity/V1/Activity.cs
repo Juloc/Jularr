@@ -16,7 +16,7 @@ namespace Jularr.Backend.Data.Admin.Activity.V1
     {
         public ReadActivityParametersV1(ActivityFilterType activityFilterTypeId = ActivityFilterType.All, int page = 1, int pageSize = 25, bool torrentOnly = false, bool downloadsOnly = false,
             bool failedOnly = false, DownloadClientKind? downloadClientKindId = null, long? acquisitionConnectionId = null, MediaType? mediaTypeId = null,
-            DownloadPriorityType? downloadPriorityTypeId = null, MediaType[]? mediaTypeIds = null, MediaSubtype[]? mediaSubtypeIds = null)
+            DownloadPriorityType? downloadPriorityTypeId = null, MediaType[]? mediaTypeIds = null, MediaSubtype[]? mediaSubtypeIds = null, bool tasksOnly = false)
         {
             MediaTypeIds = mediaTypeIds ?? [];
             MediaSubtypeIds = mediaSubtypeIds ?? [];
@@ -24,6 +24,7 @@ namespace Jularr.Backend.Data.Admin.Activity.V1
             ActivityFilterTypeId = activityFilterTypeId;
             TorrentOnly = torrentOnly;
             DownloadsOnly = downloadsOnly;
+            TasksOnly = tasksOnly;
             FailedOnly = failedOnly;
             DownloadClientKindId = downloadClientKindId;
             AcquisitionConnectionId = acquisitionConnectionId;
@@ -44,6 +45,10 @@ namespace Jularr.Backend.Data.Admin.Activity.V1
 
         [DataField(typeof(OperationFields), nameof(OperationFields.FailedOnly))]
         public bool FailedOnly { get; }
+
+        // Only Jularr's own tasks, as the Jobs entry's Tasks lists them: scans, backups, media imports, searches and the notices of failed background jobs, no downloads.
+        [DataField(typeof(OperationFields), nameof(OperationFields.TasksOnly))]
+        public bool TasksOnly { get; }
 
         // One client's downloads: a kind, and for SABnzbd and qBittorrent the connection.
         [DataField(typeof(OperationFields), nameof(OperationFields.DownloadClientKindId), false)]
@@ -518,8 +523,9 @@ namespace Jularr.Backend.Data.Admin.Activity.V1
     // The queue in four numbers: what runs, the pace of the downloads, what is downloaded but not yet imported (waiting for a person or importing) and what failed unseen.
     public sealed class ActivitySummaryV1 : BaseResponse
     {
-        public ActivitySummaryV1(int activeCount, long bytesPerSecond, int importCount, int errorCount, int allCount = 0, int waitingCount = 0, int unpackingCount = 0, int historyCount = 0)
+        public ActivitySummaryV1(int activeCount, long bytesPerSecond, int importCount, int errorCount, int allCount = 0, int waitingCount = 0, int unpackingCount = 0, int historyCount = 0, int taskHelpCount = 0)
         {
+            TaskHelpCount = taskHelpCount;
             AllCount = allCount;
             WaitingCount = waitingCount;
             UnpackingCount = unpackingCount;
@@ -554,6 +560,10 @@ namespace Jularr.Backend.Data.Admin.Activity.V1
 
         [DataField(typeof(OperationFields), nameof(OperationFields.QueueCount))]
         public int HistoryCount { get; }
+
+        // Jularr's own tasks that need a person: failed and not put aside, or waiting.
+        [DataField(typeof(OperationFields), nameof(OperationFields.QueueCount))]
+        public int TaskHelpCount { get; }
     }
 
     public sealed class SaveActivitySourceLinkDataV1 : BaseData
