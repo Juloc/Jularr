@@ -10,6 +10,10 @@ const skeletons = new WeakMap<HTMLElement, Map<string, HTMLElement>>();
 const fill = (template: string | undefined, ...values: (string | number)[]): string =>
     values.reduce<string>((text, value, index) => text.replaceAll(`{${index}}`, String(value)), template ?? "");
 
+// "1 release" or "31 releases": the singular has its own text (data-<name>-one), since languages differ in more than an "s".
+const counted = (panel: HTMLElement, name: string, count: number): string =>
+    count === 1 ? panel.getAttribute(`data-${name}-one`) ?? "" : fill(panel.getAttribute(`data-${name}`) ?? "", count);
+
 const bodies = (panel: HTMLElement) => Array.from(panel.querySelectorAll<HTMLElement>("tbody[data-source]"));
 const chips = (panel: HTMLElement) => Array.from(panel.querySelectorAll<HTMLElement>(".search-chip"));
 
@@ -165,9 +169,9 @@ function apply(panel: HTMLElement): void {
     // The status line, the bar, and the notices: nothing found (never when a source failed to answer) or nothing fitting the filters.
     const status = panel.querySelector<HTMLElement>("[data-search-status]");
     if (status) {
-        status.textContent = running ? fill(panel.dataset.running, finished, all.length)
-            : filtered ? fill(panel.dataset.filtered, shown, rows.length)
-            : failed > 0 ? fill(panel.dataset.finishedFailed, rows.length, all.length - failed, failed) : fill(panel.dataset.finished, rows.length, all.length);
+        status.textContent = running ? fill(panel.dataset.running, finished, counted(panel, "sources", all.length), all.length)
+            : filtered ? fill(rows.length === 1 ? panel.dataset.filteredOne : panel.dataset.filtered, shown, rows.length)
+            : fill(failed > 0 ? panel.dataset.finishedFailed : panel.dataset.finished, counted(panel, "releases", rows.length), counted(panel, "sources", all.length - failed), failed);
     }
 
     const bar = panel.querySelector<HTMLProgressElement>("progress");

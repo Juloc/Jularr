@@ -5234,16 +5234,16 @@
    "Durchsuchte Quellen"
   ],
   "wanted.search.running": [
-   "Searching {1} sources … {0} of {1} done",
-   "Durchsuche {1} Quellen … {0} von {1} fertig"
+   "Searching {1} … {0} of {2} done",
+   "Durchsuche {1} … {0} von {2} fertig"
   ],
   "wanted.search.finished": [
-   "{0} releases from {1} sources",
-   "{0} Treffer aus {1} Quellen"
+   "{0} from {1}",
+   "{0} aus {1}"
   ],
   "wanted.search.finishedFailed": [
-   "{0} releases from {1} sources · {2} did not answer",
-   "{0} Treffer aus {1} Quellen · {2} ohne Antwort"
+   "{0} from {1} · {2} did not answer",
+   "{0} aus {1} · {2} ohne Antwort"
   ],
   "wanted.search.filters": [
    "Filters and sorting",
@@ -5372,6 +5372,26 @@
   "wanted.search.filtered": [
    "{0} of {1} releases",
    "{0} von {1} Treffern"
+  ],
+  "wanted.search.filtered.one": [
+   "{0} of 1 release",
+   "{0} von 1 Treffer"
+  ],
+  "wanted.search.releaseCount": [
+   "{0} releases",
+   "{0} Treffer"
+  ],
+  "wanted.search.releaseCount.one": [
+   "1 release",
+   "1 Treffer"
+  ],
+  "wanted.search.sourceCount": [
+   "{0} sources",
+   "{0} Quellen"
+  ],
+  "wanted.search.sourceCount.one": [
+   "1 source",
+   "1 Quelle"
   ],
   "wanted.search.source.limit": [
    "Limit reached, try later",

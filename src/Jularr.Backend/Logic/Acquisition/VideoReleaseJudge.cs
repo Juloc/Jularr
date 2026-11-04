@@ -17,7 +17,7 @@ namespace Jularr.Backend.Logic.Acquisition
         [GeneratedRegex(@"^(?:19|20)\d{2}$")]
         private static partial Regex YearToken();
 
-        public static ReleaseJudgement<VideoIdentityMatch> Judge(AcquisitionKind kind, string title, int? year, TargetUnit? unit, UnitSet scope, ReleaseOffer offer)
+        public static ReleaseJudgement<VideoIdentityMatch> Judge(AcquisitionKind kind, string title, int? year, UnitScope? scope, ReleaseOffer offer, bool automatic = true)
         {
             if (offer.DownloadUri is null)
             {
@@ -32,12 +32,12 @@ namespace Jularr.Backend.Logic.Acquisition
             var viaId = offer.Stages.Contains("id");
             var (titleMatch, titleEvidence) = kind == AcquisitionKind.Movie ? JudgeMovieTitle(title, year, parsed, viaId) : JudgeSeriesTitle(title, parsed, viaId);
             var languages = Languages(parsed);
-            if (titleEvidence.Confidence == IdentityConfidence.Conflict || unit is null)
+            if (titleEvidence.Confidence == IdentityConfidence.Conflict || scope is null)
             {
                 return new ReleaseJudgement<VideoIdentityMatch>(titleMatch, parsed, titleEvidence, SelectionCoverage.Single, null) { Languages = languages };
             }
 
-            var judged = JudgeUnit(titleMatch, titleEvidence, parsed, unit, scope, viaId);
+            var judged = JudgeUnit(titleMatch, titleEvidence, parsed, scope, viaId, automatic);
             return new ReleaseJudgement<VideoIdentityMatch>(judged.Match, judged.Parsed, judged.Evidence, judged.Coverage, judged.SafetyRejection) { Languages = languages };
         }
 
@@ -114,9 +114,10 @@ namespace Jularr.Backend.Logic.Acquisition
             return (VideoIdentityMatch.Matches, viaId || hasYear ? ReleaseIdentityEvidence.Exact(viaId ? "MatchesById" : "MatchesTitleAndYear") : ReleaseIdentityEvidence.Strong("Matches"));
         }
 
-        private static ReleaseJudgement<VideoIdentityMatch> JudgeUnit(VideoIdentityMatch titleMatch, ReleaseIdentityEvidence title, ReleaseInfo parsed, TargetUnit unit, UnitSet scope, bool viaId)
+        private static ReleaseJudgement<VideoIdentityMatch> JudgeUnit(VideoIdentityMatch titleMatch, ReleaseIdentityEvidence title, ReleaseInfo parsed, UnitScope target, bool viaId, bool automatic)
         {
             // Absolute and dated releases count by the episodes of the season they map to.
+            var (unit, scope) = (target.Unit, target.Units);
             var mapped = parsed.IsSeasonPack ? null : EpisodeNumbering.Resolve(parsed, scope.All);
             if ((mapped?.Season ?? parsed.SeasonNumber) != unit.ParentNumber)
             {
@@ -134,7 +135,11 @@ namespace Jularr.Backend.Logic.Acquisition
                 return new ReleaseJudgement<VideoIdentityMatch>(VideoIdentityMatch.ContainsTarget, parsed, Fit("ContainsTarget"), new SelectionCoverage(covered, scope.Wanted.Count, Math.Max(0, seasonUnits.Length - covered)), null);
             }
 
-            if (mapped is var (_, start, end) && unit.Number >= start && unit.Number <= end)
+            // An episode search takes the releases holding its episode, the automatic season pass (a pack, else its first missing episode) too, before it goes episode by episode;
+            // a person's season search (no episode asked) takes those holding any wanted episode of the season.
+            if (mapped is var (_, start, end) && (target.UnitNumber is null && !automatic
+                ? scope.Wanted.Any(candidate => candidate.ParentNumber == unit.ParentNumber && candidate.Number >= start && candidate.Number <= end)
+                : unit.Number >= start && unit.Number <= end))
             {
                 var covered = scope.Wanted.Count(candidate => candidate.ParentNumber == unit.ParentNumber && candidate.Number >= start && candidate.Number <= end);
                 return new ReleaseJudgement<VideoIdentityMatch>(titleMatch == VideoIdentityMatch.AmbiguousTitle ? VideoIdentityMatch.AmbiguousTitle : VideoIdentityMatch.Matches, parsed, Fit("Matches"), new SelectionCoverage(Math.Max(1, covered), scope.Wanted.Count, Math.Max(0, end - start + 1 - covered)), null);
