@@ -8,8 +8,9 @@
         // As high as the arrows, which show only once the script finds the row wider than the shelf.
         min-height: var(--control-height);
         margin-bottom: 12px;
-        h2 { flex: 1; min-width: 0; margin: 0; font-size: 20px; font-weight: 700; }
-        a { color: var(--accent-text); font-weight: 650; text-decoration: none; white-space: nowrap; }
+        // A long title wraps between words, hyphenates a long word and otherwise ends in "…", never under the link.
+        h2 { flex: 1; min-width: 0; margin: 0; overflow: hidden; font-size: 20px; font-weight: 700; hyphens: auto; text-overflow: ellipsis; }
+        a { flex-shrink: 0; color: var(--accent-text); font-weight: 650; text-decoration: none; white-space: nowrap; }
         a::after { content: " ›"; }
     }
 
