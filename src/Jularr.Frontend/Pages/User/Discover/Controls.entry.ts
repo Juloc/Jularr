@@ -82,7 +82,8 @@ document.addEventListener('click', event => {
         showPreferences();
     }
 
-    if (event.target.closest('[data-discover-layout]')) storeLayout(document.documentElement.dataset.discoverLayout !== 'grid');
+    // The page's root carries the layout too, so only the button counts.
+    if (event.target.closest('button[data-discover-layout]')) storeLayout(document.documentElement.dataset.discoverLayout !== 'grid');
 
     // Selects every type of an area, or none when all are chosen.
     const pick = event.target.closest<HTMLElement>('[data-discover-pick]');

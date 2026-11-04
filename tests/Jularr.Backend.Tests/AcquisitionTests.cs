@@ -1616,23 +1616,29 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual("download_failed", await host.ScalarAsync("SELECT \"ReasonKey\" FROM \"AcquisitionReleases\""));
 
             // The failure waits in the queue until it is retried.
-            using var todo = await host.SendAsync(HttpMethod.Get, "/Admin/Activity");
+            using var todo = await host.SendAsync(HttpMethod.Get, "/Admin/Queue");
             var html = await todo.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, todo.StatusCode, html);
             StringAssert.Contains(html, "Download failed");
             var failedId = (await ReadActivityAsync(host, ActivityFilterType.All)).Single().Id;
-            using var retried = await host.SendAsync(HttpMethod.Post, "/Admin/Activity?handler=Retry&operationId=" + failedId,
+            using var retried = await host.SendAsync(HttpMethod.Post, "/Admin/Queue?handler=Retry&operationId=" + failedId,
                 new Dictionary<string, string> { ["__RequestVerificationToken"] = LibraryTests.Token(html) });
             Assert.AreEqual(HttpStatusCode.Redirect, retried.StatusCode, await retried.Content.ReadAsStringAsync());
             Assert.AreEqual(0, (await ReadActivityAsync(host, ActivityFilterType.All)).Count);
 
-            // A failed backup is no download: it keeps the tool's reason, but the queue does not show it.
+            // A failed backup is no download: the Jobs entry's Tasks show it with the tool's reason, the queue does not.
             await host.Fixture.RunSqlAsync("INSERT INTO \"Operations\" (\"OperationTypeId\", \"OperationStatusTypeId\", \"ErrorKey\", \"FinishedAt\") VALUES (3, 4, 'backup_version_mismatch', now())");
-            using var backup = await host.SendAsync(HttpMethod.Get, "/Admin/Activity");
+            using var backup = await host.SendAsync(HttpMethod.Get, "/Admin/Queue");
             var backupHtml = await backup.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, backup.StatusCode, backupHtml);
             Assert.IsFalse(backupHtml.Contains("pg_dump or pg_restore is older than the PostgreSQL server.", StringComparison.Ordinal));
-            Assert.AreEqual("backup_version_mismatch", (await ReadActivityAsync(host, ActivityFilterType.All)).Single(item => item.OperationTypeId == OperationType.Backup).ReasonKey);
+            using var tasks = await host.SendAsync(HttpMethod.Get, "/Admin/Jobs/Tasks");
+            var tasksHtml = await tasks.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, tasks.StatusCode, tasksHtml);
+            StringAssert.Contains(tasksHtml, "pg_dump or pg_restore is older than the PostgreSQL server.");
+            var backupId = (await ReadActivityAsync(host, ActivityFilterType.All)).Single(item => item.OperationTypeId == OperationType.Backup).Id;
+            StringAssert.Contains(tasksHtml, "handler=Retry&amp;operationId=" + backupId);
+            StringAssert.Contains(tasksHtml, "handler=Dismiss&amp;operationId=" + backupId);
             Assert.AreEqual(failedId, (await ReadActivityAsync(host, ActivityFilterType.History)).Single().Id);
             using var again = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/" + failedId + "/dismiss");
             Assert.AreEqual(HttpStatusCode.NotFound, again.StatusCode);
@@ -1801,7 +1807,7 @@ namespace Jularr.Backend.Tests
             await RunAsync<MonitorDownloadsV1>(host);
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"Notifications\" WHERE \"NotificationTypeId\" = 6"));
             Assert.AreEqual("Example Movieimport_ambiguous_title", await host.ScalarAsync("SELECT \"Subject\" FROM \"Notifications\" WHERE \"NotificationTypeId\" = 6"));
-            Assert.AreEqual("/Admin/Activity?Filter=Waiting", await host.ScalarAsync("SELECT \"Link\" FROM \"Notifications\" WHERE \"NotificationTypeId\" = 6"));
+            Assert.AreEqual("/Admin/Queue", await host.ScalarAsync("SELECT \"Link\" FROM \"Notifications\" WHERE \"NotificationTypeId\" = 6"));
 
             // The same doubt after another try folds into the unread notice.
             await host.Fixture.RunSqlAsync("UPDATE \"Operations\" SET \"AttentionKey\" = NULL, \"AttentionProposal\" = NULL WHERE \"OperationTypeId\" = 2");
@@ -2889,7 +2895,7 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual((2, 50L, 2, 1), (summary.ActiveCount, summary.BytesPerSecond, summary.ImportCount, summary.ErrorCount));
 
             // The page: the type bar, the entry's views in one row, the four groups with what needs a person first, the failed entry with its retry, and the panel of one entry.
-            using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Activity");
+            using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Queue");
             var html = await page.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
             StringAssert.Contains(html, "data-live=\"queue\" data-live-text=\"speed\"");
@@ -2905,35 +2911,44 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(Group("Running")[..Group("Running").IndexOf("id=\"activity-group-Queued\"", StringComparison.Ordinal)], "Release 1");
             StringAssert.Contains(Group("Queued"), "Release 2");
             Assert.IsFalse(html.Contains("operationId=8\"", StringComparison.Ordinal) || html.Contains("id=\"activity-8\"", StringComparison.Ordinal), "A background job is not part of the queue.");
-            StringAssert.Contains(html, "href=\"/Admin/Activity?operation=5\"");
-            StringAssert.Contains(html, "href=\"/Admin/History\"");
+
+            // The Jobs entry's Tasks hold it instead: under Needs help, leading to the schedule and put aside by Dismiss; it is the figure of the Jobs entry.
+            using var tasks = await host.SendAsync(HttpMethod.Get, "/Admin/Jobs/Tasks");
+            var tasksHtml = await tasks.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, tasks.StatusCode, tasksHtml);
+            var help = tasksHtml[tasksHtml.IndexOf("id=\"tasks-group-Help\"", StringComparison.Ordinal)..];
+            StringAssert.Contains(help, "handler=Dismiss&amp;operationId=8");
+            Assert.IsFalse(tasksHtml.Contains("Release 1", StringComparison.Ordinal), "Downloads are the queue's.");
+            Assert.AreEqual(1, summary.TaskHelpCount);
+            StringAssert.Contains(html, "href=\"/Admin/Queue?operation=5\"");
+            StringAssert.Contains(html, "href=\"/Admin/Queue/History\"");
             Assert.AreEqual(1, System.Text.RegularExpressions.Regex.Matches(html, "navigation-tabs\"|navigation-tabs ").Count, "One row of views only.");
             StringAssert.Contains(html, "class=\"view-switch\"");
-            StringAssert.Contains(html, "href=\"/Admin/Activity?files=true\"");
-            using var filesView = await host.SendAsync(HttpMethod.Get, "/Admin/Activity?files=true");
+            StringAssert.Contains(html, "href=\"/Admin/Queue?files=true\"");
+            using var filesView = await host.SendAsync(HttpMethod.Get, "/Admin/Queue?files=true");
             var filesViewHtml = await filesView.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, filesView.StatusCode, filesViewHtml);
             StringAssert.Contains(filesViewHtml, "class=\"view-switch\"");
             Assert.IsFalse(System.Text.RegularExpressions.Regex.IsMatch(html, "<dialog[^>]* open=\"open\""), "Only the entry the address names is open.");
-            using var panel = await host.SendAsync(HttpMethod.Get, "/Admin/Activity?operation=5");
+            using var panel = await host.SendAsync(HttpMethod.Get, "/Admin/Queue?operation=5");
             var panelHtml = await panel.Content.ReadAsStringAsync();
             StringAssert.Matches(panelHtml, new System.Text.RegularExpressions.Regex("<dialog[^>]* open=\"open\""));
             StringAssert.Contains(panelHtml, "handler=Dismiss&amp;operationId=5");
 
             // An entry that says why it failed has no bar, as the stream sets it: a bar here would vanish with the first snapshot and the rows below would jump.
             await host.Fixture.RunSqlAsync("UPDATE \"Operations\" SET \"ProgressPercent\" = 30 WHERE \"Id\" = 5");
-            using var withProgress = await host.SendAsync(HttpMethod.Get, "/Admin/Activity");
+            using var withProgress = await host.SendAsync(HttpMethod.Get, "/Admin/Queue");
             var progressHtml = await withProgress.Content.ReadAsStringAsync();
             var helpGroup = progressHtml[progressHtml.IndexOf("id=\"activity-group-Help\"", StringComparison.Ordinal)..progressHtml.IndexOf("id=\"activity-group-Import\"", StringComparison.Ordinal)];
             Assert.IsFalse(System.Text.RegularExpressions.Regex.IsMatch(helpGroup, "<progress(?![^>]*hidden)[^>]*>"), "A failed entry shows no bar.");
 
             // The type bar narrows the queue: the films' downloads stay for movies, none is left for books, and the choice stays in the views' addresses.
-            using var movies = await host.SendAsync(HttpMethod.Get, "/Admin/Activity?type=movies");
+            using var movies = await host.SendAsync(HttpMethod.Get, "/Admin/Queue?type=movies");
             var moviesHtml = await movies.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, movies.StatusCode, moviesHtml);
             StringAssert.Contains(moviesHtml, "Release 1");
-            StringAssert.Contains(moviesHtml, "href=\"/Admin/History?type=movies\"");
-            using var books = await host.SendAsync(HttpMethod.Get, "/Admin/Activity?type=books");
+            StringAssert.Contains(moviesHtml, "href=\"/Admin/Queue/History?type=movies\"");
+            using var books = await host.SendAsync(HttpMethod.Get, "/Admin/Queue?type=books");
             var booksHtml = await books.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, books.StatusCode, booksHtml);
             Assert.IsFalse(booksHtml.Contains("Release 1", StringComparison.Ordinal));
@@ -2968,7 +2983,7 @@ namespace Jularr.Backend.Tests
             }
 
             // Blocked: every blocked release of every target, none of the allowed ones; the type bar narrows it and the views keep the choice.
-            var blocked = await GetAsync("/Admin/Activity/Blocked");
+            var blocked = await GetAsync("/Admin/Queue/Blocked");
             foreach (var title in new[] { "Film Release Blocked", "Book Release Blocked", "Film Release Faulty" })
             {
                 StringAssert.Contains(blocked, title);
@@ -2977,28 +2992,28 @@ namespace Jularr.Backend.Tests
             Assert.IsFalse(blocked.Contains("Film Release Allowed", StringComparison.Ordinal));
             StringAssert.Contains(blocked, "class=\"capsule-bar");
             StringAssert.Contains(blocked, "handler=Unblock&amp;wantedItemId=901&amp;acquisitionReleaseId=901");
-            var books = await GetAsync("/Admin/Activity/Blocked?type=books");
+            var books = await GetAsync("/Admin/Queue/Blocked?type=books");
             StringAssert.Contains(books, "Book Release Blocked");
             Assert.IsFalse(books.Contains("Film Release", StringComparison.Ordinal));
-            StringAssert.Contains(books, "href=\"/Admin/History?type=books\"");
-            StringAssert.Contains(books, "href=\"/Admin/Activity?type=books\"");
+            StringAssert.Contains(books, "href=\"/Admin/Queue/History?type=books\"");
+            StringAssert.Contains(books, "href=\"/Admin/Queue?type=books\"");
 
             // Unblocking allows the release again, so it leaves the list.
-            using (var unblocked = await host.SendAsync(HttpMethod.Post, "/Admin/Activity/Blocked?handler=Unblock&wantedItemId=901&acquisitionReleaseId=901",
+            using (var unblocked = await host.SendAsync(HttpMethod.Post, "/Admin/Queue/Blocked?handler=Unblock&wantedItemId=901&acquisitionReleaseId=901",
                 new Dictionary<string, string> { ["__RequestVerificationToken"] = LibraryTests.Token(blocked) }))
             {
                 Assert.AreEqual(HttpStatusCode.Redirect, unblocked.StatusCode, await unblocked.Content.ReadAsStringAsync());
             }
 
             Assert.AreEqual((short)5, await host.ScalarAsync("SELECT \"AcquisitionReleaseStatusTypeId\" FROM \"AcquisitionReleases\" WHERE \"Id\" = 901"));
-            Assert.IsFalse((await GetAsync("/Admin/Activity/Blocked")).Contains("Film Release Blocked", StringComparison.Ordinal));
+            Assert.IsFalse((await GetAsync("/Admin/Queue/Blocked")).Contains("Film Release Blocked", StringComparison.Ordinal));
 
             // History: the events of the chosen types only, and the chip counts follow.
-            var history = await GetAsync("/Admin/History?type=movies");
+            var history = await GetAsync("/Admin/Queue/History?type=movies");
             StringAssert.Contains(history, "Blocked Film");
             Assert.IsFalse(history.Contains("Blocked Book", StringComparison.Ordinal));
             StringAssert.Contains(history, "class=\"capsule-bar");
-            var everything = await GetAsync("/Admin/History");
+            var everything = await GetAsync("/Admin/Queue/History");
             StringAssert.Contains(everything, "Blocked Film");
             StringAssert.Contains(everything, "Blocked Book");
         }
@@ -3452,7 +3467,7 @@ namespace Jularr.Backend.Tests
             var offers = new[] { Offer("Example.Movie.2020.1080p.WEB-DL.H264-AAA", "english"), Offer("Example.Movie.2020.German.DL.1080p.WEB-DL.H264-ZZZ", "german") };
             var result = ReleaseSelectionEngine.Select(profile, offers.Select(offer =>
             {
-                var judgement = VideoReleaseJudge.Judge(AcquisitionKind.Movie, "Example Movie", 2020, null, UnitSet.Empty, offer);
+                var judgement = VideoReleaseJudge.Judge(AcquisitionKind.Movie, "Example Movie", 2020, null, offer);
                 return new SelectionCandidate(offer.Identity, judgement.Parsed, offer.SizeBytes, offer.ConnectionName, offer.ConnectionPriority, offer.PublishedAt, judgement.Evidence,
                     judgement.Coverage) { Languages = judgement.Languages ?? [] };
             }).ToArray());
@@ -3528,7 +3543,7 @@ namespace Jularr.Backend.Tests
 
             // The search for the season-two episode takes the absolute release, not another number.
             var season = episodes.Where(episode => episode.ParentNumber == 2).ToArray();
-            VideoIdentityMatch Judge(string title) => VideoReleaseJudge.Judge(AcquisitionKind.Anime, "Example Show", null, season[0], new UnitSet(season, season), Offer(title, "x")).Match;
+            VideoIdentityMatch Judge(string title) => VideoReleaseJudge.Judge(AcquisitionKind.Anime, "Example Show", null, new UnitScope(2, 1, season[0], new UnitSet(season, season)), Offer(title, "x")).Match;
             Assert.AreEqual(VideoIdentityMatch.Matches, Judge("[Grp] Example Show - 04 [1080p]"));
             Assert.AreNotEqual(VideoIdentityMatch.Matches, Judge("[Grp] Example Show - 02 [1080p]"));
 
@@ -3547,6 +3562,38 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public void Judge_SeasonSearch_TakesPacksAndEveryWantedEpisode_EpisodeSearchOnlyItsOwn()
+        {
+            // Season 6: episode 1 is on disk, 2 to 4 are missing; season 5 is complete.
+            UnitStateData[] states = [new(51, 5, 1, true, true, false), new(61, 6, 1, true, true, false), new(62, 6, 2, true, false, false), new(63, 6, 3, true, false, false), new(64, 6, 4, true, false, false)];
+            VideoIdentityMatch Judge(int? episode, string title) =>
+                VideoReleaseJudge.Judge(AcquisitionKind.Tv, "Example Show", null, AcquisitionSelectionLogic.ReadUnitScope(states, 6, episode), Offer(title, "x"), automatic: false).Match;
+
+            // The whole season: its pack and each missing episode, not one that is there already nor another season.
+            Assert.AreEqual(VideoIdentityMatch.ContainsTarget, Judge(null, "Example.Show.S06.1080p.WEB-DL-GRP"));
+            Assert.AreEqual(VideoIdentityMatch.Matches, Judge(null, "Example.Show.S06E03.1080p.WEB-DL-GRP"));
+            Assert.AreEqual(VideoIdentityMatch.Matches, Judge(null, "Example.Show.S06E01-E02.1080p.WEB-DL-GRP"));
+            Assert.AreEqual(VideoIdentityMatch.WrongEpisode, Judge(null, "Example.Show.S06E01.1080p.WEB-DL-GRP"));
+            Assert.AreEqual(VideoIdentityMatch.WrongSeason, Judge(null, "Example.Show.S05E02.1080p.WEB-DL-GRP"));
+
+            // One episode: only releases holding it.
+            Assert.AreEqual(VideoIdentityMatch.Matches, Judge(3, "Example.Show.S06E03.1080p.WEB-DL-GRP"));
+            Assert.AreEqual(VideoIdentityMatch.WrongEpisode, Judge(3, "Example.Show.S06E02.1080p.WEB-DL-GRP"));
+
+            // The automatic season pass takes the pack or the first missing episode; the others follow episode by episode.
+            Assert.AreEqual(VideoIdentityMatch.WrongEpisode, VideoReleaseJudge.Judge(AcquisitionKind.Tv, "Example Show", null, AcquisitionSelectionLogic.ReadUnitScope(states, 6, null),
+                Offer("Example.Show.S06E03.1080p.WEB-DL-GRP", "x")).Match);
+
+            // A Manga searched as a whole takes any release holding a wanted volume; a volume search only its own.
+            TargetUnit[] volumes = [new(1, null, 1, false), new(2, null, 2, false), new(3, null, 3, false)];
+            MangaIdentityMatch Manga(int? volume, string title) => MangaReleaseJudge.Judge(["Example Manga"],
+                new UnitScope(null, volume, volumes[(volume ?? 1) - 1], new UnitSet(volumes, volumes)), Offer(title, "m"), automatic: false).Match;
+            Assert.AreEqual(MangaIdentityMatch.Matches, Manga(null, "Example Manga v02 (Digital)"));
+            Assert.AreEqual(MangaIdentityMatch.WrongVolume, Manga(null, "Example Manga v07 (Digital)"));
+            Assert.AreEqual(MangaIdentityMatch.WrongVolume, Manga(1, "Example Manga v02 (Digital)"));
+        }
+
+        [TestMethod]
         public void Selection_NeverLetsAPreferenceRepairAWrongIdentity()
         {
             var profile = new QualityProfile("1", "Test", ["WEBDL-1080p", "WEBDL-720p"], ["WEBDL-1080p", "WEBDL-720p"], true, "WEBDL-1080p", null, null)
@@ -3560,7 +3607,7 @@ namespace Jularr.Backend.Tests
             };
             var result = ReleaseSelectionEngine.Select(profile, offers.Select(offer =>
             {
-                var judgement = VideoReleaseJudge.Judge(AcquisitionKind.Movie, "Example Movie", 2020, null, UnitSet.Empty, offer);
+                var judgement = VideoReleaseJudge.Judge(AcquisitionKind.Movie, "Example Movie", 2020, null, offer);
                 return new SelectionCandidate(offer.Identity, judgement.Parsed, offer.SizeBytes, offer.ConnectionName, offer.ConnectionPriority, offer.PublishedAt, judgement.Evidence,
                     judgement.Coverage);
             }).ToArray());

@@ -23,8 +23,11 @@ namespace Jularr.Frontend.Pages.Admin.Wanted
         [BindProperty(SupportsGet = true)]
         public int PageNumber { get; set; } = 1;
 
+        // As Sonarr's: what is missing first, then what is below its cutoff, every target last.
         [BindProperty(SupportsGet = true)]
-        public WantedViewType View { get; set; }
+        public WantedViewType View { get; set; } = WantedViewType.Missing;
+
+        private static readonly WantedViewType[] Views = [WantedViewType.Missing, WantedViewType.CutoffUnmet, WantedViewType.All];
 
         // Media types as slugs of the type bar, repeated or separated by commas; none shows all of them.
         [BindProperty(SupportsGet = true, Name = "type")]
@@ -49,7 +52,7 @@ namespace Jularr.Frontend.Pages.Admin.Wanted
             if (TempData["WantedBulk"] is string done) page.Content.Add(new P(new Text(done)).Class("list-notice").Attribute("role", "status"));
             page.NoPageRow();
             page.Content.Add(new MediaTypeBar(assets, Scopes.ListedSlugs, Scopes.ChosenSlugs, "library.scope.", types => ViewAddress(View, types)));
-            page.Content.Add(new ListToolbar(AdminMenu.Row(texts, Request, [.. Enum.GetValues<WantedViewType>().Select(view => new NavigationTab("wanted.view." + view, ViewAddress(view), view == View, Count: CountOf(view), Icon: Glyph(ViewIcon(view), 14)))], ariaLabelKey: "wanted.views")));
+            page.Content.Add(new ListToolbar(AdminMenu.Row(texts, Request, [.. Views.Select(view => new NavigationTab("wanted.view." + view, ViewAddress(view), view == View, Count: CountOf(view), Icon: Glyph(ViewIcon(view), 14)))], ariaLabelKey: "wanted.views")));
             if (_wanted is { } wanted)
             {
                 var empty = new Div(new IconTile(Glyph("search", 22), UiTone.Neutral), new P(new Text("wanted.empty")));
@@ -222,10 +225,10 @@ namespace Jularr.Frontend.Pages.Admin.Wanted
 
         // A view's first page with the chosen types (or the given ones; none for all of them).
         private string ViewAddress(WantedViewType view, IReadOnlyList<string>? types = null) =>
-            "/Admin/Wanted?PageNumber=1" + (view == WantedViewType.All ? "" : "&View=" + view) + TypeQuery(types);
+            "/Admin/Wanted?PageNumber=1" + (view == WantedViewType.Missing ? "" : "&View=" + view) + TypeQuery(types);
 
         private string Address(int pageNumber, string? handler = null) =>
-            "/Admin/Wanted?PageNumber=" + pageNumber.ToString(CultureInfo.InvariantCulture) + (View == WantedViewType.All ? "" : "&View=" + View) + TypeQuery(null) + (handler is null ? "" : "&handler=" + handler);
+            "/Admin/Wanted?PageNumber=" + pageNumber.ToString(CultureInfo.InvariantCulture) + (View == WantedViewType.Missing ? "" : "&View=" + View) + TypeQuery(null) + (handler is null ? "" : "&handler=" + handler);
 
         private string TypeQuery(IReadOnlyList<string>? types) => Scopes.Parameter(types ?? Scopes.Picked) is { } value ? "&type=" + value : "";
     }

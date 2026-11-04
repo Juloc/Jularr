@@ -17,6 +17,9 @@
     // The paging zone drawn in place, below a list inside a detail pane.
     &__paging--inline { justify-content: center; margin-top: 8px; }
 
+    // A dock with nothing to show (an empty list: no actions, no pager, no chosen rows) is not drawn at all, never as an empty circle.
+    &:not(:has(> .action-dock__zone:not([hidden]))) { display: none; }
+
     // Chosen rows: the bulk zone takes the place of the page's actions.
     &[data-selecting] &__actions { display: none; }
     &__bulk[hidden] { display: none; }

@@ -15,11 +15,12 @@ namespace Jularr.Frontend.Pages.Admin.WantedSearch
         private string Address => WantedStatus.Home(Id) + "/Search";
 
         // The dialog over the page that opened it: the title and the form that searches again in its head, the panel as its body.
+        // The X takes the first focus, as in every Modal; else it would fall on the (i) of the season, whose tip would open over the head by itself.
         private IUiComponent Dialog(WantedDetailsV1 item, string? csrf, string? returnUrl) =>
             new Framework.Dialog(
                 new Div(new Div(new H2(new ValueText(item.CanonicalTitle)).Attribute("id", "wanted-search-title")).Class("search-dialog__title"),
                     _sources.Count == 0 ? new Span() : ScopeForm(item, csrf),
-                    new Button(new Icon("close", assets, 18)).IconOnly(texts["common.close"]).Attribute("data-dialog-close", "")).Class("modal__head search-dialog__head"),
+                    new Button(new Icon("close", assets, 18)).IconOnly(texts["common.close"]).Attribute("data-dialog-close", "").Attribute("autofocus", "autofocus")).Class("modal__head search-dialog__head"),
                 new Div(Panel(item, csrf, returnUrl, false)).Class("modal__body"))
                 .Class("modal search-dialog search-host").Attribute("id", "wanted-search").Attribute("aria-labelledby", "wanted-search-title");
 
@@ -27,14 +28,16 @@ namespace Jularr.Frontend.Pages.Admin.WantedSearch
         private IUiComponent ScopeForm(WantedDetailsV1 item, string? csrf) =>
             new Div(new Form<SearchWantedDataV1>(form =>
             {
+                // An empty field searches all of it (the whole season, series or Manga), so it reads "All" rather than an example number that looks entered.
+                var all = new FieldHelp(Placeholder: "common.all");
                 if (item.MediaTypeId == MediaType.Series)
                 {
-                    form.Number(data => data.ParentUnitNumber, "wanted.search.season");
-                    form.Number(data => data.UnitNumber, "wanted.search.episode");
+                    form.Number(data => data.ParentUnitNumber, "wanted.search.season", all);
+                    form.Number(data => data.UnitNumber, "wanted.search.episode", all);
                 }
                 else if (item.MediaSubtypeId == MediaSubtype.Manga)
                 {
-                    form.Number(data => data.UnitNumber, "wanted.search.volume");
+                    form.Number(data => data.UnitNumber, "wanted.search.volume", all);
                 }
 
                 // With script the button always reads "Search again"; without it the search is a start.
@@ -48,7 +51,8 @@ namespace Jularr.Frontend.Pages.Admin.WantedSearch
             if (_sources.Count == 0) return new P(new Text("wanted.search.noSources")).Attribute("role", "status");
             var panel = new Div(
                 new Div(new Progress().Attribute("max", Count(_sources.Count)).Attribute("value", _candidates is null ? "0" : Count(_sources.Count)).TextAttribute("aria-label", "wanted.search.progress"),
-                    new P(new ValueText(_candidates is null ? Format("wanted.search.running", 0, _sources.Count) : Format("wanted.search.finished", _candidates.Count, _sources.Count)))
+                    new P(new ValueText(_candidates is null ? Format("wanted.search.running", 0, Counted("wanted.search.sourceCount", _sources.Count), _sources.Count)
+                        : Format("wanted.search.finished", Counted("wanted.search.releaseCount", _candidates.Count), Counted("wanted.search.sourceCount", _sources.Count))))
                         .Attribute("role", "status").Attribute("data-search-status", "")).Class("search-panel__status"),
                 _candidates is null ? Chips() : new Span(),
                 _candidates is null ? Filters() : new Span(),
@@ -60,7 +64,9 @@ namespace Jularr.Frontend.Pages.Admin.WantedSearch
             panel.Attribute("data-search-panel", "").Attribute("data-source-url", Address + "?handler=Source").Attribute("data-total", Count(_sources.Count))
                 .Attribute("data-return-url", returnUrl ?? "").Attribute("aria-busy", "true")
                 .TextAttribute("data-failed-text", "wanted.search.source.failed").TextAttribute("data-running", "wanted.search.running").TextAttribute("data-finished", "wanted.search.finished")
-                .TextAttribute("data-finished-failed", "wanted.search.finishedFailed").TextAttribute("data-filtered", "wanted.search.filtered");
+                .TextAttribute("data-finished-failed", "wanted.search.finishedFailed").TextAttribute("data-filtered", "wanted.search.filtered").TextAttribute("data-filtered-one", "wanted.search.filtered.one")
+                .TextAttribute("data-releases", "wanted.search.releaseCount").TextAttribute("data-releases-one", "wanted.search.releaseCount.one")
+                .TextAttribute("data-sources", "wanted.search.sourceCount").TextAttribute("data-sources-one", "wanted.search.sourceCount.one");
             return page ? new Div(ScopeForm(item, csrf), panel).Class("search-host") : panel;
         }
 
@@ -239,5 +245,8 @@ namespace Jularr.Frontend.Pages.Admin.WantedSearch
         private static string Count(long number) => number.ToString(CultureInfo.InvariantCulture);
 
         private string Format(string key, params object[] values) => string.Format(CultureInfo.CurrentCulture, texts[key], values);
+
+        // "1 release" or "31 releases": the singular has its own text, since languages differ in more than an "s".
+        private string Counted(string key, int count) => count == 1 ? texts[key + ".one"] : Format(key, count);
     }
 }

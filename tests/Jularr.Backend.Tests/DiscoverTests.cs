@@ -221,7 +221,8 @@ namespace Jularr.Backend.Tests
             html = await last.Content.ReadAsStringAsync();
             StringAssert.Contains(html, "class=\"discover-end\"");
             Assert.IsFalse(html.Contains("data-discover-next", StringComparison.Ordinal));
-            using var shelves = await host.SendAsync(HttpMethod.Get, "/?type=anime&handler=Recommendations");
+            // Anime's fifth list arrives with the second part of its shelves.
+            using var shelves = await host.SendAsync(HttpMethod.Get, "/?type=anime&p=2&handler=Recommendations");
             StringAssert.Contains(await shelves.Content.ReadAsStringAsync(), "data-shelf-more=\"/?type=anime&amp;view=Top100&amp;p=2\"");
         }
 

@@ -401,7 +401,7 @@ namespace Jularr.Backend.Service.User.Discover.V1
 
                 var scopes = await DiscoverQueries.ReadScopesAsync(ctx, Auth.ProfileId!.Value, ct);
                 var shelves = scopes.Where(scope => (Data.ScopeSlug is null || scope.Slug == Data.ScopeSlug) && whole.Contains(DiscoverScopes.Namespace(scope)))
-                    .SelectMany(scope => scope.Feeds.Select(feed => (Scope: scope, Feed: feed))).ToArray();
+                    .SelectMany(scope => scope.Feeds.Where(feed => Data.DiscoverFeedTypeIds is null || Data.DiscoverFeedTypeIds.Contains(feed)).Select(feed => (Scope: scope, Feed: feed))).ToArray();
                 if (shelves.Length == 0) return new BaseDataList<DiscoverShelfV1>([]);
 
                 var query = new ExternalWorkShelfQueryData([.. shelves.Select((shelf, index) => new ExternalWorkShelfData(index, DiscoverScopes.Namespace(shelf.Scope), shelf.Scope.MediaTypeId,

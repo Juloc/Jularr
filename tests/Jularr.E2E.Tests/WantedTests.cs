@@ -33,9 +33,11 @@ namespace Jularr.E2E.Tests
             await Assertions.Expect(page.Locator(".wanted-list")).ToContainTextAsync("Wanted Manga");
             await Assertions.Expect(page.Locator(".navigation-tabs a[aria-current=page]")).ToContainTextAsync("1");
 
-            // The views keep the types.
-            await page.Locator(".navigation-tabs a", new() { HasTextString = "Missing" }).ClickAsync();
-            await Assertions.Expect(page).ToHaveURLAsync(new Regex("View=Missing&type=manga$"));
+            // The views keep the types; Missing is the first and the default, All the last.
+            await Assertions.Expect(page.Locator(".navigation-tabs a[aria-current=page]")).ToContainTextAsync("Missing");
+            await Assertions.Expect(page.Locator(".navigation-tabs__link").Last).ToContainTextAsync("All");
+            await page.Locator(".navigation-tabs a", new() { HasTextString = "All" }).ClickAsync();
+            await Assertions.Expect(page).ToHaveURLAsync(new Regex("View=All&type=manga$"));
             await Assertions.Expect(page.Locator(".wanted-list a.list-identity__title")).ToHaveCountAsync(1);
             await Evidence.SaveAsync(page, "wanted-types-manga");
 

@@ -128,13 +128,13 @@ namespace Jularr.Frontend.Pages.User.Discover
             && SortSlugs.Where(sort => sort.Slug == Sort).Select(sort => (DiscoverSort?)sort.Sort).FirstOrDefault() is { } chosen
             && chosen != DiscoverSort.Popularity && offered.Sorts.Contains(chosen) ? chosen : null;
 
+        // The chosen types are asked together.
         private async Task LoadFilterOptionsAsync()
         {
-            foreach (var scope in Chosen.Where(scope => !_filterOptions.ContainsKey(scope.Slug)))
-            {
-                _filterOptions[scope.Slug] = await filterOptions.ExecuteAsync<DiscoverFilterOptionsV1>(new ReadDiscoverFilterOptionsDataV1(scope.Slug, Chosen.Count == 1),
-                    HttpContext.RequestAborted);
-            }
+            var missing = Chosen.Where(scope => !_filterOptions.ContainsKey(scope.Slug)).ToList();
+            var read = await Task.WhenAll(missing.Select(scope => filterOptions.ExecuteAsync<DiscoverFilterOptionsV1>(new ReadDiscoverFilterOptionsDataV1(scope.Slug, Chosen.Count == 1),
+                HttpContext.RequestAborted)));
+            for (var index = 0; index < missing.Count; index++) _filterOptions[missing[index].Slug] = read[index];
         }
 
         // One page of each chosen type, together, the types taking turns title by title; a type that does not answer leaves the others.

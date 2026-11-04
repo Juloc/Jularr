@@ -29,12 +29,12 @@
     padding: 24px 0;
 }
 
-// While pages load by themselves the link waits hidden; it shows once they stop or fail, and always without script.
+// While pages and recommendation shelves load by themselves the link waits hidden; it shows once they stop or fail, and always without script.
 @media (scripting: enabled) {
-    .discover-paging[data-automatic] [data-discover-next] { display: none; }
+    .discover-paging[data-automatic] :is([data-discover-next], [data-discover-recommendations]) { display: none; }
 }
 
-// Grey cards where the next page arrives: a row under the grid, three at the end of a shelf.
+// Grey cards where the next page arrives: a row under the grid, three at the end of a shelf, a row where the next recommendation shelves arrive.
 .discover-skeletons {
     margin-top: 18px;
     &--shelf { display: contents; }

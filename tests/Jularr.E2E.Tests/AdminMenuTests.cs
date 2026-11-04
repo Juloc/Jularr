@@ -29,8 +29,8 @@ namespace Jularr.E2E.Tests
 
                 // A click on an entry swaps the page in place and the mark follows it; the group of the page is tinted.
                 await menu.Locator(".menu-entry", new() { HasText = "Jobs" }).ClickAsync();
-                await Assertions.Expect(page).ToHaveURLAsync(new Regex("/Admin/Jobs$"));
-                await Assertions.Expect(menu.Locator(".menu-entry.is-active")).ToHaveAttributeAsync("href", "/Admin/Jobs");
+                await Assertions.Expect(page).ToHaveURLAsync(new Regex("/Admin/Jobs/Tasks$"));
+                await Assertions.Expect(menu.Locator(".menu-entry.is-active")).ToHaveAttributeAsync("href", "/Admin/Jobs/Tasks");
                 await Assertions.Expect(menu.Locator(".menu-group--current")).ToHaveCountAsync(1);
                 Assert.AreEqual("same document", await page.EvaluateAsync<string>("window.menuMarker"));
 

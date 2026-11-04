@@ -46,7 +46,7 @@ namespace Jularr.Frontend.Pages.Admin.Dashboard
             if (_activity is { } activity)
             {
                 left.Add(new UiSection("dashboard.activity", [new Div(activity.Items.Count > 0 ? activity.Items.Select(Download).ToArray() : [new P(new Text("dashboard.activity.empty"))]).Class("dashboard-recent")],
-                    action: Link("dashboard.activity.open", "/Admin/Activity")));
+                    action: Link("dashboard.activity.open", "/Admin/Queue")));
             }
 
             var right = new List<IUiComponent> { Services(health) };

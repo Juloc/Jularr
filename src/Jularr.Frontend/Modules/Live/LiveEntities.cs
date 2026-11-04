@@ -85,7 +85,7 @@ namespace Jularr.Frontend.Modules.Live
 
         // The figures of the administration menu; a figure that is zero or not readable has no text, so its badge hides.
         public static LiveEntity Menu(AdminCounts counts) =>
-            new("menu", null, null, Texts([.. new[] { AdminCounter.OpenDownloads, AdminCounter.FailedJobs, AdminCounter.OpenRequests }
+            new("menu", null, null, Texts([.. new[] { AdminCounter.OpenDownloads, AdminCounter.TasksNeedingHelp, AdminCounter.OpenRequests }
                 .Select(counter => (AdminCounts.Name(counter), counts.Of(counter) is int count and > 0 ? Count(count) : null))]));
 
         // Counts and the pace as the tiles first render them.

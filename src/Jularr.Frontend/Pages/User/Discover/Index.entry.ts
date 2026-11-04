@@ -6,16 +6,20 @@ import { inserted, onPage } from '../../../Modules/Navigation/PageSwap';
 // Enter in the header search loads this page's results here instead of swapping the page; set up once per visit.
 let searching: HTMLFormElement | undefined;
 let more: ((next: HTMLAnchorElement) => void) | undefined;
+let recommend: (() => void) | undefined;
 
 document.addEventListener('htmx:config:request', event => {
     if ((event as CustomEvent).detail.ctx.sourceElement === searching && searching?.isConnected) event.preventDefault();
 });
 
 document.addEventListener('click', event => {
-    const next = (event.target as Element | null)?.closest<HTMLAnchorElement>('[data-discover-next]');
-    if (!next || !more || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+    const target = event.target as Element | null;
+    const next = target?.closest<HTMLAnchorElement>('[data-discover-next]');
+    const shelves = target?.closest('[data-discover-recommendations]');
+    if (!(next && more || shelves && recommend) || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
     event.preventDefault();
-    more(next);
+    if (next) more!(next);
+    else recommend!();
 });
 
 // Pages that add nothing new in a row before automatic loading stops; a provider may repeat a page, a filter may empty several.
@@ -95,6 +99,7 @@ function setup(): void {
     let results = document.querySelector<HTMLElement>('#discover-results');
     searching = undefined;
     more = undefined;
+    recommend = undefined;
 
     if (searchForm && results) {
         searching = searchForm;
@@ -104,30 +109,63 @@ function setup(): void {
         let empty = 0;
         let observer: IntersectionObserver | undefined;
         let recommendationRequest: AbortController | undefined;
+        let recommendationObserver: IntersectionObserver | undefined;
 
-        // Provider shelves never block local HTML.
+        // Provider shelves never block local HTML. They arrive a few at a time in place of their link: the first ones at once, the next ones as the page nears them,
+        // with grey cards where they arrive; a part that fails leaves its link as the retry.
         async function recommendations(): Promise<void> {
-            const link = results!.querySelector<HTMLAnchorElement>('[data-discover-recommendations]');
-            if (!link) return;
+            recommendationObserver?.disconnect();
+            const region = results!.querySelector<HTMLElement>('#discover-recommendations');
+            const link = region?.querySelector<HTMLAnchorElement>('[data-discover-recommendations]');
+            const paging = link?.closest<HTMLElement>('.discover-paging');
+            if (!region || !link || !paging) return;
             recommendationRequest?.abort();
             recommendationRequest = new AbortController();
             const signal = recommendationRequest.signal;
             const current = generation;
+            const waiting = skeletons(6, 'media-shelf__items discover-skeletons');
+            paging.before(waiting);
             try {
                 const response = await fetch(link.href, { signal, headers: { Accept: 'text/html', 'X-Jularr-Fragment': 'recommendations' } });
                 if (!response.ok || response.redirected) throw new Error('Unavailable recommendations');
                 const page = new DOMParser().parseFromString(await response.text(), 'text/html');
-                const shelves = page.querySelector('#discover-recommendations');
-                if (!shelves) throw new Error('Missing recommendations');
+                const incoming = page.querySelector('#discover-recommendations');
+                if (!incoming) throw new Error('Missing recommendations');
                 if (current !== generation || signal.aborted) return;
-                results!.querySelector('#discover-recommendations')?.replaceWith(shelves);
-                inserted(shelves);
-                initializeShelves(results!);
+
+                // A provider that did not answer is said once.
+                if (region.querySelector(':scope > [role=status]')) incoming.querySelector(':scope > [role=status]')?.remove();
+                const added = Array.from(incoming.children);
+                waiting.remove();
+                paging.replaceWith(...added);
+                added.forEach(inserted);
+                initializeShelves(region);
+                initializeCards();
+                const feedback = results!.querySelector<HTMLElement>('.discover-feedback');
+                if (feedback) feedback.textContent = '';
+                observeRecommendations();
             } catch {
                 if (signal.aborted || current !== generation) return;
+                delete paging.dataset.automatic;
+                if (link.dataset.retryLabel) link.textContent = link.dataset.retryLabel;
                 const feedback = results!.querySelector<HTMLElement>('.discover-feedback');
                 if (feedback) feedback.textContent = results!.dataset.loadError ?? '';
+            } finally {
+                waiting.remove();
             }
+        }
+
+        // The next part loads as the page nears its link; a part that leaves the link in reach lets the following one load at once.
+        function observeRecommendations(): void {
+            const paging = results!.querySelector<HTMLElement>('#discover-recommendations .discover-paging');
+            if (!paging || !('IntersectionObserver' in window)) {
+                if (paging) delete paging.dataset.automatic;
+                return;
+            }
+            recommendationObserver = new IntersectionObserver(entries => {
+                if (entries.some(entry => entry.isIntersecting)) void recommendations();
+            }, { rootMargin: '600px' });
+            recommendationObserver.observe(paging);
         }
 
         // Only HTML from this route.
@@ -135,6 +173,7 @@ function setup(): void {
             if (append && loading) return;
             request?.abort();
             recommendationRequest?.abort();
+            recommendationObserver?.disconnect();
             request = new AbortController();
             const current = ++generation;
             const signal = request.signal;
@@ -229,9 +268,11 @@ function setup(): void {
         // Shows the link once pages stop loading by themselves; after a failure it reads as a retry.
         function manual(failed: boolean): void {
             const paging = results!.querySelector<HTMLElement>('.discover-paging');
-            if (paging) delete paging.dataset.automatic;
             const next = paging?.querySelector<HTMLAnchorElement>('[data-discover-next]');
-            if (failed && next?.dataset.retryLabel) next.textContent = next.dataset.retryLabel;
+            // The recommendation shelves' link waits for its own part.
+            if (!paging || !next) return;
+            delete paging.dataset.automatic;
+            if (failed && next.dataset.retryLabel) next.textContent = next.dataset.retryLabel;
         }
 
         function searchAddress(): URL {
@@ -248,6 +289,7 @@ function setup(): void {
         });
 
         more = next => void load(new URL(next.href), true);
+        recommend = () => void recommendations();
 
         observeNext();
         void recommendations();

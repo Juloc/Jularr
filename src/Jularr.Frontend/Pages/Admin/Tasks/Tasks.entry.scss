@@ -1,0 +1,13 @@
+// Jularr's own tasks on the list kit: the grid of their columns at three widths (the state and the groups share the Queue's styles).
+.tasks-list {
+    --list-columns: minmax(220px, 2.4fr) minmax(170px, 1.6fr) minmax(130px, .9fr) minmax(90px, .6fr);
+    --list-columns-medium: minmax(220px, 2.4fr) minmax(170px, 1.6fr) minmax(90px, .6fr);
+}
+
+// Why a task failed is what a person acts on: it wraps whole instead of ending in an ellipsis.
+.tasks-list .live-progress.activity-status .live-progress__facts { white-space: normal; overflow-wrap: anywhere; }
+
+// Phone card: the state beside the name takes at most half the row, so the name keeps its room.
+@container list (max-width: 690px) {
+    .tasks-list .list-row { grid-template-columns: minmax(0, 1fr) fit-content(48%); }
+}

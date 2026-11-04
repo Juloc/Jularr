@@ -32,7 +32,7 @@ namespace Jularr.Backend.Logic.Acquisition
         [GeneratedRegex(@"^\s*(?:[\[(][^\])]*[\])]\s*)+")]
         private static partial Regex LeadingTags();
 
-        public static ReleaseJudgement<MangaIdentityMatch> Judge(IReadOnlyList<string> titles, UnitScope? scope, ReleaseOffer offer)
+        public static ReleaseJudgement<MangaIdentityMatch> Judge(IReadOnlyList<string> titles, UnitScope? scope, ReleaseOffer offer, bool automatic = true)
         {
             if (offer.DownloadUri is null)
             {
@@ -73,8 +73,9 @@ namespace Jularr.Backend.Logic.Acquisition
                 return Result(MangaIdentityMatch.AmbiguousTitle, ReleaseIdentityEvidence.Ambiguous("VolumesUnknown", start.ToString(CultureInfo.InvariantCulture)), SelectionCoverage.Single);
             }
 
+            // A volume search and the automatic pass take the releases holding the target volume; a person's search of the whole Manga those holding any wanted volume.
             var end = Math.Max(start, parsed.VolumeEnd ?? start);
-            if (scope.Unit.Number < start || scope.Unit.Number > end)
+            if (scope.UnitNumber is null && !automatic ? !scope.Units.Wanted.Any(unit => unit.Number >= start && unit.Number <= end) : scope.Unit.Number < start || scope.Unit.Number > end)
             {
                 return Result(MangaIdentityMatch.WrongVolume, ReleaseIdentityEvidence.Conflict("WrongVolume", start.ToString(CultureInfo.InvariantCulture)), SelectionCoverage.Single);
             }
