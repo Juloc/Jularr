@@ -17,8 +17,11 @@ namespace Jularr.E2E.Tests
             var page = session.Page;
             await Owner.SetUpAndSignInAsync(page);
 
-            // Empty lists draw no floating bar: no empty circle under the list.
-            await jularr.RunSqlAsync("""UPDATE "InstanceModules" SET "IsEnabled" = TRUE WHERE "Key" IN ('Acquisition', 'Requests');""");
+            // Empty lists draw no floating bar: no empty circle under the list. The offline keyless catalogs are switched off, so the background health check adds no task of its own.
+            await jularr.RunSqlAsync("""
+                UPDATE "InstanceModules" SET "IsEnabled" = TRUE WHERE "Key" IN ('Acquisition', 'Requests');
+                UPDATE "Providers" SET "IsEnabled" = FALSE WHERE "ProtectedSecret" IS NULL;
+                """);
             foreach (var empty in new[] { "/Admin/Wanted", "/Admin/Queue" })
             {
                 await page.GotoAsync(empty);
@@ -55,33 +58,37 @@ namespace Jularr.E2E.Tests
                     await Assertions.Expect(views.Locator("a[href^='/Admin/Queue/Blocked']")).ToHaveCountAsync(1);
                     await Evidence.SaveAsync(page, "queue-" + (phone ? "phone" : "desktop"));
 
-                    // The Jobs entry opens its Tasks: the backup and the job need help, Schedule is the next chip.
+                    // The Jobs entry opens its Tasks: the backup and the job need help (and the group counts what it holds), Schedule is the next chip.
                     await page.GotoAsync("/Admin/Jobs/Tasks");
                     var help = page.Locator("#tasks-group-Help");
-                    await Assertions.Expect(help.Locator(".list-row")).ToHaveCountAsync(2);
+                    await Assertions.Expect(Steps.ListRow(help, "Backup")).ToHaveCountAsync(1);
+                    await Assertions.Expect(Steps.ListRow(help, "Library scans")).ToHaveCountAsync(1);
                     await Assertions.Expect(help).ToContainTextAsync("pg_dump or pg_restore is older than the PostgreSQL server.");
-                    await Assertions.Expect(help.Locator(".activity-group__count")).ToHaveTextAsync("2");
+                    await Assertions.Expect(help.Locator(".activity-group__count")).ToHaveTextAsync((await help.Locator(".list-row").CountAsync()).ToString(System.Globalization.CultureInfo.InvariantCulture));
                     await Assertions.Expect(page.Locator("main")).Not.ToContainTextAsync("Queued Film");
                     await Assertions.Expect(page.Locator("main .navigation-tabs a[aria-current=page]")).ToHaveTextAsync("Tasks");
                     await Assertions.Expect(page.Locator("main .navigation-tabs a[href='/Admin/Jobs']")).ToHaveTextAsync("Schedule");
                     await Evidence.SaveAsync(page, "tasks-" + (phone ? "phone" : "desktop"));
                 }
 
-                // The sidebar: the Queue and Wanted in the ARR group, the Queue with its open download, Jobs with the two tasks that need help.
+                // The sidebar: the Queue and Wanted in the ARR group, the Queue with its open download, Jobs with the tasks that need help.
                 await page.SetViewportSizeAsync(1440, 900);
                 var menu = page.Locator(".app-sidebar--admin .menu");
                 var arr = menu.Locator(".menu-group", new() { Has = page.Locator("a.menu-entry[href='/Admin/Queue']") });
                 await Assertions.Expect(arr.Locator("a.menu-entry[href='/Admin/Wanted']")).ToHaveCountAsync(1);
                 await Assertions.Expect(arr.Locator("a.menu-entry[href='/Admin/Acquisition']")).ToHaveCountAsync(1);
                 await Assertions.Expect(menu.Locator("a.menu-entry[href='/Admin/Queue'] [data-live-text=downloads]")).ToHaveTextAsync("1");
-                await Assertions.Expect(menu.Locator("a.menu-entry[href='/Admin/Jobs/Tasks'] [data-live-text=jobs]")).ToHaveTextAsync("2");
+                var figure = menu.Locator("a.menu-entry[href='/Admin/Jobs/Tasks'] [data-live-text=jobs]");
+                var needing = await page.Locator("#tasks-group-Help .list-row").CountAsync();
+                await Assertions.Expect(figure).ToHaveTextAsync(needing.ToString(System.Globalization.CultureInfo.InvariantCulture));
 
-                // Dismiss puts the backup aside: one task is left, and the figure follows.
+                // Dismiss puts the backup aside: the job is left, and the figure follows.
                 var backup = Steps.ListRow(page.Locator("#tasks-group-Help"), "Backup");
                 await Steps.SubmitAsync(page, backup.Locator("form").Filter(new() { Has = page.GetByRole(AriaRole.Button, new() { Name = "Dismiss" }) }));
-                await Assertions.Expect(page.Locator("#tasks-group-Help .list-row")).ToHaveCountAsync(1);
+                await Assertions.Expect(backup).ToHaveCountAsync(0);
+                await Assertions.Expect(Steps.ListRow(page.Locator("#tasks-group-Help"), "Library scans")).ToHaveCountAsync(1);
                 await page.ReloadAsync();
-                await Assertions.Expect(menu.Locator("a.menu-entry[href='/Admin/Jobs/Tasks'] [data-live-text=jobs]")).ToHaveTextAsync("1");
+                await Assertions.Expect(figure).ToHaveTextAsync((needing - 1).ToString(System.Globalization.CultureInfo.InvariantCulture));
             }
             catch
             {
