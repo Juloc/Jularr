@@ -64,9 +64,12 @@ counted, else the chapter's), theater, fullscreen and settings. Both bars separa
 decided by width, not by breakpoints: `Overflow.ts` measures the bar and moves what does not fit, the highest rank first, into the More
 menu, where an entry of the same name takes its place; a menu entry does what its tool does. The settings button of the bottom bar never
 leaves, so the settings open with one press at every width. The language button is there whenever the Translation module is on; with no
-reading language set up its panel says so and leads to the profile settings. While the server's translation shows and a machine has a
+reading language set up its panel says so and leads to the profile settings. The languages are offered where a server model translates for
+this reader: the Owner's default or an installed TranslateGemma, else for the Owner (`instance.settings.update`) Codex's model of the AI page,
+which translates the chapter's missing blocks in whole-passage requests (`TranslateLocalReadingPassagesV1`, no choice for other readers). With
+nothing to translate because the Ollama machines set up do not answer, the panel says the machine is not answering instead of offering nothing. While the server's translation shows and a machine has a
 second model, the panel also translates again with a chosen model (the one re-translation of the Reader; Codex appears among the models for
-the Owner): the paragraph at the top of the page, the chapter, or the whole book (Ollama: the rest in the background; Codex: chapter by
+the Owner, every model of the account, the AI page's first): the paragraph at the top of the page, the chapter, or the whole book (Ollama: the rest in the background; Codex: chapter by
 chapter with progress and Stop), for every reader of the book; a line names the paragraph's model, and a paragraph from another model than
 the chapter's own is faintly dotted-underlined. The shared Range owns the slider: a thin track across the
 bar with a notch at each chapter, the thumb showing while the bar is in use. It runs over the whole book (0 to 1000); dragging shows the

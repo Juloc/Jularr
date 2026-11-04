@@ -15,6 +15,9 @@ namespace Jularr.Backend.Service.Core
         int BatchCharacters { get; }
 
         Task<string?[]> TranslateBlocksAsync(TranslationMachine machine, string source, string target, IReadOnlyList<string> blocks, string? context, CancellationToken ct);
+
+        // One chapter's requests counted together until disposed (chapter from 1), for comparing what a chapter costs with each model.
+        IDisposable BeginChapter(TranslationMachine machine, int chapter, string? title);
     }
 
     // The Owner's ChatGPT account as a translator through the provider seam, model ids "codex:<model>". It translates only when asked by name (the Owner's default
@@ -44,13 +47,13 @@ namespace Jularr.Backend.Service.Core
         // The Owner's ChatGPT account: only the admin-only right chooses its model in the Reader.
         public bool IsAdminOnly => true;
 
-        // The model chosen on the AI page, else the account's first, while Codex is connected and within its limits.
+        // The account's models while Codex is connected and within its limits, the one chosen on the AI page first (the Owner compares them on one chapter).
         public async Task<IReadOnlyList<string>> AvailableAsync(TranslationSetupV1 setup, CancellationToken ct)
         {
             if (connection.PlanLimitedUntil is not null || connection.LimitReached(setup.CodexDailyTokens, setup.CodexRunTokens) || !await connection.IsConnectedAsync(ct)) return [];
             if (connection.KnownModels.Length == 0) await connection.ReadCatalogAsync(ct);
-            var model = setup.CodexModel ?? connection.KnownModels.FirstOrDefault();
-            return model is not null && connection.KnownModels.Contains(model, StringComparer.Ordinal) ? [model] : [];
+            var known = connection.KnownModels;
+            return [.. known.Where(model => model == setup.CodexModel).Concat(known.Where(model => model != setup.CodexModel))];
         }
 
         public async Task<TranslationMachine?> ChooseAsync(TranslationSetupV1 setup, string? model, CancellationToken ct)
@@ -119,6 +122,9 @@ namespace Jularr.Backend.Service.Core
             Flush();
             return parts;
         }
+
+        public IDisposable BeginChapter(TranslationMachine machine, int chapter, string? title) =>
+            connection.BeginRun(chapter, title, machine.Model, Query(machine.Address).GetValueOrDefault("effort"));
 
         public Task<string> TranslateAsync(TranslationMachine machine, string source, string target, string text, CancellationToken ct) =>
             AskAsync(machine, Prompt(source, target, text, null, "Keep every cue number and line break exactly as given; translate only the spoken text."), "translate subtitles", ct);

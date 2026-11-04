@@ -77,7 +77,14 @@
     .codex-history__tokens { text-align: end; font-variant-numeric: tabular-nums; }
 }
 
-// What Codex is doing and did last: one row per request, the time, what it was, the model, the cost and how it ended.
+// What Codex is doing and did last: one row per chapter or request, the time, what it was, the model and effort, the cost and how it ended.
+// The chapters of a passage translation above the single requests, each list under its name.
+.codex-requests__title {
+    margin: 0;
+    color: var(--muted);
+    font-weight: 600;
+}
+
 .codex-requests {
     display: grid;
     gap: 8px;

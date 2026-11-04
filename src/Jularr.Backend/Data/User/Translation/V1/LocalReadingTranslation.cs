@@ -9,9 +9,13 @@ namespace Jularr.Backend.Data.User.Translation.V1
     {
     }
 
-    public sealed class LocalTranslationAvailabilityV1(string? model) : BaseResponse
+    // The model id that translates for the caller now; Passages when it translates a chapter in whole-passage requests (Codex); Away when none translates
+    // because the machines set up for translation do not answer.
+    public sealed class LocalTranslationAvailabilityV1(string? model, bool passages = false, bool away = false) : BaseResponse
     {
         public string? Model { get; } = model;
+        public bool Passages { get; } = passages;
+        public bool Away { get; } = away;
     }
 
     public sealed class LocalReadingTranslationParametersV1(long documentId, int sectionIndex, string language, string model, string sourceLanguage) : BaseParameters

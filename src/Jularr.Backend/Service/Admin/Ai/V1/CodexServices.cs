@@ -131,7 +131,7 @@ namespace Jularr.Backend.Service.Admin.Ai.V1
         protected override ServicePermission GetPermission(CodexConnectionParametersV1 parameters, Type resultType) => new("instance.settings.read");
 
         protected override Task<IServiceOutput> OnRead() =>
-            Task.FromResult<IServiceOutput>(new CodexActivityV1(_connection.Requests(), [.. _connection.History().Select(day => new CodexDayV1(day.Day, day.Tokens))], _connection.PlanLimitedUntil));
+            Task.FromResult<IServiceOutput>(new CodexActivityV1(_connection.Runs(), _connection.Requests(), [.. _connection.History().Select(day => new CodexDayV1(day.Day, day.Tokens))], _connection.PlanLimitedUntil));
     }
 
     [ServiceEndpoint("GET", "/api/v1/admin/ai/codex/settings")]

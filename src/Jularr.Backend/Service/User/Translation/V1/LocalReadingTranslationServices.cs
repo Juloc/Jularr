@@ -142,12 +142,13 @@ namespace Jularr.Backend.Service.User.Translation.V1
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<LocalTranslationAvailabilityV1>()];
         protected override ModuleRequirement GetInstanceModules(LocalTranslationAvailabilityParametersV1 parameters) => ModuleRequirement.All("Library", "Reading", "Translation");
         protected override ServicePermission GetPermission(LocalTranslationAvailabilityParametersV1 parameters, Type resultType) => new("profile.media.read");
-        // The model id that translates now (the Owner's default, else the largest installed TranslateGemma); asking each machine is metadata work
-        // and never delays opening the Reader for long.
+        // The model id that translates for the caller now (the Owner's default, else the largest installed TranslateGemma, else for the admin-only right
+        // Codex); asking each machine is metadata work and never delays opening the Reader for long.
         protected override async Task<IServiceOutput> OnRead()
         {
             var setup = await TranslationProviders.SetupAsync(Context, CancellationToken);
-            return new LocalTranslationAvailabilityV1((await _providers.ChooseAsync(setup, CancellationToken))?.ModelId);
+            var (machine, away) = await _providers.ChooseForAsync(setup, Auth, CancellationToken);
+            return new LocalTranslationAvailabilityV1(machine?.ModelId, machine?.Provider is IBatchTranslationProvider, away);
         }
     }
 

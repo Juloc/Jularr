@@ -10611,6 +10611,22 @@
    "Activity",
    "Aktivität"
   ],
+  "admin.ai.chapters": [
+   "Chapters",
+   "Kapitel"
+  ],
+  "admin.ai.chapter": [
+   "Chapter {0}",
+   "Kapitel {0}"
+  ],
+  "admin.ai.chapterRequests": [
+   "Requests: {0}",
+   "Anfragen: {0}"
+  ],
+  "admin.ai.requests": [
+   "Requests",
+   "Anfragen"
+  ],
   "admin.ai.activityLine": [
    "What Codex is doing and did last",
    "Was Codex gerade tut und zuletzt getan hat"
@@ -14278,6 +14294,10 @@
    "Paragraph spacing (%)",
    "Absatzabstand (%)"
   ],
+  "reader.language.away": [
+   "The translation machine is not answering right now. Try again later; until then you can read this book in its original language.",
+   "Die Übersetzungsmaschine antwortet gerade nicht. Versuche es später noch einmal; bis dahin kannst du das Buch in seiner Originalsprache lesen."
+  ],
   "reader.language.none": [
    "No translation engine is available right now. You can still read this book in its original language.",
    "Derzeit ist keine Übersetzungs-Engine verfügbar. Du kannst das Buch weiterhin in seiner Originalsprache lesen."
@@ -16251,6 +16271,10 @@
   "reader.translation.provider.browser": [
    "Engine: Mozilla/Bergamot · browser",
    "Engine: Mozilla/Bergamot · Browser"
+  ],
+  "reader.translation.provider.account": [
+   "Engine: ChatGPT account",
+   "Engine: ChatGPT-Konto"
   ],
   "reader.translation.provider.local": [
    "Engine: TranslateGemma · local",

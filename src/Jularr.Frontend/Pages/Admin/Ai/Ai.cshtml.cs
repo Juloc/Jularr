@@ -35,7 +35,7 @@ namespace Jularr.Frontend.Pages.Admin.Ai
             if (_connection.Phase == CodexPhase.Connected && _catalog is not null && _settings is not null && _activity is not null)
             {
                 if (_catalog.Windows.Length > 0 || _catalog.UsedToday > 0 || _catalog.UsedSinceStart > 0 || _activity.PlanLimitedUntil is not null) cards.Add(UsageCard(_catalog, _settings, _activity));
-                if (_activity.Requests.Length > 0) cards.Add(ActivityCard(_activity));
+                if (_activity.Requests.Length > 0 || _activity.Chapters.Length > 0) cards.Add(ActivityCard(_activity));
                 cards.Add(SettingsCard(_catalog, _settings, csrf));
             }
 
@@ -139,32 +139,52 @@ namespace Jularr.Frontend.Pages.Admin.Ai
             return new FeatureCard(new IconTile(new Icon("pulse", assets, 18), UiTone.Accent), texts["admin.ai.usage"], plan, state, body, [], null, "codex-usage").Wide();
         }
 
-        // The running requests and the last ones, newest first; the page asks again while one runs.
+        // The running chapters and requests and the last ones, newest first; the page asks again while one runs. A chapter adds up its requests, so the
+        // Owner compares what one chapter costs with each model and effort.
         private IUiComponent ActivityCard(CodexActivityV1 activity)
         {
-            var running = activity.Requests.Any(request => request.State == 0);
-            var rows = activity.Requests.Select(request =>
-            {
-                var (key, tone) = request.State switch
-                {
-                    0 => ("admin.ai.requestRunning", UiTone.Accent),
-                    1 => ("admin.ai.requestDone", UiTone.Success),
-                    3 => ("admin.ai.requestPlanLimit", UiTone.Danger),
-                    _ => ("admin.ai.requestFailed", UiTone.Warning)
-                };
-                return (IUiComponent)new Li(
-                    new Span(new LocalTime(request.Started.UtcDateTime, "time")).Class("codex-request__time"),
-                    new Span(new ValueText(request.What)).Class("codex-request__what"),
-                    new Span(new ValueText(request.Model)).Class("codex-request__model"),
-                    new Span(new ValueText(request.Tokens > 0 ? request.Tokens.ToString("N0", CultureInfo.CurrentCulture) + " · " : "")
-                        , new ValueText(request.Seconds.ToString("0.#", CultureInfo.CurrentCulture) + " s")).Class("codex-request__cost"),
-                    new StateChip(new Text(key), tone, null, request.State == 0)).Class("codex-request");
-            });
+            var running = activity.Requests.Any(request => request.State == 0) || activity.Chapters.Any(chapter => chapter.State == 0);
+            var chapters = activity.Chapters.Select(chapter => (IUiComponent)new Li(
+                new Span(new LocalTime(chapter.Started.UtcDateTime, "time")).Class("codex-request__time"),
+                new Span(new ValueText(string.Format(CultureInfo.CurrentCulture, texts["admin.ai.chapter"], chapter.Chapter) + (chapter.Title is { Length: > 0 } title ? " · " + title : "")))
+                    .Class("codex-request__what"),
+                new Span(new ValueText(ModelAndEffort(chapter.Model, chapter.Effort))).Class("codex-request__model"),
+                new Span(new ValueText(Cost(chapter.Tokens, chapter.Seconds) + " · " + string.Format(CultureInfo.CurrentCulture, texts["admin.ai.chapterRequests"], chapter.Requests)))
+                    .Class("codex-request__cost"),
+                State(chapter.State)).Class("codex-request").Attribute("data-codex-chapter", ""));
+            var requests = activity.Requests.Select(request => (IUiComponent)new Li(
+                new Span(new LocalTime(request.Started.UtcDateTime, "time")).Class("codex-request__time"),
+                new Span(new ValueText(request.What)).Class("codex-request__what"),
+                new Span(new ValueText(ModelAndEffort(request.Model, request.Effort))).Class("codex-request__model"),
+                new Span(new ValueText(Cost(request.Tokens, request.Seconds))).Class("codex-request__cost"),
+                State(request.State)).Class("codex-request"));
+            IUiComponent[] body = activity.Chapters.Length == 0 ? [new Ul([.. requests]).Class("codex-requests")]
+                : [new P(new Text("admin.ai.chapters")).Class("codex-requests__title"), new Ul([.. chapters]).Class("codex-requests").Attribute("data-role", "codex-chapters"),
+                    .. activity.Requests.Length == 0 ? Array.Empty<IUiComponent>() : [new P(new Text("admin.ai.requests")).Class("codex-requests__title"), new Ul([.. requests]).Class("codex-requests")]];
             var card = new FeatureCard(new IconTile(new Icon("activity", assets, 18), UiTone.Accent), texts["admin.ai.activity"], texts["admin.ai.activityLine"], null,
-                [new Ul([.. rows]).Class("codex-requests")], [], null, "codex-activity").Wide();
+                body, [], null, "codex-activity").Wide();
             if (running) card.Attribute("data-codex-busy", "");
             return card;
         }
+
+        private static StateChip State(byte state)
+        {
+            var (key, tone) = state switch
+            {
+                0 => ("admin.ai.requestRunning", UiTone.Accent),
+                1 => ("admin.ai.requestDone", UiTone.Success),
+                3 => ("admin.ai.requestPlanLimit", UiTone.Danger),
+                _ => ("admin.ai.requestFailed", UiTone.Warning)
+            };
+            return new StateChip(new Text(key), tone, null, state == 0);
+        }
+
+        // The model and, when the Owner chose one, the effort by its name on this page.
+        private string ModelAndEffort(string model, string? effort) =>
+            effort is null ? model : model + " · " + (texts.Has("admin.ai.effort." + effort) ? texts["admin.ai.effort." + effort] : effort);
+
+        private static string Cost(long tokens, double seconds) =>
+            (tokens > 0 ? tokens.ToString("N0", CultureInfo.CurrentCulture) + " · " : "") + seconds.ToString("0.#", CultureInfo.CurrentCulture) + " s";
 
         private static string Count(long used, long limit) =>
             used.ToString("N0", CultureInfo.CurrentCulture) + (limit > 0 ? " / " + limit.ToString("N0", CultureInfo.CurrentCulture) : "");
@@ -222,7 +242,7 @@ namespace Jularr.Frontend.Pages.Admin.Ai
         {
             await LoadDataAsync();
             using var writer = new StringWriter(CultureInfo.InvariantCulture);
-            if (_activity is { Requests.Length: > 0 }) ActivityCard(_activity).WriteTo(writer, global::System.Text.Encodings.Web.HtmlEncoder.Default, texts);
+            if (_activity is { Requests.Length: > 0 } or { Chapters.Length: > 0 }) ActivityCard(_activity).WriteTo(writer, global::System.Text.Encodings.Web.HtmlEncoder.Default, texts);
             Response.Headers.CacheControl = "no-store";
             return Content(writer.ToString(), "text/html");
         }
