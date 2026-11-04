@@ -8,7 +8,7 @@ namespace Jularr.E2E.Tests
     {
         [TestMethod]
         [Timeout(300_000)]
-        public async Task Phone_QueueRowKeepsItsTitle_AndTheHeaderTrailShowsItsFirstPartAndScrollsItsMenu()
+        public async Task Phone_TaskRowKeepsItsTitle_AndTheHeaderTrailShowsItsFirstPartAndScrollsItsMenu()
         {
             await using var jularr = await JularrInstance.StartAsync();
             await using var session = await BrowserSession.StartAsync(jularr);
@@ -17,7 +17,7 @@ namespace Jularr.E2E.Tests
             {
                 await Owner.SetUpAndSignInAsync(page);
 
-                // A failed scan: its status cell carries a long reason that must not push the title out of the row.
+                // A failed scan (one of the Jobs entry's Tasks): its status cell carries a long reason that must not push the title out of the row.
                 await jularr.RunSqlAsync("""
                     DO $$
                     DECLARE mount bigint; root bigint;
@@ -32,7 +32,7 @@ namespace Jularr.E2E.Tests
                 foreach (var width in new[] { 375, 480, 600 })
                 {
                     await page.SetViewportSizeAsync(width, 667);
-                    await page.GotoAsync("/Admin/Queue");
+                    await page.GotoAsync("/Admin/Jobs/Tasks");
                     var row = Steps.ListRow(page, "Phone queue library");
                     await Assertions.Expect(row).ToBeVisibleAsync();
                     await Assertions.Expect(row).ToContainTextAsync("not reachable");
