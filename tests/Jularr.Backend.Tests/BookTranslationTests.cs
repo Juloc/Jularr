@@ -579,6 +579,12 @@ namespace Jularr.Backend.Tests
             Assert.IsTrue(during.Current.Title is "First Book" or "Second Book");
             Assert.IsTrue(during.Current.Section >= 1);
             Assert.AreEqual("de", during.Current.Language);
+            // The time left counts the blocks of the sections still to do: a finished section's blocks are its own, not another's.
+            var doneBlocks = Convert.ToInt64(await host.ScalarAsync("SELECT coalesce(sum((document.\"Structure\" -> 'Sections' -> substring(cache.\"Path\" FROM '[0-9]{5}$')::integer ->> 'Blocks')::integer), 0) "
+                + "FROM \"ReadingResources\" AS cache JOIN \"ReadingDocuments\" AS document ON document.\"Id\" = cache.\"ReadingDocumentId\" WHERE cache.\"Path\" ~ '^:localtranslation/v4/[^/]+/de/[0-9]{5}$'"),
+                System.Globalization.CultureInfo.InvariantCulture);
+            Assert.IsTrue(doneBlocks > 0);
+            Assert.AreEqual((long)Math.Round((totalBlocks - doneBlocks) / during.BlocksPerMinute * 60), during.SecondsRemaining);
 
             // A book that is one volume of a series is listed with its number.
             await host.Fixture.RunSqlAsync("INSERT INTO \"WorkUnits\" (\"WorkId\", \"WorkUnitTypeId\", \"Number\") SELECT asset.\"WorkId\", 3, 14 FROM \"MediaAssets\" AS asset WHERE asset.\"Id\" = " + first);

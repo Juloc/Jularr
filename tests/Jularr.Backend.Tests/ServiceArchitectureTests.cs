@@ -79,6 +79,23 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public void Sql_StoredJson_IsParsedOncePerRow()
+        {
+            // Inlined, the lateral parse runs again for every condition, sort key and block that reads it (seconds for a book's translations).
+            var root = new DirectoryInfo(AppContext.BaseDirectory);
+            while (root.GetFiles("Jularr.sln").Length == 0)
+            {
+                root = root.Parent!;
+            }
+
+            var inlined = Directory.EnumerateFiles(Path.Combine(root.FullName, "src", "Jularr.Backend"), "*.cs", SearchOption.AllDirectories)
+                .Where(file => !file.Contains(Path.DirectorySeparatorChar + "obj" + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+                .Where(file => Regex.IsMatch(File.ReadAllText(file), @"SELECT convert_from\([^)]*\)::jsonb AS value\s*\)"))
+                .Select(Path.GetFileName).ToArray();
+            Assert.AreEqual(0, inlined.Length, "Parse stored JSON in a LATERAL (... OFFSET 0) in: " + string.Join(", ", inlined));
+        }
+
+        [TestMethod]
         public void ConsumerContracts_PublicAndProtectedSignatures_DoNotExposeNpgsql()
         {
             foreach (var type in typeof(ServiceApi).Assembly.GetExportedTypes())

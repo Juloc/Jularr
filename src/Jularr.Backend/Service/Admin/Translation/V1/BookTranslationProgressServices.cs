@@ -68,7 +68,13 @@ namespace Jularr.Backend.Service.Admin.Translation.V1
                         CROSS JOIN LATERAL jsonb_array_elements(document."Structure" -> 'Sections') WITH ORDINALITY AS section (value, ordinal)
                 ),
                 totals AS (
-                    SELECT section."DocumentId", sum(section."Blocks")::integer AS "TotalBlocks" FROM sections AS section GROUP BY section."DocumentId"
+                    -- The blocks per section as an array, so a finished section's blocks are one lookup: searching "sections" (no index) for every one took seconds.
+                    SELECT
+                        section."DocumentId",
+                        sum(section."Blocks")::integer AS "TotalBlocks",
+                        array_agg(section."Blocks" ORDER BY section."Section") AS "SectionBlocks"
+                    FROM sections AS section
+                    GROUP BY section."DocumentId"
                 )
                 SELECT
                     book."Id" AS "DocumentId",
@@ -83,15 +89,18 @@ namespace Jularr.Backend.Service.Admin.Translation.V1
                 FROM
                     books AS book
                     CROSS JOIN targets AS target
+                    LEFT JOIN totals AS total ON total."DocumentId" = book."Id"
                     CROSS JOIN LATERAL (
                         SELECT
                             count(*)::integer AS "Done",
-                            coalesce(sum(section."Blocks"), 0)::integer AS "DoneBlocks"
+                            coalesce(sum(total."SectionBlocks"[keys."Section" + 1]), 0)::integer AS "DoneBlocks"
                         FROM (
                             SELECT substring(cache."Path" FROM '[0-9]{5}$')::integer AS "Section"
                             FROM "ReadingResources" AS cache
+                            -- Parsed once (OFFSET 0), not again for every condition on it.
                             CROSS JOIN LATERAL (
                                 SELECT convert_from(cache."Bytes", 'UTF8')::jsonb AS value
+                                OFFSET 0
                             ) AS stored
                             WHERE cache."ReadingDocumentId" = book."Id"
                                 AND cache."Path" ~ ('^:localtranslation/v4/[^/]+/' || target."Language" || '/[0-9]{5}$')
@@ -104,9 +113,7 @@ namespace Jularr.Backend.Service.Admin.Translation.V1
                                 )
                             GROUP BY 1
                         ) AS keys
-                        LEFT JOIN sections AS section ON section."DocumentId" = book."Id" AND section."Section" = keys."Section"
                     ) AS finished
-                    LEFT JOIN totals AS total ON total."DocumentId" = book."Id"
                 WHERE
                     length(target."Language") BETWEEN 2 AND 3
                     AND length(book."SourceLanguage") BETWEEN 2 AND 3
@@ -176,8 +183,10 @@ namespace Jularr.Backend.Service.Admin.Translation.V1
                             OR (split_part(cache."Path", '/', 3) = @Model AND stored.value ->> 'ModelDigest' IS DISTINCT FROM @Digest) AS "IsStale"
                     FROM
                         "ReadingResources" AS cache
+                        -- Parsed once (OFFSET 0), not again for every column read from it.
                         CROSS JOIN LATERAL (
                             SELECT convert_from(cache."Bytes", 'UTF8')::jsonb AS value
+                            OFFSET 0
                         ) AS stored
                     WHERE
                         cache."Path" ~ '^:localtranslation/v4/[^/]+/[a-z]{2,3}/[0-9]{5}$'
@@ -187,16 +196,21 @@ namespace Jularr.Backend.Service.Admin.Translation.V1
                     SELECT
                         cache."ReadingDocumentId" AS "DocumentId",
                         split_part(cache."Path", '/', 4) AS "Language",
-                        max(jsonb_array_length(stored.value -> 'Texts')) AS "Blocks",
-                        count(DISTINCT block.position) FILTER (
-                                        WHERE block.value <> 'null'::jsonb OR coalesce(stored.value -> 'Stale' -> 'Texts' -> (block.position::integer - 1), 'null'::jsonb) <> 'null'::jsonb
-                                    ) AS "Visible"
+                        max(block."Blocks") AS "Blocks",
+                        count(DISTINCT block.position) FILTER (WHERE block."IsVisible") AS "Visible"
                     FROM
                         "ReadingResources" AS cache
+                        -- Each stored section is parsed once (OFFSET 0), not again for every block of it.
                         CROSS JOIN LATERAL (
-                            SELECT convert_from(cache."Bytes", 'UTF8')::jsonb AS value
-                        ) AS stored
-                        CROSS JOIN LATERAL jsonb_array_elements(stored.value -> 'Texts') WITH ORDINALITY AS block (value, position)
+                            SELECT
+                                jsonb_array_length(stored.value -> 'Texts') AS "Blocks",
+                                block.position,
+                                block.value <> 'null'::jsonb OR coalesce(stored.value -> 'Stale' -> 'Texts' -> (block.position::integer - 1), 'null'::jsonb) <> 'null'::jsonb AS "IsVisible"
+                            FROM
+                                (SELECT convert_from(cache."Bytes", 'UTF8')::jsonb AS value OFFSET 0) AS stored
+                                CROSS JOIN LATERAL jsonb_array_elements(stored.value -> 'Texts') WITH ORDINALITY AS block (value, position)
+                            OFFSET 0
+                        ) AS block
                     WHERE
                         cache."Path" ~ '^:localtranslation/v4/[^/]+/[a-z]{2,3}/[0-9]{5}$'
                     GROUP BY
