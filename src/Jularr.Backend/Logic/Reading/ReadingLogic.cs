@@ -255,9 +255,9 @@ namespace Jularr.Backend.Logic.Reading
                     @ReadingLanguage
                 FROM
                     "MediaAssets" AS asset
-                    JOIN "ProfileWorks" AS visible ON visible."WorkId" = asset."WorkId" AND visible."ProfileId" = @ProfileId
                 WHERE
                     asset."Id" = @MediaAssetId
+                    AND EXISTS (SELECT 1 FROM "ProfileWorks" AS visible WHERE visible."WorkId" = asset."WorkId" AND visible."ProfileId" = @ProfileId)
                 ON CONFLICT ("ProfileId", "WorkId") DO UPDATE
                 SET
                     "Language" = EXCLUDED."Language",
@@ -321,9 +321,9 @@ namespace Jularr.Backend.Logic.Reading
                     @ReadingViewTypeId
                 FROM
                     "MediaAssets" AS asset
-                    JOIN "ProfileWorks" AS visible ON visible."WorkId" = asset."WorkId" AND visible."ProfileId" = @ProfileId
                 WHERE
                     asset."Id" = @MediaAssetId
+                    AND EXISTS (SELECT 1 FROM "ProfileWorks" AS visible WHERE visible."WorkId" = asset."WorkId" AND visible."ProfileId" = @ProfileId)
                     AND asset."MediaAssetTypeId" IN (3, 4)
                 ON CONFLICT ("ProfileId", "WorkId") DO UPDATE
                 SET

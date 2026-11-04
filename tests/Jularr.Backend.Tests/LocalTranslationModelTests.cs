@@ -35,7 +35,23 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(new Uri("http://10.0.0.2:11434/"), (await machines.ChooseAsync(saved, default))?.Server);
             handler.Offline = null;
             Assert.AreEqual(new Uri("http://10.0.0.2:11434/"), (await machines.ChooseAsync(saved, default))?.Server);
+            // After its rest it is asked again in the background, so this choice does not wait for it; once it answered it translates again.
             clock.Now += TimeSpan.FromMinutes(2);
+            Assert.AreEqual(new Uri("http://10.0.0.2:11434/"), (await machines.ChooseAsync(saved, default))?.Server);
+            await machines.WakingAsync();
+            Assert.AreEqual(new Uri("http://192.168.1.20:11434/"), (await machines.ChooseAsync(saved, default))?.Server);
+
+            // Still away after its rest: it rests once more, and no choice waits for it.
+            handler.Offline = "192.168.1.20";
+            machines.Fail(new Uri("http://192.168.1.20:11434/"));
+            clock.Now += TimeSpan.FromMinutes(2);
+            Assert.AreEqual(new Uri("http://10.0.0.2:11434/"), (await machines.ChooseAsync(saved, default))?.Server);
+            await machines.WakingAsync();
+            handler.Offline = null;
+            Assert.AreEqual(new Uri("http://10.0.0.2:11434/"), (await machines.ChooseAsync(saved, default))?.Server);
+            clock.Now += TimeSpan.FromMinutes(2);
+            await machines.ChooseAsync(saved, default);
+            await machines.WakingAsync();
             Assert.AreEqual(new Uri("http://192.168.1.20:11434/"), (await machines.ChooseAsync(saved, default))?.Server);
 
             // A machine that failed a block rests too; a machine without the wanted model is passed over.

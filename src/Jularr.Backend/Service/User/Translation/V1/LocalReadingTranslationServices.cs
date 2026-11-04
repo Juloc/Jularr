@@ -267,8 +267,8 @@ namespace Jularr.Backend.Service.User.Translation.V1
                         SELECT 1 FROM "ReadingDocuments" AS document
                         JOIN "StoredFiles" AS file ON file."Id" = document."StoredFileId"
                         JOIN "MediaAssets" AS asset ON asset."Id" = file."MediaAssetId"
-                        JOIN "ProfileWorks" AS visible ON visible."WorkId" = asset."WorkId" AND visible."ProfileId" = @ProfileId
                         WHERE document."Id" = resource."ReadingDocumentId"
+                            AND EXISTS (SELECT 1 FROM "ProfileWorks" AS visible WHERE visible."WorkId" = asset."WorkId" AND visible."ProfileId" = @ProfileId)
                     );
                 """;
             query.Parameters.Add(new ReadingTranslationSectionData(Parameters.DocumentId, Parameters.SectionIndex, Parameters.Language, [.. paths.Values]));

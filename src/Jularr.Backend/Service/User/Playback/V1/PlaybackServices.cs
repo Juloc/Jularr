@@ -101,7 +101,8 @@ namespace Jularr.Backend.Service.User.Playback.V1
                     ) AS "NextMediaAssetId"
                 FROM
                     "MediaAssets" AS asset
-                    JOIN "ProfileWorks" AS visible ON visible."WorkId" = asset."WorkId" AND visible."ProfileId" = @ProfileId
+                    -- This Work alone: joined directly, the view reads the catalog up to it.
+                    JOIN LATERAL (SELECT visible."Title" FROM "ProfileWorks" AS visible WHERE visible."WorkId" = asset."WorkId" AND visible."ProfileId" = @ProfileId OFFSET 0) AS visible ON TRUE
                     JOIN "Works" AS work ON work."Id" = asset."WorkId"
                     LEFT JOIN "WorkUnits" AS unit ON unit."Id" = asset."WorkUnitId"
                     LEFT JOIN "WorkUnits" AS parent ON parent."Id" = unit."ParentWorkUnitId"
@@ -141,10 +142,10 @@ namespace Jularr.Backend.Service.User.Playback.V1
                         file."Id"
                     FROM
                         "MediaAssets" AS asset
-                        JOIN "ProfileWorks" AS visible ON visible."WorkId" = asset."WorkId" AND visible."ProfileId" = @ProfileId
                         JOIN "StoredFiles" AS file ON file."MediaAssetId" = asset."Id"
                     WHERE
                         asset."Id" = @MediaAssetId
+                        AND EXISTS (SELECT 1 FROM "ProfileWorks" AS visible WHERE visible."WorkId" = asset."WorkId" AND visible."ProfileId" = @ProfileId)
                         AND file."MissingSince" IS NULL
                         AND NOT file."IsSubtitle"
                     ORDER BY
@@ -335,7 +336,6 @@ namespace Jularr.Backend.Service.User.Playback.V1
                         ), 1) AS "PlaybackQuality"
                     FROM
                         "MediaAssets" AS asset
-                        JOIN "ProfileWorks" AS visible ON visible."WorkId" = asset."WorkId" AND visible."ProfileId" = @ProfileId
                         JOIN "StoredFiles" AS file ON file."MediaAssetId" = asset."Id"
                         JOIN "LibraryRoots" AS root ON root."Id" = file."LibraryRootId"
                         JOIN "StorageMounts" AS mount ON mount."Id" = root."StorageMountId"
@@ -344,6 +344,7 @@ namespace Jularr.Backend.Service.User.Playback.V1
                             AND progress."WorkUnitId" IS NOT DISTINCT FROM asset."WorkUnitId"
                     WHERE
                         asset."Id" = @MediaAssetId
+                        AND EXISTS (SELECT 1 FROM "ProfileWorks" AS visible WHERE visible."WorkId" = asset."WorkId" AND visible."ProfileId" = @ProfileId)
                         AND file."MissingSince" IS NULL
                         AND NOT file."IsSubtitle"
                     ORDER BY

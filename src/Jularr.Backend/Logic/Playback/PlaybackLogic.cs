@@ -129,9 +129,9 @@ namespace Jularr.Backend.Logic.Playback
                             1
                         FROM
                             "MediaAssets" AS asset
-                            JOIN "ProfileWorks" AS visible ON visible."WorkId" = asset."WorkId" AND visible."ProfileId" = session."ProfileId"
                         WHERE
                             asset."Id" = session."MediaAssetId"
+                            AND EXISTS (SELECT 1 FROM "ProfileWorks" AS visible WHERE visible."WorkId" = asset."WorkId" AND visible."ProfileId" = session."ProfileId")
                     )
                 RETURNING
                     session."MediaAssetId" AS "Id";

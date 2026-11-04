@@ -28,13 +28,13 @@ namespace Jularr.Backend.Service.User.Playback.V1
                     track."Codec"
                 FROM
                     "MediaAssets" AS asset
-                    JOIN "ProfileWorks" AS visible ON visible."WorkId" = asset."WorkId" AND visible."ProfileId" = @ProfileId
                     JOIN "StoredFiles" AS file ON file."MediaAssetId" = asset."Id"
                     JOIN "LibraryRoots" AS root ON root."Id" = file."LibraryRootId"
                     JOIN "StorageMounts" AS mount ON mount."Id" = root."StorageMountId"
                     LEFT JOIN "MediaTracks" AS track ON track."StoredFileId" = file."Id" AND track."StreamIndex" = @StreamIndex AND track."MediaTrackTypeId" = 3
                 WHERE
                     asset."Id" = @MediaAssetId
+                    AND EXISTS (SELECT 1 FROM "ProfileWorks" AS visible WHERE visible."WorkId" = asset."WorkId" AND visible."ProfileId" = @ProfileId)
                     AND file."MissingSince" IS NULL
                     AND (file."Id" = @StoredFileId AND file."RelativePath" ~* '\.(srt|vtt|ass|ssa)$'
                         OR @StoredFileId::bigint IS NULL AND track."StreamIndex" IS NOT NULL AND file."Id" = (

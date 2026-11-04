@@ -60,7 +60,8 @@ namespace Jularr.Backend.Service.User.Reading.V1
                         coalesce(document."CacheCompletedAt" IS NOT NULL, FALSE) AS "IsCached"
                     FROM
                         "MediaAssets" AS asset
-                        JOIN "ProfileWorks" AS visible ON visible."WorkId" = asset."WorkId" AND visible."ProfileId" = @ProfileId
+                        -- This Work alone: joined directly, the view reads the catalog up to it.
+                        JOIN LATERAL (SELECT visible."Title" FROM "ProfileWorks" AS visible WHERE visible."WorkId" = asset."WorkId" AND visible."ProfileId" = @ProfileId OFFSET 0) AS visible ON TRUE
                         JOIN "Works" AS work ON work."Id" = asset."WorkId"
                         JOIN LATERAL (
                             SELECT
@@ -179,7 +180,8 @@ namespace Jularr.Backend.Service.User.Reading.V1
                     FROM
                         "ReadingDocuments" AS document
                         JOIN "MediaAssets" AS asset ON asset."Id" = @MediaAssetId
-                        JOIN "ProfileWorks" AS visible ON visible."WorkId" = asset."WorkId" AND visible."ProfileId" = @ProfileId
+                        -- This Work alone: joined directly, the view reads the catalog up to it.
+                        JOIN LATERAL (SELECT visible."Title", visible."MediaSubtypeId" FROM "ProfileWorks" AS visible WHERE visible."WorkId" = asset."WorkId" AND visible."ProfileId" = @ProfileId OFFSET 0) AS visible ON TRUE
                         JOIN "Works" AS work ON work."Id" = asset."WorkId"
                         LEFT JOIN "MediaProgress" AS progress ON progress."ProfileId" = @ProfileId
                             AND progress."WorkId" = asset."WorkId"
@@ -225,7 +227,8 @@ namespace Jularr.Backend.Service.User.Reading.V1
                     stopped."Locator"
                 FROM
                     "MediaAssets" AS asset
-                    JOIN "ProfileWorks" AS visible ON visible."WorkId" = asset."WorkId" AND visible."ProfileId" = @ProfileId
+                    -- This Work alone: joined directly, the view reads the catalog up to it.
+                    JOIN LATERAL (SELECT visible."Title" FROM "ProfileWorks" AS visible WHERE visible."WorkId" = asset."WorkId" AND visible."ProfileId" = @ProfileId OFFSET 0) AS visible ON TRUE
                     JOIN "Works" AS work ON work."Id" = asset."WorkId"
                     LEFT JOIN "ReadingPreferences" AS chosen ON chosen."ProfileId" = @ProfileId AND chosen."WorkId" = asset."WorkId"
                     LEFT JOIN "MediaProgress" AS stopped ON stopped."ProfileId" = @ProfileId
@@ -372,9 +375,9 @@ namespace Jularr.Backend.Service.User.Reading.V1
                         FROM
                             "StoredFiles" AS file
                             JOIN "MediaAssets" AS asset ON asset."Id" = file."MediaAssetId"
-                            JOIN "ProfileWorks" AS visible ON visible."WorkId" = asset."WorkId" AND visible."ProfileId" = @ProfileId
                         WHERE
                             file."Id" = document."StoredFileId"
+                            AND EXISTS (SELECT 1 FROM "ProfileWorks" AS visible WHERE visible."WorkId" = asset."WorkId" AND visible."ProfileId" = @ProfileId)
                     )
                 ORDER BY
                     toc.position
@@ -437,9 +440,9 @@ namespace Jularr.Backend.Service.User.Reading.V1
                         FROM
                             "StoredFiles" AS file
                             JOIN "MediaAssets" AS asset ON asset."Id" = file."MediaAssetId"
-                            JOIN "ProfileWorks" AS visible ON visible."WorkId" = asset."WorkId" AND visible."ProfileId" = @ProfileId
                         WHERE
                             file."Id" = document."StoredFileId"
+                            AND EXISTS (SELECT 1 FROM "ProfileWorks" AS visible WHERE visible."WorkId" = asset."WorkId" AND visible."ProfileId" = @ProfileId)
                     );
                 """;
             sql.Parameters.Add(Parameters);
@@ -477,9 +480,9 @@ namespace Jularr.Backend.Service.User.Reading.V1
                         FROM
                             "StoredFiles" AS file
                             JOIN "MediaAssets" AS asset ON asset."Id" = file."MediaAssetId"
-                            JOIN "ProfileWorks" AS visible ON visible."WorkId" = asset."WorkId" AND visible."ProfileId" = @ProfileId
                         WHERE
                             file."Id" = document."StoredFileId"
+                            AND EXISTS (SELECT 1 FROM "ProfileWorks" AS visible WHERE visible."WorkId" = asset."WorkId" AND visible."ProfileId" = @ProfileId)
                     )
                 ORDER BY
                     resource."Path";
@@ -549,9 +552,9 @@ namespace Jularr.Backend.Service.User.Reading.V1
                         FROM
                             "StoredFiles" AS file
                             JOIN "MediaAssets" AS asset ON asset."Id" = file."MediaAssetId"
-                            JOIN "ProfileWorks" AS visible ON visible."WorkId" = asset."WorkId" AND visible."ProfileId" = @ProfileId
                         WHERE
                             file."Id" = document."StoredFileId"
+                            AND EXISTS (SELECT 1 FROM "ProfileWorks" AS visible WHERE visible."WorkId" = asset."WorkId" AND visible."ProfileId" = @ProfileId)
                     );
                 """;
             sql.Parameters.Add(Parameters);
@@ -599,13 +602,13 @@ namespace Jularr.Backend.Service.User.Reading.V1
                         "ReadingDocuments" AS document
                         JOIN "StoredFiles" AS file ON file."Id" = document."StoredFileId"
                         JOIN "MediaAssets" AS asset ON asset."Id" = file."MediaAssetId"
-                        JOIN "ProfileWorks" AS visible ON visible."WorkId" = asset."WorkId" AND visible."ProfileId" = @ProfileId
                         JOIN "LibraryRoots" AS root ON root."Id" = file."LibraryRootId"
                         JOIN "StorageMounts" AS mount ON mount."Id" = root."StorageMountId"
                         LEFT JOIN "ReadingResources" AS page ON page."ReadingDocumentId" = document."Id"
                             AND page."Path" = ':page/' || lpad(@SectionIndex::text, 5, '0')
                     WHERE
                         document."Id" = @DocumentId
+                        AND EXISTS (SELECT 1 FROM "ProfileWorks" AS visible WHERE visible."WorkId" = asset."WorkId" AND visible."ProfileId" = @ProfileId)
                         AND document."ReadingFormatTypeId" = 4
                         AND coalesce((document."Structure" ->> 'RendersPages')::boolean, FALSE)
                         AND file."RelativePath" ~* '\.(djvu|djv)$'
@@ -669,7 +672,8 @@ namespace Jularr.Backend.Service.User.Reading.V1
                     "ReadingDocuments" AS document
                     JOIN "StoredFiles" AS file ON file."Id" = document."StoredFileId"
                     JOIN "MediaAssets" AS asset ON asset."Id" = file."MediaAssetId"
-                    JOIN "ProfileWorks" AS visible ON visible."WorkId" = asset."WorkId" AND visible."ProfileId" = @ProfileId
+                    -- This Work alone: joined directly, the view reads the catalog up to it.
+                    JOIN LATERAL (SELECT visible."Title", visible."MediaSubtypeId" FROM "ProfileWorks" AS visible WHERE visible."WorkId" = asset."WorkId" AND visible."ProfileId" = @ProfileId OFFSET 0) AS visible ON TRUE
                     JOIN "Works" AS work ON work."Id" = asset."WorkId"
                 WHERE
                     document."Id" = @DocumentId

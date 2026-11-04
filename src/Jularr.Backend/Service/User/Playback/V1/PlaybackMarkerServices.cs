@@ -29,7 +29,6 @@ namespace Jularr.Backend.Service.User.Playback.V1
                     played."DurationMs"
                 FROM
                     "MediaAssets" AS asset
-                    JOIN "ProfileWorks" AS visible ON visible."WorkId" = asset."WorkId" AND visible."ProfileId" = @ProfileId
                     JOIN LATERAL (
                         SELECT
                             file."Id",
@@ -47,6 +46,7 @@ namespace Jularr.Backend.Service.User.Playback.V1
                     JOIN "MediaMarkers" AS marker ON marker."StoredFileId" = played."Id"
                 WHERE
                     asset."Id" = @MediaAssetId
+                    AND EXISTS (SELECT 1 FROM "ProfileWorks" AS visible WHERE visible."WorkId" = asset."WorkId" AND visible."ProfileId" = @ProfileId)
                 ORDER BY
                     marker."MediaMarkerKindTypeId",
                     marker."MediaMarkerSourceTypeId";
@@ -81,7 +81,6 @@ namespace Jularr.Backend.Service.User.Playback.V1
                     chapter."Title"
                 FROM
                     "MediaAssets" AS asset
-                    JOIN "ProfileWorks" AS visible ON visible."WorkId" = asset."WorkId" AND visible."ProfileId" = @ProfileId
                     JOIN LATERAL (
                         SELECT
                             file."Id"
@@ -98,6 +97,7 @@ namespace Jularr.Backend.Service.User.Playback.V1
                     JOIN "MediaChapters" AS chapter ON chapter."StoredFileId" = played."Id"
                 WHERE
                     asset."Id" = @MediaAssetId
+                    AND EXISTS (SELECT 1 FROM "ProfileWorks" AS visible WHERE visible."WorkId" = asset."WorkId" AND visible."ProfileId" = @ProfileId)
                 ORDER BY
                     chapter."ChapterIndex";
                 """;

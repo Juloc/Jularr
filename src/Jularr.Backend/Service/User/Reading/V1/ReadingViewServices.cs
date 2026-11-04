@@ -64,7 +64,6 @@ namespace Jularr.Backend.Service.User.Reading.V1
                     coalesce(recognition."FailedAt" IS NULL AND recognition."FinishedAt" IS NULL, FALSE) AS "IsRecognizing"
                 FROM
                     "MediaAssets" AS asset
-                    JOIN "ProfileWorks" AS visible ON visible."WorkId" = asset."WorkId" AND visible."ProfileId" = @ProfileId
                     LEFT JOIN LATERAL (
                         SELECT
                             file."Id",
@@ -103,6 +102,7 @@ namespace Jularr.Backend.Service.User.Reading.V1
                     ) AS prepared ON TRUE
                 WHERE
                     asset."Id" = @MediaAssetId
+                    AND EXISTS (SELECT 1 FROM "ProfileWorks" AS visible WHERE visible."WorkId" = asset."WorkId" AND visible."ProfileId" = @ProfileId)
                     AND asset."MediaAssetTypeId" IN (3, 4);
                 """;
             sql.Parameters.Add(new ReadingSourceLookupData(Parameters.MediaAssetId, ReadingHtml.AnalyzerVersion, ComicPages.AnalyzerVersion, PdfBook.AnalyzerVersion));
@@ -141,9 +141,9 @@ namespace Jularr.Backend.Service.User.Reading.V1
                     "ReadingDocuments" AS document
                     JOIN "StoredFiles" AS file ON file."Id" = document."StoredFileId"
                     JOIN "MediaAssets" AS asset ON asset."Id" = file."MediaAssetId"
-                    JOIN "ProfileWorks" AS visible ON visible."WorkId" = asset."WorkId" AND visible."ProfileId" = @ProfileId
                 WHERE
                     asset."Id" = @MediaAssetId
+                    AND EXISTS (SELECT 1 FROM "ProfileWorks" AS visible WHERE visible."WorkId" = asset."WorkId" AND visible."ProfileId" = @ProfileId)
                     AND document."CacheCompletedAt" IS NOT NULL
                     AND (
                         document."ReadingFormatTypeId" = 2 AND document."AnalyzerVersion" = @PdfAnalyzerVersion

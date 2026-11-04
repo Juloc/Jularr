@@ -85,9 +85,9 @@ namespace Jularr.Backend.Service.User.Reading.V1
                         FROM
                             "StoredFiles" AS file
                             JOIN "MediaAssets" AS asset ON asset."Id" = file."MediaAssetId"
-                            JOIN "ProfileWorks" AS visible ON visible."WorkId" = asset."WorkId" AND visible."ProfileId" = @ProfileId
                         WHERE
                             file."Id" = document."StoredFileId"
+                            AND EXISTS (SELECT 1 FROM "ProfileWorks" AS visible WHERE visible."WorkId" = asset."WorkId" AND visible."ProfileId" = @ProfileId)
                     )
                 ORDER BY
                     section.position
