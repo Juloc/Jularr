@@ -905,7 +905,7 @@ namespace Jularr.Frontend.Localization
             new("profile.languageFallback.Original", "Original"),
             new("profile.languageFallback.English", "English"),
             new("profile.languageFallback.None", "Strict: requested languages only"),
-            new("profile.languageFallback.Any", "Flexible: requested, original, then unmarked; other languages by hand"),
+            new("profile.languageFallback.Any", "Flexible: requested, then original; other languages by hand"),
             new("profile.allowed", "Allowed"),
             new("profile.minimumSize", "Minimum size"),
             new("profile.maximumSize", "Maximum size"),

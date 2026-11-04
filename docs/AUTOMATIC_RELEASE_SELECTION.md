@@ -110,12 +110,11 @@ volume beats a pack, because every further volume costs coverage. The table show
 ## Book language
 
 A book request's languages are the profile's language order, else the request's language. The profile's fallback decides what an **automatic** search may
-take beyond them: Original the original language of the work, English English, None nothing, Flexible (Any) the original language and a file that states no
-language (ranked after every known one). A known language that is neither asked for nor allowed (Polish, Chinese or English for a German request of an Almond
-without that fallback) is Manual review with the reason "Language not allowed by the request · PL"; an unknown language under another fallback is "File
-language is unknown". The manual search shows every language, ranked: asked languages in the profile's order, original, other known, unknown. Direct sources
-state their languages (Anna's Archive names every language of a file, `de, en` counts for both); a source that states none gives an unknown language. Manga
-has no language rule yet.
+take beyond them: Original the original language of the work, English English, None nothing, Flexible (Any) the original language. Any other language
+(Polish, Chinese or English for a German request of an Almond) and a file that states no language are Manual review: "Language not allowed by the request · PL"
+or "File language is unknown"; a person can still take them in the manual search, which shows every row with its languages, ranked: asked languages in the
+profile's order, original, other known, unknown. Direct sources state their languages (Anna's Archive names every language of a file, `de, en` counts for both);
+a source that states none gives an unknown language. Manga has no language rule yet.
 
 ## Tests
 

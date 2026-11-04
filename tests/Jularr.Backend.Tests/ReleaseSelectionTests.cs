@@ -207,33 +207,17 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
-        public void Selection_FlexibleFallbackRanksUnknownAfterTheOriginal()
+        public void Selection_FlexibleFallbackNeverTakesAnUnknownLanguageAutomatically()
         {
             var result = ReleaseSelectionEngine.Select(ProfileWithFallback(LanguageFallbackType.Any, "JA"),
                 [Candidate("Héctor García - IKIGAI (epub)", false, 1, "Usenet"),
                  Candidate("Héctor García - IKIGAI (JA) (epub)", false, 50, "Anna")]);
 
             Assert.AreEqual("Héctor García - IKIGAI (JA) (epub)", result.Winner!.Candidate.Parsed!.RawTitle);
-            Assert.AreEqual("PreferredLanguage", result.WinnerReason!.Code);
-        }
-
-        [TestMethod]
-        public void Selection_FlexibleAnyLanguageFallbackPrefersQualityOverIndexerPriorityAmongUnknownLanguages()
-        {
-            var profile = new QualityProfile("profile", "Profile", ["EPUB", "PDF"], ["EPUB", "PDF"], false, null, null, null)
-            {
-                IsBook = true,
-                LanguageOrder = ["DE"],
-                OriginalLanguage = "JA",
-                LanguageFallback = LanguageFallbackType.Any
-            };
-            var result = ReleaseSelectionEngine.Select(profile,
-                [Candidate("Héctor García - IKIGAI (pdf)", false, 1, "Usenet"),
-                 Candidate("Héctor García - IKIGAI (epub)", false, 50, "Anna")]);
-
-            Assert.IsNotNull(result.Winner);
-            Assert.AreEqual("Héctor García - IKIGAI (epub)", result.Winner.Candidate.Parsed!.RawTitle);
-            Assert.AreEqual("HigherQuality", result.WinnerReason!.Code);
+            var unknown = result.Ranked.Single(row => row.Candidate.Languages.Count == 0);
+            Assert.AreEqual(SelectionDecision.ManualReview, unknown.Decision);
+            Assert.AreEqual("LanguageUnknown", unknown.Reasons[^1].Code);
+            Assert.IsNull(ReleaseSelectionEngine.Select(ProfileWithFallback(LanguageFallbackType.Any, "JA"), [Candidate("Héctor García - IKIGAI (epub)")]).Winner);
         }
 
         [TestMethod]

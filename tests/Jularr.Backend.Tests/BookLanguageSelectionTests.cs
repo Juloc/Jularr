@@ -5,7 +5,7 @@ using Jularr.Backend.Service.Admin.Wanted.V1;
 
 namespace Jularr.Backend.Tests
 {
-    // The language a book request asks for decides what an automatic search may take: the asked languages, then what the profile's fallback names; never another language, never an unknown one.
+    // The language a book request asks for decides what an automatic search may take: the asked languages, then what the profile's fallback names; never another language, never an unknown one (the original language only where the fallback names it).
     [TestClass]
     public sealed class BookLanguageSelectionTests
     {
@@ -39,39 +39,37 @@ namespace Jularr.Backend.Tests
         ];
 
         [TestMethod]
-        public void Flexible_OnlyOtherKnownLanguages_NothingIsTakenAutomatically_EveryRowSaysWhy()
+        public void Flexible_OnlyOtherOrUnknownLanguages_NothingIsTakenAutomatically_EveryRowSaysWhy()
         {
-            var result = ReleaseSelectionEngine.Select(Profile(LanguageFallbackType.Any, original: "JA"), NoGermanEdition().Where(candidate => candidate.Languages.Count > 0).ToArray());
+            var result = ReleaseSelectionEngine.Select(Profile(LanguageFallbackType.Any, original: "JA"), NoGermanEdition());
 
             Assert.IsNull(result.Winner);
             Assert.AreEqual(SelectionOutcome.ManualReviewOnly, result.Outcome);
             Assert.IsTrue(result.Ranked.All(evaluation => evaluation.Decision == SelectionDecision.ManualReview));
-            var reasons = result.Ranked.ToDictionary(evaluation => evaluation.Candidate.Languages.Single(), evaluation => evaluation.Reasons[^1]);
+            var reasons = result.Ranked.ToDictionary(evaluation => evaluation.Candidate.Languages.SingleOrDefault() ?? "", evaluation => evaluation.Reasons[^1]);
             Assert.AreEqual(("LanguageNotAllowed", "PL"), (reasons["PL"].Code, reasons["PL"].Value));
             Assert.AreEqual(("LanguageNotAllowed", "ZH"), (reasons["ZH"].Code, reasons["ZH"].Value));
             Assert.AreEqual(("LanguageNotAllowed", "EN"), (reasons["EN"].Code, reasons["EN"].Value));
+            Assert.AreEqual("LanguageUnknown", result.Ranked.Single(evaluation => evaluation.Candidate.Languages.Count == 0).Reasons[^1].Code);
         }
 
         [TestMethod]
-        public void UnknownLanguage_RanksAfterEveryKnownOne_AndIsOnlyTakenWhenTheProfileIsFlexible()
+        public void UnknownLanguage_IsNeverTakenAutomatically_UnderAnyFallback()
         {
             var unknown = Candidate("Sun-mi Hwang - Almond (epub)", priority: 1, connection: "OPDS");
-            var english = Candidate("Sun-mi Hwang - Almond (EN) (epub)", priority: 50);
-
-            // Flexible: the unknown file is taken only when nothing else is allowed, and never ahead of the asked or the original language.
-            Assert.AreEqual(unknown.Id, ReleaseSelectionEngine.Select(Profile(LanguageFallbackType.Any), [unknown, english]).Winner!.Candidate.Id);
-            var korean = Candidate("Sun-mi Hwang - Almond (KO) (epub)", priority: 50);
-            Assert.AreEqual(korean.Id, ReleaseSelectionEngine.Select(Profile(LanguageFallbackType.Any), [unknown, english, korean]).Winner!.Candidate.Id);
-            var german = Candidate("Sun-mi Hwang - Almond (DE) (epub)", priority: 99);
-            Assert.AreEqual(german.Id, ReleaseSelectionEngine.Select(Profile(LanguageFallbackType.Any), [unknown, english, korean, german]).Winner!.Candidate.Id);
-
-            // The other fallbacks and strict mode leave it to a person.
-            foreach (var fallback in new[] { LanguageFallbackType.Original, LanguageFallbackType.English, LanguageFallbackType.None })
+            foreach (var fallback in Enum.GetValues<LanguageFallbackType>())
             {
                 var result = ReleaseSelectionEngine.Select(Profile(fallback), [unknown]);
                 Assert.IsNull(result.Winner, fallback.ToString());
+                Assert.AreEqual(SelectionDecision.ManualReview, result.Ranked.Single().Decision);
                 Assert.AreEqual("LanguageUnknown", result.Ranked.Single().Reasons[^1].Code);
             }
+
+            // Next to a file in the original language, the unknown one stays a row for a person.
+            var korean = Candidate("Sun-mi Hwang - Almond (KO) (epub)", priority: 50);
+            var mixed = ReleaseSelectionEngine.Select(Profile(LanguageFallbackType.Any), [unknown, korean]);
+            Assert.AreEqual(korean.Id, mixed.Winner!.Candidate.Id);
+            Assert.AreEqual(SelectionDecision.ManualReview, mixed.Ranked.Single(row => row.Candidate.Id == unknown.Id).Decision);
         }
 
         [TestMethod]
@@ -81,7 +79,7 @@ namespace Jularr.Backend.Tests
             var result = ReleaseSelectionEngine.Select(Profile(LanguageFallbackType.Any), [.. NoGermanEdition(priority: 1), german]);
 
             Assert.AreEqual(german.Id, result.Winner!.Candidate.Id);
-            Assert.AreEqual(2, result.Ranked.Count(evaluation => evaluation.Decision == SelectionDecision.Eligible));
+            Assert.AreEqual(1, result.Ranked.Count(evaluation => evaluation.Decision == SelectionDecision.Eligible));
             Assert.AreEqual(german.Id, result.Ranked[0].Candidate.Id);
         }
 
@@ -92,7 +90,7 @@ namespace Jularr.Backend.Tests
             var result = ReleaseSelectionEngine.Select(Profile(LanguageFallbackType.Any), [.. NoGermanEdition(), korean]);
 
             Assert.AreEqual(korean.Id, result.Winner!.Candidate.Id);
-            Assert.AreEqual(2, result.Ranked.Count(evaluation => evaluation.Decision == SelectionDecision.Eligible));
+            Assert.AreEqual(1, result.Ranked.Count(evaluation => evaluation.Decision == SelectionDecision.Eligible));
         }
 
         [TestMethod]

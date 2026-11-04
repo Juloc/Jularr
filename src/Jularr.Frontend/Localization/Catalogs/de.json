@@ -13351,8 +13351,8 @@
    "Strikt: nur gewünschte Sprachen"
   ],
   "profile.languageFallback.Any": [
-   "Flexible: requested, original, then unmarked; other languages by hand",
-   "Flexibel: Wunsch, Original, dann ohne Angabe; andere Sprachen von Hand"
+   "Flexible: requested, then original; other languages by hand",
+   "Flexibel: Wunsch, dann Original; andere Sprachen von Hand"
   ],
   "hint.AcquisitionProfileFields.LanguageOrder.placeholder": [
    "de, en, ja",
