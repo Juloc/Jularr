@@ -1,7 +1,79 @@
-// The figures and the cards are one region: an action of a card swaps both.
+// The figures and the list are one region: an action of a row swaps both.
 .connections__cards {
     display: grid;
     gap: 16px;
+}
+
+// Indexers: name with kind, served types, state, today's use, priority and the row's test and edit; the served types leave first, then the priority.
+.connections-list--search {
+    --list-columns: minmax(200px, 2.2fr) minmax(100px, 1fr) minmax(120px, .9fr) minmax(150px, 1.2fr) minmax(56px, .4fr) 80px;
+    --list-columns-medium: minmax(200px, 2.2fr) minmax(120px, .9fr) minmax(150px, 1.2fr) minmax(56px, .4fr) 80px;
+    --list-columns-narrow: minmax(180px, 2fr) minmax(120px, .9fr) minmax(140px, 1.2fr) 80px;
+}
+
+.connections-list--subtitles {
+    --list-columns: minmax(200px, 2.2fr) minmax(120px, 1fr) minmax(120px, .9fr) minmax(56px, .4fr) 80px;
+    --list-columns-medium: minmax(200px, 2.2fr) minmax(120px, .9fr) minmax(56px, .4fr) 80px;
+    --list-columns-narrow: minmax(180px, 2fr) minmax(120px, .9fr) 80px;
+}
+
+.connections-list {
+    .list-row { min-height: 72px; }
+    .list-cell--data .list-value { display: block; overflow: hidden; text-overflow: ellipsis; }
+
+    &__kind { display: inline-flex; align-items: center; gap: 7px; min-width: 0; }
+    &__kind .tag { flex: none; }
+}
+
+// Today's queries against the daily limit: a thin capsule over the counts; without a limit its place says so.
+.connection-usage {
+    display: grid;
+    gap: 6px;
+    justify-items: end;
+    min-width: 0;
+
+    &__bar {
+        appearance: none;
+        width: 100%;
+        max-width: 160px;
+        height: 6px;
+        border: 0;
+        border-radius: 999px;
+        background: var(--accent-soft);
+        color: var(--accent);
+        overflow: hidden;
+        &::-webkit-progress-bar { background: var(--accent-soft); border-radius: 999px; }
+        &::-webkit-progress-value { background: var(--accent); border-radius: 999px; }
+        &::-moz-progress-bar { background: var(--accent); border-radius: 999px; }
+    }
+
+    &__bar--full {
+        color: var(--danger);
+        &::-webkit-progress-value { background: var(--danger); }
+        &::-moz-progress-bar { background: var(--danger); }
+    }
+
+    &__none { color: var(--muted); font-size: var(--text-small); font-weight: 520; line-height: 6px; }
+    &__text { color: var(--text); font-weight: 650; white-space: nowrap; }
+}
+
+// The edit dialog's head: the state and the last test on the left, the tools on the right; they wrap on a phone.
+.connection-editor {
+    &__head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px 16px;
+        margin-bottom: 16px;
+        padding-bottom: 14px;
+        border-bottom: 1px solid var(--border);
+    }
+
+    &__facts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; min-width: 0; color: var(--muted); font-size: var(--text-small); }
+    &__fact { white-space: nowrap; }
+    &__error { flex-basis: 100%; color: var(--danger); overflow-wrap: anywhere; }
+    &__tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; form { display: inline-flex; margin: 0; } }
 }
 
 

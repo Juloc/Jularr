@@ -9,7 +9,7 @@ namespace Jularr.E2E.Tests
     public sealed class LayoutShiftTests
     {
         // The layout shift the browser counted since the page began to load (cumulative, without shifts right after an input), with its first sources.
-        private const string Measure = """
+        internal const string Measure = """
             async () => {
                 await new Promise(resolve => setTimeout(resolve, 2500));
                 let score = 0; const sources = [];
