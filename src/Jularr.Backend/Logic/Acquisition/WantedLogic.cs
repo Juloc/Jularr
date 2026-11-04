@@ -64,14 +64,14 @@ namespace Jularr.Backend.Logic.Acquisition
                 )
                 SELECT
                     work."Id",
-                    profile."Id",
+                    profile."AcquisitionProfileId",
                     root."Id",
                     @IsPaused
                 FROM
                     "Works" AS work
-                    LEFT JOIN "AcquisitionProfiles" AS profile ON profile."Id" = @AcquisitionProfileId
-                        AND profile."MediaTypeId" = work."MediaTypeId"
-                        AND (profile."MediaSubtypeId" IS NULL OR profile."MediaSubtypeId" = work."MediaSubtypeId")
+                    JOIN "WorkAcquisitionKinds" AS kind ON kind."WorkId" = work."Id"
+                    LEFT JOIN "AcquisitionProfileMediaKinds" AS profile ON profile."AcquisitionProfileId" = @AcquisitionProfileId
+                        AND profile."AcquisitionMediaKindId" = kind."AcquisitionMediaKindId"
                     LEFT JOIN "LibraryRoots" AS root ON root."Id" = @LibraryRootId
                         AND root."MediaTypeId" = work."MediaTypeId"
                 WHERE
@@ -128,11 +128,11 @@ namespace Jularr.Backend.Logic.Acquisition
                         SELECT
                             1
                         FROM
-                            "AcquisitionProfiles" AS profile
+                            "AcquisitionProfileMediaKinds" AS profile
+                            JOIN "WorkAcquisitionKinds" AS kind ON kind."AcquisitionMediaKindId" = profile."AcquisitionMediaKindId"
                         WHERE
-                            profile."Id" = @AcquisitionProfileId
-                            AND profile."MediaTypeId" = work."MediaTypeId"
-                            AND (profile."MediaSubtypeId" IS NULL OR profile."MediaSubtypeId" = work."MediaSubtypeId")
+                            profile."AcquisitionProfileId" = @AcquisitionProfileId
+                            AND kind."WorkId" = work."Id"
                     ))
                     AND (@LibraryRootId::bigint IS NULL OR EXISTS (
                         SELECT

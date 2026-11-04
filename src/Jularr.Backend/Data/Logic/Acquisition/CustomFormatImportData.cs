@@ -1,7 +1,5 @@
 using Jularr.Backend.Data.Common;
-using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Fields.Acquisition;
-using Jularr.Backend.Data.Fields.Media;
 
 namespace Jularr.Backend.Data.Logic.Acquisition
 {
@@ -29,14 +27,10 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
     internal sealed class CustomFormatBatchData : BaseData
     {
-        public CustomFormatBatchData(MediaType mediaTypeId, string rows)
+        public CustomFormatBatchData(string rows)
         {
-            MediaTypeId = mediaTypeId;
             Rows = rows;
         }
-
-        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId))]
-        public MediaType MediaTypeId { get; }
 
         [DataField(typeof(FormatScoreFields), nameof(FormatScoreFields.ImportRows))]
         public string Rows { get; }

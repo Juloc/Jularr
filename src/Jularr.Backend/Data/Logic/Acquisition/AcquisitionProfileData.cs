@@ -1,6 +1,5 @@
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
-using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Fields.Acquisition;
 using Jularr.Backend.Data.Fields.Media;
 
@@ -8,14 +7,13 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 {
     internal sealed class AcquisitionProfileInputData : BaseData
     {
-        public AcquisitionProfileInputData(long? id, string name, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, bool isDefault, string[] allowedQualities,
+        public AcquisitionProfileInputData(long? id, string name, AcquisitionMediaKind[] mediaKinds, AcquisitionMediaKind[] defaultFor, string[] allowedQualities,
             bool upgradeAllowed, string? upgradeCutoffQuality, int? minimumSizeMb, int? maximumSizeMb, long? version)
         {
             Id = id;
             Name = name;
-            MediaTypeId = mediaTypeId;
-            MediaSubtypeId = mediaSubtypeId;
-            IsDefault = isDefault;
+            MediaKinds = mediaKinds;
+            DefaultFor = defaultFor;
             AllowedQualities = allowedQualities;
             UpgradeAllowed = upgradeAllowed;
             UpgradeCutoffQuality = upgradeCutoffQuality;
@@ -30,14 +28,11 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.Name))]
         public string Name { get; }
 
-        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId))]
-        public MediaType MediaTypeId { get; }
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.MediaKinds))]
+        public AcquisitionMediaKind[] MediaKinds { get; }
 
-        [DataField(typeof(WorkFields), nameof(WorkFields.MediaSubtypeId))]
-        public MediaSubtype? MediaSubtypeId { get; }
-
-        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.IsDefault))]
-        public bool IsDefault { get; }
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.DefaultFor))]
+        public AcquisitionMediaKind[] DefaultFor { get; }
 
         [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.AllowedQualities))]
         public string[] AllowedQualities { get; }
@@ -70,7 +65,7 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         public int MinimumUpgradeFormatScore { get; init; } = 1;
         public ReleaseMonitoring? Monitoring { get; init; }
 
-        // The points of a release group rated good or bad for the profile's media type.
+        // The points of a release group rated good or bad.
         public int GoodGroupScore { get; init; } = AcquisitionProfileDefinition.DefaultGoodGroupScore;
         public int BadGroupScore { get; init; } = AcquisitionProfileDefinition.DefaultBadGroupScore;
 
@@ -78,13 +73,10 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
     internal sealed class AcquisitionProfileRowData : BaseData
     {
-        public AcquisitionProfileRowData(long? id, string name, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, bool isDefault, string definition, long? version)
+        public AcquisitionProfileRowData(long? id, string name, string definition, long? version)
         {
             Id = id;
             Name = name;
-            MediaTypeId = mediaTypeId;
-            MediaSubtypeId = mediaSubtypeId;
-            IsDefault = isDefault;
             Definition = definition;
             Version = version;
         }
@@ -95,15 +87,6 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.Name))]
         public string Name { get; }
 
-        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId))]
-        public MediaType MediaTypeId { get; }
-
-        [DataField(typeof(WorkFields), nameof(WorkFields.MediaSubtypeId))]
-        public MediaSubtype? MediaSubtypeId { get; }
-
-        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.IsDefault))]
-        public bool IsDefault { get; }
-
         [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.Definition))]
         public string Definition { get; }
 
@@ -113,12 +96,11 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
     internal sealed class AcquisitionProfileStateData : BaseData
     {
-        public AcquisitionProfileStateData(long id, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, bool isDefault, string definition, long version)
+        public AcquisitionProfileStateData(long id, AcquisitionMediaKind[] mediaKinds, AcquisitionMediaKind[] defaultFor, string definition, long version)
         {
             Id = id;
-            MediaTypeId = mediaTypeId;
-            MediaSubtypeId = mediaSubtypeId;
-            IsDefault = isDefault;
+            MediaKinds = mediaKinds;
+            DefaultFor = defaultFor;
             Definition = definition;
             Version = version;
         }
@@ -126,20 +108,47 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.Id))]
         public long Id { get; }
 
-        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId))]
-        public MediaType MediaTypeId { get; }
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.MediaKinds))]
+        public AcquisitionMediaKind[] MediaKinds { get; }
 
-        [DataField(typeof(WorkFields), nameof(WorkFields.MediaSubtypeId))]
-        public MediaSubtype? MediaSubtypeId { get; }
-
-        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.IsDefault))]
-        public bool IsDefault { get; }
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.DefaultFor))]
+        public AcquisitionMediaKind[] DefaultFor { get; }
 
         [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.Definition))]
         public string Definition { get; }
 
         [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.Version))]
         public long Version { get; }
+    }
+
+    internal sealed class AcquisitionProfileKindsData : BaseData
+    {
+        public AcquisitionProfileKindsData(long id, AcquisitionMediaKind[] mediaKinds, AcquisitionMediaKind[] defaultFor)
+        {
+            Id = id;
+            MediaKinds = mediaKinds;
+            DefaultFor = defaultFor;
+        }
+
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.Id))]
+        public long Id { get; }
+
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.MediaKinds))]
+        public AcquisitionMediaKind[] MediaKinds { get; }
+
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.DefaultFor))]
+        public AcquisitionMediaKind[] DefaultFor { get; }
+    }
+
+    internal sealed class AcquisitionProfileUseData : BaseData
+    {
+        public AcquisitionProfileUseData(bool isInUse)
+        {
+            IsInUse = isInUse;
+        }
+
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.IsInUse))]
+        public bool IsInUse { get; }
     }
 
     internal sealed class AcquisitionProfileDefinitionData : BaseData

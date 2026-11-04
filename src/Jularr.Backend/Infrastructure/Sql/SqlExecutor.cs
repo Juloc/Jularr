@@ -125,6 +125,20 @@ namespace Jularr.Backend.Infrastructure.Sql
                 return value;
             }
 
+            // A catalog list (smallint[]) reads as its enum values, each one known.
+            if (type.IsArray && type.GetElementType() is { IsEnum: true } element && value is Array items)
+            {
+                var result = Array.CreateInstance(element, items.Length);
+                for (var index = 0; index < items.Length; index++)
+                {
+                    var item = Enum.ToObject(element, items.GetValue(index)!);
+                    if (!Enum.IsDefined(element, item)) throw new InvalidOperationException($"SQL returned an undefined {element.Name} value.");
+                    result.SetValue(item, index);
+                }
+
+                return result;
+            }
+
             // Npgsql reads date columns as DateTime.
             if (type == typeof(DateOnly) && value is DateTime day)
             {

@@ -25,7 +25,6 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                 """
                 SELECT
                     item."Id",
-                    item."MediaTypeId",
                     item."Name",
                     item."ReleaseGroupRatingId",
                     item."SeenCount",
@@ -33,8 +32,7 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                 FROM
                     "ReleaseGroups" AS item
                 WHERE
-                    item."MediaTypeId" = @MediaTypeId
-                    AND (@Search::text IS NULL OR strpos(lower(item."Name"), lower(@Search::text)) > 0)
+                    (@Search::text IS NULL OR strpos(lower(item."Name"), lower(@Search::text)) > 0)
                 ORDER BY
                     item."ReleaseGroupRatingId" NULLS FIRST,
                     item."SeenCount" DESC,
@@ -45,7 +43,7 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                 OFFSET @Offset;
                 """;
             sql.Page = Page;
-            sql.Parameters.Add(new ReleaseGroupFilterData(Parameters.MediaTypeId, Parameters.Search));
+            sql.Parameters.Add(new ReleaseGroupFilterData(Parameters.Search));
             return new PageResult<ReleaseGroupDetailsV1>(await Context.ReadSql.ReadListAsync<ReleaseGroupDetailsV1>(sql, CancellationToken), Page!);
         }
     }
@@ -68,11 +66,8 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                     count(*) FILTER (WHERE item."ReleaseGroupRatingId" IS NULL)::integer AS "NotRatedCount",
                     count(*) FILTER (WHERE item."ReleaseGroupRatingId" = 3)::integer AS "BlockedCount"
                 FROM
-                    "ReleaseGroups" AS item
-                WHERE
-                    item."MediaTypeId" = @MediaTypeId;
+                    "ReleaseGroups" AS item;
                 """;
-            sql.Parameters.Add(Parameters);
             return await Context.ReadSql.ReadRequiredAsync<ReleaseGroupFiguresV1>(sql, CancellationToken);
         }
     }
@@ -87,7 +82,7 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
 
         protected override async Task<IServiceOutput> OnCreate()
         {
-            var key = await Context.AddReleaseGroupAsync(new ReleaseGroupAddData(Data.MediaTypeId, Data.Name), CancellationToken);
+            var key = await Context.AddReleaseGroupAsync(new ReleaseGroupAddData(Data.Name), CancellationToken);
             return new SavedReleaseGroupV1(key.Id);
         }
     }

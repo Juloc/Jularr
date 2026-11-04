@@ -110,8 +110,7 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                     """
                     SELECT
                         profile."Id",
-                        profile."Name",
-                        profile."MediaTypeId"
+                        profile."Name"
                     FROM
                         "AcquisitionProfiles" AS profile;
                     """;

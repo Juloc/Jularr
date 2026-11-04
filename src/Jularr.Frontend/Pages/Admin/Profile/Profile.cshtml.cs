@@ -4,7 +4,6 @@ using Jularr.Backend.Data.Admin.Acquisition.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Enums.Instance;
-using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Service.Admin.Acquisition.V1;
 using Jularr.Frontend.Framework;
 using Jularr.Frontend.Pages.Admin.Profiles;
@@ -24,12 +23,12 @@ namespace Jularr.Frontend.Pages.Admin.Profile
         private bool _advancedOpen;
 
         [BindProperty(SupportsGet = true)] public string Id { get; set; } = "";
-        [BindProperty(SupportsGet = true, Name = "type")] public MediaType? NewType { get; set; }
-        [BindProperty(SupportsGet = true, Name = "subtype")] public MediaSubtype? NewSubtype { get; set; }
+
+        // The media type a new profile starts with; it decides the profile's list of qualities.
+        [BindProperty(SupportsGet = true, Name = "kind")] public string? NewKindText { get; set; }
         [BindProperty] public string? Name { get; set; }
-        [BindProperty] public MediaType MediaTypeId { get; set; }
-        [BindProperty] public MediaSubtype? MediaSubtypeId { get; set; }
-        [BindProperty] public bool IsDefault { get; set; }
+        [BindProperty] public string[]? MediaKinds { get; set; }
+        [BindProperty] public string[]? DefaultFor { get; set; }
         [BindProperty] public string[]? AllowedQualities { get; set; }
         [BindProperty] public bool UpgradeAllowed { get; set; }
         [BindProperty] public string? UpgradeCutoffQuality { get; set; }
@@ -52,8 +51,10 @@ namespace Jularr.Frontend.Pages.Admin.Profile
         [BindProperty] public int BadGroupScore { get; set; } = -50;
 
         private long? ProfileId => long.TryParse(Id, NumberStyles.None, CultureInfo.InvariantCulture, out var id) ? id : null;
-        private MediaType Scope => _profile?.MediaTypeId ?? NewType ?? MediaType.Movie;
-        private MediaSubtype? ScopeSubtype => _profile is { } saved ? saved.MediaSubtypeId : NewSubtype;
+        private AcquisitionMediaKind? NewKind => Enum.TryParse<AcquisitionMediaKind>(NewKindText, true, out var kind) && Enum.IsDefined(kind) && !int.TryParse(NewKindText, out _) ? kind : null;
+
+        // The quality list of the profile: its media types share one.
+        private QualityFamily Family => _profile?.QualityFamily ?? AcquisitionMediaKinds.Family(NewKind ?? AcquisitionMediaKind.Movie);
 
         protected override void Define(Page page)
         {
@@ -64,19 +65,21 @@ namespace Jularr.Frontend.Pages.Admin.Profile
             page.Asset("Framework/Components/Modal.entry.ts");
             page.Asset("Framework/Components/ActionDock.entry.ts");
             if (_profile is null && Id != NewId) return;
-            var input = WithMatrix(_input ?? (_profile is { } profile ? FromProfile(profile) : NewProfile(NewType!.Value, NewSubtype)));
+            var input = WithMatrix(_input ?? (_profile is { } profile ? FromProfile(profile) : NewProfile(NewKind!.Value)));
+            var kinds = Enum.GetValues<AcquisitionMediaKind>().Where(kind => AcquisitionMediaKinds.Family(kind) == Family)
+                .Select(kind => new SelectOption(kind.ToString(), texts["library.scope." + ProfilesModel.KindSlug(kind)])).ToArray();
             var order = DisplayOrder(input);
             var choices = order.Select(quality => new SelectOption(quality, input.QualityGroups.FirstOrDefault(group => group.Key == quality)?.Name ?? quality)).ToArray();
             var token = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
             var form = new Form<SaveAcquisitionProfileDataV1>(fields =>
             {
-                fields.Hidden(item => item.MediaTypeId);
-                fields.Hidden(item => item.MediaSubtypeId);
                 fields.Hidden(item => item.Version);
                 fields.Section("profile.section.general", section =>
                 {
                     section.Text(item => item.Name, "profile.name");
-                    section.Toggle(item => item.IsDefault, ScopeSubtype == MediaSubtype.Anime ? Scope == MediaType.Movie ? "profile.isDefault.AnimeMovie" : "profile.isDefault.AnimeSeries" : "profile.isDefault");
+
+                    // The media types of one quality list: those it applies to, and those whose default it is (one default per type; another profile takes it over).
+                    section.ChoiceTable("profile.appliesTo", kinds, [section.Column(item => item.MediaKinds, "profile.appliesTo"), section.Column(item => item.DefaultFor, "profile.defaultFor")]);
                 });
                 fields.Section("profile.section.qualities", section =>
                 {
@@ -116,7 +119,7 @@ namespace Jularr.Frontend.Pages.Admin.Profile
                     {
                         var label = string.Format(CultureInfo.CurrentCulture, texts["profile.rateGroups"], figures.GroupCount.ToString("N0", CultureInfo.CurrentCulture),
                             figures.BlockedCount.ToString("N0", CultureInfo.CurrentCulture));
-                        section.Content(new Div(new A(new ValueText(label)).Class("button").Attribute("href", DownloadPages.PaneAddress(DownloadPages.Groups, Scope, ProfilesModel.Home(Request))))
+                        section.Content(new Div(new A(new ValueText(label)).Class("button").Attribute("href", ProfilesModel.Home(Request) + "?tab=" + DownloadPages.Formats + "#release-groups"))
                             .Class("ui-field profile-groups"));
                     }
                 });
@@ -148,7 +151,7 @@ namespace Jularr.Frontend.Pages.Admin.Profile
                         section.Content(Draft("arr.refreshGroups", "refreshGroups", "true"));
                     });
 
-                    // The matrix: every custom format of the media type with this profile's score (0 leaves it out).
+                    // The matrix: every custom format with this profile's score (0 leaves it out).
                     if (input.FormatScores.Count > 0) advanced.Section("arr.scores", section => section.Rows(item => item.FormatScores, (row, score) =>
                     {
                         row.Hidden(item => item.FormatId);
@@ -166,7 +169,7 @@ namespace Jularr.Frontend.Pages.Admin.Profile
 
             // Back to the list, and the deletion of an unused profile behind a dialog.
             var actions = new List<IUiComponent> { new A(Glyph("chevron-left", 16), new Span(new Text("common.back")).Class("action-dock__text")).Class("button").Attribute("href", BackAddress()) };
-            if (_profile is { } saved && !saved.IsDefault)
+            if (_profile is { } saved && saved.DefaultFor.Length == 0)
             {
                 actions.Add(Modal.Opener(new Button(Glyph("trash", 16), new Span(new Text("profile.delete")).Class("action-dock__text")).Warn(), "profile-delete"));
                 page.Content.Add(new Modal(assets, "profile-delete", "profile.deleteConfirm", [new Form<DeleteAcquisitionProfileParametersV1>(fields =>
@@ -180,18 +183,18 @@ namespace Jularr.Frontend.Pages.Admin.Profile
             page.Content.Add(new ActionDock(assets, "arr.actions", actions));
         }
 
-        // The list this profile belongs to.
-        private string BackAddress() => DownloadPages.PaneAddress(DownloadPages.Profiles, Scope, ProfilesModel.Home(Request), ScopeSubtype);
+        // The list of every profile.
+        private string BackAddress() => ProfilesModel.Home(Request);
 
         private IUiComponent Glyph(string name, int size = 20) => new Icon(name, assets, size);
 
-        // The profile's scores next to every format of the media type, so each can be scored in place.
+        // The profile's scores next to every format, so each can be scored in place.
         private SaveAcquisitionProfileDataV1 WithMatrix(SaveAcquisitionProfileDataV1 input)
         {
             var rows = _formats.Select(format => new CustomFormatScoreV1(format.Id, input.FormatScores.FirstOrDefault(score => score.FormatId == format.Id)?.Score ?? 0)).ToList();
             rows.AddRange(input.FormatScores.Where(score => _formats.All(format => format.Id != score.FormatId)));
-            return new(input.Name, input.MediaTypeId, input.IsDefault, input.AllowedQualities, input.UpgradeAllowed, input.UpgradeCutoffQuality, input.MinimumSizeMb, input.MaximumSizeMb, input.Version,
-                input.MediaSubtypeId, input.QualityOrder, input.QualityGroups, new(rows), input.MinimumFormatScore, input.CutoffFormatScore, input.MinimumUpgradeFormatScore, input.LanguageOrder, input.LanguageFallback,
+            return new(input.Name, input.MediaKinds, input.DefaultFor, input.AllowedQualities, input.UpgradeAllowed, input.UpgradeCutoffQuality, input.MinimumSizeMb, input.MaximumSizeMb,
+                input.Version, input.QualityOrder, input.QualityGroups, new(rows), input.MinimumFormatScore, input.CutoffFormatScore, input.MinimumUpgradeFormatScore, input.LanguageOrder, input.LanguageFallback,
                 input.GoodGroupScore, input.BadGroupScore);
         }
 
@@ -206,16 +209,19 @@ namespace Jularr.Frontend.Pages.Admin.Profile
             return button.Attribute("title", texts[key]).Attribute("formaction", Address("Draft")).Attribute("formnovalidate", "formnovalidate").Attribute("name", command).Attribute("value", value);
         }
 
-        private static SaveAcquisitionProfileDataV1 FromProfile(AcquisitionProfileDetailsV1 profile) => new(profile.Name, profile.MediaTypeId, profile.IsDefault, profile.AllowedQualities,
-            profile.UpgradeAllowed, profile.UpgradeCutoffQuality, profile.MinimumSizeMb, profile.MaximumSizeMb, profile.Version, profile.MediaSubtypeId, profile.QualityOrder,
+        private static SaveAcquisitionProfileDataV1 FromProfile(AcquisitionProfileDetailsV1 profile) => new(profile.Name, profile.MediaKinds, profile.DefaultFor, profile.AllowedQualities,
+            profile.UpgradeAllowed, profile.UpgradeCutoffQuality, profile.MinimumSizeMb, profile.MaximumSizeMb, profile.Version, profile.QualityOrder,
             profile.QualityGroups, profile.FormatScores, profile.MinimumFormatScore, profile.CutoffFormatScore, profile.MinimumUpgradeFormatScore,
             profile.LanguageOrder, profile.LanguageFallback, profile.GoodGroupScore, profile.BadGroupScore);
 
-        private static SaveAcquisitionProfileDataV1 NewProfile(MediaType type, MediaSubtype? subtype) => new("", type, false, ProfileQualities.StartingQualities(type, subtype),
-            ProfileQualities.StartingCutoff(type) is not null, ProfileQualities.StartingCutoff(type), null, null, null, subtype);
+        private static SaveAcquisitionProfileDataV1 NewProfile(AcquisitionMediaKind kind)
+        {
+            var family = AcquisitionMediaKinds.Family(kind);
+            return new("", [kind], [], ProfileQualities.StartingQualities(family), ProfileQualities.StartingCutoff(family) is not null, ProfileQualities.StartingCutoff(family), null, null);
+        }
 
-        private SaveAcquisitionProfileDataV1 Posted() => new(Name ?? "", MediaTypeId, IsDefault, AllowedQualities ?? [], UpgradeAllowed, UpgradeCutoffQuality, MinimumSizeMb,
-            MaximumSizeMb, Version, MediaSubtypeId, Terms(QualityOrder), new(QualityGroups.Select(group => new QualityGroupV1(group.Id, group.Name ?? "", Terms(group.Qualities)))),
+        private SaveAcquisitionProfileDataV1 Posted() => new(Name ?? "", Kinds(MediaKinds), Kinds(DefaultFor), AllowedQualities ?? [], UpgradeAllowed, UpgradeCutoffQuality, MinimumSizeMb,
+            MaximumSizeMb, Version, Terms(QualityOrder), new(QualityGroups.Select(group => new QualityGroupV1(group.Id, group.Name ?? "", Terms(group.Qualities)))),
             new(FormatScores.Where(score => score.Score != 0).Select(score => new CustomFormatScoreV1(score.FormatId, score.Score))), MinimumFormatScore, CutoffFormatScore, MinimumUpgradeFormatScore,
             Terms(LanguageOrder), LanguageFallback, GoodGroupScore, BadGroupScore);
 
@@ -271,34 +277,39 @@ namespace Jularr.Frontend.Pages.Admin.Profile
         protected override async Task LoadDataAsync()
         {
             if (ProfileId is { } id) _profile = await read.ExecuteAsync<AcquisitionProfileDetailsV1>(new AcquisitionProfileParametersV1(id), HttpContext.RequestAborted);
-            else if (Id != NewId || NewType is not { } type || !ProfilesModel.Kinds.Contains((type, NewSubtype))) throw new KeyNotFoundException("The profile was not found.");
+            else if (Id != NewId || NewKind is null) throw new KeyNotFoundException("The profile was not found.");
 
-            // Every format of the media type, page by page.
+            // Every format, page by page.
             _formats = [];
             for (var formatPage = 1; ; formatPage++)
             {
-                var read = await formats.ExecuteAsync<PageResult<CustomFormatDetailsV1>>(new ReadCustomFormatsParametersV1(Scope, formatPage, 100), HttpContext.RequestAborted);
+                var read = await formats.ExecuteAsync<PageResult<CustomFormatDetailsV1>>(new ReadCustomFormatsParametersV1(formatPage, 100), HttpContext.RequestAborted);
                 _formats.AddRange(read.Items);
                 if (read.Items.Count < read.PageSize) break;
             }
 
-            // The figures of the media type's release groups name the link to their rating.
-            _groupFigures = await groupFigures.ExecuteAsync<ReleaseGroupFiguresV1>(new ReleaseGroupScopeParametersV1(Scope), HttpContext.RequestAborted);
+            // The figures of the release groups name the link to their rating.
+            _groupFigures = await groupFigures.ExecuteAsync<ReleaseGroupFiguresV1>(new ReleaseGroupScopeParametersV1(), HttpContext.RequestAborted);
         }
 
         private string Address(string? handler = null)
         {
             var address = ProfilesModel.Home(Request) + "/" + (ProfileId?.ToString(CultureInfo.InvariantCulture) ?? NewId);
-            if (ProfileId is null && NewType is { } type) address += "?type=" + type + (NewSubtype is { } subtype ? "&subtype=" + subtype : "");
+            if (ProfileId is null && NewKind is { } kind) address += "?kind=" + kind;
             return handler is null ? address : address + (address.Contains('?') ? "&" : "?") + "handler=" + handler;
         }
 
         private static string[] Terms(string? value) => value is null ? [] : value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
-        private static string[] DisplayOrder(SaveAcquisitionProfileDataV1 input)
+
+        // The media types of the post; an unknown one is left out.
+        private static AcquisitionMediaKind[] Kinds(string[]? values) =>
+            [.. (values ?? []).Select(value => Enum.TryParse<AcquisitionMediaKind>(value, true, out var kind) && Enum.IsDefined(kind) ? kind : (AcquisitionMediaKind?)null).OfType<AcquisitionMediaKind>().Distinct()];
+
+        private string[] DisplayOrder(SaveAcquisitionProfileDataV1 input)
         {
             var groups = input.QualityGroups.Where(group => !string.IsNullOrWhiteSpace(group.Name) && group.Qualities.Length > 0).ToArray();
             var grouped = groups.SelectMany(group => group.Qualities).ToHashSet(StringComparer.OrdinalIgnoreCase);
-            var available = ProfileQualities.For(input.MediaTypeId, input.MediaSubtypeId).Where(quality => !grouped.Contains(quality)).Concat(groups.Select(group => group.Key)).ToArray();
+            var available = ProfileQualities.For(Family).Where(quality => !grouped.Contains(quality)).Concat(groups.Select(group => group.Key)).ToArray();
             return input.QualityOrder.Select(quality => groups.FirstOrDefault(group => group.Qualities.Contains(quality, StringComparer.OrdinalIgnoreCase))?.Key ?? quality)
                 .Where(available.Contains).Concat(available).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
         }

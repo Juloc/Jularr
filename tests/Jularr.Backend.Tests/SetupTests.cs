@@ -118,7 +118,7 @@ namespace Jularr.Backend.Tests
 
             using var profiles = await host.SendAsync(HttpMethod.Get, "/Setup/Profiles");
             var profilesHtml = await profiles.Content.ReadAsStringAsync();
-            StringAssert.Contains(profilesHtml, "href=\"/Setup/Profiles/New?type=Movie\"");
+            StringAssert.Contains(profilesHtml, "href=\"/Setup/Profiles?new=profile\"");
             using var overview = await host.SendAsync(HttpMethod.Get, "/Setup/Overview");
             var overviewHtml = await overview.Content.ReadAsStringAsync();
             StringAssert.Contains(overviewHtml, "href=\"/Setup/Libraries\"");

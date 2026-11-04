@@ -14,56 +14,63 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Jularr.Frontend.Pages.Admin.Profiles
 {
-    // The quality rules, one pane each: profiles, custom formats, quality sizes, release profiles, release groups and tags. Profiles, formats and groups are lists (the profile has its own
-    // page, the format's conditions a dialog, a group's rating saves on click); release profiles and tags are cards with their settings inside and sizes is one form, all saved by the
-    // page's pill; adding opens a dialog. The media type bar on top chooses one type; the profiles also have a tab for each subtype the instance offers (Anime, Manga, Light novels), each with its own default.
+    // The quality rules as Sonarr has them, in three tabs and without a media-type bar: one list of every profile (the media types it applies to and those it is the
+    // default of), the custom formats once for every type with the release profiles, release groups and tags as sections under them, and the quality sizes as sliders.
+    // A profile has its own page; adding is a dialog the address opens, settings of a card are inputs saved by the page's pill.
     public sealed partial class ProfilesModel(
         ReadAcquisitionProfilesV1 profiles,
         ReadCustomFormatsV1 formats, ReadCustomFormatV1 format, SaveCustomFormatV1 saveFormat, DeleteCustomFormatV1 deleteFormat, ImportCustomFormatsV1 importFormats,
         ReadQualityDefinitionsV1 sizes, SaveQualityDefinitionsV1 saveSizes,
         ReadReleaseProfilesV1 releases, ReadReleaseProfileV1 release, SaveReleaseProfileV1 saveRelease, DeleteReleaseProfileV1 deleteRelease,
-        ReadReleaseGroupsV1 groups, ReadReleaseGroupFiguresV1 groupFigures, AddReleaseGroupV1 addGroup, RateReleaseGroupV1 rateGroup,
+        ReadReleaseGroupsV1 groups, AddReleaseGroupV1 addGroup, RateReleaseGroupV1 rateGroup,
         ReadAcquisitionTagsV1 tags, ReadAcquisitionTagV1 tag, SaveAcquisitionTagV1 saveTag, DeleteAcquisitionTagV1 deleteTag,
         ReadAcquisitionConnectionsV1 connections, ReadAcquisitionConnectionV1 connection, ReadInstanceMediaV1 media,
         FrontendAssets assets, IAntiforgery antiforgery, UiText texts) : JularrPage
     {
-        internal static readonly (MediaType Type, MediaSubtype? Subtype)[] Kinds =
-        [
-            (MediaType.Movie, null), (MediaType.Series, null), (MediaType.Book, null),
-            (MediaType.Series, MediaSubtype.Anime), (MediaType.Movie, MediaSubtype.Anime), (MediaType.Book, MediaSubtype.Manga), (MediaType.Book, MediaSubtype.LightNovel),
-            (MediaType.Music, null), (MediaType.Game, null)
-        ];
+        // The items of the custom formats tab an address may open or remove.
+        private const string FormatItem = "format";
+        private const string ReleaseItem = "release";
+        private const string TagItem = "tag";
+        private const string GroupItem = "group";
+        private const string ProfileItem = "profile";
 
+        // Every value of the address is read leniently: an unknown tab, item or number shows the page, never a refused request.
         [BindProperty(SupportsGet = true, Name = "tab")] public string? SelectedTab { get; set; }
-        // The setup step shows the quality profiles only; the other panes belong to the administration.
-        private string Tab { get => SetupWizard.IsActive(Request) ? DownloadPages.Profiles : SelectedTab ?? DownloadPages.Profiles; set => SelectedTab = value; }
-        [BindProperty(SupportsGet = true)] public MediaType MediaTypeId { get; set; } = MediaType.Movie;
-
-        // The subtype whose profiles the list shows (profiles only).
-        [BindProperty(SupportsGet = true, Name = "subtype")] public MediaSubtype? Subtype { get; set; }
-        [BindProperty(SupportsGet = true)] public long? Edit { get; set; }
-        [BindProperty(SupportsGet = true, Name = "new")] public bool IsNew { get; set; }
-        [BindProperty(SupportsGet = true, Name = "delete")] public bool ConfirmDelete { get; set; }
-        [BindProperty(SupportsGet = true)] public int PageNumber { get; set; } = 1;
-        [BindProperty(SupportsGet = true)] public int TagPage { get; set; } = 1;
-        [BindProperty(SupportsGet = true)] public int IndexerPage { get; set; } = 1;
+        [BindProperty(SupportsGet = true, Name = "edit")] public string? EditText { get; set; }
+        [BindProperty(SupportsGet = true, Name = "new")] public string? NewText { get; set; }
+        [BindProperty(SupportsGet = true, Name = "delete")] public string? DeleteText { get; set; }
+        [BindProperty(SupportsGet = true, Name = "item")] public string? ItemText { get; set; }
         [BindProperty(SupportsGet = true, Name = "q")] public string? Search { get; set; }
+
+        private string? _tab;
+        private string Tab
+        {
+            get => SetupWizard.IsActive(Request) ? DownloadPages.Profiles : _tab ?? DownloadPages.Current(SelectedTab);
+            set => _tab = value;
+        }
+
+        private long? Edit => long.TryParse(EditText, NumberStyles.None, CultureInfo.InvariantCulture, out var id) && id > 0 ? id : null;
+        private string? Item => ItemText?.Trim().ToLowerInvariant() is FormatItem or ReleaseItem or TagItem or GroupItem or ProfileItem ? ItemText.Trim().ToLowerInvariant() : null;
+        private string? NewItem => NewText?.Trim().ToLowerInvariant() is FormatItem or ReleaseItem or TagItem or ProfileItem ? NewText.Trim().ToLowerInvariant() : null;
+        private bool ConfirmDelete => string.Equals(DeleteText, "true", StringComparison.OrdinalIgnoreCase);
+        private int PageOf(string key) => PagingScope.PageOf(Request.Query, key);
+
         private SelectOption[] _tagChoices = [];
         private SelectOption[] _indexerChoices = [];
         private PageResult<AcquisitionTagDetailsV1>? _tagPage;
         private PageResult<AcquisitionConnectionDetailsV1>? _indexerPage;
         private IReadOnlyList<AcquisitionProfileDetailsV1> _profiles = [];
-        private IReadOnlyList<MediaSubtype> _subtypes = [];
+        private IReadOnlyList<AcquisitionMediaKind> _kinds = [];
         private PageResult<CustomFormatDetailsV1>? _formats;
         private PageResult<ReleaseProfileDetailsV1>? _releases;
         private PageResult<AcquisitionTagDetailsV1>? _tags;
         private PageResult<ReleaseGroupDetailsV1>? _groups;
-        private ReleaseGroupFiguresV1? _groupFigures;
         private AddReleaseGroupDataV1? _group;
         private SaveCustomFormatDataV1? _format;
         private SaveReleaseProfileDataV1? _release;
         private SaveAcquisitionTagDataV1? _tag;
-        private SaveQualityDefinitionsDataV1? _sizes;
+        private readonly Dictionary<MediaType, SaveQualityDefinitionsDataV1> _sizes = [];
+        private MediaType? _sizesPosted;
         private ImportCustomFormatsDataV1? _import;
 
         protected override void Define(Page page)
@@ -71,10 +78,7 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
             page.Title(Tab switch
             {
                 DownloadPages.Formats => "arr.formats",
-                DownloadPages.Sizes => "arr.sizes",
-                DownloadPages.Release => "arr.releaseProfiles",
-                DownloadPages.Groups => "arr.releaseGroups",
-                DownloadPages.Tags => "arr.tags",
+                DownloadPages.Quality => "arr.quality",
                 _ => "admin.profiles.title"
             });
             page.Navigation("nav.admin");
@@ -82,95 +86,65 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
             page.Asset("Framework/Components/Modal.entry.ts");
             page.Asset("Framework/Components/ActionDock.entry.ts");
             page.Asset("Framework/Components/Truncated.entry.ts");
-            var isSetup = SetupWizard.IsActive(Request);
+            if (Tab == DownloadPages.Quality) page.Asset("Framework/Components/SizeRange.entry.ts");
 
-            // The media type bar, then one row of navigation; the quality rules are scoped by a media type (tags belong to every type).
+            // One row of tabs; the setup shows the profiles alone.
             page.NoPageRow();
-            if (Tab != DownloadPages.Tags) page.Content.Add(ScopeBar());
-            IUiComponent chips = isSetup ? new Span() : AdminMenu.Row(texts, Request, null, Tab, ((byte)MediaTypeId).ToString(CultureInfo.InvariantCulture));
-            page.Content.Add(new ListToolbar(chips));
-            if (Tab == DownloadPages.Profiles)
-            {
-                page.Content.Add(ProfileFigures());
-                if (Subtype == MediaSubtype.Anime) page.Content.Add(AnimeDefaultNote());
-            }
-
+            if (!SetupWizard.IsActive(Request)) page.Content.Add(new ListToolbar(AdminMenu.Row(texts, Request, null, Tab)));
             switch (Tab)
             {
-                case DownloadPages.Profiles: DefineProfiles(page); break;
                 case DownloadPages.Formats: DefineFormats(page); break;
-                case DownloadPages.Sizes: DefineSizes(page); break;
-                case DownloadPages.Release: DefineRelease(page); break;
-                case DownloadPages.Groups: DefineGroups(page); break;
-                case DownloadPages.Tags: DefineTags(page); break;
+                case DownloadPages.Quality: DefineQuality(page); break;
+                default: DefineProfiles(page); break;
             }
         }
 
-        // The media type the lists and editors are about; the other panes keep the choice. Profiles also have a tab per subtype the instance offers (Anime only while it is on).
-        private IUiComponent ScopeBar()
-        {
-            var types = new[] { MediaType.Movie, MediaType.Series, MediaType.Book, MediaType.Music, MediaType.Game };
-            var scopes = LibraryScopes.All.Where(scope => scope.Slug != "all" && (scope.Subtype is { } subtype ? Tab == DownloadPages.Profiles && _subtypes.Contains(subtype) : types.Contains(scope.Type!.Value))).ToList();
-            return new MediaTypeBar(assets, [.. scopes.Select(scope => scope.Slug)], [LibraryScopes.Slug(MediaTypeId, Subtype)], "library.scope.", picked =>
-            {
-                var scope = LibraryScopes.Find(picked.Count > 0 ? picked[0] : "series");
-                var type = scope.Subtype is { } subtype ? subtype == MediaSubtype.Anime ? MediaType.Series : MediaType.Book : scope.Type!.Value;
-                return DownloadPages.PaneAddress(Tab, type, Home(Request), scope.Subtype);
-            }, isSingle: true);
-        }
-
-        // Which profile Anime series and Anime films follow: their own default, else the default of their type.
-        private IUiComponent AnimeDefaultNote() => new Div([.. new[] { MediaType.Series, MediaType.Movie }.Select(type =>
-        {
-            var label = texts[MediaTypeLabel.Key(type, null)];
-            var own = _profiles.FirstOrDefault(item => item.IsDefault && item.MediaTypeId == type && item.MediaSubtypeId == MediaSubtype.Anime);
-            var shown = own is not null ? string.Format(CultureInfo.CurrentCulture, texts["profile.anime.own"], label, own.Name)
-                : string.Format(CultureInfo.CurrentCulture, texts["profile.anime.fallback"], label, _profiles.FirstOrDefault(item => item.IsDefault && item.MediaTypeId == type && item.MediaSubtypeId is null)?.Name ?? "");
-            return (IUiComponent)new P(new ValueText(shown));
-        })]).Class("profiles-note").Attribute("role", "status");
-
-        // The profiles of the chosen type: those without subtype, or those of the chosen subtype.
-        private IEnumerable<AcquisitionProfileDetailsV1> Shown => _profiles.Where(item => item.MediaSubtypeId == Subtype);
-
-        // Anime has profiles of series and of films together.
-        private bool IsAnimeList => Tab == DownloadPages.Profiles && Subtype == MediaSubtype.Anime;
-
-        private IUiComponent ProfileFigures() => new KpiTiles(
-            new KpiTile("profile.kpi.total", Count(Shown.Count()), Glyph("layers"), UiTone.Accent),
-            new KpiTile("profile.kpi.inUse", Count(Shown.Count(item => item.WantedCount > 0)), Glyph("check"), UiTone.Success),
-            new KpiTile("profile.kpi.scored", Count(Shown.Count(item => item.FormatScores.Any(score => score.Score != 0))), Glyph("sliders"), UiTone.Info),
-            new KpiTile("profile.kpi.upgrading", Count(Shown.Count(item => item.UpgradeAllowed)), Glyph("sync"), UiTone.Warning)).Strip();
-
+        // One list of every profile: the media types it applies to, those it is the default of, the titles that chose it and where upgrades stop.
         private void DefineProfiles(Page page)
         {
             var empty = new Div(new IconTile(Glyph("layers", 22), UiTone.Neutral), new P(new Text("profile.none")).Attribute("role", "status"));
             var columns = new List<ListColumn>
             {
-                new("profile.name", ListRole.Main), new("table.status", ListRole.Status), new("profile.cutoff", ListRole.Data, 1), new("arr.minimumScore", ListRole.Data, 2),
-                new("profile.scores", ListRole.Data, 2), new("common.actions", ListRole.Actions)
+                new("profile.name", ListRole.Main), new("profile.appliesTo", ListRole.Data, 1), new("profile.defaultFor", ListRole.Data, 1), new("profile.cutoff", ListRole.Data, 2),
+                new("profile.targets", ListRole.Data, 2), new("common.actions", ListRole.Actions)
             };
-            var rows = Shown.Select(item =>
+            var rows = _profiles.Select(item =>
             {
                 var qualities = string.Join(", ", item.AllowedQualities.Select(quality => QualityName(item, quality)));
                 var editor = Home(Request) + "/" + Number(item.Id);
-                var identity = new ListIdentity(new IconTile(Glyph("layers", 18), UiTone.Accent), new A(new ValueText(item.Name)).Class("list-identity__title").Attribute("href", editor),
-                    new Truncated(IsAnimeList ? texts[MediaTypeLabel.Key(item.MediaTypeId, null)] + " · " + qualities : qualities));
-                var cutoff = item.UpgradeAllowed && item.UpgradeCutoffQuality is { } stop ? new Span(new ValueText(QualityName(item, stop))).Class("list-value") : new Span(new Text("profile.noCutoff")).Class("list-value list-value--dim");
-                var scored = item.FormatScores.Count(score => score.Score != 0);
-                var state = item.IsDefault ? new StateChip(new Text("profile.default"), UiTone.Success, Glyph("check", 14))
-                    : item.WantedCount > 0 ? new StateChip(new ValueText(string.Format(CultureInfo.CurrentCulture, texts["profile.usedBy"], item.WantedCount)), UiTone.Info, Glyph("requests", 14))
-                    : new StateChip(new Text("profile.unused"), UiTone.Neutral, Glyph("clock", 14));
-                var caption = new List<IUiComponent> { ListPanel.Fact("profile.cutoff", cutoff), ListPanel.Fact("profile.scores", Count(scored)) };
-                return new ListRow([identity, state, cutoff, new Span(new ValueText(item.MinimumFormatScore.ToString(CultureInfo.CurrentCulture))).Class("list-value"), new Span(Count(scored)).Class("list-value"),
-                    new Div(EditLink(editor)).Class("list-actions")], caption);
+                var identity = new ListIdentity(new IconTile(Glyph("layers", 18), item.DefaultFor.Length > 0 ? UiTone.Success : UiTone.Accent),
+                    new A(new ValueText(item.Name)).Class("list-identity__title").Attribute("href", editor), new Truncated(qualities));
+                var appliesTo = KindTags(item.MediaKinds, false);
+                var defaultFor = item.DefaultFor.Length == 0 ? new Span(new ValueText("–")).Class("list-value list-value--dim") : KindTags(item.DefaultFor, true);
+                var cutoff = item.UpgradeAllowed && item.UpgradeCutoffQuality is { } stop ? new Span(new ValueText(QualityName(item, stop))).Class("list-value")
+                    : new Span(new Text("profile.noCutoff")).Class("list-value list-value--dim");
+                var caption = new List<IUiComponent> { ListPanel.Fact("profile.appliesTo", new ValueText(string.Join(", ", item.MediaKinds.Select(KindName)))) };
+                if (item.DefaultFor.Length > 0) caption.Add(ListPanel.Fact("profile.defaultFor", new ValueText(string.Join(", ", item.DefaultFor.Select(KindName)))));
+                return new ListRow([identity, appliesTo, defaultFor, cutoff, new Span(Count(item.WantedCount)).Class("list-value"), new Div(EditLink(editor)).Class("list-actions")], caption,
+                    item.Name);
             }).ToList();
             page.Content.Add(new ListPanel("admin.profiles.title", columns, rows, empty).Modifier("profiles-list"));
 
-            // One add action for the chosen type or subtype.
-            var actions = Kinds.Where(kind => (IsAnimeList || kind.Type == MediaTypeId) && kind.Subtype == Subtype).Select(kind => (IUiComponent)new A(Glyph("plus", 16), new Span(new Text("profile.add." + (kind.Subtype == MediaSubtype.Anime ? "Anime" + kind.Type : kind.Subtype?.ToString() ?? kind.Type.ToString()))).Class("action-dock__text"))
-                .Class("button").Attribute("href", Home(Request) + "/New?type=" + kind.Type + (kind.Subtype is { } subtype ? "&subtype=" + subtype : ""))).ToList();
-            page.Content.Add(new ActionDock(assets, "arr.actions", actions));
+            // A new profile starts with the media type it is for; the type decides its list of qualities.
+            if (NewItem == ProfileItem)
+            {
+                var choices = _kinds.Select(kind => (IUiComponent)new A(new IconTile(Glyph(KindIcon(kind), 18), UiTone.Accent), new Span(new ValueText(KindName(kind))))
+                    .Class("profile-kind").Attribute("href", Home(Request) + "/New?kind=" + kind)).ToList();
+                page.Content.Add(new Modal(assets, "profile-new", "profile.new", [new P(new Text("profile.new.kind")), new Div([.. choices]).Class("profile-kinds")], open: true, returnTo: Address()));
+            }
+
+            page.Content.Add(new ActionDock(assets, "arr.actions", [AddAction("profile.new", ProfileItem)]));
         }
+
+        // The media types as small chips, as the media-type bar names them; a default is tinted.
+        private IUiComponent KindTags(IEnumerable<AcquisitionMediaKind> kinds, bool accent) =>
+            new Div([.. kinds.Select(kind => (IUiComponent)(accent ? new Tag(new ValueText(KindName(kind))).Accent() : new Tag(new ValueText(KindName(kind)))))]).Class("profile-kinds-cell");
+
+        internal static string KindSlug(AcquisitionMediaKind kind) => MediaAreas.Keys.First(pair => pair.Value == kind.ToString()).Key;
+
+        private string KindName(AcquisitionMediaKind kind) => texts["library.scope." + KindSlug(kind)];
+
+        private static string KindIcon(AcquisitionMediaKind kind) => MediaAreas.Icons[KindSlug(kind)];
 
         // The name of a quality or of a quality group.
         private static string QualityName(AcquisitionProfileDetailsV1 item, string quality) => item.QualityGroups.FirstOrDefault(group => group.Key == quality)?.Name ?? quality;
@@ -181,19 +155,34 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
 
         private static IUiComponent Count(int value) => new ValueText(value.ToString("N0", CultureInfo.CurrentCulture));
 
-        private string Address(string? handler = null, long? edit = null, int? page = null, bool isNew = false) =>
-            DownloadPages.PaneAddress(Tab, MediaTypeId, Home(Request)) + "&PageNumber=" + Number(page ?? PageNumber)
-            + (edit is { } id ? "&edit=" + Number(id) : "") + (isNew ? "&new=true" : "") + (string.IsNullOrWhiteSpace(Search) ? "" : "&q=" + Uri.EscapeDataString(Search.Trim()))
-            + (handler is null ? "" : "&handler=" + handler);
+        // The address of the tab with what it opens; the pages of its lists stay as they are.
+        private string Address(string? handler = null, long? edit = null, string? item = null, string? isNew = null)
+        {
+            var query = new List<string>();
+            if (Tab != DownloadPages.Profiles) query.Add("tab=" + Tab);
+            foreach (var key in new[] { PagedList.DefaultKey, "releases", "groups", "tags" })
+            {
+                if (PageOf(key) > 1) query.Add(key + "=" + Number(PageOf(key)));
+            }
+
+            if (edit is { } id) query.Add("edit=" + Number(id));
+            if (item is not null) query.Add("item=" + item);
+            if (isNew is not null) query.Add("new=" + isNew);
+            if (!string.IsNullOrWhiteSpace(Search)) query.Add("q=" + Uri.EscapeDataString(Search.Trim()));
+            if (handler is not null) query.Add("handler=" + handler);
+            return Home(Request) + (query.Count == 0 ? "" : "?" + string.Join("&", query));
+        }
 
         private string? Token => antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
         private static string Number(long value) => value.ToString(CultureInfo.InvariantCulture);
 
-
-        private IUiComponent AddAction(string labelKey) => new A(Glyph("plus", 16), new Span(new Text(labelKey)).Class("action-dock__text")).Class("button").Attribute("href", Address(isNew: true));
+        private IUiComponent AddAction(string labelKey, string item) =>
+            new A(Glyph("plus", 16), new Span(new Text(labelKey)).Class("action-dock__text")).Class("button").Attribute("href", Address(isNew: item));
 
         public async Task<IActionResult> OnGetAsync()
         {
+            // An address of the former panes and media-type bar leads to the tab that holds it now, without its type.
+            if (DownloadPages.Legacy(Request.Query, Home(Request)) is { } current) return LocalRedirect(current);
             await LoadDataAsync();
             PreparePage();
             return Page();
@@ -201,60 +190,27 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
 
         protected override async Task LoadDataAsync()
         {
-            if (!Enum.IsDefined(MediaTypeId) || !DownloadPages.Panes.Contains(Tab) || Subtype is not null && !Kinds.Contains((MediaTypeId, Subtype))) throw new KeyNotFoundException();
             var cancellation = HttpContext.RequestAborted;
-            if (Tab != DownloadPages.Profiles) Subtype = null;
-            if (Tab != DownloadPages.Tags)
-            {
-                var offered = await media.ExecuteAsync<BaseDataList<InstanceMediaDetailsV1>>(new ReadInstanceMediaParametersV1(), cancellation);
-                _subtypes = [.. Enum.GetValues<MediaSubtype>().Where(subtype => offered.Any(item => item.IsSubtype && item.IsEnabled && item.Key == subtype.ToString()))];
-            }
-
             switch (Tab)
             {
                 case DownloadPages.Profiles:
-                    _profiles = await profiles.ExecuteAsync<BaseDataList<AcquisitionProfileDetailsV1>>(new ReadAcquisitionProfilesParametersV1(mediaTypeId: IsAnimeList ? null : MediaTypeId), cancellation);
-                    break;
-                case DownloadPages.Formats:
-                    _formats = await formats.ExecuteAsync<PageResult<CustomFormatDetailsV1>>(new ReadCustomFormatsParametersV1(MediaTypeId, PageNumber), cancellation);
-                    _profiles = await profiles.ExecuteAsync<BaseDataList<AcquisitionProfileDetailsV1>>(new ReadAcquisitionProfilesParametersV1(mediaTypeId: MediaTypeId), cancellation);
-                    if (_format is null && Edit is { } formatId)
+                    _profiles = await profiles.ExecuteAsync<BaseDataList<AcquisitionProfileDetailsV1>>(new ReadAcquisitionProfilesParametersV1(), cancellation);
+                    if (NewItem == ProfileItem)
                     {
-                        var item = await format.ExecuteAsync<CustomFormatDetailsV1>(new CustomFormatParametersV1(formatId), cancellation);
-                        if (item.MediaTypeId != MediaTypeId) throw new KeyNotFoundException();
-                        _format = new(item.Id, item.MediaTypeId, item.Name, item.IncludeWhenRenaming, item.Conditions, item.Version);
+                        // The types the instance offers: a type that is switched off has no new profiles.
+                        var offered = await media.ExecuteAsync<BaseDataList<InstanceMediaDetailsV1>>(new ReadInstanceMediaParametersV1(), cancellation);
+                        _kinds = [.. Enum.GetValues<AcquisitionMediaKind>().Where(kind => offered.Any(item => item.IsEnabled && item.Key == kind.ToString()))];
                     }
                     break;
-                case DownloadPages.Sizes:
-                    _sizes ??= new(await sizes.ExecuteAsync<BaseDataList<QualityDefinitionV1>>(new QualityDefinitionsParametersV1(MediaTypeId), cancellation));
+                case DownloadPages.Formats:
+                    await LoadFormatsAsync(cancellation);
                     break;
-                case DownloadPages.Release:
-                    _releases = await releases.ExecuteAsync<PageResult<ReleaseProfileDetailsV1>>(new ReadAcquisitionPolicyParametersV1(MediaTypeId, PageNumber), cancellation);
+                case DownloadPages.Quality:
+                    foreach (var type in QualityTypes)
+                    {
+                        if (!_sizes.ContainsKey(type)) _sizes[type] = new(await sizes.ExecuteAsync<BaseDataList<QualityDefinitionV1>>(new QualityDefinitionsParametersV1(type), cancellation));
+                    }
                     break;
-                case DownloadPages.Groups:
-                    _groups = await groups.ExecuteAsync<PageResult<ReleaseGroupDetailsV1>>(new ReadReleaseGroupsParametersV1(MediaTypeId, Search, PageNumber), cancellation);
-                    _groupFigures = await groupFigures.ExecuteAsync<ReleaseGroupFiguresV1>(new ReleaseGroupScopeParametersV1(MediaTypeId), cancellation);
-                    break;
-                case DownloadPages.Tags:
-                    _tags = await tags.ExecuteAsync<PageResult<AcquisitionTagDetailsV1>>(new ReadAcquisitionTagsParametersV1(PageNumber), cancellation);
-                    break;
-            }
-            if (Tab == DownloadPages.Release)
-            {
-                // Every card's chosen tags are offered besides the page of tags the pager shows.
-                _tagPage = await tags.ExecuteAsync<PageResult<AcquisitionTagDetailsV1>>(new ReadAcquisitionTagsParametersV1(TagPage), cancellation);
-                var choices = _tagPage.Items.ToList();
-                foreach (var id in (_release?.TagIds ?? []).Concat((_releases?.Items ?? []).SelectMany(item => item.TagIds)).Distinct().Where(id => !choices.Any(choice => choice.Id == id)).Take(100).ToList())
-                    choices.Add(await tag.ExecuteAsync<AcquisitionTagDetailsV1>(new AcquisitionTagParametersV1(id), cancellation));
-                _tagChoices = choices.Select(item => new SelectOption(Number(item.Id), item.Label)).ToArray();
-                _indexerPage = await connections.ExecuteAsync<PageResult<AcquisitionConnectionDetailsV1>>(
-                    new ReadAcquisitionConnectionsParametersV1(IndexerPage, acquisitionConnectionRoleId: AcquisitionConnectionRole.Search), cancellation);
-                var indexers = _indexerPage.Items.ToList();
-                foreach (var id in new[] { _release?.AcquisitionConnectionId }.Concat((_releases?.Items ?? []).Select(item => item.AcquisitionConnectionId)).OfType<long>().Distinct()
-                    .Where(id => !indexers.Any(item => item.Id == id)).Take(100))
-                    indexers.Add(await connection.ExecuteAsync<AcquisitionConnectionDetailsV1>(new AcquisitionConnectionParametersV1(id), cancellation));
-                _indexerChoices = new[] { new SelectOption("", texts["arr.anyIndexer"]) }
-                    .Concat(indexers.Select(item => new SelectOption(Number(item.Id), item.Name))).ToArray();
             }
         }
 

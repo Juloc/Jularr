@@ -116,6 +116,41 @@ namespace Jularr.Frontend.Framework
             return this;
         }
 
+        // A size range as Sonarr's quality definitions draw it: one track whose thumbs are the minimum, the preferred and the maximum (a range without a preferred
+        // value has two), from zero up to a limit that stands for no limit. Each thumb is the native range of its field; the numbers above follow them
+        // (SizeRange.entry.ts keeps the thumbs in order). The label is the row's data, such as the quality's name.
+        public Form<TData> SizeRange<TMinimum, TPreferred, TMaximum>(IUiComponent label, Expression<Func<TData, TMinimum>> minimum, Expression<Func<TData, TPreferred>>? preferred,
+            Expression<Func<TData, TMaximum>> maximum, decimal limit, string unitKey, string noneKey)
+        {
+            var thumbs = new List<IUiComponent>();
+            var values = new List<IUiComponent>();
+            void Thumb<TValue>(Expression<Func<TData, TValue>> selector, string labelKey, string role)
+            {
+                var field = Declare(selector, FieldControl.Range, labelKey);
+                var value = _data is null ? null : field.ReadValue(_data) as decimal?;
+                var shown = Math.Min(value ?? limit, limit);
+                var input = new Input().Attribute("id", _id + "-" + field.Name).Attribute("name", field.Name).Attribute("type", "range");
+                Configure(field, input);
+                input.Attribute("max", limit.ToString(CultureInfo.InvariantCulture)).Attribute("value", shown.ToString(CultureInfo.InvariantCulture))
+                    .TextAttribute("aria-label", labelKey).Attribute("data-size-thumb", role).Class("size-range__thumb size-range__thumb--" + role);
+                thumbs.Add(input);
+                values.Add(new Span(new Span(new Text("arr.size." + role)).Class("size-range__label"),
+                    new HtmlOutput(value is null || value >= limit ? new Text(noneKey) : new ValueText(value.Value.ToString("0.#", CultureInfo.CurrentCulture)))
+                        .Attribute("for", _id + "-" + field.Name).Attribute("data-size-output", role)).Class("size-range__value size-range__value--" + role));
+            }
+
+            Thumb(minimum, "arr.minimumMb", "minimum");
+            if (preferred is not null) Thumb(preferred, "arr.preferredMb", "preferred");
+            Thumb(maximum, "arr.maximumMb", "maximum");
+            var head = new Div(new Span(label).Class("size-range__name"), new Span([.. values, new Span(new Text(unitKey)).Class("size-range__unit")]).Class("size-range__values"))
+                .Class("size-range__head");
+            _target.Add(new Div(head, new Div([.. thumbs]).Class("size-range__track")).Class("ui-field ui-field--wide size-range")
+                .Attribute("data-size-range", "").Attribute("data-size-limit", limit.ToString(CultureInfo.InvariantCulture)).TextAttribute("data-size-none", noneKey));
+            _visibleFields++;
+            _hasWideField = true;
+            return this;
+        }
+
         // A wall-clock time: hour and minute fields on a desktop, a wheel on Android, the system's own picker on iOS (TimePicker.entry.ts).
         public Form<TData> Time<TValue>(Expression<Func<TData, TValue>> selector, string labelKey, FieldHelp? help = null)
         {

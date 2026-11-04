@@ -24,29 +24,39 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                 SELECT
                     profile."Id",
                     profile."Name",
-                    profile."MediaTypeId",
-                    profile."MediaSubtypeId",
-                    profile."IsDefault",
+                    coalesce((
+                        SELECT array_agg(applies."AcquisitionMediaKindId" ORDER BY applies."AcquisitionMediaKindId")
+                        FROM "AcquisitionProfileMediaKinds" AS applies
+                        WHERE applies."AcquisitionProfileId" = profile."Id"
+                    ), '{}') AS "MediaKinds",
+                    coalesce((
+                        SELECT array_agg(standard."AcquisitionMediaKindId" ORDER BY standard."AcquisitionMediaKindId")
+                        FROM "AcquisitionProfileDefaults" AS standard
+                        WHERE standard."AcquisitionProfileId" = profile."Id"
+                    ), '{}') AS "DefaultFor",
                     profile."Definition"::text AS "Definition",
                     (SELECT count(*)::integer FROM "WantedItems" AS wanted WHERE wanted."AcquisitionProfileId" = profile."Id") AS "WantedCount",
                     profile."Version"
                 FROM
                     "AcquisitionProfiles" AS profile
                 WHERE
-                    (@MediaTypeId::smallint IS NULL OR profile."MediaTypeId" = @MediaTypeId)
+                    (@MediaKind::smallint IS NULL OR EXISTS (
+                        SELECT 1
+                        FROM "AcquisitionProfileMediaKinds" AS applies
+                        WHERE applies."AcquisitionProfileId" = profile."Id"
+                            AND applies."AcquisitionMediaKindId" = @MediaKind
+                    ))
                     AND (@WantedItemId::bigint IS NULL OR EXISTS (
                         SELECT 1
                         FROM "WantedItems" AS wanted
-                            JOIN "Works" AS work ON work."Id" = wanted."WorkId"
+                            JOIN "WorkAcquisitionKinds" AS kind ON kind."WorkId" = wanted."WorkId"
+                            JOIN "AcquisitionProfileMediaKinds" AS applies ON applies."AcquisitionMediaKindId" = kind."AcquisitionMediaKindId"
                         WHERE wanted."Id" = @WantedItemId
-                            AND profile."MediaTypeId" = work."MediaTypeId"
-                            AND (profile."MediaSubtypeId" IS NULL OR profile."MediaSubtypeId" = work."MediaSubtypeId")
+                            AND applies."AcquisitionProfileId" = profile."Id"
                     ))
                 ORDER BY
-                    profile."MediaTypeId",
-                    profile."MediaSubtypeId" NULLS FIRST,
-                    profile."IsDefault" DESC,
-                    profile."Name",
+                    (SELECT min(applies."AcquisitionMediaKindId") FROM "AcquisitionProfileMediaKinds" AS applies WHERE applies."AcquisitionProfileId" = profile."Id") NULLS LAST,
+                    lower(profile."Name"),
                     profile."Id";
                 """;
             sql.Parameters.Add(Parameters);
@@ -70,9 +80,16 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                 SELECT
                     profile."Id",
                     profile."Name",
-                    profile."MediaTypeId",
-                    profile."MediaSubtypeId",
-                    profile."IsDefault",
+                    coalesce((
+                        SELECT array_agg(applies."AcquisitionMediaKindId" ORDER BY applies."AcquisitionMediaKindId")
+                        FROM "AcquisitionProfileMediaKinds" AS applies
+                        WHERE applies."AcquisitionProfileId" = profile."Id"
+                    ), '{}') AS "MediaKinds",
+                    coalesce((
+                        SELECT array_agg(standard."AcquisitionMediaKindId" ORDER BY standard."AcquisitionMediaKindId")
+                        FROM "AcquisitionProfileDefaults" AS standard
+                        WHERE standard."AcquisitionProfileId" = profile."Id"
+                    ), '{}') AS "DefaultFor",
                     profile."Definition"::text AS "Definition",
                     (SELECT count(*)::integer FROM "WantedItems" AS wanted WHERE wanted."AcquisitionProfileId" = profile."Id") AS "WantedCount",
                     profile."Version"
@@ -134,7 +151,7 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
     internal static class AcquisitionProfileContracts
     {
         public static AcquisitionProfileInputData Input(long? id, SaveAcquisitionProfileDataV1 data) =>
-            new(id, data.Name, data.MediaTypeId, data.MediaSubtypeId, data.IsDefault, data.AllowedQualities, data.UpgradeAllowed, data.UpgradeCutoffQuality,
+            new(id, data.Name, data.MediaKinds, data.DefaultFor, data.AllowedQualities, data.UpgradeAllowed, data.UpgradeCutoffQuality,
                 data.MinimumSizeMb, data.MaximumSizeMb, data.Version)
             {
                 QualityOrder = data.QualityOrder,
@@ -153,9 +170,8 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
         {
             var definition = JsonSerializer.Deserialize<AcquisitionProfileDefinition>(row.Definition, AcquisitionSelectionLogic.DefinitionOptions)
                 ?? throw new InvalidOperationException("The acquisition profile is invalid.");
-            return new AcquisitionProfileDetailsV1(row.Id, row.Name, row.MediaTypeId, row.IsDefault, definition.AllowedQualities, definition.UpgradeAllowed,
-                definition.UpgradeCutoffQuality, (int?)(definition.MinimumSizeBytes / 1048576), (int?)(definition.MaximumSizeBytes / 1048576), row.MediaSubtypeId,
-                definition.QualityOrder, new BaseDataList<QualityGroupV1>(definition.QualityGroups.Select(group => new QualityGroupV1(group.Id, group.Name, group.Qualities))),
+            return new AcquisitionProfileDetailsV1(row.Id, row.Name, row.MediaKinds, row.DefaultFor, definition.AllowedQualities, definition.UpgradeAllowed,
+                definition.UpgradeCutoffQuality, (int?)(definition.MinimumSizeBytes / 1048576), (int?)(definition.MaximumSizeBytes / 1048576), definition.QualityOrder, new BaseDataList<QualityGroupV1>(definition.QualityGroups.Select(group => new QualityGroupV1(group.Id, group.Name, group.Qualities))),
                 new BaseDataList<CustomFormatScoreV1>(definition.FormatScores.Select(score => new CustomFormatScoreV1(score.FormatId, score.Score))),
                 definition.MinimumFormatScore, definition.CutoffFormatScore, definition.MinimumUpgradeFormatScore, row.WantedCount, row.Version,
                 [.. (definition.Monitoring?.PrimaryTypes ?? []).Concat(definition.Monitoring?.SecondaryTypes ?? []).Concat(definition.Monitoring?.ReleaseStatuses ?? [])],

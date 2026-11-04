@@ -7,13 +7,13 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 {
     internal sealed class AcquisitionMediaScopeData : BaseData
     {
-        public AcquisitionMediaScopeData(MediaType mediaTypeId)
+        public AcquisitionMediaScopeData(MediaType? mediaTypeId)
         {
             MediaTypeId = mediaTypeId;
         }
 
-        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId))]
-        public MediaType MediaTypeId { get; }
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId), false)]
+        public MediaType? MediaTypeId { get; }
     }
 
     internal sealed class AcquisitionTagSetData : BaseData

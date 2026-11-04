@@ -25,23 +25,19 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                 """
                 SELECT
                     format."Id",
-                    format."MediaTypeId",
                     format."Name",
                     format."IncludeWhenRenaming",
                     format."Conditions"::text AS "Conditions",
                     format."Version"
                 FROM
                     "CustomFormats" AS format
-                WHERE
-                    format."MediaTypeId" = @MediaTypeId
                 ORDER BY
-                    format."Name",
+                    lower(format."Name"),
                     format."Id"
                 LIMIT @PageSize
                 OFFSET @Offset;
                 """;
             sql.Page = Page;
-            sql.Parameters.Add(new AcquisitionMediaScopeData(Parameters.MediaTypeId));
             var rows = await Context.ReadSql.ReadListAsync<CustomFormatRowData>(sql, CancellationToken);
             return new PageResult<CustomFormatDetailsV1>(rows.Select(CustomFormatContracts.Read).ToArray(), Page!);
         }
@@ -61,7 +57,6 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                 """
                 SELECT
                     format."Id",
-                    format."MediaTypeId",
                     format."Name",
                     format."IncludeWhenRenaming",
                     format."Conditions"::text AS "Conditions",
@@ -90,7 +85,7 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
             {
                 Value = item.Value, ExceptLanguage = item.ExceptLanguage, Resolution = item.Resolution, Minimum = item.Minimum, Maximum = item.Maximum
             }).ToArray();
-            var key = await Context.SaveCustomFormatAsync(new CustomFormatWriteData(Data.Id, Data.MediaTypeId, Data.Name, Data.IncludeWhenRenaming,
+            var key = await Context.SaveCustomFormatAsync(new CustomFormatWriteData(Data.Id, Data.Name, Data.IncludeWhenRenaming,
                 JsonSerializer.Serialize(conditions, AcquisitionSelectionLogic.DefinitionOptions), Data.Version), CancellationToken);
             return new SavedCustomFormatV1(key.Id, key.Version);
         }
@@ -117,7 +112,7 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
         {
             var conditions = JsonSerializer.Deserialize<FormatCondition[]>(row.Conditions, AcquisitionSelectionLogic.DefinitionOptions)
                 ?? throw new InvalidOperationException("The custom format is invalid.");
-            return new CustomFormatDetailsV1(row.Id, row.MediaTypeId, row.Name, row.IncludeWhenRenaming,
+            return new CustomFormatDetailsV1(row.Id, row.Name, row.IncludeWhenRenaming,
                 new BaseDataList<FormatConditionV1>(conditions.Select(item => new FormatConditionV1(item.Name, item.Kind, item.Negate, item.Required, item.Value,
                     item.ExceptLanguage, item.Resolution, item.Minimum, item.Maximum))), row.Version);
         }

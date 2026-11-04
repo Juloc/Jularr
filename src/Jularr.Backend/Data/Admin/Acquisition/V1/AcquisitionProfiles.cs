@@ -10,17 +10,18 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
 {
     public sealed class ReadAcquisitionProfilesParametersV1 : BaseParameters
     {
-        public ReadAcquisitionProfilesParametersV1(long? wantedItemId = null, MediaType? mediaTypeId = null)
+        public ReadAcquisitionProfilesParametersV1(long? wantedItemId = null, AcquisitionMediaKind? mediaKind = null)
         {
             WantedItemId = wantedItemId;
-            MediaTypeId = mediaTypeId;
+            MediaKind = mediaKind;
         }
 
+        // Only the profiles that apply to the target's Work, or to one media type.
         [DataField(typeof(WantedItemFields), nameof(WantedItemFields.Id), false)]
         public long? WantedItemId { get; }
 
-        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId), false)]
-        public MediaType? MediaTypeId { get; }
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.MediaKind), false)]
+        public AcquisitionMediaKind? MediaKind { get; }
     }
     public sealed class CreateAcquisitionProfileParametersV1 : BaseParameters
     {
@@ -86,23 +87,22 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
     }
     public sealed class SaveAcquisitionProfileDataV1 : BaseData
     {
-        public SaveAcquisitionProfileDataV1(string name, MediaType mediaTypeId, bool isDefault, string[] allowedQualities, bool upgradeAllowed, string? upgradeCutoffQuality,
-            int? minimumSizeMb, int? maximumSizeMb, long? version = null, MediaSubtype? mediaSubtypeId = null, string[]? qualityOrder = null,
+        public SaveAcquisitionProfileDataV1(string name, AcquisitionMediaKind[] mediaKinds, AcquisitionMediaKind[] defaultFor, string[] allowedQualities, bool upgradeAllowed,
+            string? upgradeCutoffQuality, int? minimumSizeMb, int? maximumSizeMb, long? version = null, string[]? qualityOrder = null,
             BaseDataList<QualityGroupV1>? qualityGroups = null, BaseDataList<CustomFormatScoreV1>? formatScores = null,
             int minimumFormatScore = 0, int cutoffFormatScore = 0, int minimumUpgradeFormatScore = 1, string[]? languageOrder = null,
             LanguageFallbackType languageFallback = LanguageFallbackType.Any, int goodGroupScore = AcquisitionProfileDefinition.DefaultGoodGroupScore,
             int badGroupScore = AcquisitionProfileDefinition.DefaultBadGroupScore)
         {
             Name = name;
-            MediaTypeId = mediaTypeId;
-            IsDefault = isDefault;
+            MediaKinds = mediaKinds;
+            DefaultFor = defaultFor;
             AllowedQualities = allowedQualities;
             UpgradeAllowed = upgradeAllowed;
             UpgradeCutoffQuality = upgradeCutoffQuality;
             MinimumSizeMb = minimumSizeMb;
             MaximumSizeMb = maximumSizeMb;
             Version = version;
-            MediaSubtypeId = mediaSubtypeId;
             QualityOrder = qualityOrder ?? [];
             QualityGroups = qualityGroups ?? new([]);
             FormatScores = formatScores ?? new([]);
@@ -118,11 +118,12 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
         [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.Name))]
         public string Name { get; }
 
-        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId))]
-        public MediaType MediaTypeId { get; }
+        // The media types the profile applies to and those it is the default of.
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.MediaKinds))]
+        public AcquisitionMediaKind[] MediaKinds { get; }
 
-        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.IsDefault))]
-        public bool IsDefault { get; }
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.DefaultFor))]
+        public AcquisitionMediaKind[] DefaultFor { get; }
 
         [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.AllowedQualities))]
         public string[] AllowedQualities { get; }
@@ -141,9 +142,6 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
 
         [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.Version), false)]
         public long? Version { get; }
-
-        [DataField(typeof(WorkFields), nameof(WorkFields.MediaSubtypeId))]
-        public MediaSubtype? MediaSubtypeId { get; }
 
         [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.AllowedQualities))]
         public string[] QualityOrder { get; }
@@ -169,7 +167,7 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
         [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.LanguageFallback), false)]
         public LanguageFallbackType LanguageFallback { get; }
 
-        // The points of a release group rated good or bad for the profile's media type.
+        // The points of a release group rated good or bad.
         [DataField(typeof(ReleaseGroupFields), nameof(ReleaseGroupFields.GoodScore))]
         public int GoodGroupScore { get; }
 
@@ -188,8 +186,8 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
     }
     public sealed class AcquisitionProfileDetailsV1 : BaseResponse
     {
-        public AcquisitionProfileDetailsV1(long id, string name, MediaType mediaTypeId, bool isDefault, string[] allowedQualities, bool upgradeAllowed, string? upgradeCutoffQuality,
-            int? minimumSizeMb, int? maximumSizeMb, MediaSubtype? mediaSubtypeId, string[]? qualityOrder, BaseDataList<QualityGroupV1>? qualityGroups,
+        public AcquisitionProfileDetailsV1(long id, string name, AcquisitionMediaKind[] mediaKinds, AcquisitionMediaKind[] defaultFor, string[] allowedQualities, bool upgradeAllowed,
+            string? upgradeCutoffQuality, int? minimumSizeMb, int? maximumSizeMb, string[]? qualityOrder, BaseDataList<QualityGroupV1>? qualityGroups,
             BaseDataList<CustomFormatScoreV1>? formatScores, int minimumFormatScore, int cutoffFormatScore, int minimumUpgradeFormatScore,
             int wantedCount, long version, string[] monitoredTypes, string[] monitoredLanguages, int? minimumPages,
             string[]? languageOrder = null, LanguageFallbackType languageFallback = LanguageFallbackType.Any, int goodGroupScore = AcquisitionProfileDefinition.DefaultGoodGroupScore,
@@ -197,14 +195,13 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
         {
             Id = id;
             Name = name;
-            MediaTypeId = mediaTypeId;
-            IsDefault = isDefault;
+            MediaKinds = mediaKinds;
+            DefaultFor = defaultFor;
             AllowedQualities = allowedQualities;
             UpgradeAllowed = upgradeAllowed;
             UpgradeCutoffQuality = upgradeCutoffQuality;
             MinimumSizeMb = minimumSizeMb;
             MaximumSizeMb = maximumSizeMb;
-            MediaSubtypeId = mediaSubtypeId;
             QualityOrder = qualityOrder ?? [];
             QualityGroups = qualityGroups ?? new([]);
             FormatScores = formatScores ?? new([]);
@@ -228,11 +225,12 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
         [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.Name))]
         public string Name { get; }
 
-        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId))]
-        public MediaType MediaTypeId { get; }
+        // The media types the profile applies to and those it is the default of.
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.MediaKinds))]
+        public AcquisitionMediaKind[] MediaKinds { get; }
 
-        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.IsDefault))]
-        public bool IsDefault { get; }
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.DefaultFor))]
+        public AcquisitionMediaKind[] DefaultFor { get; }
 
         [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.AllowedQualities))]
         public string[] AllowedQualities { get; }
@@ -249,8 +247,12 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
         [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.MaximumSizeMb))]
         public int? MaximumSizeMb { get; }
 
-        [DataField(typeof(WorkFields), nameof(WorkFields.MediaSubtypeId))]
-        public MediaSubtype? MediaSubtypeId { get; }
+        // The quality list the profile's media types share.
+        [JsonIgnore]
+        public QualityFamily QualityFamily => AcquisitionMediaKinds.Family(MediaKinds.Length > 0 ? MediaKinds[0] : AcquisitionMediaKind.Movie);
+
+        // Whether the profile applies to a Work of this type and subtype.
+        public bool AppliesTo(MediaType mediaType, MediaSubtype? subtype) => MediaKinds.Contains(AcquisitionMediaKinds.Of(mediaType, subtype));
 
         [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.AllowedQualities))]
         public string[] QualityOrder { get; }
@@ -291,7 +293,7 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
         [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.LanguageFallback), false)]
         public LanguageFallbackType LanguageFallback { get; }
 
-        // The points of a release group rated good or bad for the profile's media type.
+        // The points of a release group rated good or bad.
         [DataField(typeof(ReleaseGroupFields), nameof(ReleaseGroupFields.GoodScore))]
         public int GoodGroupScore { get; }
 

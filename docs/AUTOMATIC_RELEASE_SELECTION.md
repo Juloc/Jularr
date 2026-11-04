@@ -44,14 +44,14 @@ Equal input gives the same ranking whatever order the indexers answered in:
 
 ## Release groups
 
-Each media type keeps one list of release groups (`ReleaseGroups`, migration `0028`; [ReleaseGroupLogic.cs](../src/Jularr.Backend/Logic/Acquisition/ReleaseGroupLogic.cs)).
+One list of release groups serves every media type (`ReleaseGroups`, migration `0028`; one list since `0042`, where the same group of two types kept the stricter rating; [ReleaseGroupLogic.cs](../src/Jularr.Backend/Logic/Acquisition/ReleaseGroupLogic.cs)).
 Every manual or automatic search adds the groups its results name (the video parser's group; for books and manga the last named tag, see
 below), counts each once per search and keeps when it last saw it; no extra provider call is made. A name with several groups
 ("danke-Empire, Ushi", also joined by `&`, `+` or `/`) is several groups for the list, the rating and the Group column. A group can also be
-typed by hand (Admin, Acquisition, Profiles, Release groups). A name is trimmed and kept once per media type in any case. A rating saves on
-click and refreshes the figures with the list; the chosen segment clicked again takes it back (not rated).
+typed by hand (Admin, Acquisition, Quality profiles, Custom formats, Release groups). A name is trimmed and kept once in any case. A rating saves on
+click and refreshes the list; the chosen segment clicked again takes it back (not rated).
 
-A rating (Good, Bad, Blocked; none is not rated) applies to every profile of the media type and is one more named rule of the score
+A rating (Good, Bad, Blocked; none is not rated) applies to every profile and is one more named rule of the score
 (`ReleaseScorer.GroupRating`), not a tie-break:
 
 - Good and Bad add the profile's points, "Group X (good)" and "Group X (bad)", to the format score, once for each rated group of the name. The points live in the profile

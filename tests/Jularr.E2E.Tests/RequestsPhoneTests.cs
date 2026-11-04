@@ -20,9 +20,11 @@ namespace Jularr.E2E.Tests
                     SELECT "Id" INTO pid FROM "Profiles" ORDER BY "Id" LIMIT 1;
                     SELECT "Id" INTO aid FROM "Accounts" ORDER BY "Id" LIMIT 1;
                     UPDATE "InstanceModules" SET "IsEnabled" = TRUE WHERE "Key" IN ('Library', 'Requests');
-                    INSERT INTO "AcquisitionProfiles" ("Name", "MediaTypeId", "Definition")
-                    SELECT 'Ultra HD Remux Lossless Audio Edition', 1, "Definition" FROM "AcquisitionProfiles" WHERE "MediaTypeId" = 1 AND "IsDefault" LIMIT 1
+                    INSERT INTO "AcquisitionProfiles" ("Name", "Definition")
+                    SELECT 'Ultra HD Remux Lossless Audio Edition', profile."Definition" FROM "AcquisitionProfiles" AS profile
+                        JOIN "AcquisitionProfileDefaults" AS standard ON standard."AcquisitionProfileId" = profile."Id" AND standard."AcquisitionMediaKindId" = 1
                     RETURNING "Id" INTO qid;
+                    INSERT INTO "AcquisitionProfileMediaKinds" ("AcquisitionProfileId", "AcquisitionMediaKindId") VALUES (qid, 1);
                     INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle")
                     SELECT 9000 + n, 1, 'Phone film ' || lpad(n::text, 2, '0') FROM generate_series(1, 12) AS n;
                     INSERT INTO "AcquisitionRequests" ("WorkId", "RequestedByProfileId", "RequestedByAccountId", "UiLocaleId", "AcquisitionProfileId")

@@ -17,13 +17,15 @@ namespace Jularr.Backend.Logic.Acquisition
                 SELECT evidence."StoredFileId", format."Id" AS "CustomFormatId", format."Version" AS "FormatVersion",
                     format."Name", format."Conditions"::text AS "Conditions", evidence."Evidence"::text AS "Evidence"
                 FROM "StoredFileFormatEvidence" AS evidence
-                    JOIN "CustomFormats" AS format ON format."MediaTypeId" = evidence."MediaTypeId"
+                    JOIN "WorkAcquisitionKinds" AS kind ON kind."WorkId" = evidence."WorkId"
+                    CROSS JOIN "CustomFormats" AS format
                     LEFT JOIN "StoredFileCustomFormats" AS evaluated ON evaluated."StoredFileId" = evidence."StoredFileId" AND evaluated."CustomFormatId" = format."Id"
                 WHERE EXISTS (SELECT 1 FROM "WantedItems" AS wanted WHERE wanted."WorkId" = evidence."WorkId")
                     AND EXISTS (
-                        SELECT 1 FROM "AcquisitionProfiles" AS profile
+                        SELECT 1 FROM "AcquisitionProfileMediaKinds" AS applies
+                            JOIN "AcquisitionProfiles" AS profile ON profile."Id" = applies."AcquisitionProfileId"
                             CROSS JOIN LATERAL jsonb_array_elements(coalesce(profile."Definition" -> 'FormatScores', '[]'::jsonb)) AS score
-                        WHERE profile."MediaTypeId" = evidence."MediaTypeId" AND (score ->> 'FormatId')::bigint = format."Id"
+                        WHERE applies."AcquisitionMediaKindId" = kind."AcquisitionMediaKindId" AND (score ->> 'FormatId')::bigint = format."Id"
                     )
                     AND (evaluated."FormatVersion" IS DISTINCT FROM format."Version"
                         OR evaluated."Evidence" IS DISTINCT FROM evidence."Evidence")

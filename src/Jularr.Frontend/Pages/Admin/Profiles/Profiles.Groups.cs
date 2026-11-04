@@ -9,29 +9,20 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
 {
     public sealed partial class ProfilesModel
     {
-        // The release groups of the media type: its figures, one field that finds or adds a group, and a list whose segments rate a group for every profile of the type
-        // with one click. Not rated groups come first.
-        private void DefineGroups(Page page)
+        // The release groups, one list for every media type: one field that finds or adds a group and a list whose segments rate a group for every profile with one
+        // click (the profile names the points of a good or bad group). Not rated groups come first.
+        private IUiComponent GroupSection()
         {
-            if (_groups is not { } result || _groupFigures is not { } figures) return;
-
-            // A rating updates the figures and the list together, as one region.
             var region = new List<IUiComponent>();
-            region.Add(new KpiTiles(
-                new KpiTile("arr.groups.total", Count(figures.GroupCount), Glyph("layers"), UiTone.Accent),
-                new KpiTile("arr.groups.rating.Good", Count(figures.GoodCount), Glyph("check"), UiTone.Success),
-                new KpiTile("arr.groups.notRated", Count(figures.NotRatedCount), Glyph("sliders"), UiTone.Info),
-                new KpiTile("arr.groups.rating.Blocked", Count(figures.BlockedCount), Glyph("sync"), UiTone.Warning)).Strip());
-
             region.Add(new Div(new Form<AddReleaseGroupDataV1>(form =>
             {
                 form.Text(item => item.Name, "arr.groups.name", help: new FieldHelp(Placeholder: "arr.groups.find"));
                 form.Submit("arr.groups.add");
-            }, Address("Group"), Token, _group ?? new AddReleaseGroupDataV1(MediaTypeId, Search ?? ""), FormError)).Class("release-groups-bar"));
+            }, Address("Group"), Token, _group ?? new AddReleaseGroupDataV1(Search ?? ""), FormError)).Class("release-groups-bar"));
 
             var empty = new Div(new IconTile(Glyph("layers", 22), UiTone.Neutral), new P(new Text("arr.groups.none")).Attribute("role", "status"));
             var columns = new List<ListColumn> { new("arr.groups.name", ListRole.Main), new("arr.groups.rating", ListRole.Actions) };
-            var rows = result.Items.Select(item =>
+            var rows = (_groups?.Items ?? []).Select(item =>
             {
                 var seen = item.LastSeenAt is not { } last ? texts["arr.groups.unseen"]
                     : item.SeenCount == 1 ? string.Format(CultureInfo.CurrentCulture, texts["arr.groups.seenOnce"], Age(last))
@@ -40,8 +31,8 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
                     new ValueText(item.ReleaseGroupRatingId is null ? texts["arr.groups.notRated"] + " · " + seen : seen));
                 return new ListRow([identity, RatingForm(item)]);
             }).ToList();
-            region.Add(new ListPanel("arr.releaseGroups", columns, rows, empty).Modifier("release-groups-list").Paged());
-            page.Content.Add(new Region("release-groups", [.. region]).Class("release-groups"));
+            region.Add(new ListPanel("arr.releaseGroups", columns, rows, empty).Modifier("release-groups-list").Paged(key: "groups"));
+            return PaneSection("release-groups", "arr.releaseGroups", new Region("release-groups-region", [.. region]).Class("release-groups"));
         }
 
         // Good, Bad and Blocked as one segmented control; none chosen is not rated. A click saves it.
@@ -54,7 +45,7 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
                 var fallback = new Button(new Text("common.save"));
                 fallback.Attribute("data-form-submit-fallback", "");
                 form.Submit(fallback);
-            }, Address("Rate", item.Id), Token, new RateReleaseGroupDataV1(item.ReleaseGroupRatingId));
+            }, Address("Rate", item.Id, GroupItem), Token, new RateReleaseGroupDataV1(item.ReleaseGroupRatingId));
             return new Div(form).Class("list-actions");
         }
 
@@ -68,22 +59,22 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
 
         public async Task<IActionResult> OnPostGroupAsync(string? name)
         {
-            Tab = DownloadPages.Groups;
-            _group = new AddReleaseGroupDataV1(MediaTypeId, name ?? "");
+            Tab = DownloadPages.Formats;
+            _group = new AddReleaseGroupDataV1(name ?? "");
             await addGroup.ExecuteAsync<SavedReleaseGroupV1>(new SaveAcquisitionPolicyParametersV1(), _group, HttpContext.RequestAborted);
 
             // The list shows the group that was found or added, ready to be rated.
             Search = name;
-            PageNumber = 1;
-            return LocalRedirect(Address());
+            return LocalRedirect(Address() + "#release-groups");
         }
 
         public async Task<IActionResult> OnPostRateAsync(ReleaseGroupRating? releaseGroupRatingId)
         {
-            Tab = DownloadPages.Groups;
+            Tab = DownloadPages.Formats;
             var id = Edit ?? throw new KeyNotFoundException();
             await rateGroup.ExecuteAsync<UpdateResult>(new ReleaseGroupParametersV1(id), new RateReleaseGroupDataV1(releaseGroupRatingId), HttpContext.RequestAborted);
-            Edit = null;
+            EditText = null;
+            ItemText = null;
             return LocalRedirect(Address());
         }
     }

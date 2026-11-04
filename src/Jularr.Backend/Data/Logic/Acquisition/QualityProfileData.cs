@@ -235,14 +235,13 @@ namespace Jularr.Backend.Data.Logic.Acquisition
     // What became of a taken-over profile, and the Jularr profile its titles use.
     internal sealed record TakenOverProfileOutcome(string OutcomeKey, long? ProfileId);
 
-    // A profile's name and media type; a takeover does not create the same twice.
+    // A profile's name; a takeover does not create the same twice.
     internal sealed class AcquisitionProfileNameData : BaseData
     {
-        public AcquisitionProfileNameData(long id, string name, MediaType mediaTypeId)
+        public AcquisitionProfileNameData(long id, string name)
         {
             Id = id;
             Name = name;
-            MediaTypeId = mediaTypeId;
         }
 
         [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.Id))]
@@ -250,9 +249,6 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
         [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.Name))]
         public string Name { get; }
-
-        [DataField(typeof(Fields.Media.WorkFields), nameof(Fields.Media.WorkFields.MediaTypeId))]
-        public MediaType MediaTypeId { get; }
     }
 
     internal sealed class TakeoverLibraryData : BaseData

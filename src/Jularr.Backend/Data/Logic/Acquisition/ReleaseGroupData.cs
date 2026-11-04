@@ -1,23 +1,17 @@
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
-using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Fields.Acquisition;
-using Jularr.Backend.Data.Fields.Media;
 
 namespace Jularr.Backend.Data.Logic.Acquisition
 {
-    // The groups one search saw for a media type; each counts once per search.
+    // The groups one search saw; each counts once per search.
     internal sealed class ReleaseGroupSightingsData : BaseData
     {
-        public ReleaseGroupSightingsData(MediaType mediaTypeId, string[] names, DateTime seenAt)
+        public ReleaseGroupSightingsData(string[] names, DateTime seenAt)
         {
-            MediaTypeId = mediaTypeId;
             Names = names;
             SeenAt = seenAt;
         }
-
-        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId))]
-        public MediaType MediaTypeId { get; }
 
         [DataField(typeof(ReleaseGroupFields), nameof(ReleaseGroupFields.Names))]
         public string[] Names { get; }
@@ -26,17 +20,13 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         public DateTime SeenAt { get; }
     }
 
-    // A group typed by hand for a media type.
+    // A group typed by hand.
     internal sealed class ReleaseGroupAddData : BaseData
     {
-        public ReleaseGroupAddData(MediaType mediaTypeId, string name)
+        public ReleaseGroupAddData(string name)
         {
-            MediaTypeId = mediaTypeId;
             Name = name;
         }
-
-        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId))]
-        public MediaType MediaTypeId { get; }
 
         [DataField(typeof(ReleaseGroupFields), nameof(ReleaseGroupFields.Name))]
         public string Name { get; }
@@ -58,17 +48,13 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         public ReleaseGroupRating? ReleaseGroupRatingId { get; }
     }
 
-    // A media type's groups whose name holds the search text in any case; no text lists them all.
+    // The groups whose name holds the search text in any case; no text lists them all.
     internal sealed class ReleaseGroupFilterData : BaseData
     {
-        public ReleaseGroupFilterData(MediaType mediaTypeId, string? search)
+        public ReleaseGroupFilterData(string? search)
         {
-            MediaTypeId = mediaTypeId;
             Search = search;
         }
-
-        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId))]
-        public MediaType MediaTypeId { get; }
 
         [DataField(typeof(ReleaseGroupFields), nameof(ReleaseGroupFields.Search))]
         public string? Search { get; }

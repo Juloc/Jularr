@@ -35,9 +35,10 @@ namespace Jularr.Backend.Tests
                 StringAssert.Contains(page, "class=\"menu-entry is-active\" href=\"" + address + "\"", address);
             }
 
-            // The quality profiles are an entry of their own: their panes are its chips.
+            // The quality profiles are an entry of their own: their three tabs are its chips.
             var rules = Row(await GetAsync(host, "/Admin/Acquisition/Profiles"));
-            foreach (var pane in new[] { "formats", "sizes", "release", "groups", "tags" }) StringAssert.Contains(rules, "tab=" + pane);
+            foreach (var pane in new[] { "profiles", "formats", "quality" }) StringAssert.Contains(rules, "tab=" + pane);
+            foreach (var pane in new[] { "sizes", "release", "groups", "tags" }) Assert.IsFalse(rules.Contains("tab=" + pane, StringComparison.Ordinal), pane);
             Assert.IsFalse(rules.Contains("href=\"/Admin/Acquisition\"", StringComparison.Ordinal));
 
             // A module that is off takes its entries and chips with it.
@@ -100,10 +101,10 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(jobs, "navigation-tabs__divider");
             StringAssert.Contains(jobs, "href=\"/Admin/Jobs?state=failed\"");
 
-            // The quality rules are panes of one address; the media type stays when the pane changes.
-            var formats = Row(await GetAsync(host, "/Admin/Acquisition/Profiles?tab=formats&mediaTypeId=2"));
-            StringAssert.Contains(formats, "href=\"/Admin/Acquisition/Profiles?tab=formats&amp;mediaTypeId=2\" class=\"navigation-tabs__link navigation-tabs__link--active\"");
-            StringAssert.Contains(formats, "href=\"/Admin/Acquisition/Profiles?tab=sizes&amp;mediaTypeId=2\"");
+            // The quality rules are tabs of one address, none of them about one media type.
+            var formats = Row(await GetAsync(host, "/Admin/Acquisition/Profiles?tab=formats"));
+            StringAssert.Contains(formats, "href=\"/Admin/Acquisition/Profiles?tab=formats\" class=\"navigation-tabs__link navigation-tabs__link--active\"");
+            StringAssert.Contains(formats, "href=\"/Admin/Acquisition/Profiles?tab=quality\"");
 
             // A detail page of an entry has no row of its own.
             await host.Fixture.RunSqlAsync("INSERT INTO \"Works\" (\"Id\", \"MediaTypeId\", \"CanonicalTitle\") VALUES (10, 1, 'Film')");

@@ -11,11 +11,11 @@ namespace Jularr.Frontend.Framework
         OpenRequests
     }
 
-    // One page of an entry, reached by a chip. A pane is a page that shares its address with others and names itself in the query (`?tab=` of the quality rules, which keep the
-    // chosen media type; `?view=` of the media servers); the default pane is the one shown without a name.
+    // One page of an entry, reached by a chip. A pane is a page that shares its address with others and names itself in the query (`?tab=` of the quality rules,
+    // `?view=` of the media servers); the default pane is the one shown without a name.
     public sealed record AdminMenuPage(string LabelKey, string Path, string? Right = null, string[]? Modules = null, string? Pane = null, bool IsDefaultPane = false, string PaneKey = "tab")
     {
-        public string Href(string? mediaTypeId = null) => Pane is null ? Path : Path + "?" + PaneKey + "=" + Pane + (string.IsNullOrEmpty(mediaTypeId) ? "" : "&mediaTypeId=" + Uri.EscapeDataString(mediaTypeId));
+        public string Href() => Pane is null ? Path : Path + "?" + PaneKey + "=" + Pane;
 
         // The page is shown for the account: its right inside its enabled modules.
         public bool IsAllowed(UiText texts) => texts.Can(Right, Modules ?? []);
@@ -100,12 +100,9 @@ namespace Jularr.Frontend.Framework
                 ]),
                 new("profiles", "admin.profiles.title", "layers",
                 [
-                    new("admin.profiles.title", "/Admin/Acquisition/Profiles", Acquisition, ["Acquisition"], "profiles", true),
+                    new("arr.profiles", "/Admin/Acquisition/Profiles", Acquisition, ["Acquisition"], "profiles", true),
                     new("arr.formats", "/Admin/Acquisition/Profiles", Acquisition, ["Acquisition"], "formats"),
-                    new("arr.sizes", "/Admin/Acquisition/Profiles", Acquisition, ["Acquisition"], "sizes"),
-                    new("arr.releaseProfiles", "/Admin/Acquisition/Profiles", Acquisition, ["Acquisition"], "release"),
-                    new("arr.releaseGroups", "/Admin/Acquisition/Profiles", Acquisition, ["Acquisition"], "groups"),
-                    new("arr.tags", "/Admin/Acquisition/Profiles", Acquisition, ["Acquisition"], "tags")
+                    new("arr.quality", "/Admin/Acquisition/Profiles", Acquisition, ["Acquisition"], "quality")
                 ]),
                 new("sources", "admin.sources.title", "swap",
                 [
@@ -207,18 +204,17 @@ namespace Jularr.Frontend.Framework
         // A page that holds the pane and the scope in its own state (the quality rules after a post) names them; one with filters gives the row the name of its filters.
         // A page whose chips keep part of its own state (the Activity pages, their media types) gives the address of each page.
         // A page that knows how much it holds of a sibling gives the counts by label: a sibling with none is left out (nothing is set up for it), the others show their number.
-        public static NavigationTabs Row(UiText texts, HttpRequest request, IReadOnlyList<NavigationTab>? filters = null, string? tab = null, string? mediaTypeId = null, string ariaLabelKey = "admin.menu.pages",
+        public static NavigationTabs Row(UiText texts, HttpRequest request, IReadOnlyList<NavigationTab>? filters = null, string? tab = null, string ariaLabelKey = "admin.menu.pages",
             IReadOnlyDictionary<string, int>? counts = null, Func<AdminMenuPage, string>? href = null)
         {
             var tabs = new List<NavigationTab>();
             if (Current(For(texts), request.Path.Value ?? "/", Query(request, tab)) is { Entry.Pages.Count: > 1 } current)
             {
-                mediaTypeId ??= request.Query["mediaTypeId"].ToString();
                 foreach (var page in current.Entry.Pages)
                 {
                     int? count = counts is not null && counts.TryGetValue(page.LabelKey, out var known) ? known : null;
                     if (count == 0 && page != current.Page) continue;
-                    tabs.Add(new NavigationTab(page.LabelKey, href?.Invoke(page) ?? page.Href(mediaTypeId), page == current.Page, Count: count));
+                    tabs.Add(new NavigationTab(page.LabelKey, href?.Invoke(page) ?? page.Href(), page == current.Page, Count: count));
                 }
             }
 

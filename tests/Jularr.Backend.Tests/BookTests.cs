@@ -624,7 +624,7 @@ namespace Jularr.Backend.Tests
             await host.Fixture.RunSqlAsync("""
                 UPDATE "AcquisitionProfiles" SET "Definition" = "Definition" ||
                     '{"UpgradeAllowed":true,"UpgradeCutoffQuality":"EPUB","FormatScores":[],"CutoffFormatScore":0}'::jsonb
-                WHERE "MediaTypeId" = 3 AND "MediaSubtypeId" IS NULL AND "IsDefault";
+                WHERE "Id" = (SELECT "AcquisitionProfileId" FROM "AcquisitionProfileDefaults" WHERE "AcquisitionMediaKindId" = 4);
                 UPDATE "AcquisitionConnections" SET "IsEnabled" = FALSE WHERE "AcquisitionConnectionTypeId" = 1;
                 """);
             await RunAsync<SearchDueWantedV1>(host);

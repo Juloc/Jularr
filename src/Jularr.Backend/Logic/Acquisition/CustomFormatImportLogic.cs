@@ -19,7 +19,7 @@ namespace Jularr.Backend.Logic.Acquisition
             }
 
             if (formats.Select(format => format.SourceId).Distinct().Count() != formats.Count
-                || formats.Select(format => format.Name).Distinct(StringComparer.Ordinal).Count() != formats.Count) throw new DataValidationException("Formats", "duplicate_value");
+                || formats.Select(format => format.Name).Distinct(StringComparer.OrdinalIgnoreCase).Count() != formats.Count) throw new DataValidationException("Formats", "duplicate_value");
 
             // Matching definitions are reused. A conflicting name never overwrites the Owner's rules.
             var sql = new SqlStatement();
@@ -31,20 +31,20 @@ namespace Jularr.Backend.Logic.Acquisition
                 ), existing AS MATERIALIZED (
                     SELECT format."Id", format."Name", format."IncludeWhenRenaming", format."Conditions", format."Version"
                     FROM "CustomFormats" AS format
-                    WHERE format."MediaTypeId" = @MediaTypeId AND format."Name" IN (SELECT input."Name" FROM input)
+                    WHERE lower(format."Name") IN (SELECT lower(input."Name") FROM input)
                     ORDER BY format."Id"
                     FOR UPDATE
                 ), conflicts AS (
                     SELECT 1
-                    FROM input JOIN existing USING ("Name")
+                    FROM input JOIN existing ON lower(existing."Name") = lower(input."Name")
                     WHERE input."Conditions" <> existing."Conditions" OR input."IncludeWhenRenaming" <> existing."IncludeWhenRenaming"
                 ), inserted AS (
-                    INSERT INTO "CustomFormats" ("MediaTypeId", "Name", "IncludeWhenRenaming", "Conditions")
-                    SELECT @MediaTypeId, input."Name", input."IncludeWhenRenaming", input."Conditions"
+                    INSERT INTO "CustomFormats" ("Name", "IncludeWhenRenaming", "Conditions")
+                    SELECT input."Name", input."IncludeWhenRenaming", input."Conditions"
                     FROM input
                     WHERE NOT EXISTS (SELECT 1 FROM conflicts)
-                        AND NOT EXISTS (SELECT 1 FROM existing WHERE existing."Name" = input."Name")
-                    ON CONFLICT ("MediaTypeId", "Name") DO NOTHING
+                        AND NOT EXISTS (SELECT 1 FROM existing WHERE lower(existing."Name") = lower(input."Name"))
+                    ON CONFLICT ((lower("Name"))) DO NOTHING
                     RETURNING "Id", "Name", "Version"
                 )
                 SELECT
@@ -53,13 +53,13 @@ namespace Jularr.Backend.Logic.Acquisition
                     coalesce(inserted."Version", existing."Version") AS "Version"
                 FROM
                     input
-                    LEFT JOIN inserted USING ("Name")
-                    LEFT JOIN existing USING ("Name")
+                    LEFT JOIN inserted ON lower(inserted."Name") = lower(input."Name")
+                    LEFT JOIN existing ON lower(existing."Name") = lower(input."Name")
                 WHERE
                     NOT EXISTS (SELECT 1 FROM conflicts)
                     AND coalesce(inserted."Id", existing."Id") IS NOT NULL;
                 """;
-            sql.Parameters.Add(new CustomFormatBatchData(mediaType, JsonSerializer.Serialize(formats, AcquisitionSelectionLogic.DefinitionOptions)));
+            sql.Parameters.Add(new CustomFormatBatchData(JsonSerializer.Serialize(formats, AcquisitionSelectionLogic.DefinitionOptions)));
             var result = await ctx.Sql.ReadListAsync<ImportedCustomFormatKeyData>(sql, ct);
             if (result.Count != formats.Count) throw new DataValidationException("Formats", "invalid_transition");
             return result;
