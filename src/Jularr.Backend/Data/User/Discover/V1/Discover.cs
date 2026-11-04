@@ -71,16 +71,20 @@ namespace Jularr.Backend.Data.User.Discover.V1
         public DiscoverSort? DiscoverSortId { get; }
     }
 
-    // The shelves of one scope, or of every listed scope without one.
+    // The shelves of one scope, or of every listed scope without one; only the named lists, or all of them without any.
     public sealed class ReadDiscoverShelvesDataV1 : BaseData
     {
-        public ReadDiscoverShelvesDataV1(string? scopeSlug = null)
+        public ReadDiscoverShelvesDataV1(string? scopeSlug = null, DiscoverFeedType[]? discoverFeedTypeIds = null)
         {
             ScopeSlug = scopeSlug;
+            DiscoverFeedTypeIds = discoverFeedTypeIds;
         }
 
         [DataField(typeof(DiscoverFields), nameof(DiscoverFields.ScopeSlug), false)]
         public string? ScopeSlug { get; }
+
+        [DataField(typeof(DiscoverFields), nameof(DiscoverFields.DiscoverFeedTypeIds), false)]
+        public DiscoverFeedType[]? DiscoverFeedTypeIds { get; }
     }
 
     // A shelf answered from a whole catalog: films and series as Items, the other catalogs' titles as CatalogItems.

@@ -33,6 +33,11 @@ namespace Jularr.Frontend.Pages.User.Discover
         private static readonly TimeSpan SlowShelf = TimeSpan.FromMilliseconds(700);
         private const int SearchRowSize = 20;
 
+        // Recommendation shelves arrive a few at a time: about two screens first, the next ones as the page nears them.
+        private const int ShelvesPerPart = 4;
+        // A part beyond every list reads none.
+        private const int MaximumPart = 500;
+
         private const string HeroPreferences = "discover-hero";
 
         // The most highlights of one type a device can choose to show.
@@ -73,6 +78,11 @@ namespace Jularr.Frontend.Pages.User.Discover
         private string? _feed;
         private string? _sort;
         private string? _availability;
+        private bool _recommendationsRead;
+        private bool _moreShelves;
+
+        // The types whose first shelf is in the part read, so each type is named once, above its first shelf.
+        private readonly HashSet<DiscoverScopeV1> _beginningScopes = [];
 
         // One or more scope slugs, as a comma list or repeated; none or every listed one means all.
         [BindProperty(SupportsGet = true, Name = "type")]
@@ -402,13 +412,6 @@ namespace Jularr.Frontend.Pages.User.Discover
         {
             var recommendations = new Page();
             DefineRecommendations(recommendations);
-            if (_shelves.Count == 0 && _catalogShelves.Count == 0 && !_providerUnavailable)
-            {
-                var address = Address(Current with { View = null, Page = 1 });
-                recommendations.Content.Add(new A(new Text("discover.loadRecommendations")).Class("button").Attribute("data-discover-recommendations", "true")
-                    .Attribute("href", address + (address.Contains('?') ? "&" : "?") + "handler=Recommendations"));
-            }
-
             return new Div([.. recommendations.Content]).Attribute("id", "discover-recommendations");
         }
 
@@ -434,7 +437,7 @@ namespace Jularr.Frontend.Pages.User.Discover
                     ? _catalogShelves.Where(shelf => shelf.Scope == scope).Select(shelf => (shelf.Feed, Cards: Filtered(shelf.Items.Select(item => (scope, item))).Select(entry => CatalogCard(scope, entry.Item)).ToList()))
                     : _shelves.Where(shelf => shelf.Type == scope.MediaTypeId).Select(shelf => (shelf.Feed, Cards: Filtered(shelf.Items).Select(Card).ToList()));
                 var shown = shelves.Where(shelf => FeedType is null || shelf.Feed == FeedType).ToList();
-                if (selected is null && shown.Any(shelf => shelf.Cards.Count > 0))
+                if (selected is null && _beginningScopes.Contains(scope) && shown.Any(shelf => shelf.Cards.Count > 0))
                 {
                     page.Content.Add(new H2(new Text("discover.type." + scope.Slug)).Class("discover-media-heading"));
                 }
@@ -445,6 +448,15 @@ namespace Jularr.Frontend.Pages.User.Discover
                     var ranking = Current with { Types = [scope.Slug], Feed = null, View = feed, Page = 1 };
                     page.Content.Add(new MediaShelf(assets, "discover.feed." + feed, Address(ranking), [.. cards], Address(ranking with { Page = 2 })));
                 }
+            }
+
+            // The next part: the page's script loads it as the page nears it, without script it is a link.
+            if (_recommendationsRead ? _moreShelves : !_providerUnavailable)
+            {
+                var address = Address(Current with { View = null, Page = _recommendationsRead ? Math.Clamp(PageNumber, 1, MaximumPart) + 1 : 1 });
+                page.Content.Add(new Nav(new A(new Text(_recommendationsRead ? "list.loadMore" : "discover.loadRecommendations")).Class("button")
+                    .Attribute("data-discover-recommendations", "true").Attribute("data-navigation", "full").Attribute("data-retry-label", texts["discover.retry"])
+                    .Attribute("href", address + (address.Contains('?') ? "&" : "?") + "handler=Recommendations")).Class("discover-paging").Attribute("data-automatic", ""));
             }
         }
 
@@ -534,6 +546,7 @@ namespace Jularr.Frontend.Pages.User.Discover
         public async Task<IActionResult> OnGetRecommendationsAsync()
         {
             if (!texts.CanReadMedia()) return Forbid();
+            Response.Headers.Vary = "X-Jularr-Fragment";
             await LoadRecommendationsAsync();
 
             // Native navigation keeps full SSR.
@@ -618,7 +631,7 @@ namespace Jularr.Frontend.Pages.User.Discover
                 () => library.ExecuteAsync<PageResult<LibraryItemV1>>(new ReadLibraryParametersV1(recentTypes, pageSize: 20, mediaSubtypeIds: recentSubtypes), HttpContext.RequestAborted));
             var heroFeed = Feed is null ? DiscoverFeedType.Trending : FeedType;
             var keptTask = ReadWhenAsync(hero && heroFeed is not null,
-                () => readShelves.ExecuteAsync<BaseDataList<DiscoverShelfV1>>(new ReadDiscoverShelvesDataV1(selected?.Slug), HttpContext.RequestAborted));
+                () => readShelves.ExecuteAsync<BaseDataList<DiscoverShelfV1>>(new ReadDiscoverShelvesDataV1(selected?.Slug, [heroFeed!.Value]), HttpContext.RequestAborted));
             await Task.WhenAll(continueTask, recentTask, keptTask);
 
             _continue = (await continueTask) ?? _continue;
@@ -884,26 +897,27 @@ namespace Jularr.Frontend.Pages.User.Discover
         // One shelf of a provider: what it answered, or that it did not answer in time.
         private sealed record ShelfAnswer(DiscoverScopeV1 Scope, DiscoverFeedType Feed, IReadOnlyList<DiscoverItemV1>? Items, IReadOnlyList<DiscoverCatalogItemV1>? Catalog, bool Failed);
 
+        // The part of the recommendation shelves the address names (p); every chosen type's lists in the order of the media-type bar.
         private async Task LoadRecommendationsAsync()
         {
             await LoadListedAsync();
-            var selected = Selected;
             var started = Stopwatch.GetTimestamp();
+            var all = Chosen.SelectMany(scope => scope.Feeds.Where(feed => FeedType is null || feed == FeedType).Select(feed => (Scope: scope, Feed: feed))).ToList();
+            var first = (Math.Clamp(PageNumber, 1, MaximumPart) - 1) * ShelvesPerPart;
+            var part = all.Skip(first).Take(ShelvesPerPart).ToList();
+            _recommendationsRead = true;
+            _moreShelves = all.Count > first + ShelvesPerPart;
+            _beginningScopes.UnionWith(part.Where(shelf => all.First(entry => entry.Scope == shelf.Scope) == shelf).Select(shelf => shelf.Scope));
 
-            // Catalogs read whole answer all their shelves at once; the others ask their providers shelf by shelf, together.
-            var whole = await readShelves.ExecuteAsync<BaseDataList<DiscoverShelfV1>>(new ReadDiscoverShelvesDataV1(selected?.Slug), HttpContext.RequestAborted);
+            // Catalogs read whole answer the part's shelves of each type in one read; the others ask their providers shelf by shelf, together.
+            var reads = part.GroupBy(shelf => shelf.Scope).Select(group => readShelves.ExecuteAsync<BaseDataList<DiscoverShelfV1>>(
+                new ReadDiscoverShelvesDataV1(group.Key.Slug, [.. group.Select(shelf => shelf.Feed)]), HttpContext.RequestAborted)).ToList();
+            var whole = (await Task.WhenAll(reads)).SelectMany(shelves => shelves).ToList();
             var wholeMilliseconds = (long)Stopwatch.GetElapsedTime(started).TotalMilliseconds;
             using var gate = new SemaphoreSlim(ShelfConcurrency);
-            var answers = new List<Task<ShelfAnswer>>();
-            foreach (var scope in Chosen)
-            {
-                foreach (var feed in scope.Feeds.Where(feed => FeedType is null || feed == FeedType))
-                {
-                    answers.Add(whole.FirstOrDefault(shelf => shelf.ScopeSlug == scope.Slug && shelf.DiscoverFeedTypeId == feed) is { } kept
-                        ? Task.FromResult(new ShelfAnswer(scope, feed, scope.IsCatalog ? null : kept.Items, scope.IsCatalog ? kept.CatalogItems : null, false))
-                        : ReadProviderShelfAsync(scope, feed, gate));
-                }
-            }
+            var answers = part.Select(shelf => whole.FirstOrDefault(kept => kept.ScopeSlug == shelf.Scope.Slug && kept.DiscoverFeedTypeId == shelf.Feed) is { } kept
+                ? Task.FromResult(new ShelfAnswer(shelf.Scope, shelf.Feed, shelf.Scope.IsCatalog ? null : kept.Items, shelf.Scope.IsCatalog ? kept.CatalogItems : null, false))
+                : ReadProviderShelfAsync(shelf.Scope, shelf.Feed, gate)).ToList();
 
             // In the order of the media-type bar.
             foreach (var answer in await Task.WhenAll(answers))

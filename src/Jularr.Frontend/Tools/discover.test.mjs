@@ -30,18 +30,45 @@ function discover(landing = false) {
             querySelector: () => paging.next?.end ? null : paging.next, replaceChildren: (...nodes) => { paging.next = nodes[0] ?? null; } };
         const end = next ? null : { end: true };
         const feedback = { textContent: '' };
-        const slots = {};
+        const shelves = recommendations ? recommendationRegion('https://jularr.test/?handler=Recommendations') : null;
         return {
-            cards, feedback, slots, attributes: {}, dataset: { loadError: 'Try again', providerUnavailable: String(unavailable) },
+            cards, feedback, shelves, attributes: {}, dataset: { loadError: 'Try again', providerUnavailable: String(unavailable) },
             querySelector: selector => selector === '.media-grid' ? grid : selector === '.discover-paging' ? paging
                 : selector === '.discover-feedback' ? feedback : selector === '[data-discover-next]' ? (paging.next?.end ? null : paging.next) : selector === '.discover-end' ? end
-                : selector === '[data-discover-recommendations]' ? recommendations ? { href: 'https://jularr.test/?handler=Recommendations' } : null
-                : selector === '#discover-recommendations' ? { replaceWith: value => slots.shelves = value } : null,
+                : selector === '#discover-recommendations' ? shelves : selector === '#discover-recommendations .discover-paging' ? shelves?.paging ?? null : null,
             querySelectorAll: () => cards,
             setAttribute(name, value) { this.attributes[name] = value; },
             removeAttribute(name) { delete this.attributes[name]; },
             replaceWith(incoming) { active = incoming; }
         };
+    }
+
+    // The recommendation shelves: what arrived, and the link of the next part in its row.
+    function recommendationRegion(href) {
+        const shelves = { nodes: [], paging: null,
+            querySelector: selector => selector === '[data-discover-recommendations]' ? shelves.paging?.link ?? null
+                : selector === ':scope > [role=status]' ? shelves.nodes.find(node => node.status) ?? null : null };
+        shelves.paging = row(href);
+        function row(next) {
+            const nav = { dataset: { automatic: '' }, before() {},
+                replaceWith(...nodes) {
+                    shelves.paging = null;
+                    for (const node of nodes) {
+                        if (node.next) shelves.paging = row(node.next);
+                        else shelves.nodes.push(node);
+                    }
+                } };
+            nav.link = { href: next, textContent: 'Load more', dataset: { retryLabel: 'Try again' }, closest: () => nav };
+            return nav;
+        }
+        return shelves;
+    }
+
+    // A part as the server sends it: shelves, a notice, the next part's link.
+    function fragment(nodes) {
+        const part = { children: nodes, querySelector: selector => selector === ':scope > [role=status]' ? part.children.find(node => node.status) ?? null : null };
+        for (const node of nodes) node.remove = () => { part.children = part.children.filter(other => other !== node); };
+        return part;
     }
 
     active = region([1, 2], landing ? null : 2, false, landing);
@@ -77,10 +104,11 @@ function discover(landing = false) {
     });
 
     return {
-        requests, region, Element,
+        requests, region, fragment, Element,
         get active() { return active; }, get address() { return address; }, get observing() { return !!observed; },
         search(value) { input.value = value; formEvents.submit({ preventDefault() {} }); },
         scroll(target) { documentEvents.scroll({ target }); },
+        click(link) { documentEvents.click({ target: { closest: selector => selector === '[data-discover-recommendations]' ? link : null }, button: 0, preventDefault() {} }); },
         intersect() { if (observed) observerAction([{ isIntersecting: true }]); },
         async answer(index, incoming) {
             const key = String(index);
@@ -217,24 +245,45 @@ test('a ranking shelf adds its next page near its end and shows where it ends', 
     assert.equal(ui.requests.length, 5);
 });
 
-test('recommendation fragments preserve local content and obsolete responses are discarded', async () => {
+test('recommendation shelves arrive a part at a time near their link, keep local content and say a failure once', async () => {
     const ui = discover(true);
     const local = ui.active;
+    const shelves = local.shelves;
     assert.equal(ui.requests.length, 1);
     assert.equal(ui.requests[0].options.headers['X-Jularr-Fragment'], 'recommendations');
-    const providers = { shelves: {} };
-    await ui.answer(0, providers);
+    await ui.answer(0, { shelves: ui.fragment([{ shelf: 'movies' }, { status: true }, { next: 'https://jularr.test/?p=2&handler=Recommendations' }]) });
     assert.equal(ui.active, local);
     assert.equal(local.cards.length, 2);
-    assert.equal(local.slots.shelves, providers.shelves);
+    assert.deepEqual(shelves.nodes.map(node => node.shelf ?? 'notice'), ['movies', 'notice']);
+
+    // The next part waits until the page nears its link; a notice that a provider did not answer is said once.
+    assert.equal(ui.requests.length, 1);
+    ui.intersect();
+    assert.equal(ui.requests[1].url, 'https://jularr.test/?p=2&handler=Recommendations');
+    await ui.answer(1, { shelves: ui.fragment([{ status: true }, { shelf: 'anime' }, { next: 'https://jularr.test/?p=3&handler=Recommendations' }]) });
+    assert.deepEqual(shelves.nodes.map(node => node.shelf ?? 'notice'), ['movies', 'notice', 'anime']);
+
+    // A part that fails leaves its link as the retry, without asking again by itself.
+    ui.intersect();
+    ui.requests[2].reject(new Error('offline'));
+    await settle();
+    assert.equal(shelves.paging.link.textContent, 'Try again');
+    assert.equal(shelves.paging.dataset.automatic, undefined);
+    assert.equal(local.feedback.textContent, 'Try again');
+    assert.equal(ui.observing, false);
+    ui.click(shelves.paging.link);
+    assert.equal(ui.requests[3].url, 'https://jularr.test/?p=3&handler=Recommendations');
+    await ui.answer(3, { shelves: ui.fragment([{ shelf: 'manga' }]) });
+    assert.deepEqual(shelves.nodes.map(node => node.shelf ?? 'notice'), ['movies', 'notice', 'anime', 'manga']);
+    assert.equal(shelves.paging, null);
+    assert.equal(local.feedback.textContent, '');
 
     const obsolete = discover(true);
     obsolete.search('Matrix');
     assert.equal(obsolete.requests[0].options.signal.aborted, true);
-    await obsolete.answer(0, providers);
-    assert.equal(obsolete.active.slots.shelves, undefined);
+    await obsolete.answer(0, { shelves: obsolete.fragment([{ shelf: 'movies' }]) });
+    assert.deepEqual(obsolete.active.shelves.nodes, []);
 });
-
 
 test('Hero never arrives in an asynchronous recommendations fragment', () => {
     const source = readFileSync(new URL('../Pages/User/Discover/Index.cshtml.cs', import.meta.url), 'utf8');

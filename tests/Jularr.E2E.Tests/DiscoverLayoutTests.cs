@@ -60,7 +60,7 @@ namespace Jularr.E2E.Tests
 
                 // Shelves keep their lists' order, only a ranking's grid sorts; the layout toggle wraps the shelves and is remembered on the device.
                 await Assertions.Expect(page.Locator("select[name=sort]")).ToHaveCountAsync(0);
-                await page.Locator("[data-discover-layout]").ClickAsync();
+                await page.Locator("button[data-discover-layout]").ClickAsync();
                 await Assertions.Expect(page.Locator("html")).ToHaveAttributeAsync("data-discover-layout", "grid");
 
                 // One highlight per type leaves one slide for each of the two types: the films read whole, the series from Discover's series list.
