@@ -65,17 +65,32 @@ namespace Jularr.E2E.Tests
                 await Assertions.Expect(row.Locator("progress")).ToHaveAttributeAsync("value", (before + 1).ToString(System.Globalization.CultureInfo.InvariantCulture));
                 await Assertions.Expect(row.Locator(".connection-usage__text")).ToContainTextAsync((before + 1) + " / 40 queries");
 
+                // A book source with a long address: on a phone its address is one line that ends in an ellipsis, never wrapped letter by letter.
+                await page.GotoAsync("/Admin/Acquisition?Type=Gutenberg");
+                var book = page.Locator("dialog#connection-editor form").First;
+                await book.Locator("[name=Name]").FillAsync("Gutenberg mirror");
+                await book.Locator("[name=BaseUrl]").FillAsync("https://gutendex.standardebooks-library-mirror.example.org/");
+                await Steps.SubmitAsync(page, book);
+                await Assertions.Expect(Row(page, "Gutenberg mirror").Locator(".tag")).ToHaveTextAsync("Books");
+
                 // Desktop and phone hold still while loading; on a phone each row is a card with its facts and nothing reaches past the viewport.
                 var folder = Directory.CreateDirectory(Path.Combine(JularrInstance.Repository, "TestResults", "e2e")).FullName;
-                foreach (var (width, height) in new[] { (1440, 900), (390, 844) })
+                foreach (var (width, height) in new[] { (1440, 900), (430, 932), (338, 740), (320, 640), (390, 844) })
                 {
                     await page.SetViewportSizeAsync(width, height);
                     await page.GotoAsync("/Admin/Acquisition");
                     var shift = await page.EvaluateAsync<System.Text.Json.JsonElement>(LayoutShiftTests.Measure);
                     Assert.IsTrue(shift.GetProperty("score").GetDouble() < 0.01, $"Layout shift {shift.GetProperty("score").GetDouble():0.0000} at {width}px ({shift.GetProperty("sources").GetString()})");
                     Assert.IsTrue(await page.EvaluateAsync<bool>("document.documentElement.scrollWidth <= innerWidth + 1"), "Horizontal page overflow at " + width + "px");
+                    var lines = await page.EvaluateAsync<string>(@"() => [...document.querySelectorAll('.connections-list__kind')]
+                        .filter(kind => kind.getBoundingClientRect().height > 30 || kind.querySelector('.truncated__text').getClientRects().length !== 1)
+                        .map(kind => kind.textContent + ' ' + Math.round(kind.getBoundingClientRect().height) + 'px').join('; ')");
+                    Assert.AreEqual("", lines, "An address wraps at " + width + "px");
                     await page.ScreenshotAsync(new() { Path = Path.Combine(folder, "indexers-" + width + ".png"), FullPage = true });
                 }
+
+                Assert.IsTrue(await Row(page, "Gutenberg mirror").Locator(".connections-list__host .truncated__text")
+                    .EvaluateAsync<bool>("text => text.scrollWidth > text.clientWidth"), "The long address is cut off with an ellipsis on a phone");
 
                 await Assertions.Expect(page.Locator(".connections-list .list-head")).ToBeHiddenAsync();
                 await Assertions.Expect(row.Locator(".list-row__caption")).ToContainTextAsync("40 queries");

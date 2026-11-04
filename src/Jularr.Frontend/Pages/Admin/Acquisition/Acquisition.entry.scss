@@ -21,8 +21,10 @@
     .list-row { min-height: 72px; }
     .list-cell--data .list-value { display: block; overflow: hidden; text-overflow: ellipsis; }
 
-    &__kind { display: inline-flex; align-items: center; gap: 7px; min-width: 0; }
+    // The kind and the address share one line; a long address ends in an ellipsis (whole on hover and in the dialog) and never wraps letter by letter on a phone.
+    &__kind { display: flex; align-items: center; gap: 7px; min-width: 0; max-width: 100%; }
     &__kind .tag { flex: none; }
+    &__host { flex: 0 1 auto; min-width: 0; overflow: hidden; }
 }
 
 // Today's queries against the daily limit: a thin capsule over the counts; without a limit its place says so.

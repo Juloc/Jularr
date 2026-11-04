@@ -49,7 +49,7 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                 };
                 var identity = new ListIdentity(new IconTile(Glyph(Role == AcquisitionConnectionRole.Subtitles ? "subtitles" : "search", 18), UiTone.Info),
                     new A(new Truncated(item.Name)).Class("list-identity__title").Attribute("href", EditAddress(item.Id)),
-                    new Span(new Tag(new Text(KindKey(item.AcquisitionConnectionTypeId))), new ValueText(Host(item.BaseUrl))).Class("connections-list__kind"), note);
+                    new Span(new Tag(new Text(KindKey(item.AcquisitionConnectionTypeId))), new Span(new Truncated(Host(item.BaseUrl))).Class("connections-list__host")).Class("connections-list__kind"), note);
 
                 var actions = new Div(
                     Post("Test", item.Id, csrf, [], new Button(Glyph("pulse", 16)).IconOnly(texts["acquisition.connection.test"]).Submit()),
