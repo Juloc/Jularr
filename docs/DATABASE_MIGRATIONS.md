@@ -27,6 +27,8 @@ advisory lock so two instances never migrate at once. Migrations run automatical
   up to that version, line endings normalized). A changed or missing version or a newer database stops the start.
 - Pending migrations: first a complete backup (database dump, key ring, manifest) through the backup owner into `Backup:Path` (`/data/backups`),
   using `Backup:PgDumpPath`. If the backup cannot be made, nothing is migrated and Jularr does not start. With nothing pending no backup is made.
+  The backup's kind is `Update`; after the migrations are committed, older automatic and update backups beyond the Owner's keep limit are removed
+  (manual ones stay). A failure there is logged as a warning and does not stop the start.
 - All pending migrations and their version entries run in one transaction in numeric order. A failure rolls everything back.
 
 ## A failed update

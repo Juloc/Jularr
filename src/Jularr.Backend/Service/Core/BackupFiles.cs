@@ -2,8 +2,10 @@ using System.IO.Compression;
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Enums.Operation;
 using Jularr.Integrations.Logic.Database;
 
 namespace Jularr.Backend.Service.Core
@@ -16,6 +18,7 @@ namespace Jularr.Backend.Service.Core
         private const int KeyIterations = 600_000;
         private static readonly byte[] SealedMagic = "JKR1"u8.ToArray();
         private const string ManifestName = "backup.json";
+        private static readonly JsonSerializerOptions ManifestJson = new() { Converters = { new JsonStringEnumConverter() } };
 
         [GeneratedRegex(@"^jularr-\d{8}-\d{6}(?:\d{7})?\z")]
         private static partial Regex Name();
@@ -38,8 +41,9 @@ namespace Jularr.Backend.Service.Core
 
         public static IReadOnlyList<BackupFolder> List(string root) =>
             [.. Folders(root)
-                .Select(folder => new BackupFolder(folder.Name, CreatedAt(folder.Name), folder.EnumerateFiles("*", SearchOption.AllDirectories).Sum(file => file.Length),
-                    ReadFingerprint(folder.FullName) == SchemaFingerprint, File.Exists(Path.Combine(folder.FullName, SealedKeysName))))
+                .Select(folder => (Folder: folder, Manifest: ReadManifest(folder.FullName)))
+                .Select(item => new BackupFolder(item.Folder.Name, CreatedAt(item.Folder.Name), item.Folder.EnumerateFiles("*", SearchOption.AllDirectories).Sum(file => file.Length),
+                    item.Manifest?.SchemaFingerprint == SchemaFingerprint, File.Exists(Path.Combine(item.Folder.FullName, SealedKeysName)), item.Manifest?.Kind ?? BackupKindType.Automatic))
                 .OrderByDescending(folder => folder.Name, StringComparer.Ordinal)];
 
         // Only the name is read; sizes and manifests stay untouched.
@@ -54,11 +58,11 @@ namespace Jularr.Backend.Service.Core
         public static string Resolve(string root, string name) =>
             Name().IsMatch(name) && Directory.Exists(Path.Combine(root, name)) ? Path.Combine(root, name) : throw new KeyNotFoundException("The backup was not found.");
 
-        private static Task WriteManifestAsync(string folder, DateTime createdAt, int schemaVersion, string fingerprint, CancellationToken ct) =>
-            File.WriteAllTextAsync(Path.Combine(folder, ManifestName), JsonSerializer.Serialize(new BackupManifest(fingerprint, createdAt, schemaVersion)), ct);
+        private static Task WriteManifestAsync(string folder, DateTime createdAt, int schemaVersion, string fingerprint, BackupKindType kind, CancellationToken ct) =>
+            File.WriteAllTextAsync(Path.Combine(folder, ManifestName), JsonSerializer.Serialize(new BackupManifest(fingerprint, createdAt, schemaVersion, kind), ManifestJson), ct);
 
         // Startup upgrades and scheduled backups publish the same complete folder format.
-        public static async Task CreateAsync(BackupOptions options, PostgresBackupTools tools, DateTime now, int schemaVersion, string fingerprint, CancellationToken ct, bool requiresKeys = false)
+        public static async Task CreateAsync(BackupOptions options, PostgresBackupTools tools, DateTime now, int schemaVersion, string fingerprint, BackupKindType kind, CancellationToken ct, bool requiresKeys = false)
         {
             if (!Path.IsPathFullyQualified(options.Path))
             {
@@ -96,7 +100,7 @@ namespace Jularr.Backend.Service.Core
                     CopyKeys(options.KeyDirectory, Path.Combine(partial, "keys"));
                 }
 
-                await WriteManifestAsync(partial, now, schemaVersion, fingerprint, ct);
+                await WriteManifestAsync(partial, now, schemaVersion, fingerprint, kind, ct);
                 Directory.Move(partial, Path.Combine(options.Path, name));
             }
             finally
@@ -200,25 +204,27 @@ namespace Jularr.Backend.Service.Core
             }
         }
 
-        // At least the newest stays; leftovers of interrupted runs go too.
+        // Automatic and update backups share the limit and at least the newest of them stays; manual ones stay until a person deletes them.
+        // Leftovers of interrupted runs go too.
         public static void Prune(string root, int keep)
         {
-            foreach (var old in List(root).Skip(Math.Max(1, keep)))
+            foreach (var old in List(root).Where(folder => folder.Kind != BackupKindType.Manual).Skip(Math.Max(1, keep)))
             {
                 Directory.Delete(Path.Combine(root, old.Name), true);
             }
 
-            foreach (var partial in Directory.EnumerateDirectories(root, "jularr-*.partial"))
+            foreach (var partial in Directory.Exists(root) ? Directory.EnumerateDirectories(root, "jularr-*.partial") : [])
             {
                 Directory.Delete(partial, true);
             }
         }
 
-        private static string? ReadFingerprint(string folder)
+        // Backups made before kinds were recorded count as automatic.
+        private static BackupManifest? ReadManifest(string folder)
         {
             try
             {
-                return JsonSerializer.Deserialize<BackupManifest>(File.ReadAllText(Path.Combine(folder, ManifestName)))?.SchemaFingerprint;
+                return JsonSerializer.Deserialize<BackupManifest>(File.ReadAllText(Path.Combine(folder, ManifestName)), ManifestJson);
             }
             catch (Exception exception) when (exception is IOException or JsonException)
             {
@@ -226,20 +232,22 @@ namespace Jularr.Backend.Service.Core
             }
         }
 
-        private sealed class BackupManifest(string schemaFingerprint, DateTime createdAt, int schemaVersion = 0)
+        private sealed class BackupManifest(string schemaFingerprint, DateTime createdAt, int schemaVersion = 0, BackupKindType? kind = null)
         {
             public string SchemaFingerprint { get; } = schemaFingerprint;
             public DateTime CreatedAt { get; } = createdAt;
             public int SchemaVersion { get; } = schemaVersion;
+            public BackupKindType? Kind { get; } = kind;
         }
     }
 
-    internal sealed class BackupFolder(string name, DateTime createdAt, long sizeBytes, bool isCompatible, bool isSealed)
+    internal sealed class BackupFolder(string name, DateTime createdAt, long sizeBytes, bool isCompatible, bool isSealed, BackupKindType kind)
     {
         public string Name { get; } = name;
         public DateTime CreatedAt { get; } = createdAt;
         public long SizeBytes { get; } = sizeBytes;
         public bool IsCompatible { get; } = isCompatible;
         public bool IsSealed { get; } = isSealed;
+        public BackupKindType Kind { get; } = kind;
     }
 }

@@ -175,7 +175,8 @@ namespace Jularr.Backend.Logic.Acquisition
             return ctx.ExecuteAsyncForAffectedRows(sql, ct);
         }
 
-        // Insert only for the corresponding enabled policy; a repeated callback is idempotent.
+        // SABnzbd's job goes where its policy says; qBittorrent's torrent always, since an import moves its files and it could only report them missing.
+        // A repeated callback is idempotent.
         public static Task QueueImportedCleanupAsync(this LogicContext ctx, DownloadCleanupKeyData data, CancellationToken ct)
         {
             var sql = new SqlStatement();
@@ -185,8 +186,7 @@ namespace Jularr.Backend.Logic.Acquisition
                 SELECT connection."Id", @ExternalId, 'imported', @OperationId, @SourceFingerprint
                 FROM "AcquisitionConnections" AS connection
                 WHERE connection."Id" = @AcquisitionConnectionId
-                  AND connection."AcquisitionConnectionTypeId" = 2
-                  AND connection."RemovesCompleted"
+                  AND (connection."AcquisitionConnectionTypeId" = 2 AND connection."RemovesCompleted" OR connection."AcquisitionConnectionTypeId" = 9)
                   AND @SourceFingerprint IS NOT NULL
                 ON CONFLICT ("AcquisitionConnectionId", "ExternalId") DO NOTHING;
                 """;

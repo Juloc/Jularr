@@ -1,4 +1,5 @@
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Enums.Operation;
 using Jularr.Backend.Data.Fields.Operation;
 
 namespace Jularr.Backend.Data.Admin.Backup.V1
@@ -20,8 +21,9 @@ namespace Jularr.Backend.Data.Admin.Backup.V1
 
     public sealed class BackupV1 : BaseResponse
     {
-        public BackupV1(string name, DateTime createdAt, long sizeBytes, bool isCompatible, bool isSealed)
+        public BackupV1(string name, DateTime createdAt, long sizeBytes, bool isCompatible, bool isSealed, BackupKindType kind)
         {
+            Kind = kind;
             IsSealed = isSealed;
             Name = name;
             CreatedAt = createdAt;
@@ -45,6 +47,10 @@ namespace Jularr.Backend.Data.Admin.Backup.V1
         // The key ring needs the passphrase to come back.
         [DataField(typeof(BackupFields), nameof(BackupFields.IsSealed))]
         public bool IsSealed { get; }
+
+        // Manual backups are never removed by the keep limit.
+        [DataField(typeof(BackupFields), nameof(BackupFields.Kind))]
+        public BackupKindType Kind { get; }
     }
 
     public sealed class RestoreBackupDataV1 : BaseData

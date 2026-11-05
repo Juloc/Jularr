@@ -59,7 +59,7 @@ namespace Jularr.Backend.Service.Admin.Backup.V1
                 """;
             var state = await Context.ReadSql.ReadRequiredAsync<BackupStateData>(sql, CancellationToken);
             var items = BackupFiles.List(_options.Path);
-            return new BackupsV1(new BaseDataList<BackupV1>(items.Select(item => new BackupV1(item.Name, item.CreatedAt, item.SizeBytes, item.IsCompatible, item.IsSealed))), _tools.CanBackUp,
+            return new BackupsV1(new BaseDataList<BackupV1>(items.Select(item => new BackupV1(item.Name, item.CreatedAt, item.SizeBytes, item.IsCompatible, item.IsSealed, item.Kind))), _tools.CanBackUp,
                 state.IsRunning, state.ErrorKey, state.CanRestore && _tools.CanRestore);
         }
     }

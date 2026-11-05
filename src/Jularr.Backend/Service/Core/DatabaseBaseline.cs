@@ -2,8 +2,11 @@ using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
+using Jularr.Backend.Data.Enums.Operation;
 using Jularr.Integrations.Logic.Database;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Npgsql;
 
 namespace Jularr.Backend.Service.Core
@@ -17,6 +20,7 @@ namespace Jularr.Backend.Service.Core
         private readonly BackupOptions _backup;
         private readonly PostgresBackupTools _tools;
         private readonly IReadOnlyList<DatabaseMigration> _migrations;
+        private readonly ILogger _logger;
 
         // The embedded database/migrations/NNNN_name.sql scripts from version 2; the baselines (version 1) are frozen.
         internal static IReadOnlyList<DatabaseMigration> Migrations { get; } = DatabaseMigration.Embedded(typeof(DatabaseBaseline).Assembly);
@@ -24,9 +28,10 @@ namespace Jularr.Backend.Service.Core
         public static int CurrentVersion => 1 + Migrations.Count;
         public static string CurrentFingerprint => Fingerprint(CurrentVersion, Migrations);
 
-        internal DatabaseBaseline(string connectionString, BackupOptions? backup = null, PostgresBackupTools? tools = null, IReadOnlyList<DatabaseMigration>? migrations = null)
+        internal DatabaseBaseline(string connectionString, BackupOptions? backup = null, PostgresBackupTools? tools = null, IReadOnlyList<DatabaseMigration>? migrations = null, ILogger? logger = null)
         {
             _connectionString = connectionString;
+            _logger = logger ?? NullLogger.Instance;
             _backup = backup ?? new BackupOptions();
             _tools = tools ?? new PostgresBackupTools();
             _migrations = migrations ?? Migrations;
@@ -114,7 +119,8 @@ namespace Jularr.Backend.Service.Core
             }
 
             // Nothing to migrate: no backup. Otherwise the backup comes first, and when it cannot be made the update does not run.
-            if (_migrations.Any(migration => migration.Version > installedVersion))
+            var isBackedUp = _migrations.Any(migration => migration.Version > installedVersion);
+            if (isBackedUp)
             {
                 bool requiresKeys;
                 await using (var accounts = new NpgsqlCommand("SELECT EXISTS (SELECT 1 FROM \"Accounts\");", connection))
@@ -124,7 +130,7 @@ namespace Jularr.Backend.Service.Core
 
                 try
                 {
-                    await BackupFiles.CreateAsync(_backup, _tools, DateTime.UtcNow, installedVersion, Fingerprint(installedVersion, _migrations), cancellationToken, requiresKeys);
+                    await BackupFiles.CreateAsync(_backup, _tools, DateTime.UtcNow, installedVersion, Fingerprint(installedVersion, _migrations), BackupKindType.Update, cancellationToken, requiresKeys);
                 }
                 catch (Exception exception) when (exception is not OperationCanceledException)
                 {
@@ -150,6 +156,25 @@ namespace Jularr.Backend.Service.Core
 
             await ApplyMigrationsAsync(connection, migrationTransaction, installedVersion, cancellationToken);
             await migrationTransaction.CommitAsync(cancellationToken);
+            if (isBackedUp)
+            {
+                await PruneBackupsAsync(connection, cancellationToken);
+            }
+        }
+
+        // The update backup counts towards the Owner's limit like a scheduled one. Pruning never stops the start: the update is already applied.
+        private async Task PruneBackupsAsync(NpgsqlConnection connection, CancellationToken ct)
+        {
+            try
+            {
+                await using var keep = new NpgsqlCommand("SELECT \"BackupKeep\" FROM \"InstanceSettings\" WHERE \"Id\" = 1;", connection);
+                var limit = await keep.ExecuteScalarAsync(ct) as short? ?? throw new InvalidDataException("The instance settings have no backup limit.");
+                BackupFiles.Prune(_backup.Path, limit);
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                _logger.LogWarning(exception, "Old backups could not be removed after the update.");
+            }
         }
 
         private static async Task<bool> HasVersionTableAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, CancellationToken ct)

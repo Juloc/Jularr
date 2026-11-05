@@ -11,10 +11,15 @@ namespace Jularr.Backend.Logic.Acquisition
     // A different inventory must never authorize an automatic source-folder deletion.
     internal static class DownloadSourceInventory
     {
+        // A folder a move emptied: it may go, and a file that appears in it later keeps it.
+        public static readonly string Empty = Convert.ToHexString(SHA256.HashData([]));
+
         public static string Fingerprint(IEnumerable<StorageFile> files)
         {
             var entries = files.OrderBy(file => file.RelativePath, StringComparer.Ordinal).ToArray();
-            if (entries.Length == 0 || entries.Any(file => string.IsNullOrWhiteSpace(file.RelativePath)
+            if (entries.Length == 0)
+                return Empty;
+            if (entries.Any(file => string.IsNullOrWhiteSpace(file.RelativePath)
                 || file.RelativePath.Any(char.IsControl)))
                 throw new DataValidationException(nameof(files), "invalid_transition");
 
@@ -33,7 +38,7 @@ namespace Jularr.Backend.Logic.Acquisition
         {
             var state = new StorageScanState();
             var files = StorageFileSystem.EnumerateFiles(directory, null, state, CancellationToken.None, includeHidden: true).ToArray();
-            if (!state.IsComplete || files.Length == 0)
+            if (!state.IsComplete)
                 throw new DataValidationException(nameof(directory), "invalid_transition");
             return Fingerprint(files);
         }

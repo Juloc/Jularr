@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Text;
+using Jularr.Backend.Data.Enums.Operation;
 using Jularr.Backend.Data.Enums.Sql;
 using Jularr.Backend.Data.Logic.Acquisition;
 using Jularr.Backend.Infrastructure.Sql;
@@ -28,7 +29,7 @@ namespace Jularr.Backend.Tests
             """;
 
         // Writes the custom-format signature to the --file target, or fails like a broken pg_dump.
-        private static string FakeDump(string folder, bool succeeds)
+        internal static string FakeDump(string folder, bool succeeds)
         {
             if (OperatingSystem.IsWindows())
             {
@@ -1106,6 +1107,65 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(1, await ScalarAsync(cs, "SELECT max(\"Version\") FROM \"DatabaseSchemaVersions\";"));
             Assert.AreEqual(0L, await ScalarAsync(cs, "SELECT count(*) FROM pg_tables WHERE tablename = 'UpgradeNotes';"));
             Assert.AreEqual(0, Directory.GetFileSystemEntries(backups).Length);
+        }
+
+        [TestMethod]
+        [DataRow(7, 3, new[] { "update", "jularr-20261005-120000", "jularr-20261004-120000" })]
+        [DataRow(5, 5, new[] { "update", "jularr-20261005-120000", "jularr-20261004-120000", "jularr-20261003-120000", "jularr-20261001-120000" })]
+        public async Task Upgrade_UpdateBackup_PrunesAutomaticAndUpdateBackupsToTheLimitAndKeepsManualOnes(int storedKeep, int keep, string[] kept)
+        {
+            using var folder = new LibraryTests.TemporaryDirectory();
+            var cs = TestPostgres.ResolveConnectionString(nameof(Upgrade_UpdateBackup_PrunesAutomaticAndUpdateBackupsToTheLimitAndKeepsManualOnes) + storedKeep);
+            var options = Backup(folder.Path, out var backups);
+            await new DatabaseBaseline(cs, migrations: DatabaseBaseline.Migrations.Take(47).ToArray()).StartAsync(CancellationToken.None);
+            await ExecuteAsync(cs, $"UPDATE \"InstanceSettings\" SET \"BackupKeep\" = {storedKeep};");
+            WriteBackup(backups, "jularr-20261001-120000", "Automatic");
+            WriteBackup(backups, "jularr-20261002-120000", "Manual");
+            WriteBackup(backups, "jularr-20261003-120000", "Automatic");
+            WriteBackup(backups, "jularr-20261004-120000", null);
+            WriteBackup(backups, "jularr-20261005-120000", "Automatic");
+            WriteBackup(backups, "jularr-20260901-120000", "Manual");
+            Directory.CreateDirectory(Path.Combine(backups, "jularr-20261006-120000-left.partial"));
+
+            // The update to 0049 lowers the old default of 7 to 3 (a chosen number stays), then prunes with it after its own backup.
+            await new DatabaseBaseline(cs, options, Tools(cs, FakeDump(folder.Path, true), null)).StartAsync(CancellationToken.None);
+            Assert.AreEqual((short)keep, await ScalarAsync(cs, "SELECT \"BackupKeep\" FROM \"InstanceSettings\";"));
+            var listed = BackupFiles.List(backups);
+            var update = listed[0];
+            Assert.AreEqual(BackupKindType.Update, update.Kind);
+            CollectionAssert.AreEqual(kept.Select(name => name == "update" ? update.Name : name).ToArray(), listed.Where(item => item.Kind != BackupKindType.Manual).Select(item => item.Name).ToArray());
+            CollectionAssert.AreEqual(new[] { "jularr-20261002-120000", "jularr-20260901-120000" }, listed.Where(item => item.Kind == BackupKindType.Manual).Select(item => item.Name).ToArray());
+            Assert.AreEqual(BackupKindType.Automatic, listed.Single(item => item.Name == "jularr-20261004-120000").Kind, "A backup without a kind counts as automatic.");
+            Assert.IsEmpty(Directory.GetDirectories(backups, "*.partial"));
+        }
+
+        [TestMethod]
+        public async Task Upgrade_PruningFails_StillStartsWithTheUpdateAndKeepsEveryBackup()
+        {
+            using var folder = new LibraryTests.TemporaryDirectory();
+            var cs = TestPostgres.ResolveConnectionString(nameof(Upgrade_PruningFails_StillStartsWithTheUpdateAndKeepsEveryBackup));
+            var options = Backup(folder.Path, out var backups);
+            await new DatabaseBaseline(cs).StartAsync(CancellationToken.None);
+            foreach (var day in Enumerable.Range(1, 5))
+            {
+                WriteBackup(backups, $"jularr-202610{day:00}-120000", "Automatic");
+            }
+
+            // The keep limit cannot be read after this migration; the update stays applied and nothing is removed.
+            var next = new DatabaseBaseline(cs, options, Tools(cs, FakeDump(folder.Path, true), null),
+                [.. DatabaseBaseline.Migrations, Probe(DatabaseBaseline.CurrentVersion + 1, "ALTER TABLE \"InstanceSettings\" RENAME COLUMN \"BackupKeep\" TO \"BackupKeepProbe\";")]);
+            await next.StartAsync(CancellationToken.None);
+            Assert.AreEqual(DatabaseBaseline.CurrentVersion + 1, await ScalarAsync(cs, "SELECT max(\"Version\") FROM \"DatabaseSchemaVersions\";"));
+            Assert.AreEqual(6, BackupFiles.List(backups).Count);
+        }
+
+        // A finished backup folder as BackupFiles writes it; a null kind is a manifest from before kinds were recorded.
+        internal static void WriteBackup(string root, string name, string? kind)
+        {
+            var folder = Directory.CreateDirectory(Path.Combine(root, name)).FullName;
+            File.WriteAllText(Path.Combine(folder, BackupFiles.DumpName), "PGDMP");
+            File.WriteAllText(Path.Combine(folder, "backup.json"), "{\"SchemaFingerprint\":\"" + BackupFiles.SchemaFingerprint + "\",\"CreatedAt\":\"2026-10-01T12:00:00Z\""
+                + (kind is null ? "" : ",\"Kind\":\"" + kind + "\"") + "}");
         }
 
         [TestMethod]

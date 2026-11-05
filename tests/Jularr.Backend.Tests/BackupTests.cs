@@ -106,6 +106,45 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Backups_ManualOnesAreNeverPruned_AutomaticOnesKeepTheNewestThree()
+        {
+            using var folder = new LibraryTests.TemporaryDirectory();
+            using var tools = new LibraryTests.TemporaryDirectory();
+            await using var host = await CreateHostAsync(new Dictionary<string, string>
+            {
+                ["Backup:Path"] = folder.Path,
+                ["Backup:PgDumpPath"] = DatabaseMigrationTests.FakeDump(tools.Path, true)
+            });
+            foreach (var day in Enumerable.Range(1, 4))
+            {
+                DatabaseMigrationTests.WriteBackup(folder.Path, $"jularr-202610{day:00}-120000", day == 1 ? "Manual" : "Automatic");
+            }
+
+            await using var scope = host.Services.CreateAsyncScope();
+            async Task RunAsync()
+            {
+                var claimed = await scope.ServiceProvider.GetRequiredService<ClaimOperationV1>().ExecuteAsync<ClaimOperationResultV1>(new ClaimOperationParametersV1(OperationType.Backup), default, CancellationToken.None);
+                await scope.ServiceProvider.GetRequiredService<ExecuteBackupV1>().ExecuteAsync<UpdateResult>(new OperationParametersV1(claimed.OperationId!.Value), default, CancellationToken.None);
+            }
+
+            // Back up now: a manual backup, the others stay as they are.
+            using var queued = await host.SendAsync(HttpMethod.Post, Route);
+            Assert.IsTrue((await queued.Content.ReadFromJsonAsync<UpdateResult>())!.Success);
+            await RunAsync();
+            var afterManual = (await ReadAsync(host)).Items;
+            Assert.AreEqual(5, afterManual.Count);
+            Assert.AreEqual(BackupKindType.Manual, afterManual[0].Kind);
+
+            // The schedule's backup prunes the automatic ones to the default of 3; both manual ones stay.
+            Assert.IsTrue((await scope.ServiceProvider.GetRequiredService<ScheduleBackupV1>().ExecuteAsync<UpdateResult>(new BackupScheduleParametersV1(true), default)).Success);
+            await RunAsync();
+            var items = (await ReadAsync(host)).Items;
+            CollectionAssert.AreEqual(new[] { BackupKindType.Automatic, BackupKindType.Manual, BackupKindType.Automatic, BackupKindType.Automatic, BackupKindType.Manual },
+                items.Select(item => item.Kind).ToArray());
+            CollectionAssert.AreEqual(new[] { afterManual[0].Name, "jularr-20261004-120000", "jularr-20261003-120000", "jularr-20261001-120000" }, items.Skip(1).Select(item => item.Name).ToArray());
+        }
+
+        [TestMethod]
         public async Task Schedule_FollowsTheOwnersInterval_ZeroSwitchesItOff_AndRunNowQueuesAnyway()
         {
             using var folder = new LibraryTests.TemporaryDirectory();
