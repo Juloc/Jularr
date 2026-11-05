@@ -66,7 +66,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                     evaluation.Decision switch { SelectionDecision.Eligible => ReleaseDecisionType.Eligible, SelectionDecision.ManualReview => ReleaseDecisionType.ManualReview, _ => ReleaseDecisionType.Rejected },
                     evaluation.PreferenceScore, reason.Item1, TextLimit.Cut(reason.Item2, 1000), book?.Kind, book?.VolumeStart, book?.VolumeEnd, book?.IsComplete ?? false,
                     evaluation.Candidate.SizeMark, new BaseDataList<ReleaseScorePointV1>(points), TextLimit.Cut(string.Join(", ", ReleaseGroupLogic.Split(evaluation.Candidate.Parsed?.ReleaseGroup)) is { Length: > 0 } groups ? groups : null, 64),
-                    Protocol(offer), [.. evaluation.Candidate.Languages.Select(language => TextLimit.Cut(language, 16)!).Distinct().Take(16)], evaluation.Candidate.LanguagesFromTitle);
+                    Protocol(offer), [.. evaluation.Candidate.Languages.Select(language => TextLimit.Cut(language, 16)!).Distinct().Take(16)], evaluation.Candidate.LanguagesFromTitle, evaluation.Candidate.LanguagesAssumedOriginal, [.. evaluation.Candidate.SubtitleLanguages.Select(language => TextLimit.Cut(language, 16)!).Distinct().Take(16)]);
             }).ToArray());
         }
 

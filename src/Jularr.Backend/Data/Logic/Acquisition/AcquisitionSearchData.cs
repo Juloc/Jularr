@@ -162,6 +162,12 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         // The release names no language; the languages come from its title.
         public bool LanguagesFromTitle { get; init; }
 
+        // A video release without an audio tag is in the original language of the work.
+        public bool LanguagesAssumedOriginal { get; init; }
+
+        // The languages of the subtitles the name states ("*" for subtitles in several languages that are not named).
+        public IReadOnlyList<string> SubtitleLanguages { get; init; } = [];
+
         // Preference points the media type gives from the request, each with its rule.
         public IReadOnlyList<ScorePoint> Points { get; init; } = [];
 

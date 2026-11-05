@@ -156,7 +156,8 @@ namespace Jularr.Frontend.Pages.Admin.WantedSearch
             if (item.ReleaseGroup is { } group) facts.Add(new ValueText(group));
             if (item.BookReleaseKindId is { } kind) facts.Add(new Text("acquisition.kind." + kind));
             if (Volumes(item) is { } volumes) facts.Add(volumes);
-            if (item.Languages.Select(WorkLanguages.Code).Distinct().ToArray() is { Length: > 0 } languages) facts.Add(new Span(new ValueText(string.Join(", ", languages.Select(language => WorkLanguages.Name(language)))), item.LanguagesFromTitle ? new Text("wanted.search.languageFromTitle") : new Span()));
+            if (item.Languages.Select(WorkLanguages.Code).Distinct().ToArray() is { Length: > 0 } languages) facts.Add(new Span(new ValueText(string.Join(", ", languages.Select(language => WorkLanguages.Name(language)))), item.LanguagesFromTitle ? new Text("wanted.search.languageFromTitle") : item.LanguagesAssumedOriginal ? new Text("wanted.search.languageOriginal") : new Span()));
+            if (item.SubtitleLanguages.Length > 0) facts.Add(new Span(new Text("wanted.search.subtitles"), new ValueText(": " + string.Join(", ", item.SubtitleLanguages.Select(language => language == "*" ? "…" : language.ToUpperInvariant())))));
             var reason = item.ReasonValue is { } value ? new Span(new Text("acquisition.reason." + item.ReasonCode), new ValueText(" · " + value)) : new Span(new Text("acquisition.reason." + item.ReasonCode));
             return new Tr(
                 new Td(new Span(new ValueText(item.Title)).Class("search-row__title"), facts.Count == 0 ? new Span() : new Span([.. Joined(facts)]).Class("search-row__facts")).Class("search-row__release"),

@@ -5393,6 +5393,24 @@
    " (from title)",
    " (aus Titel)"
   ],
+  "wanted.search.languageOriginal": [
+   " (original, no tag)",
+   " (Original, ohne Angabe)"
+  ],
+  "wanted.search.subtitles": [
+   "Subtitles",
+   "Untertitel"
+  ],
+  "arr.languageRules.title": ["Add-ons of a language", "Zusätze einer Sprache"],
+  "arr.languageRules.info": ["For releases in a language, for every media type: release groups and words that are preferred (they add points) or blocked (an automatic search never takes them, a manual one marks them). One entry per line.", "Für Releases in einer Sprache, für alle Medientypen: Release-Gruppen und Wörter, die bevorzugt (geben Punkte) oder gesperrt sind (die automatische Suche nimmt sie nie, die manuelle markiert sie). Ein Eintrag pro Zeile."],
+  "arr.languageRules.preferredGroups": ["Preferred groups", "Bevorzugte Gruppen"],
+  "arr.languageRules.blockedGroups": ["Blocked groups", "Gesperrte Gruppen"],
+  "arr.languageRules.preferredWords": ["Preferred words", "Bevorzugte Wörter"],
+  "arr.languageRules.blockedWords": ["Blocked words", "Gesperrte Wörter"],
+  "acquisition.points.LanguageGroupPreferred": ["Preferred group for the language: {0}", "Bevorzugte Gruppe der Sprache: {0}"],
+  "acquisition.points.LanguageWordPreferred": ["Preferred word for the language: {0}", "Bevorzugtes Wort der Sprache: {0}"],
+  "acquisition.reason.LanguageGroupBlocked": ["Group blocked for the language", "Gruppe für die Sprache gesperrt"],
+  "acquisition.reason.LanguageWordBlocked": ["Word blocked for the language", "Wort für die Sprache gesperrt"],
   "wanted.search.startNow": [
    "Start now",
    "Jetzt starten"

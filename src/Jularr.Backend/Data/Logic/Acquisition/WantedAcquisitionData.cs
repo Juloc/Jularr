@@ -45,8 +45,9 @@ namespace Jularr.Backend.Data.Logic.Acquisition
             string[] requestedLocales, string? author, string? platformAbbreviation, int? platformIgdbId, string? installedFiles = null,
             string[]? editionTitles = null, string[]? isbns = null, string? originalLanguage = null, string? formats = null, string? qualitySizes = null,
             int? runtimeMinutes = null, string? releaseProfiles = null, string[]? monitoredEditionLanguages = null, string[]? unmonitoredEditionLanguages = null,
-            string? releaseGroupRatings = null, string[]? languageTitles = null, string[]? wantedLanguages = null, string[]? missingLanguages = null, string[]? languageChains = null)
+            string? releaseGroupRatings = null, string[]? languageTitles = null, string[]? wantedLanguages = null, string[]? missingLanguages = null, string[]? languageChains = null, string? languageRules = null)
         {
+            LanguageRules = languageRules ?? "[]";
             LanguageChains = languageChains ?? [];
             WantedLanguages = wantedLanguages ?? [];
             MissingLanguages = missingLanguages ?? [];
@@ -198,6 +199,10 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         // The release profiles that apply to the title, as JSON.
         [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.Definition))]
         public string ReleaseProfiles { get; }
+
+        // The add-ons of the languages (preferred and blocked groups and words) as a JSON list.
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.Definition))]
+        public string LanguageRules { get; }
 
         // The rated release groups of the media type as a JSON object of name and rating.
         [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.Definition))]

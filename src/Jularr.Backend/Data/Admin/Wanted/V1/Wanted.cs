@@ -367,8 +367,10 @@ namespace Jularr.Backend.Data.Admin.Wanted.V1
         public WantedReleaseCandidateV1(string candidateId, string title, string connectionName, long? sizeBytes, DateTime? publishedAt, string? qualityKey,
             ReleaseDecisionType releaseDecisionTypeId, int score, string reasonCode, string? reasonValue, BookReleaseKind? bookReleaseKindId = null, int? volumeStart = null,
             int? volumeEnd = null, bool isComplete = false, ReleaseSizeMark? releaseSizeMarkId = null, BaseDataList<ReleaseScorePointV1>? scorePoints = null, string? releaseGroup = null,
-            ReleaseProtocol releaseProtocolId = ReleaseProtocol.Usenet, string[]? languages = null, bool languagesFromTitle = false)
+            ReleaseProtocol releaseProtocolId = ReleaseProtocol.Usenet, string[]? languages = null, bool languagesFromTitle = false, bool languagesAssumedOriginal = false, string[]? subtitleLanguages = null)
         {
+            LanguagesAssumedOriginal = languagesAssumedOriginal;
+            SubtitleLanguages = subtitleLanguages ?? [];
             LanguagesFromTitle = languagesFromTitle;
             ReleaseProtocolId = releaseProtocolId;
             Languages = languages ?? [];
@@ -455,6 +457,14 @@ namespace Jularr.Backend.Data.Admin.Wanted.V1
         // The release names no language; they come from its title (a localized or the original title of the Work).
         [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.LanguagesFromTitle))]
         public bool LanguagesFromTitle { get; }
+
+        // A video release without an audio tag: its language is the original language of the work.
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.LanguagesAssumedOriginal))]
+        public bool LanguagesAssumedOriginal { get; }
+
+        // The subtitle languages the name states ("*" for several that are not named).
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.SubtitleLanguages))]
+        public string[] SubtitleLanguages { get; }
     }
 
     // The points of one score rule and what it saw.

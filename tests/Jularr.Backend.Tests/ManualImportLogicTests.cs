@@ -155,8 +155,10 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(names["a.1080p.WEB-DL.H264-GRP.mkv"], "720p");
             StringAssert.Contains(names["b.mkv"], "DVD");
 
-            var proposals = ManualImportLogic.Propose(MediaType.Movie, null, "Example Movie", 2020, Files("Example.Movie.2020.GERMAN.1080p.WEB-DL.H264-GRP.mkv", "plain.mkv"), NamingPatternTests.Defaults, []);
-            Assert.AreEqual("DE+EN", proposals.Single(file => file.Path.StartsWith("Example", StringComparison.Ordinal)).Languages);
+            var proposals = ManualImportLogic.Propose(MediaType.Movie, null, "Example Movie", 2020, Files("Example.Movie.2020.GERMAN.1080p.WEB-DL.H264-GRP.mkv", "Example.Movie.2020.GERMAN.DL.1080p.WEB-DL.H264-GRP.mkv", "plain.mkv"), NamingPatternTests.Defaults, []);
+            // The "DL" of WEB-DL is no second audio track; a dual-language name ("German.DL") also carries English.
+            Assert.AreEqual("DE", proposals.Single(file => file.Path.StartsWith("Example.Movie.2020.GERMAN.1080p", StringComparison.Ordinal)).Languages);
+            Assert.AreEqual("DE+EN", proposals.Single(file => file.Path.StartsWith("Example.Movie.2020.GERMAN.DL", StringComparison.Ordinal)).Languages);
             Assert.AreEqual("EN", proposals.Single(file => file.Path == "plain.mkv").Languages);
         }
     }

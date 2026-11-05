@@ -89,6 +89,6 @@ namespace Jularr.Backend.Logic.Acquisition
         }
 
         // The audio languages a name states, as the acquisition reads them (an untagged name is English), such as DE+EN.
-        private static string? Languages(string path) => ReleaseParser.TryParse(Path.GetFileNameWithoutExtension(path), out var parsed) ? string.Join('+', VideoReleaseJudge.Languages(parsed)) : null;
+        private static string? Languages(string path) => ReleaseParser.TryParse(Path.GetFileNameWithoutExtension(path), out var parsed) ? string.Join('+', VideoReleaseJudge.Languages(parsed, "en").Languages) : null;
     }
 }

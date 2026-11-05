@@ -105,7 +105,7 @@ namespace Jularr.Backend.Logic.Acquisition
 
         // The file carries the original language of the work; it is the next choice after the asked ones.
         public static bool IsOriginal(QualityProfile profile, IReadOnlyList<string> languages) =>
-            profile.OriginalLanguage is { } original && languages.Any(language => Same(original, language));
+            profile.OriginalLanguage is { Length: > 0 } original && languages.Any(language => Same(original, language));
 
         // The fallback when no file carries an asked language: the original language, English, or nothing. Flexible (Any) allows the original language here and shows
         // every other language to a person in the manual search; no automatic choice takes a language that is neither asked for nor allowed, nor a file that states none.

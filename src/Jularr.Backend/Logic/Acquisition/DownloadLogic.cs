@@ -290,7 +290,14 @@ namespace Jularr.Backend.Logic.Acquisition
                             "ReleaseGroups" AS rated
                         WHERE
                             rated."ReleaseGroupRatingId" IS NOT NULL
-                    ), '{}')::text AS "ReleaseGroupRatings"
+                    ), '{}')::text AS "ReleaseGroupRatings",
+                    coalesce((
+                        SELECT
+                            jsonb_agg(jsonb_build_object('Language', rule."Language", 'PreferredGroups', rule."PreferredGroups", 'BlockedGroups', rule."BlockedGroups",
+                                'PreferredWords', rule."PreferredWords", 'BlockedWords', rule."BlockedWords"))
+                        FROM
+                            "LanguageReleaseRules" AS rule
+                    ), '[]')::text AS "LanguageRules"
                 FROM
                     "WantedItems" AS wanted
                     JOIN "Works" AS work ON work."Id" = wanted."WorkId"

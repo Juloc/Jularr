@@ -133,13 +133,27 @@ next language after the download (a Work downloads once at a time). The Wanted l
 day its number picks (`Id % 1440` minutes, 60 minutes wide), so languages that become wanted all at once are spread over the day and the books' daily rhythm; the batch of five a cycle bounds it further
 (300 newly due books: at most 5 in a cycle, about 13 an hour, at most 30 in the first hour; `DatabaseMigrationTests.BookLanguages_DueSearch_…`). An import never replaces a file in one wanted language by a file in another; only a file in a language nobody wants goes. The migration wrote
 the chain a target followed before onto it where the new rule would choose another (a profile with its own language list, an English or no fallback) and merged profiles that
-only differed in languages into their type's default; profiles that also differ in quality stay. Manga and video follow in the next steps.
+only differed in languages into their type's default; profiles that also differ in quality stay. Video and manga follow the same chain (below).
+
+**Video and manga** (migration `0047`). A film, series or anime is judged by the **audio** of the release (`VideoReleaseJudge.Languages`): the languages the name states (German, French, Italian, Spanish,
+Japanese, English, Korean, Russian, Dutch, Polish, Portuguese, Chinese or a language list of a media-info name); a release that states none is in the **original language of the work**
+(`Works.OriginalLanguage`; the manual search shows "(original, no tag)"), and where the work has none recorded it is unknown. "DL" and "MULTi" (not the "DL" of "WEB-DL", not "MULTi.SUBS")
+add the original language to the named ones. The chain decides what an automatic search may take, as for books: first languages, then the second one, then the original language
+(when the person's switch is on), always in that order whatever the indexer's priority or the quality (a lower step wins first, within a step the order of the tie-break list applies);
+a release in another known language is Manual review ("Language not allowed by the request · FR"), one whose language is unknown only the last resort when nothing in the chain can be taken.
+**Subtitles** (`VideoReleaseJudge.SubtitleLanguages`: GerSub, German.Subbed, ENGSUB, VOSTFR, MULTi.SUBS and bracketed language groups) matter at the step of the original language:
+a release with subtitles in the first or second language comes before one without, so the original with German subtitles is taken before the plain original. The dialog shows audio and
+subtitles. **Manga** follows the same chain and ranking; a manga release name rarely names a language, so it is unknown (not English) and only the last resort when no release in the
+chain exists. There are no per-language volume targets for manga.
+
+**Language add-ons.** Per language, global for every media type (Profiles page, "Language add-ons"; `LanguageReleaseRules`, `GET/PUT /api/v1/admin/acquisition/language-rules`): preferred release groups
+(+50 points each, "Preferred group for this language"), blocked groups (the release is rejected in an automatic search and only marked in a manual search, like a blocked release group), preferred words
+(+25 points each, a whole word of the release name; several words are a phrase) and blocked words. They apply only to a release that is in that language (its audio, or the language of a book).
 
 **Language from the title.** A book or light-novel release that names no language is in the language its title is known in: after removing the author, the title
 (cleaned as in the series matcher) must equal a title of the Work that carries a language: an edition's title (`WorkEditions`), a localized title (`WorkTitles` by
 UI locale) or the original title in the original language. One language counts (the manual search shows it as "German (from title)"); a title several languages share
 ("Emma"), one no language is known to carry, or the Work's main title alone (it may be a translated title) leaves the language unknown. A language the release names is never replaced.
-Manga has no language rule yet.
 
 ## Tests
 
