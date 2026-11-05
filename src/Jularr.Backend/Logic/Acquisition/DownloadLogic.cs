@@ -327,6 +327,14 @@ namespace Jularr.Backend.Logic.Acquisition
                         below."WantedItemId"
                     FROM
                         "WantedBelowCutoff" AS below
+                ), book_language_state AS MATERIALIZED (
+                    -- The books that lack a language, once: the view per target would be evaluated again for every one.
+                    SELECT
+                        language."WantedItemId"
+                    FROM
+                        "WantedBookLanguages" AS language
+                    WHERE
+                        NOT language."IsCovered"
                 )
                 SELECT
                     wanted."Id" AS "WantedItemId"
@@ -419,14 +427,11 @@ namespace Jularr.Backend.Logic.Acquisition
                         -- A book that lacks a language of its target is searched once a day, in an hour of the day its number picks, so languages that become wanted all at once
                         -- (a new profile, a setting, the first run after an update) are spread over the day and the books' daily rhythm; the batch of a cycle bounds it further.
                         AND (date_part('hour', @Now)::integer * 60 + date_part('minute', @Now)::integer - wanted."Id" % 1440 + 1440) % 1440 < 60
-                        AND EXISTS (
+                        AND wanted."Id" IN (
                             SELECT
-                                1
+                                book_language_state."WantedItemId"
                             FROM
-                                "WantedBookLanguages" AS language
-                            WHERE
-                                language."WantedItemId" = wanted."Id"
-                                AND NOT language."IsCovered"
+                                book_language_state
                         )
                         AND NOT EXISTS (
                             SELECT

@@ -114,6 +114,14 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
         // continues the body of "wanted_state".
         internal const string WantedEntries =
             "WITH wanted_base AS (" + WantedState + """
+                ), book_languages AS MATERIALIZED (
+                    -- Once: joined as it is, the view is evaluated again for every row of the list.
+                    SELECT
+                        language."WantedItemId",
+                        language."Language",
+                        language."IsCovered"
+                    FROM
+                        "WantedBookLanguages" AS language
                 ), wanted_state AS (
                     SELECT
                         base."Id",
@@ -135,7 +143,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                         language."Language" AS "BookLanguage"
                     FROM
                         wanted_base AS base
-                        LEFT JOIN "WantedBookLanguages" AS language ON language."WantedItemId" = base."Id"
+                        LEFT JOIN book_languages AS language ON language."WantedItemId" = base."Id"
                         LEFT JOIN "WantedBookLanguageSearches" AS searched ON searched."WantedItemId" = language."WantedItemId" AND searched."Language" = language."Language"
             """;
 
