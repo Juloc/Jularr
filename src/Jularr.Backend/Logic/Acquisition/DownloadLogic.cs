@@ -405,6 +405,29 @@ namespace Jularr.Backend.Logic.Acquisition
                                 release."WantedItemId" = wanted."Id"
                                 AND operation."OperationStatusTypeId" IN (1, 2)
                         )
+                        OR work."MediaTypeId" = 3 AND work."MediaSubtypeId" IS DISTINCT FROM 2
+                        -- A book that lacks a language of its target is searched once a day, in an hour of the day its number picks, so languages that become wanted all at once
+                        -- (a new profile, a setting, the first run after an update) are spread over the day and the books' daily rhythm; the batch of a cycle bounds it further.
+                        AND (date_part('hour', @Now)::integer * 60 + date_part('minute', @Now)::integer - wanted."Id" % 1440 + 1440) % 1440 < 60
+                        AND EXISTS (
+                            SELECT
+                                1
+                            FROM
+                                "WantedBookLanguages" AS language
+                            WHERE
+                                language."WantedItemId" = wanted."Id"
+                                AND NOT language."IsCovered"
+                        )
+                        AND NOT EXISTS (
+                            SELECT
+                                1
+                            FROM
+                                "AcquisitionReleases" AS release
+                                JOIN "Operations" AS operation ON operation."AcquisitionReleaseId" = release."Id"
+                            WHERE
+                                release."WantedItemId" = wanted."Id"
+                                AND operation."OperationStatusTypeId" IN (1, 2)
+                        )
                         OR (work."MediaTypeId" = 2 OR work."MediaSubtypeId" = 2)
                         AND EXISTS (
                             SELECT

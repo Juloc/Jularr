@@ -13,7 +13,7 @@ using Microsoft.AspNetCore.Mvc.ModelBinding;
 namespace Jularr.Frontend.Pages.Admin.Wanted
 {
     // Shared Work targets, not requests, on the list kit; each opens on its own page. Rows are chosen for a priority or a search of their own, in the dock's bulk zone.
-    public sealed class WantedModel(ReadWantedV1 read, ReadWantedSummaryV1 readSummary, UpdateWantedV1 update, UpdateWantedPriorityV1 updatePriority, StartWantedSearchV1 startSearch, IAntiforgery antiforgery, UiText texts, FrontendAssets assets) : JularrPage
+    public sealed class WantedModel(ReadWantedV1 read, ReadWantedSummaryV1 readSummary, UpdateWantedV1 update, UpdateWantedPriorityV1 updatePriority, StartWantedSearchV1 startSearch, SearchWantedAutomaticallyV1 automatic, IAntiforgery antiforgery, UiText texts, FrontendAssets assets) : JularrPage
     {
         // The form that the chosen rows belong to; the dock's buttons carry it.
         private const string BulkForm = "wanted-bulk";
@@ -118,7 +118,11 @@ namespace Jularr.Frontend.Pages.Admin.Wanted
         private ListRow Row(WantedDetailsV1 item, bool acquire, bool manage, int pageNumber, string? csrf)
         {
             var name = item.PlatformName is { } platform ? item.CanonicalTitle + " · " + platform : item.CanonicalTitle;
-            var identity = new ListIdentity(TypeTile(item), new A(new Truncated(name)).Class("list-identity__title").Attribute("href", WantedStatus.Home(item.Id)), new Text(MediaTypeLabel.Key(item.MediaTypeId, item.MediaSubtypeId)),
+
+            // A book is wanted once per language: each language is its own entry (the type line names it: "Book · German edition") with its own status.
+            IUiComponent kind = new Text(MediaTypeLabel.Key(item.MediaTypeId, item.MediaSubtypeId));
+            if (item.BookLanguage is { } bookLanguage) kind = new Span(kind, new ValueText(" · " + string.Format(CultureInfo.CurrentCulture, texts["wanted.edition"], Pages.Admin.Work.WorkLanguages.Name(bookLanguage))));
+            var identity = new ListIdentity(TypeTile(item), new A(new Truncated(name)).Class("list-identity__title").Attribute("href", WantedStatus.Home(item.Id)), kind,
                 select: manage ? ListIdentity.Select("wantedItemIds", item.Id.ToString(CultureInfo.InvariantCulture), BulkForm, "wanted.select") : null);
             var languages = string.Join(", ", item.RequestedLanguages);
             var searched = item.LastSearchedAt;
@@ -164,7 +168,15 @@ namespace Jularr.Frontend.Pages.Admin.Wanted
         {
             var actions = new List<IUiComponent>();
             var name = item.CanonicalTitle;
+            if (item.BookLanguage is { } bookLanguage) name += " · " + string.Format(CultureInfo.CurrentCulture, texts["wanted.edition"], Pages.Admin.Work.WorkLanguages.Name(bookLanguage));
             if (acquire) actions.Add(IconLink("search", "wanted.searchManual", WantedStatus.Search(item.Id), name).Attribute("data-search-dialog", ""));
+            if (acquire && item.BookLanguage is { } searched && !item.HasMedia && !item.IsPaused)
+            {
+                var label = texts["wanted.searchAutomatic"] + " " + name;
+                actions.Add(new PostForm(Address(pageNumber, "SearchLanguage") + "&wantedItemId=" + item.Id.ToString(CultureInfo.InvariantCulture) + "&language=" + searched, csrf, [],
+                    new Button(Glyph("play", 18)).IconOnly(label).Submit().Attribute("title", label)));
+            }
+
             actions.Add(IconLink("pencil", "wanted.edit", WantedStatus.Home(item.Id), name));
             if (manage)
             {
@@ -193,6 +205,14 @@ namespace Jularr.Frontend.Pages.Admin.Wanted
         {
             await update.ExecuteAsync<UpdateResult>(new UpdateWantedParametersV1(wantedItemId), new UpdateWantedDataV1(isPaused, version, acquisitionProfileId, libraryRootId),
                 HttpContext.RequestAborted);
+            return LocalRedirect(Address(PageNumber));
+        }
+
+        // The search of one language of a book: only releases in that language count.
+        public async Task<IActionResult> OnPostSearchLanguageAsync([BindRequired] long wantedItemId, [BindRequired] string language)
+        {
+            var result = await automatic.ExecuteAsync<AutomaticSearchResultV1>(new WantedItemParametersV1(wantedItemId), new SearchWantedDataV1(null, null, language), HttpContext.RequestAborted);
+            HintText(texts["acquisition.outcome." + result.OutcomeKey] + (result.Title is { } title ? ": " + title : ""));
             return LocalRedirect(Address(PageNumber));
         }
 

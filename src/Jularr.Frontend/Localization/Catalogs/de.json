@@ -8903,6 +8903,10 @@
    "{0} selected",
    "{0} ausgewählt"
   ],
+  "wanted.edition": [
+   "{0} edition",
+   "Ausgabe: {0}"
+  ],
   "wanted.priority": [
    "Priority",
    "Priorität"

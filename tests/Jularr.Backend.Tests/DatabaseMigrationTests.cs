@@ -3,6 +3,10 @@ using System.Net;
 using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Text;
+using Jularr.Backend.Data.Enums.Sql;
+using Jularr.Backend.Data.Logic.Acquisition;
+using Jularr.Backend.Infrastructure.Sql;
+using Jularr.Backend.Logic.Acquisition;
 using Jularr.Backend.Service.Core;
 using Jularr.Backend.Tests.Infrastructure;
 using Jularr.Frontend.Framework;
@@ -486,8 +490,79 @@ namespace Jularr.Backend.Tests
             // (German, the first profile); 606's file was taken for Indonesian, so German is open; the manga has no languages.
             Assert.AreEqual("601:de+ 601:id- 602:de+ 602:id+ 603:id- 604:de- 604:id- 605:de+ 605:id- 606:de- 606:id+", (string)(await ScalarAsync(cs, Languages))!);
 
-            // Every target that lacks a language is below its cutoff, so the automatic search takes it; the complete one is not.
-            Assert.AreEqual("701 703 704 705 706", (string)(await ScalarAsync(cs, """SELECT string_agg("WantedItemId"::text, ' ' ORDER BY "WantedItemId") FROM "WantedBelowCutoff" WHERE "WantedItemId" < 707"""))!);
+            // Every target that lacks a language is searched by the due search, once in the day; the complete one and the manga never.
+            var due = await DueOverADayAsync(cs, limit: 100, markSearched: false);
+            Assert.AreEqual("701 703 704 705 706", string.Join(' ', due.Keys.Where(id => id < 707).Order()));
+        }
+
+        // What the due search takes in every cycle (every two minutes) of one day, with a batch of `limit`; a target taken is searched, so it waits a day.
+        private static async Task<Dictionary<long, DateTime>> DueOverADayAsync(string cs, int limit, bool markSearched, int[]? perHour = null, int[]? perCycle = null)
+        {
+            var day = new DateTime(2026, 11, 6, 0, 0, 0, DateTimeKind.Utc);
+            var taken = new Dictionary<long, DateTime>();
+            await using var source = NpgsqlDataSource.Create(cs);
+            for (var minute = 0; minute < 1440; minute += 2)
+            {
+                var now = day.AddMinutes(minute);
+                await using var sql = new SqlContext(source);
+                await sql.BeginAsync(SqlAccessMode.ReadOnly);
+                var due = await new LogicContext(sql).ReadDueWantedItemsAsync(new WantedDueData(now, limit), default);
+                await sql.CommitAsync();
+                if (perCycle is not null) perCycle[minute / 2] = due.Count;
+                foreach (var item in due)
+                {
+                    taken.TryAdd(item.WantedItemId, now);
+                    if (perHour is not null) perHour[minute / 60]++;
+                    if (markSearched)
+                    {
+                        await ExecuteAsync(cs, $"UPDATE \"WantedItems\" SET \"LastSearchedAt\" = '{now:O}', \"NextSearchAt\" = '{now.AddHours(24):O}' WHERE \"Id\" = {item.WantedItemId}");
+                    }
+                }
+            }
+
+            return taken;
+        }
+
+        [TestMethod]
+        public async Task BookLanguages_DueSearch_SpreadsNewlyDueLanguagesOverTheDay_AndTakesAtMostABatchPerCycle()
+        {
+            using var folder = new LibraryTests.TemporaryDirectory();
+            var cs = TestPostgres.ResolveConnectionString(nameof(BookLanguages_DueSearch_SpreadsNewlyDueLanguagesOverTheDay_AndTakesAtMostABatchPerCycle));
+            var options = Backup(folder.Path, out _);
+            var tools = Tools(cs, FakeDump(folder.Path, true), null);
+            await new DatabaseBaseline(cs, migrations: DatabaseBaseline.Migrations.Where(migration => migration.Version < 44).ToArray()).StartAsync(CancellationToken.None);
+
+            // The first run after the update: 300 books with a German file whose profiles also want Indonesian, all of them due at once (last searched long ago).
+            await ExecuteAsync(cs,
+                """
+                INSERT INTO "UiLocales" ("Id", "Locale", "Name") VALUES (91, 'de-DE', 'Deutsch'), (92, 'id', 'Indonesia') ON CONFLICT ("Locale") DO NOTHING;
+                INSERT INTO "Accounts" ("Id", "Username", "Email", "DisplayName", "AccountRoleTypeId") VALUES (41, 'due_owner', 'due@example.test', 'Owner', 1);
+                INSERT INTO "Profiles" ("Id", "OwnerAccountId", "DisplayName", "UiLocaleId") VALUES
+                    (301, 41, 'Deutsch', (SELECT "Id" FROM "UiLocales" WHERE "Locale" = 'de-DE')), (302, 41, 'Indonesia', (SELECT "Id" FROM "UiLocales" WHERE "Locale" = 'id'));
+                INSERT INTO "AccountProfiles" ("AccountId", "ProfileId") VALUES (41, 301), (41, 302);
+                INSERT INTO "StorageMounts" ("Id", "Name", "StorageProtocolTypeId", "SharePath", "IsReadOnly") OVERRIDING SYSTEM VALUE VALUES (1, 'Books', 3, '/books', FALSE);
+                INSERT INTO "LibraryRoots" ("Id", "Name", "MediaTypeId", "StorageMountId", "RelativePath") VALUES (1, 'Books', 3, 1, 'books');
+                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle") SELECT 1000 + number, 3, 'Book ' || number FROM generate_series(1, 300) AS number;
+                INSERT INTO "WantedItems" ("Id", "WorkId", "NextSearchAt") SELECT 1000 + number * 13, 1000 + number, now() - interval '30 days' FROM generate_series(1, 300) AS number;
+                INSERT INTO "WorkEditions" ("Id", "WorkId") SELECT "Id", "Id" FROM "Works" WHERE "Id" > 1000;
+                INSERT INTO "WorkVersions" ("Id", "WorkId", "WorkEditionId") SELECT "Id", "Id", "Id" FROM "Works" WHERE "Id" > 1000;
+                INSERT INTO "MediaAssets" ("Id", "WorkId", "WorkVersionId", "MediaAssetTypeId") SELECT "Id", "Id", "Id", 3 FROM "Works" WHERE "Id" > 1000;
+                INSERT INTO "StoredFiles" ("LibraryRootId", "RelativePath", "SizeBytes", "ModifiedAt", "MediaAssetId", "LastSeenAt", "ReleaseLanguages", "ReleaseName")
+                SELECT 1, 'book' || "Id" || '.epub', 1, now(), "Id", now(), '{de}', 'Book (DE) (epub)' FROM "Works" WHERE "Id" > 1000;
+                """);
+            await new DatabaseBaseline(cs, options, tools).StartAsync(CancellationToken.None);
+
+            var perHour = new int[24];
+            var perCycle = new int[720];
+            var taken = await DueOverADayAsync(cs, limit: 5, markSearched: true, perHour, perCycle);
+
+            // Every book is searched once in the day, a batch (5) at most in a cycle; about 13 an hour (300 / 24) once the day is going, the first hour a few more (the books whose hour
+            // it is, at most 30): never all of them in the first cycles.
+            Assert.AreEqual(300, taken.Count);
+            Assert.IsLessThanOrEqualTo(5, perCycle.Max());
+            Assert.IsLessThanOrEqualTo(30, perHour[0], string.Join(",", perHour));
+            Assert.IsLessThanOrEqualTo(20, perHour.Skip(1).Max(), string.Join(",", perHour));
+            Assert.IsLessThanOrEqualTo(30, perCycle.Take(30).Sum());
         }
 
         [TestMethod]

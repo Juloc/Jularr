@@ -3372,6 +3372,7 @@ namespace Jularr.Frontend.Localization
             new("wanted.select", "Select"),
             new("wanted.selectAll", "Select all"),
             new("wanted.selected", "{0} selected"),
+            new("wanted.edition", "{0} edition"),
             new("wanted.priority", "Priority"),
             new("wanted.priority.Normal", "Normal"),
             new("wanted.priority.High", "High"),

@@ -123,7 +123,10 @@ requested (monitored or imported by an administrator) the first language of ever
 source). A language is covered by a present file that names it, or whose release was taken for it (`AcquisitionReleases.TargetLanguage`, set by the grab: the missing language the release
 carries, else the first missing one); a file that names none covers the first language still open, one language per file, so a library without language evidence is not searched
 again. The search asks for the missing languages only (a German file is no "upgrade" to compare an Indonesian release with), one grab per run, the next language after the download
-(a Work downloads once at a time). A book with a missing language is below its cutoff (`WantedUnitsBelowCutoff`), so the due search and the Wanted page find it. An import never
+(a Work downloads once at a time). The Wanted list shows each language of a book as its own entry ("Almond · German edition") with its own status, and the Missing view lists the languages no file covers
+(`ReadWantedV1.WantedEntries`, the summary counts entries; the search of a language is the row's play button). The due search takes a book with a missing language once a day, in the hour of the
+day its number picks (`Id % 1440` minutes, 60 minutes wide), so languages that become wanted all at once are spread over the day and the books' daily rhythm; the batch of five a cycle bounds it further
+(300 newly due books: at most 5 in a cycle, about 13 an hour, at most 30 in the first hour; `DatabaseMigrationTests.BookLanguages_DueSearch_…`). An import never
 replaces a file in one wanted language by a file in another; only a file in a language nobody wants goes. Manga is not covered yet.
 
 **Language from the title.** A book or light-novel release that names no language is in the language its title is known in: after removing the author, the title
