@@ -3580,7 +3580,7 @@ namespace Jularr.Backend.Tests
             var offers = new[] { Offer("Example.Movie.2020.1080p.WEB-DL.H264-AAA", "english"), Offer("Example.Movie.2020.German.DL.1080p.WEB-DL.H264-ZZZ", "german") };
             var result = ReleaseSelectionEngine.Select(profile, offers.Select(offer =>
             {
-                var judgement = VideoReleaseJudge.Judge(AcquisitionKind.Movie, "Example Movie", 2020, null, offer);
+                var judgement = VideoReleaseJudge.Judge(AcquisitionKind.Movie, ["Example Movie"], 2020, null, offer);
                 return new SelectionCandidate(offer.Identity, judgement.Parsed, offer.SizeBytes, offer.ConnectionName, offer.ConnectionPriority, offer.PublishedAt, judgement.Evidence,
                     judgement.Coverage) { Languages = judgement.Languages ?? [] };
             }).ToArray());
@@ -3656,7 +3656,7 @@ namespace Jularr.Backend.Tests
 
             // The search for the season-two episode takes the absolute release, not another number.
             var season = episodes.Where(episode => episode.ParentNumber == 2).ToArray();
-            VideoIdentityMatch Judge(string title) => VideoReleaseJudge.Judge(AcquisitionKind.Anime, "Example Show", null, new UnitScope(2, 1, season[0], new UnitSet(season, season)), Offer(title, "x")).Match;
+            VideoIdentityMatch Judge(string title) => VideoReleaseJudge.Judge(AcquisitionKind.Anime, ["Example Show"], null, new UnitScope(2, 1, season[0], new UnitSet(season, season)), Offer(title, "x")).Match;
             Assert.AreEqual(VideoIdentityMatch.Matches, Judge("[Grp] Example Show - 04 [1080p]"));
             Assert.AreNotEqual(VideoIdentityMatch.Matches, Judge("[Grp] Example Show - 02 [1080p]"));
 
@@ -3680,7 +3680,7 @@ namespace Jularr.Backend.Tests
             // Season 6: episode 1 is on disk, 2 to 4 are missing; season 5 is complete.
             UnitStateData[] states = [new(51, 5, 1, true, true, false), new(61, 6, 1, true, true, false), new(62, 6, 2, true, false, false), new(63, 6, 3, true, false, false), new(64, 6, 4, true, false, false)];
             VideoIdentityMatch Judge(int? episode, string title) =>
-                VideoReleaseJudge.Judge(AcquisitionKind.Tv, "Example Show", null, AcquisitionSelectionLogic.ReadUnitScope(states, 6, episode), Offer(title, "x"), automatic: false).Match;
+                VideoReleaseJudge.Judge(AcquisitionKind.Tv, ["Example Show"], null, AcquisitionSelectionLogic.ReadUnitScope(states, 6, episode), Offer(title, "x"), automatic: false).Match;
 
             // The whole season: its pack and each missing episode, not one that is there already nor another season.
             Assert.AreEqual(VideoIdentityMatch.ContainsTarget, Judge(null, "Example.Show.S06.1080p.WEB-DL-GRP"));
@@ -3694,7 +3694,7 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(VideoIdentityMatch.WrongEpisode, Judge(3, "Example.Show.S06E02.1080p.WEB-DL-GRP"));
 
             // The automatic season pass takes the pack or the first missing episode; the others follow episode by episode.
-            Assert.AreEqual(VideoIdentityMatch.WrongEpisode, VideoReleaseJudge.Judge(AcquisitionKind.Tv, "Example Show", null, AcquisitionSelectionLogic.ReadUnitScope(states, 6, null),
+            Assert.AreEqual(VideoIdentityMatch.WrongEpisode, VideoReleaseJudge.Judge(AcquisitionKind.Tv, ["Example Show"], null, AcquisitionSelectionLogic.ReadUnitScope(states, 6, null),
                 Offer("Example.Show.S06E03.1080p.WEB-DL-GRP", "x")).Match);
 
             // A Manga searched as a whole takes any release holding a wanted volume; a volume search only its own.
@@ -3720,7 +3720,7 @@ namespace Jularr.Backend.Tests
             };
             var result = ReleaseSelectionEngine.Select(profile, offers.Select(offer =>
             {
-                var judgement = VideoReleaseJudge.Judge(AcquisitionKind.Movie, "Example Movie", 2020, null, offer);
+                var judgement = VideoReleaseJudge.Judge(AcquisitionKind.Movie, ["Example Movie"], 2020, null, offer);
                 return new SelectionCandidate(offer.Identity, judgement.Parsed, offer.SizeBytes, offer.ConnectionName, offer.ConnectionPriority, offer.PublishedAt, judgement.Evidence,
                     judgement.Coverage);
             }).ToArray());

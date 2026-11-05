@@ -17,7 +17,7 @@ namespace Jularr.Backend.Logic.Acquisition
         [GeneratedRegex(@"^(?:19|20)\d{2}$")]
         private static partial Regex YearToken();
 
-        public static ReleaseJudgement<VideoIdentityMatch> Judge(AcquisitionKind kind, string title, int? year, UnitScope? scope, ReleaseOffer offer, bool automatic = true)
+        public static ReleaseJudgement<VideoIdentityMatch> Judge(AcquisitionKind kind, IReadOnlyList<string> titles, int? year, UnitScope? scope, ReleaseOffer offer, bool automatic = true)
         {
             if (offer.DownloadUri is null)
             {
@@ -30,7 +30,7 @@ namespace Jularr.Backend.Logic.Acquisition
             }
 
             var viaId = offer.Stages.Contains("id");
-            var (titleMatch, titleEvidence) = kind == AcquisitionKind.Movie ? JudgeMovieTitle(title, year, parsed, viaId) : JudgeSeriesTitle(title, parsed, viaId);
+            var (titleMatch, titleEvidence) = kind == AcquisitionKind.Movie ? JudgeMovieTitle(titles[0], year, parsed, viaId) : JudgeSeriesTitle(titles, year, parsed, viaId);
             var languages = Languages(parsed);
             if (titleEvidence.Confidence == IdentityConfidence.Conflict || scope is null)
             {
@@ -41,9 +41,9 @@ namespace Jularr.Backend.Logic.Acquisition
             return new ReleaseJudgement<VideoIdentityMatch>(judged.Match, judged.Parsed, judged.Evidence, judged.Coverage, judged.SafetyRejection) { Languages = languages };
         }
 
-        // Whether a name found in a download's own file is the film or series asked for.
-        public static VideoIdentityMatch JudgeTitle(AcquisitionKind kind, string title, int? year, ReleaseInfo parsed) =>
-            (kind == AcquisitionKind.Movie ? JudgeMovieTitle(title, year, parsed, false) : JudgeSeriesTitle(title, parsed, false)).Match;
+        // Whether a name found in a download's own file is the film or series asked for; a film is asked for by its first title.
+        public static VideoIdentityMatch JudgeTitle(AcquisitionKind kind, IReadOnlyList<string> titles, int? year, ReleaseInfo parsed) =>
+            (kind == AcquisitionKind.Movie ? JudgeMovieTitle(titles[0], year, parsed, false) : JudgeSeriesTitle(titles, year, parsed, false)).Match;
 
         // Scene names state non-English audio as words; untagged releases are English.
         internal static IReadOnlyList<string> Languages(ReleaseInfo parsed)
@@ -74,16 +74,21 @@ namespace Jularr.Backend.Logic.Acquisition
         private static ReleaseJudgement<VideoIdentityMatch> Unusable(VideoIdentityMatch match, string code) =>
             new(match, null, ReleaseIdentityEvidence.Strong(code), SelectionCoverage.Single, code);
 
-        private static (VideoIdentityMatch Match, ReleaseIdentityEvidence Evidence) JudgeSeriesTitle(string requested, ReleaseInfo parsed, bool viaId)
+        // The series' parsed title must be one of the titles it is known by, whole: another series that merely contains the words ("Peaky Blinders - Gangs of Birmingham",
+        // "My Hero Academia Memories") is not this one. A year the name adds must be the series' own. Found by id, a different name stays ambiguous for a person to decide.
+        private static (VideoIdentityMatch Match, ReleaseIdentityEvidence Evidence) JudgeSeriesTitle(IReadOnlyList<string> titles, int? year, ReleaseInfo parsed, bool viaId)
         {
-            if (TitleMatcher.Matches(requested, parsed.SeriesTitle))
+            switch (TitleMatcher.Compare(titles, parsed.SeriesTitle, year))
             {
-                return (VideoIdentityMatch.Matches, viaId ? ReleaseIdentityEvidence.Exact("Matches") : ReleaseIdentityEvidence.Strong("Matches"));
+                case TitleComparison.Same:
+                    return (VideoIdentityMatch.Matches, viaId ? ReleaseIdentityEvidence.Exact("Matches") : ReleaseIdentityEvidence.Strong("Matches"));
+                case TitleComparison.OtherYear:
+                    return (VideoIdentityMatch.WrongYear, ReleaseIdentityEvidence.Conflict("WrongYear", parsed.SeriesTitle));
+                default:
+                    return viaId
+                        ? (VideoIdentityMatch.AmbiguousTitle, ReleaseIdentityEvidence.Ambiguous("AmbiguousTitle", parsed.SeriesTitle))
+                        : (VideoIdentityMatch.WrongTitle, ReleaseIdentityEvidence.Conflict("WrongTitle", parsed.SeriesTitle));
             }
-
-            return viaId
-                ? (VideoIdentityMatch.AmbiguousTitle, ReleaseIdentityEvidence.Ambiguous("AmbiguousTitle", parsed.SeriesTitle))
-                : (VideoIdentityMatch.WrongTitle, ReleaseIdentityEvidence.Conflict("WrongTitle", parsed.SeriesTitle));
         }
 
         private static (VideoIdentityMatch Match, ReleaseIdentityEvidence Evidence) JudgeMovieTitle(string requested, int? year, ReleaseInfo parsed, bool viaId)

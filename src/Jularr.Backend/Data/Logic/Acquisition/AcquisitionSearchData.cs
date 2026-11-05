@@ -159,6 +159,9 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         public string? SafetyRejection { get; }
         public IReadOnlyList<string>? Languages { get; init; }
 
+        // The release names no language; the languages come from its title.
+        public bool LanguagesFromTitle { get; init; }
+
         // Preference points the media type gives from the request, each with its rule.
         public IReadOnlyList<ScorePoint> Points { get; init; } = [];
 

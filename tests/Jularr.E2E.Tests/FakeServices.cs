@@ -260,8 +260,8 @@ namespace Jularr.E2E.Tests
             "works/OL66554W.json" => Json("""{"title":"Pride and Prejudice","first_publish_date":"1813","description":{"value":"A novel of manners."},"authors":[{"author":{"key":"/authors/OL21594A"}}]}"""),
             "works/OL9W.json" => Json("""{"title":"Example Manga","first_publish_date":"2019","authors":[{"author":{"key":"/authors/OL1A"}}]}"""),
 
-            // Without a language the edition is only compared, never saved as a catalog edition on import.
-            "works/OL66554W/editions.json" => Json("""{"entries":[{"key":"/books/OL7353617M","title":"Pride and Prejudice","physical_format":"Paperback","isbn_13":["9780141439518"],"publishers":["Penguin Classics"],"publish_date":"2003"}]}"""),
+            // Open Library names the language of its editions; the book's untagged releases are in the language their title is known in.
+            "works/OL66554W/editions.json" => Json("""{"entries":[{"key":"/books/OL7353617M","title":"Pride and Prejudice","languages":[{"key":"/languages/eng"}],"physical_format":"Paperback","isbn_13":["9780141439518"],"publishers":["Penguin Classics"],"publish_date":"2003"}]}"""),
             "authors/OL21594A.json" => Json("""{"name":"Jane Austen"}"""),
             "authors/OL1A.json" => Json("""{"name":"Mika Example"}"""),
             _ => Results.NotFound()

@@ -918,7 +918,7 @@ namespace Jularr.E2E.Tests
             var book = new FakeRelease("Jane Austen - Pride and Prejudice (epub)", "pride", 7020,
                 Steps.WriteEpub(Path.Combine(folders.Fixtures, "book.epub"), FakeServices.BookTitle, "Jane Austen"));
             var volume = new FakeRelease("Example Manga v01 (2019) (Digital)", "v01", 7030, Steps.WriteComic(Path.Combine(folders.Fixtures, "volume.cbz"), 3));
-            var novel = new FakeRelease("Example Novel v01 (2020) (epub)", "novel", 7020,
+            var novel = new FakeRelease("Example Novel v01 (2020) (EN) (epub)", "novel", 7020,
                 Steps.WriteEpub(Path.Combine(folders.Fixtures, "novel.epub"), FakeServices.NovelTitle, "Ren Example"));
             await using var fakes = await FakeServices.StartAsync(folders.Downloads);
             await using var jularr = await JularrInstance.StartAsync(new Dictionary<string, string>

@@ -15,10 +15,10 @@ namespace Jularr.Backend.Tests
             [.. Enumerable.Range(1, count).Select(number => new TargetUnit(season * 100 + number, season, number, false, firstAbsolute + number - 1, null))];
 
         private static ImportVerdict Series(string[] paths, int? season = 1, int? start = 4, int? end = 4, TargetUnit[]? units = null, QualityProfile? profile = null, string release = "Example.Show.S01E04.1080p.WEB-DL.H264-GRP") =>
-            ImportJudgement.Judge(MediaType.Series, null, "Example Show", 2020, release, season, start, end, Files(paths), units ?? Season(1, 6), profile);
+            ImportJudgement.Judge(MediaType.Series, null, ["Example Show"], 2020, release, season, start, end, Files(paths), units ?? Season(1, 6), profile);
 
         private static ImportVerdict Movie(params string[] paths) =>
-            ImportJudgement.Judge(MediaType.Movie, null, "Example Movie", 2020, "Example.Movie.2020.1080p.WEB-DL.H264-GRP", null, null, null, Files(paths), [], null);
+            ImportJudgement.Judge(MediaType.Movie, null, ["Example Movie"], 2020, "Example.Movie.2020.1080p.WEB-DL.H264-GRP", null, null, null, Files(paths), [], null);
 
         [TestMethod]
         public void Series_TheWantedEpisode_IsClear_AndAPackBringsEveryEpisodeAlong()
@@ -32,7 +32,7 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(ImportVerdictKind.Clear, Series(["S01E04.mkv"]).Kind);
 
             // An absolute release counts as the episode it maps to.
-            Assert.AreEqual(ImportVerdictKind.Clear, ImportJudgement.Judge(MediaType.Series, MediaSubtype.Anime, "Example Show", 2020, "[Grp] Example Show - 04 [1080p]", 1, 4, 4,
+            Assert.AreEqual(ImportVerdictKind.Clear, ImportJudgement.Judge(MediaType.Series, MediaSubtype.Anime, ["Example Show"], 2020, "[Grp] Example Show - 04 [1080p]", 1, 4, 4,
                 Files("[Grp] Example Show - 04 [1080p].mkv"), Season(1, 6), null).Kind);
         }
 
@@ -111,8 +111,8 @@ namespace Jularr.Backend.Tests
         [TestMethod]
         public void OtherMediaTypes_KeepTheirOwnRules()
         {
-            Assert.AreEqual(ImportVerdictKind.Clear, ImportJudgement.Judge(MediaType.Music, null, "Album", 2020, "Album", null, null, null, Files("a.flac"), [], null).Kind);
-            Assert.AreEqual(ImportVerdictKind.Clear, ImportJudgement.Judge(MediaType.Book, null, "Book", 2020, "Book", null, null, null, Files("b.epub"), [], null).Kind);
+            Assert.AreEqual(ImportVerdictKind.Clear, ImportJudgement.Judge(MediaType.Music, null, ["Album"], 2020, "Album", null, null, null, Files("a.flac"), [], null).Kind);
+            Assert.AreEqual(ImportVerdictKind.Clear, ImportJudgement.Judge(MediaType.Book, null, ["Book"], 2020, "Book", null, null, null, Files("b.epub"), [], null).Kind);
         }
     }
 }

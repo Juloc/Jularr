@@ -5373,6 +5373,10 @@
    "In queue",
    "In Queue"
   ],
+  "wanted.search.languageFromTitle": [
+   " (from title)",
+   " (aus Titel)"
+  ],
   "wanted.search.startNow": [
    "Start now",
    "Jetzt starten"
@@ -5808,6 +5812,10 @@
   "acquisition.reason.LanguageUnknown": [
    "File language is unknown; review manually",
    "Sprache der Datei unbekannt; bitte manuell prüfen"
+  ],
+  "acquisition.reason.LanguageUnknownLastResort": [
+   "Language unknown · last resort",
+   "Sprache unbekannt · Notfall"
   ],
   "acquisition.reason.NotAnUpgrade": [
    "No upgrade of the present quality",
@@ -13363,8 +13371,8 @@
    "Strikt: nur gewünschte Sprachen"
   ],
   "profile.languageFallback.Any": [
-   "Flexible: requested, original, then any language",
-   "Flexibel: Wunsch-, Original-, dann jede Sprache"
+   "Flexible: requested, then original; other languages by hand",
+   "Flexibel: Wunsch, dann Original; andere Sprachen von Hand"
   ],
   "hint.AcquisitionProfileFields.LanguageOrder.placeholder": [
    "de, en, ja",

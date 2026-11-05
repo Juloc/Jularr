@@ -11,7 +11,15 @@ namespace Jularr.Backend.Logic.Acquisition
             ArgumentNullException.ThrowIfNull(profile);
             ArgumentNullException.ThrowIfNull(candidates);
 
-            var evaluations = candidates.Select(candidate => Evaluate(profile, candidate)).ToArray();
+            var evaluations = candidates.Select(candidate => Evaluate(profile, candidate, false)).ToArray();
+
+            // Last resort of a book request: when no release in the language chain can be taken at all, one whose language is unknown (the name and its title say none) is taken
+            // rather than nothing. A strict profile never does, and a release in a known other language is only ever taken by hand.
+            if (profile.IsBook && profile.LanguageOrder.Length > 0 && profile.LanguageFallback != LanguageFallbackType.None
+                && !evaluations.Any(evaluation => evaluation.IsSelectable && evaluation.Candidate.Languages.Count > 0))
+            {
+                evaluations = [.. evaluations.Select(evaluation => evaluation.Reasons[^1].Code == "LanguageUnknown" ? Evaluate(profile, evaluation.Candidate, true) : evaluation)];
+            }
 
             // A complete book outranks a partial one. For books the requested language then wins ahead of
             // source priority; other media retain source priority. Profile rules still decide eligibility.
@@ -60,7 +68,7 @@ namespace Jularr.Backend.Logic.Acquisition
                 ? Math.Abs(bytes / 1_048_576m - preferred * minutes)
                 : decimal.MaxValue;
 
-        private static CandidateEvaluation Evaluate(QualityProfile profile, SelectionCandidate candidate)
+        private static CandidateEvaluation Evaluate(QualityProfile profile, SelectionCandidate candidate, bool languageLastResort)
         {
             var reasons = new List<SelectionReason>();
             var reliability = candidate.Reliability?.Points ?? 0;
@@ -109,12 +117,14 @@ namespace Jularr.Backend.Logic.Acquisition
                 return new CandidateEvaluation(candidate, SelectionDecision.ManualReview, score, reliability, reasons);
             }
 
-            // An unrequested language needs a deliberate manual choice; fallback is not an unrestricted download.
-            if (profile.IsBook && (profile.LanguageOrder.Length > 0 || profile.LanguageFallback == LanguageFallbackType.None)
+            // An unrequested language, or one the release does not state, needs a deliberate manual choice; no fallback is an unrestricted download.
+            var lastResort = languageLastResort && candidate.Languages.Count == 0;
+            if (!lastResort && profile.IsBook && (profile.LanguageOrder.Length > 0 || profile.LanguageFallback == LanguageFallbackType.None)
                 && (candidate.Identity.Confidence != IdentityConfidence.Ambiguous || profile.AllowAmbiguousIdentity)
                 && !UpgradePolicy.IsRequested(profile, candidate.Languages) && !UpgradePolicy.IsFallback(profile, candidate.Languages))
             {
-                reasons.Add(new SelectionReason(SelectionReasonKind.Profile, candidate.Languages.Count == 0 ? "LanguageUnknown" : "LanguageNotAllowed"));
+                reasons.Add(candidate.Languages.Count == 0 ? new SelectionReason(SelectionReasonKind.Profile, "LanguageUnknown")
+                    : new SelectionReason(SelectionReasonKind.Profile, "LanguageNotAllowed", string.Join(", ", candidate.Languages.Select(language => language.ToUpperInvariant()).Distinct())));
                 return new CandidateEvaluation(candidate, SelectionDecision.ManualReview, score, reliability, reasons);
             }
 
@@ -135,6 +145,11 @@ namespace Jularr.Backend.Logic.Acquisition
             foreach (var rating in ReleaseScorer.GroupRatings(profile, candidate.Parsed).Select(rated => rated.Rating).Where(rating => rating != ReleaseGroupRating.Blocked).Distinct().Order())
             {
                 reasons.Add(new SelectionReason(SelectionReasonKind.Profile, "GroupRated" + rating));
+            }
+
+            if (lastResort)
+            {
+                reasons.Add(new SelectionReason(SelectionReasonKind.Profile, "LanguageUnknownLastResort"));
             }
 
             return new CandidateEvaluation(candidate, SelectionDecision.Eligible, score, reliability, reasons);
@@ -165,6 +180,11 @@ namespace Jularr.Backend.Logic.Acquisition
         // Why the winner beat the next selectable candidate.
         private static ReleaseReason WinnerReason(QualityProfile profile, CandidateEvaluation winner, CandidateEvaluation? runnerUp)
         {
+            if (winner.Reasons.Any(reason => reason.Code == "LanguageUnknownLastResort"))
+            {
+                return new ReleaseReason("LanguageUnknownLastResort");
+            }
+
             if (runnerUp is null)
             {
                 return new ReleaseReason("OnlyCandidate");

@@ -39,14 +39,18 @@ namespace Jularr.Backend.Tests
         [TestMethod]
         public void DirectCatalogLanguage_UsesVerifiedIsoCodesOnly()
         {
-            Assert.AreEqual("DE", DirectSources.TrustedLanguageCode("deu"));
-            Assert.AreEqual("DE", DirectSources.TrustedLanguageCode("ger"));
-            Assert.AreEqual("JA", DirectSources.TrustedLanguageCode("ja-JP"));
-            Assert.AreEqual("EN", DirectSources.TrustedLanguageCode("eng"));
-            Assert.IsNull(DirectSources.TrustedLanguageCode(null));
-            Assert.IsNull(DirectSources.TrustedLanguageCode(""));
-            Assert.IsNull(DirectSources.TrustedLanguageCode("pdf"));
-            Assert.IsNull(DirectSources.TrustedLanguageCode("unknown-language"));
+            CollectionAssert.AreEqual(new[] { "DE" }, DirectSources.TrustedLanguageCodes("deu").ToArray());
+            CollectionAssert.AreEqual(new[] { "DE" }, DirectSources.TrustedLanguageCodes("ger").ToArray());
+            CollectionAssert.AreEqual(new[] { "JA" }, DirectSources.TrustedLanguageCodes("ja-JP").ToArray());
+            CollectionAssert.AreEqual(new[] { "EN" }, DirectSources.TrustedLanguageCodes("eng").ToArray());
+            Assert.AreEqual(0, DirectSources.TrustedLanguageCodes(null).Count);
+            Assert.AreEqual(0, DirectSources.TrustedLanguageCodes("").Count);
+            Assert.AreEqual(0, DirectSources.TrustedLanguageCodes("pdf").Count);
+            Assert.AreEqual(0, DirectSources.TrustedLanguageCodes("unknown-language").Count);
+
+            // A file in several languages names each of them; an unknown one is left out.
+            CollectionAssert.AreEqual(new[] { "DE", "EN" }, DirectSources.TrustedLanguageCodes("de, en").ToArray());
+            CollectionAssert.AreEqual(new[] { "PL" }, DirectSources.TrustedLanguageCodes("pl; xx-unknown").ToArray());
         }
 
 
@@ -176,6 +180,35 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(2, sources.SignedHits);
             Assert.IsFalse(sources.AuthorizationSeenBy.Contains("cdn.example.test"));
             Assert.IsTrue(sources.AuthorizationSeenBy.Contains("opds.example.test"));
+        }
+
+        [TestMethod]
+        [DataRow("en", "de", ReleaseDecisionType.ManualReview, "LanguageNotAllowed", "EN", 1)]
+        [DataRow(null, "en", ReleaseDecisionType.Eligible, "LanguageUnknownLastResort", null, 0)]
+        [DataRow("eng", "en", ReleaseDecisionType.Eligible, "OnlyCandidate", null, 1)]
+        [DataRow("de", "de", ReleaseDecisionType.Eligible, "OnlyCandidate", null, 1)]
+        public async Task Opds_OnlyTheRequestedLanguageIsTakenAutomatically_UnknownOnlyAsTheLastResort_OthersAreOfferedWithTheirReason(string? catalogLanguage, string requested,
+            ReleaseDecisionType decision, string reason, string? value, int languages)
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            var sources = new FakeSources { OpdsLanguage = catalogLanguage };
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, sources);
+            using var created = await host.SendAsync(HttpMethod.Post, Connections, new SaveAcquisitionConnectionDataV1("Calibre", AcquisitionConnectionType.Opds,
+                "https://opds.example.test/opds", FakeSources.Password, true, 40, [], null, null, null, FakeSources.User));
+            Assert.AreEqual(HttpStatusCode.OK, created.StatusCode, await created.Content.ReadAsStringAsync());
+            var wantedId = await CreateWantedBookAsync(host, locale: requested);
+
+            // The language, the decision and the reason are what a person sees in the manual search.
+            using var searched = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/wanted/" + wantedId + "/search", new SearchWantedDataV1());
+            var opds = (await searched.Content.ReadFromJsonAsync<BaseDataList<WantedReleaseCandidateV1>>())!.Single(candidate => candidate.ConnectionName == "Calibre");
+            Assert.AreEqual((decision, reason, value, languages), (opds.ReleaseDecisionTypeId, opds.ReasonCode, opds.ReasonValue, opds.Languages.Length));
+            if (decision == ReleaseDecisionType.ManualReview)
+            {
+                // Nothing is taken without a person.
+                await RunAsync<SearchDueWantedV1>(host);
+                Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"Operations\" WHERE \"OperationTypeId\" = 2"));
+            }
         }
 
         [TestMethod]
@@ -1063,7 +1096,8 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(2, Directory.EnumerateFiles(storage.Path, "*.epub", SearchOption.AllDirectories).Count());
         }
 
-        private static async Task<long> CreateWantedBookAsync(Host host, long offset = 0)
+        // The request is made in English (the language of the fixtures' books) unless the test asks for another.
+        private static async Task<long> CreateWantedBookAsync(Host host, long offset = 0, string locale = "en")
         {
             using var created = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works", new CreateWorkDataV1(MediaType.Book, "Pride and Prejudice", 1813));
             var work = (await created.Content.ReadFromJsonAsync<WorkDetailsV1>())!;
@@ -1071,7 +1105,7 @@ namespace Jularr.Backend.Tests
                 INSERT INTO "People" ("Id", "Name") VALUES (9001, 'Jane Austen') ON CONFLICT DO NOTHING;
                 INSERT INTO "WorkPeople" ("WorkId", "PersonId", "PersonRoleId", "Position") VALUES ({work.Id}, 9001, 7, 1);
                 INSERT INTO "AcquisitionRequests" ("Id", "WorkId", "RequestedByProfileId", "RequestedByAccountId", "UiLocaleId", "AcquisitionRequestStatusTypeId", "DecidedByAccountId", "DecidedAt")
-                VALUES ({710 + offset}, {work.Id}, 202, 42, 1, 2, 41, now());
+                VALUES ({710 + offset}, {work.Id}, 202, 42, (SELECT "Id" FROM "UiLocales" WHERE split_part("Locale", '-', 1) = '{locale}' ORDER BY "Id" LIMIT 1), 2, 41, now());
                 INSERT INTO "WantedItems" ("Id", "WorkId") VALUES ({810 + offset}, {work.Id});
                 INSERT INTO "RequestTargets" ("AcquisitionRequestId", "WantedItemId") VALUES ({710 + offset}, {810 + offset});
                 """);
@@ -1111,6 +1145,9 @@ namespace Jularr.Backend.Tests
             public bool SlowGate { get; set; }
             public bool SlowWithoutFile { get; set; }
             public bool RealRows { get; set; }
+
+            // The language the catalog states for its book; none when the catalog states none.
+            public string? OpdsLanguage { get; set; } = "en";
             public string RowFacts { get; set; } = "English [en] · EPUB · 1.2MB · 1813 · Book (fiction)";
             public string RowFileName { get; set; } = "lgli/Jane Austen - Pride and Prejudice (1813).epub";
 
@@ -1145,7 +1182,7 @@ namespace Jularr.Backend.Tests
                 };
             }
 
-            private static HttpResponseMessage Opds(HttpRequestMessage request)
+            private HttpResponseMessage Opds(HttpRequestMessage request)
             {
                 var expected = "Basic " + Convert.ToBase64String(Encoding.UTF8.GetBytes(User + ":" + Password));
                 if (request.Headers.Authorization?.ToString() != expected)
@@ -1159,11 +1196,11 @@ namespace Jularr.Backend.Tests
                     "/opds/osd" => Text("""<OpenSearchDescription xmlns="http://a9.com/-/spec/opensearch/1.1/"><Url type="application/atom+xml;profile=opds-catalog" template="https://opds.example.test/opds/search?q={searchTerms}"/></OpenSearchDescription>""", "application/opensearchdescription+xml"),
                     "/opds/search" => Text("""
                         <feed xmlns="http://www.w3.org/2005/Atom" xmlns:dc="http://purl.org/dc/terms/">
-                          <entry><id>urn:calibre:1</id><title>Pride and Prejudice</title><author><name>Jane Austen</name></author><dc:language>en</dc:language>
+                          <entry><id>urn:calibre:1</id><title>Pride and Prejudice</title><author><name>Jane Austen</name></author>@LANGUAGE@
                             <link rel="http://opds-spec.org/acquisition" type="application/epub+zip" href="/download/1.epub"/>
                           </entry>
                         </feed>
-                        """, "application/atom+xml"),
+                        """.Replace("@LANGUAGE@", OpdsLanguage is null ? "" : "<dc:language>" + OpdsLanguage + "</dc:language>", StringComparison.Ordinal), "application/atom+xml"),
                     "/download/1.epub" => new HttpResponseMessage(HttpStatusCode.Found) { Headers = { Location = new Uri("https://cdn.example.test/signed/1.epub?sig=" + Guid.NewGuid().ToString("N")) } },
                     _ => new HttpResponseMessage(HttpStatusCode.NotFound)
                 };

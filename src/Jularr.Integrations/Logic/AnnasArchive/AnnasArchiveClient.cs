@@ -502,9 +502,10 @@ namespace Jularr.Integrations.Logic.AnnasArchive
             var author = link.QuerySelector(".italic")?.TextContent.Trim() ?? Author(row);
             // [pdf] and similar format badges are not language evidence. Prefer the
             // first actual language badge rather than blindly accepting the first bracket.
-            var language = Language().Matches(facts).Select(match => match.Groups[1].Value)
-                .FirstOrDefault(code => code is not ("pdf" or "epub" or "mobi" or "azw" or "cbz" or "cbr"));
-            return new AnnasArchiveRecord(md5, Limit(title, 500), author is null ? null : Limit(author, 200), format, language, ReadSize(facts), site, IsPart(lines));
+            // A file in several languages names all of them: "English [en], German [de]".
+            var language = string.Join(", ", Language().Matches(facts).Select(match => match.Groups[1].Value)
+                .Where(code => code is not ("pdf" or "epub" or "mobi" or "azw" or "cbz" or "cbr")).Distinct());
+            return new AnnasArchiveRecord(md5, Limit(title, 500), author is null ? null : Limit(author, 200), format, language.Length == 0 ? null : language, ReadSize(facts), site, IsPart(lines));
         }
 
         // A file that names a part of a work is only that part.

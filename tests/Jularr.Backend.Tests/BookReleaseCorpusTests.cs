@@ -126,7 +126,6 @@ namespace Jularr.Backend.Tests
             var profile = new QualityProfile("1", "Books", [.. BookQualities.Order], [.. BookQualities.Order], false, null, null, null)
             {
                 IsBook = true,
-                LanguageOrder = ["EN"],
                 Sizes = Sizes
             };
             var target = new WantedTargetData(1, 1, MediaType.Book, subtype, title, null, [title], 1, "Books", "{}", [], false, false, false, 0, [], ["en"], author, null, null);

@@ -26,7 +26,7 @@ namespace Jularr.Backend.Logic.Acquisition
                 .Distinct().DefaultIfEmpty(untagged).Where(language => !string.IsNullOrWhiteSpace(language)).ToArray();
 
         // Direct catalogs append their explicit language immediately before the ebook format; short title words are not language tags.
-        [GeneratedRegex(@"\(([a-z]{2})(?:-[a-z]{2})?\)(?=\s*\((?:epub|pdf|azw3|mobi|cbz|cbr)\)\s*$)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+        [GeneratedRegex(@"\(([a-z]{2})(?:-[a-z]{2})?\)(?=(?:\s*\([a-z]{2}(?:-[a-z]{2})?\))*\s*\((?:epub|pdf|azw3|mobi|cbz|cbr)\)\s*$)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
         private static partial Regex CatalogLanguage();
     }
 }
