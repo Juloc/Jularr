@@ -14,6 +14,18 @@ namespace Jularr.Backend.Data.Logic.Operation
         public bool HasRecentAttempt { get; }
     }
 
+    // A person asked for the backup ("Back up now"); scheduled ones have no requester.
+    internal sealed class BackupRequestData : BaseData
+    {
+        public BackupRequestData(bool isManual)
+        {
+            IsManual = isManual;
+        }
+
+        [DataField(typeof(BackupFields), nameof(BackupFields.IsManual))]
+        public bool IsManual { get; }
+    }
+
     internal sealed class BackupStateData : BaseData
     {
         public BackupStateData(bool isRunning, string? errorKey, bool canRestore)

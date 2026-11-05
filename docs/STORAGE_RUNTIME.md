@@ -105,8 +105,10 @@ Playback, games and the PDF reader stream the file with ranges straight from the
 ffprobe read it from an address on the loopback interface with a random token that lives as long as
 the tool runs ([StorageStreamServer.cs](../src/Jularr.Integrations/Logic/Storage/StorageStreamServer.cs));
 fpcalc, whose static build has no network input, reads it on its standard input, and 7-Zip gets a
-temporary copy of a CBR or CB7. Imports from the download folder are copied beside the target and
-published when complete; a hardlink needs a folder on the same host.
+temporary copy of a CBR or CB7. Every import moves its files (owner decision 5 Nov): on the same
+filesystem of the host the file is linked into place and its old name removed, like a rename;
+elsewhere it is copied beside the target, checked and published when complete, and the source is
+deleted only after the library holds the file. A failure leaves the source as it was.
 
 ## Docker volumes
 

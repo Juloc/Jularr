@@ -264,7 +264,8 @@ namespace Jularr.Backend.Logic.Acquisition
             }
         }
 
-        // A pack names at least two different volumes and its Work has volumes; a range, an unnumbered file or a number the Work does not have is no unit, and says so.
+        // A pack names at least two different volumes, or a volume beside a file without one (what a move left of a pack), and its Work has volumes; a range, an unnumbered file or a
+        // number the Work does not have is no unit, and says so. One volume, also in two formats, stays one book.
         private static (StorageFile File, TargetUnit? Unit, string? Reason)[]? PackVolumes(MediaSubtype? subtype, IReadOnlyList<StorageFile> files, IReadOnlyList<TargetUnit> volumes)
         {
             if (subtype != MediaSubtype.LightNovel || volumes.Count == 0)
@@ -280,7 +281,8 @@ namespace Jularr.Backend.Logic.Acquisition
             int? NumberOf((StorageFile File, BookReleaseName Name) item) =>
                 item.Name.VolumeStart is { } start ? item.Name.VolumeEnd is null ? start : null : numbered.TryGetValue(item.File.RelativePath, out var number) ? number : null;
 
-            if (named.Select(NumberOf).OfType<int>().Distinct().Count() < 2)
+            var numbers = named.Select(NumberOf).ToArray();
+            if (numbers.OfType<int>().Distinct().Count() < 2 && !(numbers.Any(number => number is not null) && numbers.Any(number => number is null)))
             {
                 return null;
             }

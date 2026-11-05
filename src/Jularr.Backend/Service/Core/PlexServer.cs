@@ -115,21 +115,26 @@ namespace Jularr.Backend.Service.Core
 
         public async Task RefreshAsync(LogicContext context, MediaType mediaType, CancellationToken ct)
         {
-            // Plex scans its libraries of that kind; an unreachable Plex never fails an import.
-            if (mediaType is not (MediaType.Movie or MediaType.Series) || await ConnectAsync(context, ct) is not { } connection)
+            // Plex scans its libraries of that kind; an unreachable Plex or one that refuses its token never fails an import.
+            if (mediaType is not (MediaType.Movie or MediaType.Series))
             {
                 return;
             }
 
             try
             {
+                if (await ConnectAsync(context, ct) is not { } connection)
+                {
+                    return;
+                }
+
                 var kind = mediaType == MediaType.Movie ? PlexSectionKind.Movie : PlexSectionKind.Show;
                 foreach (var section in (await _plex.ReadServerAsync(connection, ct)).Sections.Where(section => section.Kind == kind))
                 {
                     await _plex.RefreshSectionAsync(connection, section, ct);
                 }
             }
-            catch (PlexServerException)
+            catch (Exception exception) when (exception is PlexServerException or ServiceUnavailableException)
             {
             }
         }

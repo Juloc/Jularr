@@ -109,7 +109,9 @@ SavePill, FolderPicker, IconInfo, TimePicker, FactList, Drawer, FilterDialog, Sh
   the release, removes the job with its files (SABnzbd where the connection removes failed ones, qBittorrent with its data, Jularr's own Usenet and torrent downloaders by clearing the job's folders), makes the target due again and keeps "Download failed" with its reason in the History; an
   interruption or a grab problem not caused by the release (client unreachable or refusing, link gone) goes to the History too and is searched again later. An
   **import that waits for a person** (unclear title, quality not allowed by the profile, other episodes, unreadable names, nothing placeable, partial import, a check at the source,
-  a storage or setup problem) stays as a row with the orange warning icon and its reason under the title, with import by hand, read again or the source check. A **grab its indexer
+  a storage or setup problem) stays as a row with the orange warning icon and its reason under the title, with Import (the manual import of its folder), read again or the source check. Owner's decision 5 Nov: the
+  **manual import** is a dialog over the Queue like Sonarr's (also opened from Wanted): choose a folder, then one row per file, green when it fits,
+  amber/red with the reason in plain words; only flagged rows need a person; Import moves the chosen files and each row shows where its file went or why not. A **grab its indexer
   limited** is no failure (owner's decision "Rate-Limit = wartet", Sonarr's pending release): it waits as an open row ("Waiting until 14:20") until the indexer's pause ends, then the
   same release is fetched again; it is never failed, blocked or searched again, and the History shows no failure for it. Failed rows from before are settled once by
   the same rule by the download monitor's cleanup pass. Blocked lists the releases that are not taken again (blocked by hand or by a fault) with **Allow again**. The old addresses

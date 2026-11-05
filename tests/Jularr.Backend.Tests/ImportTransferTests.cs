@@ -37,6 +37,44 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual("film (4)", result);
         }
 
+        // An import moves: on one filesystem the file is linked into place (no copy, the same data), on another it is copied and checked; the import then deletes the source.
+        [TestMethod]
+        public async Task Move_LinksOnTheSameFilesystem_AndCopiesToAnother()
+        {
+            using var directory = new TemporaryDirectory();
+            var source = Directory.CreateDirectory(Path.Combine(directory.Path, "source")).FullName;
+            var library = Directory.CreateDirectory(Path.Combine(directory.Path, "library")).FullName;
+            await File.WriteAllBytesAsync(Path.Combine(source, "film.mkv"), [1, 2, 3, 4]);
+
+            await StorageFileTransfer.PlaceAsync(new LocalStorageFiles(source), "film.mkv", new LocalStorageFiles(library), "Movie/film.mkv", CancellationToken.None);
+            Assert.IsTrue(SharesData(Path.Combine(source, "film.mkv"), Path.Combine(library, "Movie", "film.mkv")), "One filesystem: the library file is the same data.");
+
+            // Another filesystem (a memory disk) gets a complete copy of its own.
+            var other = Path.Combine("/dev/shm", "jularr-move-" + Guid.NewGuid().ToString("N"));
+            if (!Directory.Exists("/dev/shm")) Assert.Inconclusive("No second filesystem here.");
+            Directory.CreateDirectory(other);
+            try
+            {
+                await StorageFileTransfer.PlaceAsync(new LocalStorageFiles(source), "film.mkv", new LocalStorageFiles(other), "Movie/film.mkv", CancellationToken.None);
+                CollectionAssert.AreEqual(new byte[] { 1, 2, 3, 4 }, await File.ReadAllBytesAsync(Path.Combine(other, "Movie", "film.mkv")));
+                Assert.IsFalse(SharesData(Path.Combine(source, "film.mkv"), Path.Combine(other, "Movie", "film.mkv")), "Another filesystem: a copy.");
+            }
+            finally
+            {
+                Directory.Delete(other, true);
+            }
+
+            // Whether two names are one file: a byte written through one shows through the other.
+            static bool SharesData(string first, string second)
+            {
+                var before = File.ReadAllBytes(second)[0];
+                using (var stream = new FileStream(first, FileMode.Open, FileAccess.Write)) stream.WriteByte((byte)(before + 100));
+                var shared = File.ReadAllBytes(second)[0] != before;
+                using (var stream = new FileStream(first, FileMode.Open, FileAccess.Write)) stream.WriteByte(before);
+                return shared;
+            }
+        }
+
         [TestMethod]
         public async Task InterruptedCopy_RemovesTemporaryFileAndRetainsOriginal()
         {

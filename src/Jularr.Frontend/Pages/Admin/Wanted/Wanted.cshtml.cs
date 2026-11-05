@@ -148,6 +148,12 @@ namespace Jularr.Frontend.Pages.Admin.Wanted
             var actions = new List<IUiComponent>();
             if (acquire && wanted.Items.Count > 0) actions.Add(BulkButton("Search", "search", "wanted.search.all", true));
 
+            // As Sonarr's Wanted: a folder of files found elsewhere is imported by hand.
+            if (texts.Can("acquisition.manage", "Acquisition"))
+            {
+                actions.Add(new A(Glyph("folder", 16), new Span(new Text("admin.manualImport.title")).Class("action-dock__text")).Class("button").Attribute("href", "/Admin/Queue?import=true"));
+            }
+
             var bulk = new List<IUiComponent>();
             if (manage)
             {

@@ -3046,12 +3046,12 @@
    "Stunden zwischen automatischen Backups; 0 schaltet sie aus."
   ],
   "hint.InstanceSettingsFields.BackupKeep.placeholder": [
-   "7",
-   "7"
+   "3",
+   "3"
   ],
   "hint.InstanceSettingsFields.BackupKeep.info": [
-   "The newest backups stay, older ones are removed.",
-   "Die neuesten Backups bleiben, ältere werden entfernt."
+   "Counts automatic and update backups: the newest stay, older ones are removed. Manual backups are kept.",
+   "Zählt automatische und Update-Backups: Die neuesten bleiben, ältere werden entfernt. Manuelle Backups bleiben erhalten."
   ],
   "hint.InstanceSettingsFields.ProviderSyncIntervalMinutes.placeholder": [
    "30",
@@ -6271,6 +6271,18 @@
    "Delete",
    "Löschen"
   ],
+  "admin.backup.kind.Automatic": [
+   "Automatic",
+   "Automatisch"
+  ],
+  "admin.backup.kind.Update": [
+   "Update",
+   "Update"
+  ],
+  "admin.backup.kind.Manual": [
+   "Manual",
+   "Manuell"
+  ],
   "storage.synology.title": [
    "Synology",
    "Synology"
@@ -8713,41 +8725,13 @@
    "Search",
    "Suchen"
   ],
-  "manualImport.noMatch": [
-   "No work of the library matches.",
-   "Kein Werk der Bibliothek passt."
-  ],
-  "manualImport.choose": [
-   "Import to this",
-   "Hierhin importieren"
-  ],
-  "manualImport.change": [
-   "Choose another",
-   "Anderen wählen"
-  ],
   "manualImport.read": [
    "Show files",
    "Dateien anzeigen"
   ],
   "manualImport.noFiles": [
-   "The folder holds no files of this media type.",
-   "Der Ordner enthält keine Dateien dieses Medientyps."
-  ],
-  "manualImport.mode": [
-   "Transfer",
-   "Übertragung"
-  ],
-  "manualImport.mode.Link": [
-   "Hardlink",
-   "Hardlink"
-  ],
-  "manualImport.mode.Copy": [
-   "Copy",
-   "Kopieren"
-  ],
-  "manualImport.mode.Move": [
-   "Move",
-   "Verschieben"
+   "The folder holds no videos, ebooks or comics.",
+   "Der Ordner enthält keine Videos, E-Books oder Comics."
   ],
   "manualImport.season": [
    "Season",
@@ -8760,14 +8744,6 @@
   "manualImport.done": [
    "Imported files: {0}",
    "Importierte Dateien: {0}"
-  ],
-  "manualImport.list.works": [
-   "Works",
-   "Werke"
-  ],
-  "manualImport.list.target": [
-   "Import target",
-   "Importziel"
   ],
   "manualImport.list.files": [
    "Files",
@@ -8801,10 +8777,6 @@
    "Size",
    "Größe"
   ],
-  "manualImport.col.reason": [
-   "Reason",
-   "Grund"
-  ],
   "manualImport.select": [
    "Choose this file",
    "Diese Datei wählen"
@@ -8814,28 +8786,20 @@
    "Alle Dateien"
   ],
   "manualImport.state.ready": [
-   "Ready",
-   "Bereit"
-  ],
-  "manualImport.state.needs": [
-   "Needs episode",
-   "Episode fehlt"
-  ],
-  "manualImport.state.left": [
-   "Left out",
-   "Ausgelassen"
+   "Fits",
+   "Passt"
   ],
   "manualImport.state.imported": [
    "Imported",
    "Importiert"
   ],
   "manualImport.state.failed": [
-   "Not imported",
-   "Nicht importiert"
+   "Failed",
+   "Fehlgeschlagen"
   ],
   "manualImport.match": [
-   "Match",
-   "Zuordnen"
+   "Change",
+   "Ändern"
   ],
   "manualImport.matchTitle": [
    "Match file",
@@ -8858,16 +8822,12 @@
    "Übernehmen"
   ],
   "manualImport.runSelected": [
-   "Import selected",
-   "Auswahl importieren"
+   "Import",
+   "Importieren"
   ],
   "manualImport.changeFolder": [
    "Another folder",
    "Anderer Ordner"
-  ],
-  "manualImport.backToQueue": [
-   "Queue",
-   "Warteschlange"
   ],
   "manualImport.more": [
    "Import more",
@@ -8878,8 +8838,8 @@
    "Aktionen des manuellen Imports"
   ],
   "manualImport.incomplete": [
-   "Every chosen episode needs its season and episode.",
-   "Jede gewählte Episode braucht ihre Staffel und Episode."
+   "Every chosen file needs its title, and an episode its season and episode.",
+   "Jede ausgewählte Datei braucht ihr Werk, eine Folge auch Staffel und Folge."
   ],
   "manualImport.kpi.imported": [
    "Imported",
@@ -8941,13 +8901,109 @@
    "Language",
    "Sprache"
   ],
+  "manualImport.intro": [
+   "Choose a folder. Jularr recognises every file in it and shows what still needs a look.",
+   "Wähle einen Ordner. Jularr erkennt jede Datei darin und zeigt, was du noch prüfen musst."
+  ],
+  "manualImport.downloadFolder": [
+   "Folder:",
+   "Ordner:"
+  ],
+  "manualImport.found": [
+   "{0} files, {1} need a look",
+   "{0} Dateien, davon {1} bitte prüfen"
+  ],
+  "manualImport.readOnly": [
+   "This storage connection is read-only. An import moves its files, so nothing can be imported from here.",
+   "Diese Speicherverbindung ist schreibgeschützt. Ein Import verschiebt die Dateien, deshalb kann von hier nichts importiert werden."
+  ],
+  "manualImport.state.check": [
+   "Please check",
+   "Bitte prüfen"
+  ],
+  "manualImport.state.waiting": [
+   "Waiting",
+   "Wartet"
+  ],
+  "manualImport.state.moving": [
+   "Moving…",
+   "Wird verschoben …"
+  ],
+  "manualImport.state.moved": [
+   "Moved",
+   "Verschoben"
+  ],
+  "manualImport.progress": [
+   "Importing {0} of {1}",
+   "Importiere {0} von {1}"
+  ],
+  "manualImport.movedTo": [
+   "Moved to {0}",
+   "Verschoben nach {0}"
+  ],
+  "manualImport.copiedTo": [
+   "Copied to {0}; the original could not be deleted",
+   "Kopiert nach {0}; das Original ließ sich nicht löschen"
+  ],
+  "manualImport.failedBecause": [
+   "Failed: {0}",
+   "Fehlgeschlagen: {0}"
+  ],
+  "manualImport.failedPrefix": [
+   "Failed:",
+   "Fehlgeschlagen:"
+  ],
+  "manualImport.chooseWork": [
+   "Choose title",
+   "Werk wählen"
+  ],
+  "manualImport.chooseEpisode": [
+   "Set episode",
+   "Folge wählen"
+  ],
+  "manualImport.chooseVolume": [
+   "Set volume",
+   "Band wählen"
+  ],
+  "manualImport.problem.work_unknown": [
+   "No title of your library fits this name. Choose the title.",
+   "Kein Werk deiner Bibliothek passt zu diesem Namen. Bitte Werk wählen."
+  ],
+  "manualImport.problem.work_ambiguous": [
+   "Several titles fit this name. Choose the right one.",
+   "Mehrere Werke passen zu diesem Namen. Bitte das richtige wählen."
+  ],
+  "manualImport.problem.episode_unknown": [
+   "The name does not say which episode this is. Set season and episode.",
+   "Der Name sagt nicht, welche Folge das ist. Bitte Staffel und Folge wählen."
+  ],
+  "manualImport.problem.volume_unknown": [
+   "The name does not say which volume or chapter this is. Set it.",
+   "Der Name sagt nicht, welcher Band oder welches Kapitel das ist. Bitte wählen."
+  ],
+  "manualImport.problem.already_in_library": [
+   "The library already has this. Choose it only if this file should replace the one there.",
+   "Das ist schon in der Bibliothek. Nur auswählen, wenn diese Datei die vorhandene ersetzen soll."
+  ],
+  "errors.validation.import_source_read_only": [
+   "The folder's storage connection is read-only. An import moves its files, so it cannot import from here.",
+   "Die Speicherverbindung des Ordners ist schreibgeschützt. Ein Import verschiebt die Dateien, deshalb kann von hier nicht importiert werden."
+  ],
+  "errors.import_target_conflict": [
+   "Every name for this file is taken in the library. Nothing was overwritten.",
+   "Jeder Name für diese Datei ist in der Bibliothek schon vergeben. Nichts wurde überschrieben."
+  ],
+  "manualImport.problem.larger_file_chosen": [
+   "A larger file of the same film, episode or volume is in the folder and chosen. Choose this one only if it should be added too.",
+   "Eine größere Datei desselben Films, derselben Folge oder desselben Bands liegt im Ordner und ist ausgewählt. Diese nur auswählen, wenn sie zusätzlich dazukommen soll."
+  ],
   "manualImport.qualityFromFormat": [
    "From the file format",
    "Aus dem Dateiformat"
   ],
   "activity.importManually": [
-   "Import by hand",
-   "Von Hand importieren"
+   "Import",
+   "Importieren"
   ],
   "activity.source": [
    "Source",

@@ -9,6 +9,7 @@ using Jularr.Backend.Data.Enums.Operation;
 using Jularr.Backend.Service.Admin.Activity.V1;
 using Jularr.Frontend.Framework;
 using Jularr.Frontend.Modules.Live;
+using Jularr.Backend.Service.Admin.Storage.V1;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
@@ -19,8 +20,10 @@ namespace Jularr.Frontend.Pages.Admin.Queue
     // episode, quality, language, protocol, time left and progress, what a person can do with it and a drawer of details. A failed download is not in it: it is blocked when the
     // release was at fault, its target searched again and the failure kept in the History. An import that waits for a person stays with an orange warning and its reason,
     // a grab its indexer limited waits until the pause ends. Scans, imports and background jobs are the Jobs entry's Tasks.
-    public sealed class QueueModel(ReadActivityV1 read, RetryActivityV1 retry, DismissActivityV1 dismiss, SaveActivitySourceLinkV1 sourceLink, RemoveActivityDownloadV1 remove,
-        PauseActivityDownloadV1 pause, RetryActivityImportV1 retryImport, PauseActivityQueueV1 pauseQueue, ReadTorrentFilesV1 torrentFiles, IAntiforgery antiforgery, UiText texts, FrontendAssets assets) : JularrPage
+    public sealed partial class QueueModel(ReadActivityV1 read, RetryActivityV1 retry, DismissActivityV1 dismiss, SaveActivitySourceLinkV1 sourceLink, RemoveActivityDownloadV1 remove,
+        PauseActivityDownloadV1 pause, RetryActivityImportV1 retryImport, PauseActivityQueueV1 pauseQueue, ReadTorrentFilesV1 torrentFiles, FindManualImportWorksV1 find, ReadManualImportWorkV1 readWork,
+        ReadManualImportFilesV1 readFiles, PreviewManualImportV1 preview, RunManualImportV1 run, ReadManualImportDownloadV1 readDownload, RunManualImportDownloadV1 runDownload, ReadStorageMountsV1 mounts,
+        ReadStorageMountV1 mount, ReadStorageDirectoriesV1 directories, ReadStorageLocalPathsV1 localPaths, IAntiforgery antiforgery, UiText texts, FrontendAssets assets, ILogger<QueueModel> logger) : JularrPage
     {
         private PageResult<ActivityItemV1>? _items;
         private BaseDataList<TorrentFileV1>? _openedTorrentFiles;
@@ -76,8 +79,11 @@ namespace Jularr.Frontend.Pages.Admin.Queue
                 page.Content.AddRange(items.Items.Select(item => DrawerOf(item, csrf)));
             }
 
-            if (FormError is not null) page.Content.Add(new P(new Text(FormError.ResourceKey)).Attribute("role", "alert"));
-            page.Content.Add(Dock(csrf));
+            if (FormError is not null && !IsImporting) page.Content.Add(new P(new Text(FormError.ResourceKey)).Attribute("role", "alert"));
+
+            // The manual import is a dialog over the queue with its own dock; the queue's waits behind it.
+            if (IsImporting && texts.Can("acquisition.manage", "Acquisition")) ImportDialog(page, csrf!);
+            else page.Content.Add(Dock(csrf));
         }
 
         // Sonarr's columns: the state, the title, the episode and its title, quality, language, protocol, time left, progress and the actions; the narrower the list, the fewer.
@@ -95,7 +101,7 @@ namespace Jularr.Frontend.Pages.Admin.Queue
             new ViewChoice("activity.files", Address(files: true), Glyph("folder", 16), ShowFiles)
         ]);
 
-        // The whole queue's pause and resume float at the bottom with the paging, as on every admin list.
+        // The whole queue's pause and resume float at the bottom with the paging, as on every admin list, and the manual import of any folder.
         private ActionDock Dock(string? csrf)
         {
             var actions = new List<IUiComponent>();
@@ -103,6 +109,12 @@ namespace Jularr.Frontend.Pages.Admin.Queue
             {
                 actions.Add(QueueButton("PauseAll", "pause", "activity.pauseAll", csrf));
                 actions.Add(QueueButton("ResumeAll", "play", "activity.resumeAll", csrf));
+            }
+
+            // As Sonarr's queue: any folder is imported by hand.
+            if (texts.Can("acquisition.manage", "Acquisition"))
+            {
+                actions.Add(new A(Glyph("folder", 16), new Span(new Text("admin.manualImport.title")).Class("action-dock__text")).Class("button").Attribute("href", ImportAddress()));
             }
 
             return new ActionDock(assets, "activity.actions", actions);
@@ -223,7 +235,7 @@ namespace Jularr.Frontend.Pages.Admin.Queue
             if (!Limited(item))
             {
                 if (item.CanRetryImport) actions.Add(IconAction(item, "RetryImport", "sync", "activity.retryImport", csrf));
-                if (item.CanImportManually) actions.Add(IconLink("folder", "activity.importManually", "/Admin/ManualImport?operationId=" + item.Id.ToString(CultureInfo.InvariantCulture)));
+                if (item.CanImportManually) actions.Add(IconLink("folder", "activity.importManually", ImportAddress(operationId: item.Id)));
                 if (item.ManualUrl is not null) actions.Add(Drawer.Opener(new A(Glyph("link", 18)).Class("button button--icon").Attribute("href", Address(operation: item.Id)).TextAttribute("aria-label", "activity.source.check").TextAttribute("title", "activity.source.check"), DrawerId(item)));
                 if (item.CanPause) actions.Add(item.DownloadStateTypeId == DownloadStateType.Paused ? IconAction(item, "Resume", "play", "activity.resume", csrf) : IconAction(item, "Pause", "pause", "activity.pause", csrf));
                 if (item.CanBrowseFiles) actions.Add(IconLink("folder", "activity.files.view", Address(operation: item.Id) + "&files=true"));
@@ -322,7 +334,7 @@ namespace Jularr.Frontend.Pages.Admin.Queue
                 yield break;
             }
 
-            if (item.CanImportManually) yield return new A(new Text("activity.importManually")).Class("button").Attribute("href", "/Admin/ManualImport?operationId=" + item.Id.ToString(CultureInfo.InvariantCulture));
+            if (item.CanImportManually) yield return new A(new Text("activity.importManually")).Class("button").Attribute("href", ImportAddress(operationId: item.Id));
             if (item.CanRetryImport) yield return Action(item, "RetryImport", "activity.retryImport", csrf);
             if (item.CanPause) yield return item.DownloadStateTypeId == DownloadStateType.Paused ? Action(item, "Resume", "activity.resume", csrf, primary: true) : Action(item, "Pause", "activity.pause", csrf, primary: true);
         }
@@ -414,6 +426,7 @@ namespace Jularr.Frontend.Pages.Admin.Queue
 
         protected override async Task LoadDataAsync()
         {
+            await LoadImportAsync();
             var (types, subtypes) = Views.Filter;
             _items = await read.ExecuteAsync<PageResult<ActivityItemV1>>(ShowFiles
                 ? new ReadActivityParametersV1(page: Math.Max(1, PageNumber), torrentOnly: true, mediaTypeIds: types, mediaSubtypeIds: subtypes, queueOnly: true)

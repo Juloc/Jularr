@@ -1,3 +1,4 @@
+using Jularr.Backend.Data.Enums.Operation;
 using NpgsqlTypes;
 
 namespace Jularr.Backend.Data.Fields.Operation
@@ -15,5 +16,7 @@ namespace Jularr.Backend.Data.Fields.Operation
         public static readonly BoolField CanRestore = new();
         public static readonly BoolField HasRecentAttempt = new();
         public static readonly BoolField IsForced = new();
+        public static readonly BoolField IsManual = new();
+        public static readonly EnumField Kind = new(typeof(BackupKindType));
     }
 }

@@ -313,11 +313,14 @@ namespace Jularr.Backend.Tests
             Assert.IsTrue((await queue.Content.ReadFromJsonAsync<PageResult<ActivityItemV1>>())!.Items.Single().CanImportManually);
             using var read = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/" + operationId + "/manual-import/files");
             Assert.AreEqual(HttpStatusCode.OK, read.StatusCode, await read.Content.ReadAsStringAsync());
-            var file = (await read.Content.ReadFromJsonAsync<ManualImportDownloadV1>())!.Files.Single();
+            var download = (await read.Content.ReadFromJsonAsync<ManualImportDownloadV1>())!;
+            var file = download.Files.Single();
             Assert.AreEqual("Example.Movie.2005.1080p.WEB-DL.H264-GRP.mkv", file.Path);
+            StringAssert.EndsWith(download.Folder!, "movies/" + Feature, "The download's own folder is the import's.");
+            Assert.AreEqual((download.WantedItemId, "Example Movie (2020)"), (file.WantedItemId!.Value, file.WorkTitle));
 
             using var imported = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/" + operationId + "/manual-import",
-                new RunManualImportDownloadDataV1(ImportTransferMode.Link, new BaseDataList<ManualImportChoiceV1>([new ManualImportChoiceV1(file.Path, true, null, null)])));
+                new RunManualImportDownloadDataV1(new BaseDataList<ManualImportChoiceV1>([new ManualImportChoiceV1(file.Path, true, null, null)])));
             Assert.AreEqual(HttpStatusCode.OK, imported.StatusCode, await imported.Content.ReadAsStringAsync());
             Assert.AreEqual((short)3, await host.ScalarAsync("SELECT \"OperationStatusTypeId\" FROM \"Operations\" WHERE \"Id\" = " + operationId));
             Assert.AreEqual(DBNull.Value, await host.ScalarAsync("SELECT \"AttentionKey\" FROM \"Operations\" WHERE \"Id\" = " + operationId));
@@ -356,7 +359,7 @@ namespace Jularr.Backend.Tests
         private static async Task<ManualImportResultV1> RunDownloadAsync(Host host, long operationId, bool finishes, params ManualImportChoiceV1[] choices)
         {
             using var response = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/" + operationId + "/manual-import",
-                new RunManualImportDownloadDataV1(ImportTransferMode.Link, new BaseDataList<ManualImportChoiceV1>(choices), finishes));
+                new RunManualImportDownloadDataV1(new BaseDataList<ManualImportChoiceV1>(choices), finishes));
             Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, await response.Content.ReadAsStringAsync());
             return (await response.Content.ReadFromJsonAsync<ManualImportResultV1>())!;
         }
@@ -379,7 +382,7 @@ namespace Jularr.Backend.Tests
             Assert.IsTrue(files.All(file => !file.IsHandled));
 
             // The second file is another title, as a 720p Bluray with its own audio and subtitle language; an unknown language is refused before anything is placed.
-            using var refused = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/" + operationId + "/manual-import", new RunManualImportDownloadDataV1(ImportTransferMode.Link,
+            using var refused = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/" + operationId + "/manual-import", new RunManualImportDownloadDataV1(
                 new BaseDataList<ManualImportChoiceV1>([new ManualImportChoiceV1(first, true, null, null, null, null, ["xxx"])])));
             Assert.AreEqual(HttpStatusCode.BadRequest, refused.StatusCode);
             Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"StoredFiles\" WHERE \"MediaAssetId\" IS NOT NULL"));
@@ -419,7 +422,7 @@ namespace Jularr.Backend.Tests
 
             // Nothing imported yet: finishing would end a download that gave the library nothing.
             using var empty = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/" + operationId + "/manual-import",
-                new RunManualImportDownloadDataV1(ImportTransferMode.Link, new BaseDataList<ManualImportChoiceV1>([new ManualImportChoiceV1(first, false, null, null)]), true));
+                new RunManualImportDownloadDataV1(new BaseDataList<ManualImportChoiceV1>([new ManualImportChoiceV1(first, false, null, null)]), true));
             Assert.AreEqual(HttpStatusCode.BadRequest, empty.StatusCode);
             Assert.AreEqual((short)2, await host.ScalarAsync("SELECT \"OperationStatusTypeId\" FROM \"Operations\" WHERE \"Id\" = " + operationId));
 
@@ -429,9 +432,11 @@ namespace Jularr.Backend.Tests
             Assert.IsFalse(one.FinishedDownload);
             Assert.AreEqual((short)2, await host.ScalarAsync("SELECT \"OperationStatusTypeId\" FROM \"Operations\" WHERE \"Id\" = " + operationId));
             Assert.AreEqual(0, usenet.Commands.Count);
+            // The import moved it: the download's folder lists only the files still to decide.
             using var read = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/" + operationId + "/manual-import/files");
             var files = (await read.Content.ReadFromJsonAsync<ManualImportDownloadV1>())!.Files;
-            CollectionAssert.AreEqual(new[] { first }, files.Where(file => file.IsHandled).Select(file => file.Path).ToArray());
+            CollectionAssert.AreEquivalent(new[] { "second.mkv", "third.mkv" }, files.Select(file => file.Path).ToArray());
+            Assert.IsFalse(File.Exists(Path.Combine(downloads.Path, "movies", Feature, first)));
 
             // A second part, to another title; the third file is left out, and the person finishes the download without importing it.
             var two = await RunDownloadAsync(host, operationId, false, new ManualImportChoiceV1("second.mkv", true, null, null, otherId));
@@ -461,8 +466,8 @@ namespace Jularr.Backend.Tests
             Directory.CreateDirectory(folder);
             File.WriteAllBytes(Path.Combine(folder, Feature + ".mkv"), new byte[4096]);
             File.WriteAllBytes(Path.Combine(folder, "unknown-rip.mkv"), new byte[2048]);
-            using var imported = await host.SendAsync(HttpMethod.Post, ManualImport + "/" + wantedId + "/import", new RunManualImportDataV1(1, "Incoming", ImportTransferMode.Link,
-                new BaseDataList<ManualImportChoiceV1>([new ManualImportChoiceV1(Feature + ".mkv", true, null, null, null, null, ["ger"], ["fre"]), new ManualImportChoiceV1("unknown-rip.mkv", true, null, null, otherId)])));
+            using var imported = await host.SendAsync(HttpMethod.Post, ManualImport + "/import", new RunManualImportDataV1(1, "Incoming",
+                new BaseDataList<ManualImportChoiceV1>([new ManualImportChoiceV1(Feature + ".mkv", true, null, null, wantedId, null, ["ger"], ["fre"]), new ManualImportChoiceV1("unknown-rip.mkv", true, null, null, otherId)])));
             Assert.AreEqual(HttpStatusCode.OK, imported.StatusCode, await imported.Content.ReadAsStringAsync());
 
             // The scan reads English audio and subtitles in both files.
@@ -911,9 +916,11 @@ namespace Jularr.Backend.Tests
             await ImportClearFilmAsync(host, downloads, usenet);
             Assert.AreEqual(0, usenet.Commands.Count, "A connection that keeps its jobs removes nothing.");
 
-            // A client that cannot be told does not fail the import: a second film imports with it down.
+            // A client that cannot be told does not fail the import: a second film (the import moved the first one away) imports with it down.
             await host.Fixture.RunSqlAsync("UPDATE \"AcquisitionConnections\" SET \"RemovesCompleted\" = TRUE WHERE \"AcquisitionConnectionTypeId\" = 2");
             usenet.FailCommands = true;
+            Directory.CreateDirectory(Path.Combine(downloads.Path, "movies", Feature));
+            File.WriteAllBytes(Path.Combine(downloads.Path, "movies", Feature, Feature + ".mkv"), new byte[4096]);
             await host.Fixture.RunSqlAsync("UPDATE \"Operations\" SET \"OperationStatusTypeId\" = 2, \"FinishedAt\" = NULL WHERE \"OperationTypeId\" = 2");
             await RunAsync<MonitorDownloadsV1>(host);
             Assert.AreEqual((short)3, await host.ScalarAsync("SELECT \"OperationStatusTypeId\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"));
@@ -922,36 +929,36 @@ namespace Jularr.Backend.Tests
 
         private const string ManualImport = "/api/v1/admin/activity/manual-import";
 
-        // A folder of any connected storage becomes the film by hand: found by title, read with its proposed name, placed as chosen.
+        // A folder of any connected storage is read without a title: its film is recognised by the file's name, the release facts follow, and the import moves the file with its
+        // subtitle into the library, says where it went and takes the folders it emptied, the chosen one too.
         [TestMethod]
-        [DataRow(ImportTransferMode.Link)]
-        [DataRow(ImportTransferMode.Copy)]
-        [DataRow(ImportTransferMode.Move)]
-        public async Task ManualImport_PlacesAFolderAsTheFilm_AndOnlyAMoveLeavesNothingBehind(ImportTransferMode mode)
+        public async Task ManualImport_RecognisesTheFilmOfAFolder_AndMovesIt()
         {
             using var storage = new TemporaryDirectory();
             using var downloads = new TemporaryDirectory();
             await using var host = await CreateHostAsync(storage.Path, downloads.Path, new FakeUsenet());
             var wantedId = await CreateWantedMovieAsync(host);
+            await CreateWantedMovieAsync(host, "Other Movie", 2019, 501, 601);
             var folder = Path.Combine(storage.Path, "1", "Incoming", "Release");
             Directory.CreateDirectory(Path.Combine(folder, "Sub"));
             File.WriteAllBytes(Path.Combine(folder, "Sub", Feature + ".mkv"), new byte[4096]);
             File.WriteAllBytes(Path.Combine(folder, "Sub", Feature + ".en.srt"), new byte[10]);
 
-            using var found = await host.SendAsync(HttpMethod.Get, ManualImport + "/works?query=exam");
-            Assert.AreEqual(HttpStatusCode.OK, found.StatusCode, await found.Content.ReadAsStringAsync());
-            Assert.AreEqual(wantedId, (await found.Content.ReadFromJsonAsync<BaseDataList<ManualImportWorkV1>>())!.Single().WantedItemId);
-
-            using var read = await host.SendAsync(HttpMethod.Post, ManualImport + "/" + wantedId + "/files", new ReadManualImportDataV1(1, "Incoming/Release"));
+            using var read = await host.SendAsync(HttpMethod.Post, ManualImport + "/files", new ReadManualImportDataV1(1, "Incoming/Release"));
             Assert.AreEqual(HttpStatusCode.OK, read.StatusCode, await read.Content.ReadAsStringAsync());
             var file = (await read.Content.ReadFromJsonAsync<ManualImportFolderV1>())!.Files.Single();
-            Assert.AreEqual("Sub/" + Feature + ".mkv", file.Path);
+            Assert.AreEqual(("Sub/" + Feature + ".mkv", wantedId, MediaType.Movie, "Example Movie (2020)"), (file.Path, file.WantedItemId, file.MediaTypeId, file.WorkTitle));
+            Assert.AreEqual(("WEBDL-1080p", "GRP", (string?)null), (file.QualityKey, file.ReleaseGroup, file.ProblemKey));
             StringAssert.StartsWith(file.TargetName!, "Example Movie (2020)");
 
-            using var imported = await host.SendAsync(HttpMethod.Post, ManualImport + "/" + wantedId + "/import",
-                new RunManualImportDataV1(1, "Incoming/Release", mode, new BaseDataList<ManualImportChoiceV1>([new ManualImportChoiceV1(file.Path, true, null, null)])));
+            using var imported = await host.SendAsync(HttpMethod.Post, ManualImport + "/import",
+                new RunManualImportDataV1(1, "Incoming/Release", new BaseDataList<ManualImportChoiceV1>([new ManualImportChoiceV1(file.Path, true, null, null, file.WantedItemId)])));
             Assert.AreEqual(HttpStatusCode.OK, imported.StatusCode, await imported.Content.ReadAsStringAsync());
-            Assert.AreEqual(1, (await imported.Content.ReadFromJsonAsync<ManualImportResultV1>())!.Imported);
+            var result = (await imported.Content.ReadFromJsonAsync<ManualImportResultV1>())!;
+            Assert.AreEqual(1, result.Imported);
+            var outcome = result.Files.Single();
+            Assert.AreEqual((null, false), (outcome.FailureKey, outcome.SourceKept));
+            StringAssert.EndsWith(outcome.TargetPath!, "/Movies/" + file.TargetName);
 
             var library = Path.Combine(storage.Path, "1", "Movies", file.TargetName!);
             Assert.AreEqual(4096, new FileInfo(library).Length);
@@ -959,10 +966,92 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"MediaAssets\""));
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"ActivityEvents\" WHERE \"ActivityEventTypeId\" = 7"));
 
-            // The source stays unless it was moved; a move also takes the folders it emptied, never the chosen folder.
-            Assert.AreEqual(mode != ImportTransferMode.Move, File.Exists(Path.Combine(folder, "Sub", Feature + ".mkv")));
-            Assert.AreEqual(mode != ImportTransferMode.Move, Directory.Exists(Path.Combine(folder, "Sub")));
-            Assert.IsTrue(Directory.Exists(folder));
+            // Every import moves: the source and the folders it emptied are gone, the storage's own folders stay.
+            Assert.IsFalse(Directory.Exists(folder));
+            Assert.IsTrue(Directory.Exists(Path.Combine(storage.Path, "1", "Incoming")));
+        }
+
+        // One folder of several kinds is recognised file by file: an episode of a series, an episode of it in a season folder whose file name says nothing, a film, a home video
+        // no title fits; samples are left out. Only what fits is ready, the rest says why.
+        [TestMethod]
+        public async Task ManualImport_FolderOfSeveralKinds_IsRecognisedFileByFile()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, new FakeUsenet());
+            var movieId = await CreateWantedMovieAsync(host);
+            using var created = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works", new CreateWorkDataV1(MediaType.Series, "Example Show", 2019));
+            var showId = (await created.Content.ReadFromJsonAsync<WorkDetailsV1>())!.Id;
+            await host.Fixture.RunSqlAsync($"""
+                INSERT INTO "WorkUnits" ("WorkId", "WorkUnitTypeId", "Number") VALUES ({showId}, 1, 1);
+                INSERT INTO "WorkUnits" ("WorkId", "ParentWorkUnitId", "WorkUnitTypeId", "Number", "IsMonitored")
+                SELECT {showId}, season."Id", 2, episode."Number", TRUE
+                FROM (VALUES (1), (2), (3)) AS episode ("Number") CROSS JOIN "WorkUnits" AS season
+                WHERE season."WorkId" = {showId} AND season."WorkUnitTypeId" = 1;
+                INSERT INTO "WantedItems" ("Id", "WorkId") VALUES (700, {showId});
+                """);
+            var folder = Path.Combine(storage.Path, "1", "Incoming", "Mixed");
+            Directory.CreateDirectory(Path.Combine(folder, "Example.Show.S01.1080p.WEB-DL-GRP"));
+            File.WriteAllBytes(Path.Combine(folder, "Example.Show.S01E02.1080p.WEB-DL.H264-GRP.mkv"), new byte[4096]);
+            File.WriteAllBytes(Path.Combine(folder, "Example.Show.S01.1080p.WEB-DL-GRP", "episode.mkv"), new byte[4096]);
+            File.WriteAllBytes(Path.Combine(folder, Feature + ".mkv"), new byte[4096]);
+            File.WriteAllBytes(Path.Combine(folder, "Holiday.at.the.lake.mkv"), new byte[4096]);
+            File.WriteAllBytes(Path.Combine(folder, "Example.Show.S01E02.sample.mkv"), new byte[64]);
+
+            using var read = await host.SendAsync(HttpMethod.Post, ManualImport + "/files", new ReadManualImportDataV1(1, "Incoming/Mixed"));
+            Assert.AreEqual(HttpStatusCode.OK, read.StatusCode, await read.Content.ReadAsStringAsync());
+            var files = (await read.Content.ReadFromJsonAsync<ManualImportFolderV1>())!.Files.ToDictionary(file => file.Path);
+            Assert.HasCount(4, files, string.Join(", ", files.Keys));
+
+            var episode = files["Example.Show.S01E02.1080p.WEB-DL.H264-GRP.mkv"];
+            Assert.AreEqual((700L, MediaType.Series, 1, 2, (string?)null), (episode.WantedItemId, episode.MediaTypeId, episode.Season, episode.Episode, episode.ProblemKey));
+            var unnamed = files["Example.Show.S01.1080p.WEB-DL-GRP/episode.mkv"];
+            Assert.AreEqual((700L, "episode_unknown"), (unnamed.WantedItemId, unnamed.ProblemKey));
+            Assert.AreEqual((movieId, (string?)null), (files[Feature + ".mkv"].WantedItemId, files[Feature + ".mkv"].ProblemKey));
+            var unknown = files["Holiday.at.the.lake.mkv"];
+            Assert.AreEqual(((long?)null, "work_unknown"), (unknown.WantedItemId, unknown.ProblemKey));
+
+            // Nothing was touched by reading.
+            Assert.AreEqual(5, Directory.EnumerateFiles(folder, "*", SearchOption.AllDirectories).Count());
+        }
+
+        // A move that fails leaves its source as it was: the library is gone, so nothing is placed and the file stays where it lay.
+        [TestMethod]
+        public async Task ManualImport_FailedMove_LeavesTheSourceIntact()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, new FakeUsenet());
+            var wantedId = await CreateWantedMovieAsync(host);
+            var folder = Path.Combine(storage.Path, "1", "Incoming");
+            Directory.CreateDirectory(folder);
+            File.WriteAllBytes(Path.Combine(folder, Feature + ".mkv"), new byte[4096]);
+            Directory.Delete(Path.Combine(storage.Path, "1", "Movies"));
+
+            using var imported = await host.SendAsync(HttpMethod.Post, ManualImport + "/import",
+                new RunManualImportDataV1(1, "Incoming", new BaseDataList<ManualImportChoiceV1>([new ManualImportChoiceV1(Feature + ".mkv", true, null, null, wantedId)])));
+            Assert.AreEqual(HttpStatusCode.ServiceUnavailable, imported.StatusCode, await imported.Content.ReadAsStringAsync());
+            StringAssert.Contains(await imported.Content.ReadAsStringAsync(), "import_library_unavailable");
+            Assert.AreEqual(4096, new FileInfo(Path.Combine(folder, Feature + ".mkv")).Length);
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"StoredFiles\""));
+        }
+
+        // A file of a folder must name its title: without one nothing is placed.
+        [TestMethod]
+        public async Task ManualImport_FileWithoutItsTitle_IsRefused()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, new FakeUsenet());
+            await CreateWantedMovieAsync(host);
+            var folder = Path.Combine(storage.Path, "1", "Incoming");
+            Directory.CreateDirectory(folder);
+            File.WriteAllBytes(Path.Combine(folder, Feature + ".mkv"), new byte[4096]);
+
+            using var imported = await host.SendAsync(HttpMethod.Post, ManualImport + "/import",
+                new RunManualImportDataV1(1, "Incoming", new BaseDataList<ManualImportChoiceV1>([new ManualImportChoiceV1(Feature + ".mkv", true, null, null)])));
+            Assert.AreEqual(HttpStatusCode.BadRequest, imported.StatusCode);
+            Assert.IsTrue(File.Exists(Path.Combine(folder, Feature + ".mkv")));
         }
 
         // The management page reads a film with its file graded against the profile.
@@ -976,8 +1065,8 @@ namespace Jularr.Backend.Tests
             var folder = Path.Combine(storage.Path, "1", "Incoming");
             Directory.CreateDirectory(folder);
             File.WriteAllBytes(Path.Combine(folder, Feature + ".mkv"), new byte[4096]);
-            using var imported = await host.SendAsync(HttpMethod.Post, ManualImport + "/" + wantedId + "/import",
-                new RunManualImportDataV1(1, "Incoming", ImportTransferMode.Link, new BaseDataList<ManualImportChoiceV1>([new ManualImportChoiceV1(Feature + ".mkv", true, null, null)])));
+            using var imported = await host.SendAsync(HttpMethod.Post, ManualImport + "/import",
+                new RunManualImportDataV1(1, "Incoming", new BaseDataList<ManualImportChoiceV1>([new ManualImportChoiceV1(Feature + ".mkv", true, null, null, wantedId)])));
             Assert.AreEqual(HttpStatusCode.OK, imported.StatusCode, await imported.Content.ReadAsStringAsync());
             var workId = (long)(await host.ScalarAsync("SELECT \"WorkId\" FROM \"WantedItems\" WHERE \"Id\" = " + wantedId))!;
 
@@ -1006,8 +1095,8 @@ namespace Jularr.Backend.Tests
             var folder = Path.Combine(storage.Path, "1", "Incoming");
             Directory.CreateDirectory(folder);
             File.WriteAllBytes(Path.Combine(folder, Feature + ".mkv"), new byte[4096]);
-            using var imported = await host.SendAsync(HttpMethod.Post, ManualImport + "/" + wantedId + "/import",
-                new RunManualImportDataV1(1, "Incoming", ImportTransferMode.Link, new BaseDataList<ManualImportChoiceV1>([new ManualImportChoiceV1(Feature + ".mkv", true, null, null)])));
+            using var imported = await host.SendAsync(HttpMethod.Post, ManualImport + "/import",
+                new RunManualImportDataV1(1, "Incoming", new BaseDataList<ManualImportChoiceV1>([new ManualImportChoiceV1(Feature + ".mkv", true, null, null, wantedId)])));
             Assert.AreEqual(HttpStatusCode.OK, imported.StatusCode, await imported.Content.ReadAsStringAsync());
             var fileId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"StoredFiles\" WHERE \"MediaAssetId\" IS NOT NULL"))!;
             var path = Directory.EnumerateFiles(Path.Combine(storage.Path, "1"), "*.mkv", SearchOption.AllDirectories).Single(file => !file.Contains("Incoming", StringComparison.Ordinal));
@@ -1040,8 +1129,8 @@ namespace Jularr.Backend.Tests
             var folder = Path.Combine(storage.Path, "1", "Incoming");
             Directory.CreateDirectory(folder);
             File.WriteAllBytes(Path.Combine(folder, Feature + ".mkv"), new byte[4096]);
-            using var imported = await host.SendAsync(HttpMethod.Post, ManualImport + "/" + wantedId + "/import",
-                new RunManualImportDataV1(1, "Incoming", ImportTransferMode.Link, new BaseDataList<ManualImportChoiceV1>([new ManualImportChoiceV1(Feature + ".mkv", true, null, null)])));
+            using var imported = await host.SendAsync(HttpMethod.Post, ManualImport + "/import",
+                new RunManualImportDataV1(1, "Incoming", new BaseDataList<ManualImportChoiceV1>([new ManualImportChoiceV1(Feature + ".mkv", true, null, null, wantedId)])));
             Assert.AreEqual(HttpStatusCode.OK, imported.StatusCode, await imported.Content.ReadAsStringAsync());
             var fileId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"StoredFiles\" WHERE \"MediaAssetId\" IS NOT NULL"))!;
             await host.Fixture.RunSqlAsync($"""
@@ -1097,8 +1186,8 @@ namespace Jularr.Backend.Tests
             var folder = Path.Combine(storage.Path, "1", "Incoming");
             Directory.CreateDirectory(folder);
             File.WriteAllBytes(Path.Combine(folder, Feature + ".mkv"), new byte[4096]);
-            using var imported = await host.SendAsync(HttpMethod.Post, ManualImport + "/" + wantedId + "/import",
-                new RunManualImportDataV1(1, "Incoming", ImportTransferMode.Link, new BaseDataList<ManualImportChoiceV1>([new ManualImportChoiceV1(Feature + ".mkv", true, null, null)])));
+            using var imported = await host.SendAsync(HttpMethod.Post, ManualImport + "/import",
+                new RunManualImportDataV1(1, "Incoming", new BaseDataList<ManualImportChoiceV1>([new ManualImportChoiceV1(Feature + ".mkv", true, null, null, wantedId)])));
             Assert.AreEqual(HttpStatusCode.OK, imported.StatusCode, await imported.Content.ReadAsStringAsync());
             var workId = (long)(await host.ScalarAsync("SELECT \"WorkId\" FROM \"WantedItems\" WHERE \"Id\" = " + wantedId))!;
             var path = Directory.EnumerateFiles(Path.Combine(storage.Path, "1"), "*.mkv", SearchOption.AllDirectories).Single(file => !file.Contains("Incoming", StringComparison.Ordinal));
@@ -1146,8 +1235,8 @@ namespace Jularr.Backend.Tests
             var folder = Path.Combine(storage.Path, "1", "Incoming");
             Directory.CreateDirectory(folder);
             File.WriteAllBytes(Path.Combine(folder, Feature + ".mkv"), new byte[4096]);
-            using var imported = await host.SendAsync(HttpMethod.Post, ManualImport + "/" + wantedId + "/import",
-                new RunManualImportDataV1(1, "Incoming", ImportTransferMode.Link, new BaseDataList<ManualImportChoiceV1>([new ManualImportChoiceV1(Feature + ".mkv", true, null, null)])));
+            using var imported = await host.SendAsync(HttpMethod.Post, ManualImport + "/import",
+                new RunManualImportDataV1(1, "Incoming", new BaseDataList<ManualImportChoiceV1>([new ManualImportChoiceV1(Feature + ".mkv", true, null, null, wantedId)])));
             Assert.AreEqual(HttpStatusCode.OK, imported.StatusCode, await imported.Content.ReadAsStringAsync());
             var workId = (long)(await host.ScalarAsync("SELECT \"WorkId\" FROM \"WantedItems\" WHERE \"Id\" = " + wantedId))!;
             var path = Directory.EnumerateFiles(Path.Combine(storage.Path, "1"), "*.mkv", SearchOption.AllDirectories).Single(file => !file.Contains("Incoming", StringComparison.Ordinal));
@@ -1377,19 +1466,19 @@ namespace Jularr.Backend.Tests
             File.WriteAllBytes(Path.Combine(folder, Feature + ".mkv"), new byte[4096]);
 
             // A folder that is not there, and a file that is not in the folder.
-            using var missing = await host.SendAsync(HttpMethod.Post, ManualImport + "/" + wantedId + "/files", new ReadManualImportDataV1(1, "Nowhere"));
+            using var missing = await host.SendAsync(HttpMethod.Post, ManualImport + "/files", new ReadManualImportDataV1(1, "Nowhere"));
             Assert.AreEqual(HttpStatusCode.BadRequest, missing.StatusCode);
-            using var unknown = await host.SendAsync(HttpMethod.Post, ManualImport + "/" + wantedId + "/import",
-                new RunManualImportDataV1(1, "Incoming", ImportTransferMode.Link, new BaseDataList<ManualImportChoiceV1>([new ManualImportChoiceV1("other.mkv", true, null, null)])));
+            using var unknown = await host.SendAsync(HttpMethod.Post, ManualImport + "/import",
+                new RunManualImportDataV1(1, "Incoming", new BaseDataList<ManualImportChoiceV1>([new ManualImportChoiceV1("other.mkv", true, null, null, wantedId)])));
             Assert.AreEqual(HttpStatusCode.BadRequest, unknown.StatusCode);
-            using var nothing = await host.SendAsync(HttpMethod.Post, ManualImport + "/" + wantedId + "/import",
-                new RunManualImportDataV1(1, "Incoming", ImportTransferMode.Link, new BaseDataList<ManualImportChoiceV1>([new ManualImportChoiceV1(Feature + ".mkv", false, null, null)])));
+            using var nothing = await host.SendAsync(HttpMethod.Post, ManualImport + "/import",
+                new RunManualImportDataV1(1, "Incoming", new BaseDataList<ManualImportChoiceV1>([new ManualImportChoiceV1(Feature + ".mkv", false, null, null, wantedId)])));
             Assert.AreEqual(HttpStatusCode.BadRequest, nothing.StatusCode);
 
             // A storage that may not be written to is not moved from.
             await host.Fixture.RunSqlAsync("UPDATE \"StorageMounts\" SET \"IsReadOnly\" = TRUE");
-            using var moved = await host.SendAsync(HttpMethod.Post, ManualImport + "/" + wantedId + "/import",
-                new RunManualImportDataV1(1, "Incoming", ImportTransferMode.Move, new BaseDataList<ManualImportChoiceV1>([new ManualImportChoiceV1(Feature + ".mkv", true, null, null)])));
+            using var moved = await host.SendAsync(HttpMethod.Post, ManualImport + "/import",
+                new RunManualImportDataV1(1, "Incoming", new BaseDataList<ManualImportChoiceV1>([new ManualImportChoiceV1(Feature + ".mkv", true, null, null, wantedId)])));
             Assert.AreEqual(HttpStatusCode.BadRequest, moved.StatusCode);
             Assert.IsTrue(File.Exists(Path.Combine(folder, Feature + ".mkv")));
             Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"StoredFiles\" WHERE \"MediaAssetId\" IS NOT NULL"));
@@ -1410,8 +1499,8 @@ namespace Jularr.Backend.Tests
             File.WriteAllBytes(Path.Combine(folder, "unknown-rip.mkv"), new byte[2048]);
 
             // The preview names the files as chosen: the second one under the other film, as a 720p Bluray.
-            BaseDataList<ManualImportChoiceV1> choices = new([new ManualImportChoiceV1(Feature + ".mkv", true, null, null), new ManualImportChoiceV1("unknown-rip.mkv", true, null, null, otherId, "Bluray-720p")]);
-            using var preview = await host.SendAsync(HttpMethod.Post, ManualImport + "/" + wantedId + "/names", new PreviewManualImportDataV1(choices));
+            BaseDataList<ManualImportChoiceV1> choices = new([new ManualImportChoiceV1(Feature + ".mkv", true, null, null, wantedId), new ManualImportChoiceV1("unknown-rip.mkv", true, null, null, otherId, "Bluray-720p")]);
+            using var preview = await host.SendAsync(HttpMethod.Post, ManualImport + "/names", new PreviewManualImportDataV1(choices));
             Assert.AreEqual(HttpStatusCode.OK, preview.StatusCode, await preview.Content.ReadAsStringAsync());
             var names = (await preview.Content.ReadFromJsonAsync<BaseDataList<ManualImportNameV1>>())!;
             Assert.AreEqual(wantedId, names.Single(name => name.Path == Feature + ".mkv").WantedItemId);
@@ -1420,12 +1509,12 @@ namespace Jularr.Backend.Tests
             StringAssert.StartsWith(other.TargetName!, "Other Movie (2019)");
 
             // A quality the film cannot have is refused before anything is placed.
-            using var refused = await host.SendAsync(HttpMethod.Post, ManualImport + "/" + wantedId + "/import", new RunManualImportDataV1(1, "Incoming", ImportTransferMode.Link,
-                new BaseDataList<ManualImportChoiceV1>([new ManualImportChoiceV1(Feature + ".mkv", true, null, null, null, "FLAC")])));
+            using var refused = await host.SendAsync(HttpMethod.Post, ManualImport + "/import", new RunManualImportDataV1(1, "Incoming",
+                new BaseDataList<ManualImportChoiceV1>([new ManualImportChoiceV1(Feature + ".mkv", true, null, null, wantedId, "FLAC")])));
             Assert.AreEqual(HttpStatusCode.BadRequest, refused.StatusCode);
             Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"StoredFiles\" WHERE \"MediaAssetId\" IS NOT NULL"));
 
-            using var imported = await host.SendAsync(HttpMethod.Post, ManualImport + "/" + wantedId + "/import", new RunManualImportDataV1(1, "Incoming", ImportTransferMode.Link, choices));
+            using var imported = await host.SendAsync(HttpMethod.Post, ManualImport + "/import", new RunManualImportDataV1(1, "Incoming", choices));
             Assert.AreEqual(HttpStatusCode.OK, imported.StatusCode, await imported.Content.ReadAsStringAsync());
             var result = (await imported.Content.ReadFromJsonAsync<ManualImportResultV1>())!;
             Assert.AreEqual(2, result.Imported);
@@ -1496,7 +1585,7 @@ namespace Jularr.Backend.Tests
             Assert.IsTrue(wanted.IsDownloading);
             Assert.AreEqual(40, wanted.ProgressPercent);
 
-            // The completed job is mapped, linked into the library and assigned.
+            // The completed job is mapped, moved into the library and assigned.
             // SABnzbd may organize completed releases into separate category folders.
             var completed = Path.Combine(downloads.Path, "movies", Feature);
             Directory.CreateDirectory(completed);
@@ -1539,10 +1628,8 @@ namespace Jularr.Backend.Tests
             usenet.History = $$$"""{"history":{"slots":[{"nzo_id":"SABnzbd_nzo_1","name":"Example","status":"Completed","storage":"/downloads/movies/{{{Feature}}}"}]}}""";
             await RunAsync<MonitorDownloadsV1>(host);
 
-            Assert.IsTrue(File.Exists(Path.Combine(completed, Feature + ".mkv")),
-                "A download with unselected sample files must retain its source directory."); 
-            Assert.IsTrue(File.Exists(Path.Combine(completed, "sample.mkv")),
-                "Non-imported videos are retained, not silently deleted.");
+            Assert.IsFalse(File.Exists(Path.Combine(completed, Feature + ".mkv")), "The import moved the film.");
+            Assert.IsFalse(Directory.Exists(completed), "The move left only a sample, so SABnzbd's job goes with it.");
             Assert.AreEqual("existing", File.ReadAllText(Path.Combine(library, "Example Movie (2020) [WEBDL-1080p].mkv")));
             Assert.IsFalse(File.Exists(Path.Combine(library, "Example Movie (2020) [DVD].mkv")));
             Assert.AreEqual("earlier", File.ReadAllText(Path.Combine(storage.Path, "1", "Movies", ".jularr-recycle", "Example Movie (2020)", "Example Movie (2020) [DVD].mkv")));
