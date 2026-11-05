@@ -118,6 +118,23 @@ that appears later is an upgrade of it. A person can still take everything else 
 profile's order, original, other known, unknown. Direct sources state their languages (Anna's Archive names every language of a file, `de, en` counts for both);
 a source that states none gives an unknown language.
 
+**Language chain and one edition per language** (migrations `0044`, `0045`). Languages are the person's, not the quality profile's: a profile of the people has a first language (its
+first content language, else the language of its interface), an optional second one and a switch "Last, the original language" (`Profiles.LanguageUsesOriginal`, default on;
+Settings). A quality profile holds only qualities; its former language list and fallback became chains (below). The chains of a target (`WantedItemChains`, one per first
+language, in order): the title's own chain (an administrator's choice on the Work page, `WantedItemLanguageChains`, replaces all others); else the chain of every active request's
+requester (read live: their content languages and switch, so a change applies while the title has nothing; the language of the request where they have no first content language); else, for a title nobody requested (monitored or imported by an administrator), the setting
+"Languages for monitored titles" (Arr, Profiles): **all profile languages** (default: the first language of every profile of every account, children's included) or one **fixed chain**.
+A book is wanted once per first language (`WantedBookLanguages`): a language is covered by a present file that names it or whose release was taken for it
+(`AcquisitionReleases.TargetLanguage`: the missing language the release carries, or the language of that chain it stands in for as its second language or original; else the first missing one);
+a file that names none covers the first language still open, one language per file, so a library without language evidence is not searched again. The search asks the chains of
+the missing languages (first languages, then their second ones; the original language only where a chain allows it, otherwise no original and no last resort), one grab per run, the
+next language after the download (a Work downloads once at a time). The Wanted list shows each language of a book as its own entry ("Almond · German edition") with its own status, and the Missing view lists the languages no file covers
+(`ReadWantedV1.WantedEntries`, the summary counts entries, the pages count entries; each entry has its own last search, `WantedBookLanguageSearches`: a search of the title marks every language still missing, the row's play button searches that language only). The due search takes a book with a missing language once a day, in the hour of the
+day its number picks (`Id % 1440` minutes, 60 minutes wide), so languages that become wanted all at once are spread over the day and the books' daily rhythm; the batch of five a cycle bounds it further
+(300 newly due books: at most 5 in a cycle, about 13 an hour, at most 30 in the first hour; `DatabaseMigrationTests.BookLanguages_DueSearch_…`). An import never replaces a file in one wanted language by a file in another; only a file in a language nobody wants goes. The migration wrote
+the chain a target followed before onto it where the new rule would choose another (a profile with its own language list, an English or no fallback) and merged profiles that
+only differed in languages into their type's default; profiles that also differ in quality stay. Manga and video follow in the next steps.
+
 **Language from the title.** A book or light-novel release that names no language is in the language its title is known in: after removing the author, the title
 (cleaned as in the series matcher) must equal a title of the Work that carries a language: an edition's title (`WorkEditions`), a localized title (`WorkTitles` by
 UI locale) or the original title in the original language. One language counts (the manual search shows it as "German (from title)"); a title several languages share

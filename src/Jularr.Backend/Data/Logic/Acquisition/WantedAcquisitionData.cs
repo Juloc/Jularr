@@ -45,8 +45,11 @@ namespace Jularr.Backend.Data.Logic.Acquisition
             string[] requestedLocales, string? author, string? platformAbbreviation, int? platformIgdbId, string? installedFiles = null,
             string[]? editionTitles = null, string[]? isbns = null, string? originalLanguage = null, string? formats = null, string? qualitySizes = null,
             int? runtimeMinutes = null, string? releaseProfiles = null, string[]? monitoredEditionLanguages = null, string[]? unmonitoredEditionLanguages = null,
-            string? releaseGroupRatings = null, string[]? languageTitles = null)
+            string? releaseGroupRatings = null, string[]? languageTitles = null, string[]? wantedLanguages = null, string[]? missingLanguages = null, string[]? languageChains = null)
         {
+            LanguageChains = languageChains ?? [];
+            WantedLanguages = wantedLanguages ?? [];
+            MissingLanguages = missingLanguages ?? [];
             LanguageTitles = languageTitles ?? [];
             ReleaseGroupRatings = releaseGroupRatings ?? "{}";
             MonitoredEditionLanguages = monitoredEditionLanguages ?? [];
@@ -155,6 +158,17 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Isbns))]
         public string[] Isbns { get; }
 
+        // The languages a book is wanted in (its requests', else every profile's first language) and those no present file covers yet; empty for other media.
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.WantedLanguages))]
+        public string[] WantedLanguages { get; }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.MissingLanguages))]
+        public string[] MissingLanguages { get; }
+
+        // The language chains of the target, "first|second|1" (the second may be empty; 1 when the original language is allowed), in the order of their first languages.
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.LanguageChains))]
+        public string[] LanguageChains { get; }
+
         // The titles the Work is known by in a language, "language|title": its editions, its localized titles and its original title in the original language.
         [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.LanguageTitles))]
         public string[] LanguageTitles { get; }
@@ -260,10 +274,31 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         public DateTime? NextSearchAt { get; }
     }
 
+    // A search of a book: of every language still missing, or of one.
+    internal sealed class BookLanguageSearchData : BaseData
+    {
+        public BookLanguageSearchData(long wantedItemId, string? language)
+        {
+            WantedItemId = wantedItemId;
+            Language = language;
+        }
+
+        [DataField(typeof(WantedItemFields), nameof(WantedItemFields.Id))]
+        public long WantedItemId { get; }
+
+        [DataField(typeof(WantedItemFields), nameof(WantedItemFields.BookLanguage), false)]
+        public string? Language { get; }
+    }
+
     internal sealed class AcquisitionGrabData : BaseData
     {
         [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.IndexerFlags))]
         public string[] IndexerFlags { get; init; } = [];
+
+        // The language of the target this grab is for (a book is wanted once per language).
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.TargetLanguage), false)]
+        public string? TargetLanguage { get; init; }
+
         public AcquisitionGrabData(long wantedItemId, long? indexerConnectionId, string releaseIdentity, string title, string? qualityKey, long downloadConnectionId, int? parentUnitNumber,
             int? unitStart, int? unitEnd, string? sourceUrl = null, long? requestedByAccountId = null)
         {

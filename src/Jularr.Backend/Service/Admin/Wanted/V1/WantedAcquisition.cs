@@ -310,13 +310,19 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                 throw new ServiceUnavailableException(result.ErrorKey ?? "acquisition_unavailable");
             }
 
+            // The language a book was searched for is searched now, whatever came of it.
+            if (language is { Length: 2 })
+            {
+                await context.ExecuteBatchAsync(async (ctx, token) => { await ctx.RecordBookLanguageSearchAsync(new BookLanguageSearchData(wantedItemId, language.ToLowerInvariant()), token); return true; }, ct);
+            }
+
             if (result.Selection.Winner is not { } winner)
             {
                 return new AutomaticSearchResultV1(result.OutcomeKey, null);
             }
 
             var offer = result.Offers[winner.Candidate.Id];
-            await GrabAsync(context, target, offer, winner.Score?.QualityKey, clients, ct, accountId);
+            await GrabAsync(context, target, offer, winner.Score?.QualityKey, clients, ct, accountId, languages: winner.Candidate.Languages);
             return new AutomaticSearchResultV1("grabbed", TextLimit.Cut(offer.Title, 1000));
         }
 
@@ -339,7 +345,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                 }
                 var result = await SearchAsync(context, target, indexers, SearchDepth.Normal, automatic: true, ct);
                 if (result.Selection.Winner is not { } winner) return result.OutcomeKey;
-                await GrabAsync(context, target, result.Offers[winner.Candidate.Id], winner.Score?.QualityKey, clients, ct, automatic: true);
+                await GrabAsync(context, target, result.Offers[winner.Candidate.Id], winner.Score?.QualityKey, clients, ct, automatic: true, languages: winner.Candidate.Languages);
                 return "grabbed";
             }
 
@@ -357,7 +363,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                     var result = await SearchAsync(context, target, indexers, SearchDepth.Normal, automatic: true, ct, scope);
                     if (result.Selection.Winner is { } winner)
                     {
-                        await GrabAsync(context, target, result.Offers[winner.Candidate.Id], winner.Score?.QualityKey, clients, ct, automatic: true);
+                        await GrabAsync(context, target, result.Offers[winner.Candidate.Id], winner.Score?.QualityKey, clients, ct, automatic: true, languages: winner.Candidate.Languages);
                         grabbed = true;
                         units = AcquisitionSelectionLogic.Claim(units, scope, kind, winner.Candidate.Parsed);
                     }
@@ -378,15 +384,17 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
 
         // Returns whether the download also went first in its client's queue, when that was asked for.
         public async Task<bool> GrabAsync(LogicContext context, WantedTargetData target, ReleaseOffer offer, string? qualityKey, IReadOnlyList<AcquisitionConnectionData> clients, CancellationToken ct,
-            long? accountId = null, bool automatic = false, bool startsNow = false)
+            long? accountId = null, bool automatic = false, bool startsNow = false, IReadOnlyList<string>? languages = null)
         {
+            // A book is wanted once per language: the grab is for the missing language the release carries (the person chose it by hand: the one its name tags).
+            var targetLanguage = target.MissingLanguages.Length == 0 ? null : AcquisitionSelectionLogic.TargetLanguage(target, languages ?? BookReleaseJudge.Parse(offer.Title).Book!.Languages);
             // A direct-source book writes to Jularr's own workspace. Check the actual path
             // before creating an operation; a missing mount must never fall back to the VM.
             if (DirectSources.IsDirectOffer(offer.Guid) && offer.DownloadUri is { } source)
             {
                 var paths = await _downloads.OpenAsync(context, DownloadStorageArea.Direct, ct);
                 var direct = new AcquisitionGrabData(target.WantedItemId, offer.ConnectionId, Limit(offer.Identity, 600), Limit(offer.Title, 1000), qualityKey, offer.ConnectionId, null, null, null,
-                    source.ToString(), accountId) { RequiresActiveMonitoring = automatic };
+                    source.ToString(), accountId) { RequiresActiveMonitoring = automatic, TargetLanguage = targetLanguage };
                 var reserved = await context.ExecuteBatchAsync(async (ctx, token) =>
                 {
                     await ctx.RequireDownloadStorageSettingsAsync(paths.Settings, token);
@@ -441,7 +449,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                 : [];
             var (parent, start, end) = AcquisitionSelectionLogic.ReadCoverage(kind, offer.Title, episodes);
             var grab = new AcquisitionGrabData(target.WantedItemId, manual ? null : offer.ConnectionId, Limit(offer.Identity, 600), Limit(offer.Title, 1000), qualityKey, client.Id, parent, start, end,
-                requestedByAccountId: accountId) { IndexerFlags = [.. offer.IndexerFlags], RequiresActiveMonitoring = automatic };
+                requestedByAccountId: accountId) { IndexerFlags = [.. offer.IndexerFlags], RequiresActiveMonitoring = automatic, TargetLanguage = targetLanguage };
             var operationId = await context.ExecuteBatchAsync(async (ctx, token) =>
             {
                 if (nativePaths is not null) await ctx.RequireDownloadStorageSettingsAsync(nativePaths.Settings, token);

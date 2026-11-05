@@ -149,7 +149,8 @@ namespace Jularr.Frontend.Pages.User.Details
             if (_locales is not { } languages || !work.IsRequestable) return null;
 
             var options = languages.Select(locale => new SelectOption(locale.Id.ToString(CultureInfo.InvariantCulture), locale.Name));
-            var selected = languages.FirstOrDefault(locale => string.Equals(locale.Locale, texts.Locale, StringComparison.OrdinalIgnoreCase));
+            var selected = (string.IsNullOrEmpty(_contentLanguage) ? null : languages.FirstOrDefault(locale => string.Equals(locale.Locale.Split('-')[0], _contentLanguage, StringComparison.OrdinalIgnoreCase)))
+                ?? languages.FirstOrDefault(locale => string.Equals(locale.Locale, texts.Locale, StringComparison.OrdinalIgnoreCase));
             var form = new Form<CreateRequestDataV1>(form =>
             {
                 form.Select(item => item.UiLocaleId, "request.language", options);

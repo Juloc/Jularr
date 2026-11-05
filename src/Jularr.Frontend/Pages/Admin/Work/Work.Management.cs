@@ -800,7 +800,23 @@ namespace Jularr.Frontend.Pages.Admin.Work
                 form.Submit("common.save");
             }, Address(Tab, "Choice") + (ownTarget ? "&wantedItemId=" + wanted.Id.ToString(CultureInfo.InvariantCulture) : ""), csrf,
                 mine ?? new UpdateWantedDataV1(wanted.IsPaused, wanted.Version, wanted.AcquisitionProfileId, wanted.LibraryRootId, wanted.MonitorsNewUnits, tagIds: wanted.TagIds), mine is null ? null : FormError);
-            return new Modal(assets, dialogId, "work.edit", [form], isOpen);
+            if (_languages is null || ownTarget) return new Modal(assets, dialogId, "work.edit", [form], isOpen);
+
+            // A book is wanted once per language: the languages of its requests, or the setting for monitored titles, unless the title has a chain of its own.
+            var languageOpen = _languagesInput is not null && FormError is not null;
+            var chosen = _languagesInput ?? new SaveWantedLanguagesDataV1(_languages.HasOwnChain ? _languages.FirstLanguage : null, _languages.SecondLanguage, _languages.UsesOriginal);
+            IEnumerable<SelectOption> Languages(string emptyKey) => [new SelectOption("", texts[emptyKey]), .. WorkLanguages.Choices.Select(code => new SelectOption(code, WorkLanguages.Name(code)))];
+            var languages = new Form<SaveWantedLanguagesDataV1>(chain =>
+            {
+                chain.Select(data => data.FirstLanguage, "work.languages.first", Languages("work.languages.follow"));
+                chain.Select(data => data.SecondLanguage, "work.languages.second", Languages("work.languages.none"));
+                chain.Toggle(data => data.UsesOriginal, "profile.field.languageUsesOriginal");
+                chain.Submit("work.languages.save");
+            }, Address(Tab, "Languages"), csrf, chosen, languageOpen ? FormError : null);
+            var wantedIn = _languages.Languages.Length == 0 ? "–" : string.Join(", ", _languages.Languages.Select(WorkLanguages.Name));
+            var missing = _languages.MissingLanguages.Length == 0 ? "–" : string.Join(", ", _languages.MissingLanguages.Select(WorkLanguages.Name));
+            return new Modal(assets, dialogId, "work.edit", [form, new H3(new Text("work.languages.title")), new P(new Text("work.languages.wanted"), new ValueText(": " + wantedIn)),
+                new P(new Text("work.languages.missing"), new ValueText(": " + missing)), languages], isOpen || languageOpen);
         }
 
         // Sonarr's dialog: the title leaves the library, with its files when ticked, and with an exclusion when ticked.

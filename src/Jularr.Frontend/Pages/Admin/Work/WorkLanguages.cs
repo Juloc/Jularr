@@ -19,6 +19,9 @@ namespace Jularr.Frontend.Pages.Admin.Work
             ["rus"] = "ru", ["kor"] = "ko", ["chi"] = "zh", ["zho"] = "zh"
         };
 
+        // The languages a person chooses among for a chain, by their own names.
+        public static readonly string[] Choices = ["en", "de", "fr", "es", "it", "pt", "nl", "pl", "sv", "da", "no", "fi", "cs", "hu", "ro", "tr", "el", "ru", "uk", "ar", "he", "hi", "th", "id", "ja", "ko", "zh"];
+
         private static readonly HashSet<string> Flags = ["ja", "en", "de", "fr", "es", "it", "nl", "pl", "pt", "ru", "ko", "zh"];
 
         // The flag of a locale's language as a field icon, the globe where the set has none.

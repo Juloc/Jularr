@@ -165,6 +165,37 @@ namespace Jularr.Backend.Logic.Acquisition
                     ) AS "EditionTitles",
                     ARRAY(
                         SELECT
+                            language."Language"
+                        FROM
+                            "WantedBookLanguages" AS language
+                        WHERE
+                            language."WantedItemId" = wanted."Id"
+                        ORDER BY
+                            language."Position"
+                    ) AS "WantedLanguages",
+                    ARRAY(
+                        SELECT
+                            language."Language"
+                        FROM
+                            "WantedBookLanguages" AS language
+                        WHERE
+                            language."WantedItemId" = wanted."Id"
+                            AND NOT language."IsCovered"
+                        ORDER BY
+                            language."Position"
+                    ) AS "MissingLanguages",
+                    ARRAY(
+                        SELECT
+                            chain."FirstLanguage" || '|' || coalesce(chain."SecondLanguage", '') || '|' || CASE WHEN chain."UsesOriginal" THEN '1' ELSE '0' END
+                        FROM
+                            "WantedItemChains" AS chain
+                        WHERE
+                            chain."WantedItemId" = wanted."Id"
+                        ORDER BY
+                            chain."Position"
+                    ) AS "LanguageChains",
+                    ARRAY(
+                        SELECT
                             lower(edition."LanguageCode") || '|' || edition."Title"
                         FROM
                             "WorkEditions" AS edition
@@ -296,6 +327,14 @@ namespace Jularr.Backend.Logic.Acquisition
                         below."WantedItemId"
                     FROM
                         "WantedBelowCutoff" AS below
+                ), book_language_state AS MATERIALIZED (
+                    -- The books that lack a language, once: the view per target would be evaluated again for every one.
+                    SELECT
+                        language."WantedItemId"
+                    FROM
+                        "WantedBookLanguages" AS language
+                    WHERE
+                        NOT language."IsCovered"
                 )
                 SELECT
                     wanted."Id" AS "WantedItemId"
@@ -384,6 +423,26 @@ namespace Jularr.Backend.Logic.Acquisition
                                 release."WantedItemId" = wanted."Id"
                                 AND operation."OperationStatusTypeId" IN (1, 2)
                         )
+                        OR work."MediaTypeId" = 3 AND work."MediaSubtypeId" IS DISTINCT FROM 2
+                        -- A book that lacks a language of its target is searched once a day, in an hour of the day its number picks, so languages that become wanted all at once
+                        -- (a new profile, a setting, the first run after an update) are spread over the day and the books' daily rhythm; the batch of a cycle bounds it further.
+                        AND (date_part('hour', @Now)::integer * 60 + date_part('minute', @Now)::integer - wanted."Id" % 1440 + 1440) % 1440 < 60
+                        AND wanted."Id" IN (
+                            SELECT
+                                book_language_state."WantedItemId"
+                            FROM
+                                book_language_state
+                        )
+                        AND NOT EXISTS (
+                            SELECT
+                                1
+                            FROM
+                                "AcquisitionReleases" AS release
+                                JOIN "Operations" AS operation ON operation."AcquisitionReleaseId" = release."Id"
+                            WHERE
+                                release."WantedItemId" = wanted."Id"
+                                AND operation."OperationStatusTypeId" IN (1, 2)
+                        )
                         OR (work."MediaTypeId" = 2 OR work."MediaSubtypeId" = 2)
                         AND EXISTS (
                             SELECT
@@ -443,6 +502,31 @@ namespace Jularr.Backend.Logic.Acquisition
             return ctx.ReadSql.ReadListAsync<WantedItemParameters>(sql, ct);
         }
 
+        // The languages a book was just searched for: every language still missing, or the one asked for.
+        public static async Task RecordBookLanguageSearchAsync(this LogicContext ctx, BookLanguageSearchData data, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                INSERT INTO "WantedBookLanguageSearches" ("WantedItemId", "Language", "LastSearchedAt")
+                SELECT
+                    language."WantedItemId",
+                    language."Language",
+                    now()
+                FROM
+                    "WantedBookLanguages" AS language
+                WHERE
+                    language."WantedItemId" = @WantedItemId
+                    AND NOT language."IsCovered"
+                    AND (@Language::text IS NULL OR language."Language" = @Language)
+                ON CONFLICT ("WantedItemId", "Language") DO UPDATE
+                SET
+                    "LastSearchedAt" = EXCLUDED."LastSearchedAt";
+                """;
+            sql.Parameters.Add(data);
+            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+        }
+
         public static async Task RecordWantedSearchAsync(this LogicContext ctx, WantedSearchOutcomeData data, CancellationToken ct)
         {
             // Search state is not an editorial change.
@@ -461,6 +545,7 @@ namespace Jularr.Backend.Logic.Acquisition
                 """;
             sql.Parameters.Add(data);
             await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+            await ctx.RecordBookLanguageSearchAsync(new BookLanguageSearchData(data.WantedItemId, null), ct);
             await ctx.AdvanceRequestsAsync(new RequestProgressData(data.WantedItemId, AcquisitionRequestStatusType.Searching), ct);
         }
 
@@ -521,15 +606,16 @@ namespace Jularr.Backend.Logic.Acquisition
                 WITH release AS (
                     INSERT INTO
                         "AcquisitionReleases" ("WantedItemId", "AcquisitionConnectionId", "ReleaseIdentity", "Title", "SourceUrl", "QualityKey", "ParentUnitNumber", "UnitStart", "UnitEnd",
-                            "AcquisitionReleaseStatusTypeId", "IndexerFlags")
+                            "AcquisitionReleaseStatusTypeId", "IndexerFlags", "TargetLanguage")
                     VALUES
-                        (@WantedItemId, @IndexerConnectionId, @ReleaseIdentity, @Title, @SourceUrl, @QualityKey, @ParentUnitNumber, @UnitStart, @UnitEnd, 1, @IndexerFlags)
+                        (@WantedItemId, @IndexerConnectionId, @ReleaseIdentity, @Title, @SourceUrl, @QualityKey, @ParentUnitNumber, @UnitStart, @UnitEnd, 1, @IndexerFlags, @TargetLanguage)
                     ON CONFLICT ("WantedItemId", "ReleaseIdentity") DO UPDATE
                     SET
                         "SourceUrl" = EXCLUDED."SourceUrl",
                         "AcquisitionConnectionId" = EXCLUDED."AcquisitionConnectionId",
                         "Title" = EXCLUDED."Title",
                         "IndexerFlags" = EXCLUDED."IndexerFlags",
+                        "TargetLanguage" = EXCLUDED."TargetLanguage",
                         "QualityKey" = EXCLUDED."QualityKey",
                         "ParentUnitNumber" = EXCLUDED."ParentUnitNumber",
                         "UnitStart" = EXCLUDED."UnitStart",

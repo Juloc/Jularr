@@ -110,6 +110,43 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                         OR work."MediaSubtypeId" = ANY(@MediaSubtypeIds::smallint[])
             """;
 
+        // The entries of the list: a target, and for a book one entry per language it is wanted in (its own status: the language is there or missing). The rest of the statement
+        // continues the body of "wanted_state".
+        internal const string WantedEntries =
+            "WITH wanted_base AS (" + WantedState + """
+                ), book_languages AS MATERIALIZED (
+                    -- Once: joined as it is, the view is evaluated again for every row of the list.
+                    SELECT
+                        language."WantedItemId",
+                        language."Language",
+                        language."IsCovered"
+                    FROM
+                        "WantedBookLanguages" AS language
+                ), wanted_state AS (
+                    SELECT
+                        base."Id",
+                        base."WorkId",
+                        base."MediaTypeId",
+                        base."MediaSubtypeId",
+                        base."CanonicalTitle",
+                        base."IsPaused",
+                        base."WantedPriorityTypeId",
+                        base."MonitorsNewUnits",
+                        CASE WHEN language."Language" IS NULL THEN base."LastSearchedAt" ELSE searched."LastSearchedAt" END AS "LastSearchedAt",
+                        base."LastOutcomeKey",
+                        base."AcquisitionProfileId",
+                        base."LibraryRootId",
+                        base."GamePlatformId",
+                        base."Version",
+                        coalesce(language."IsCovered", base."HasMedia") AS "HasMedia",
+                        base."IsCutoffUnmet" AND coalesce(language."IsCovered", TRUE) AS "IsCutoffUnmet",
+                        language."Language" AS "BookLanguage"
+                    FROM
+                        wanted_base AS base
+                        LEFT JOIN book_languages AS language ON language."WantedItemId" = base."Id"
+                        LEFT JOIN "WantedBookLanguageSearches" AS searched ON searched."WantedItemId" = language."WantedItemId" AND searched."Language" = language."Language"
+            """;
+
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<PageResult<WantedDetailsV1>>()];
         protected override ModuleRequirement GetInstanceModules(ReadWantedParametersV1 parameters) => ModuleRequirement.All("Requests");
         protected override ServicePermission GetPermission(ReadWantedParametersV1 parameters, Type resultType) => new("wanted.read");
@@ -119,7 +156,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
         {
             // Enrich only the bounded page. Missing: nothing or a monitored aired unit without media; cutoff unmet: the view WantedBelowCutoff.
             var sql = new SqlStatement();
-            sql.Statement = "WITH wanted_state AS (" + WantedState +
+            sql.Statement = WantedEntries +
                 """
                 ), wanted_page AS (
                     SELECT
@@ -137,7 +174,8 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                         wanted_state."LibraryRootId",
                         wanted_state."GamePlatformId",
                         wanted_state."Version",
-                        wanted_state."HasMedia"
+                        wanted_state."HasMedia",
+                        wanted_state."BookLanguage"
                     FROM
                         wanted_state
                     WHERE
@@ -145,7 +183,8 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                         OR @WantedViewTypeId = 1 AND NOT wanted_state."IsPaused" AND NOT wanted_state."HasMedia"
                         OR @WantedViewTypeId = 2 AND NOT wanted_state."IsPaused" AND wanted_state."IsCutoffUnmet"
                     ORDER BY
-                        wanted_state."Id" DESC
+                        wanted_state."Id" DESC,
+                        wanted_state."BookLanguage"
                     LIMIT @PageSize
                     OFFSET @Offset
                 )
@@ -162,6 +201,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                     wanted_page."Version",
                     wanted_page."MediaTypeId" = 2 OR wanted_page."MediaSubtypeId" IS NOT DISTINCT FROM 2 AS "HasUnits",
                     wanted_page."HasMedia",
+                    wanted_page."BookLanguage",
                     download."Id" IS NOT NULL AS "IsDownloading",
                     download."ProgressPercent"::integer AS "ProgressPercent",
                     wanted_page."LastSearchedAt",
@@ -198,7 +238,8 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                         LIMIT 1
                     ) AS download ON TRUE
                 ORDER BY
-                    wanted_page."Id" DESC;
+                    wanted_page."Id" DESC,
+                    wanted_page."BookLanguage";
                 """;
             sql.Parameters.Add(new WantedViewFilterData(Parameters.WantedViewTypeId, Parameters.MediaTypeIds, Parameters.MediaSubtypeIds));
             sql.Page = Page;
@@ -218,7 +259,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
         {
             // How many targets each view of the list holds, and how many are high priority or paused.
             var sql = new SqlStatement();
-            sql.Statement = "WITH wanted_state AS (" + ReadWantedV1.WantedState +
+            sql.Statement = ReadWantedV1.WantedEntries +
                 """
                 )
                 SELECT
@@ -322,6 +363,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                                     asset."WorkUnitId" = unit."Id"
                             )
                     ) AS "HasMedia",
+                    NULL::text AS "BookLanguage",
                     download."Id" IS NOT NULL AS "IsDownloading",
                     download."ProgressPercent"::integer AS "ProgressPercent",
                     wanted_page."LastSearchedAt",

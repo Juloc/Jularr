@@ -100,6 +100,9 @@ namespace Jularr.Backend.Logic.Acquisition
         // The file carries one of the languages a request asks for.
         public static bool IsRequested(QualityProfile profile, IReadOnlyList<string> languages) => languages.Any(language => profile.LanguageOrder.Any(wanted => Same(wanted, language)));
 
+        // The file carries one of the languages a book is wanted in, covered by a file or not.
+        public static bool IsWantedLanguage(QualityProfile profile, IReadOnlyList<string> languages) => languages.Any(language => profile.WantedLanguages.Any(wanted => Same(wanted, language)));
+
         // The file carries the original language of the work; it is the next choice after the asked ones.
         public static bool IsOriginal(QualityProfile profile, IReadOnlyList<string> languages) =>
             profile.OriginalLanguage is { } original && languages.Any(language => Same(original, language));

@@ -3,6 +3,10 @@ using System.Net;
 using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Text;
+using Jularr.Backend.Data.Enums.Sql;
+using Jularr.Backend.Data.Logic.Acquisition;
+using Jularr.Backend.Infrastructure.Sql;
+using Jularr.Backend.Logic.Acquisition;
 using Jularr.Backend.Service.Core;
 using Jularr.Backend.Tests.Infrastructure;
 using Jularr.Frontend.Framework;
@@ -382,7 +386,7 @@ namespace Jularr.Backend.Tests
                 FROM "WantedItems" AS wanted JOIN "Works" AS work ON work."Id" = wanted."WorkId"
                 """;
             var before = (string)(await ScalarAsync(cs, Before))!;
-            await new DatabaseBaseline(cs, options, tools).StartAsync(CancellationToken.None);
+            await new DatabaseBaseline(cs, options, tools, migrations: DatabaseBaseline.Migrations.Where(migration => migration.Version <= 42).ToArray()).StartAsync(CancellationToken.None);
 
             // Acquisition chooses the same profile, or the one it was merged into, for every target (the film on a series profile had none and now follows the film default).
             Assert.AreEqual("201:1,202:10,203:2,204:8,205:8,206:9,207:4,208:7,209:3,210:8,211:-,212:12,213:13", before);
@@ -428,6 +432,196 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(400m, await ScalarAsync(cs, """SELECT "MaximumMbPerMinute" FROM "QualityDefinitions" WHERE "MediaTypeId" = 2 AND "Quality" = 'Remux-1080p'"""));
             Assert.AreEqual(1, Directory.GetDirectories(backups).Length);
             Assert.AreEqual(42, await ScalarAsync(cs, """SELECT "Version" FROM "DatabaseSchemaVersions" WHERE "Name" = '0042_shared_quality_profiles'"""));
+        }
+
+        [TestMethod]
+        public async Task BookLanguages_UpgradeKeepsEveryTarget_AndEachWantedLanguageIsCoveredByItsOwnFile()
+        {
+            using var folder = new LibraryTests.TemporaryDirectory();
+            var cs = TestPostgres.ResolveConnectionString(nameof(BookLanguages_UpgradeKeepsEveryTarget_AndEachWantedLanguageIsCoveredByItsOwnFile));
+            var options = Backup(folder.Path, out _);
+            var tools = Tools(cs, FakeDump(folder.Path, true), null);
+            await new DatabaseBaseline(cs, migrations: DatabaseBaseline.Migrations.Where(migration => migration.Version < 44).ToArray()).StartAsync(CancellationToken.None);
+
+            // Two profiles whose first languages are German and Indonesian, and books: 601 German only, 602 both, 603 requested in Indonesian with an English file, 604 without a file,
+            // 605 with a file that names no language, 606 with a file that names none, taken for Indonesian, 607 a manga.
+            await ExecuteAsync(cs,
+                """
+                INSERT INTO "UiLocales" ("Id", "Locale", "Name") VALUES (91, 'de-DE', 'Deutsch'), (92, 'id', 'Indonesia') ON CONFLICT ("Locale") DO NOTHING;
+                INSERT INTO "Accounts" ("Id", "Username", "Email", "DisplayName", "AccountRoleTypeId") VALUES (41, 'language_owner', 'language@example.test', 'Owner', 1);
+                INSERT INTO "Profiles" ("Id", "OwnerAccountId", "DisplayName", "UiLocaleId") VALUES
+                    (301, 41, 'Deutsch', (SELECT "Id" FROM "UiLocales" WHERE "Locale" = 'de-DE')), (302, 41, 'Indonesia', (SELECT "Id" FROM "UiLocales" WHERE "Locale" = 'id'));
+                INSERT INTO "AccountProfiles" ("AccountId", "ProfileId") VALUES (41, 301), (41, 302);
+                INSERT INTO "Works" ("Id", "MediaTypeId", "MediaSubtypeId", "CanonicalTitle") VALUES
+                    (601, 3, NULL, 'German only'), (602, 3, NULL, 'Both'), (603, 3, NULL, 'Requested'), (604, 3, NULL, 'None'), (605, 3, NULL, 'Unnamed'), (606, 3, NULL, 'Taken for'), (607, 3, 2, 'Manga');
+                INSERT INTO "WantedItems" ("Id", "WorkId") SELECT 700 + "Id" - 600, "Id" FROM "Works" WHERE "Id" BETWEEN 601 AND 607;
+                INSERT INTO "AcquisitionRequests" ("Id", "WorkId", "RequestedByProfileId", "RequestedByAccountId", "UiLocaleId", "AcquisitionRequestStatusTypeId", "DecidedByAccountId", "DecidedAt")
+                VALUES (801, 603, 302, 41, (SELECT "Id" FROM "UiLocales" WHERE "Locale" = 'id'), 2, 41, now());
+                INSERT INTO "RequestTargets" ("AcquisitionRequestId", "WantedItemId") VALUES (801, 703);
+                INSERT INTO "StorageMounts" ("Id", "Name", "StorageProtocolTypeId", "SharePath", "IsReadOnly") OVERRIDING SYSTEM VALUE VALUES (1, 'Books', 3, '/books', FALSE);
+                INSERT INTO "LibraryRoots" ("Id", "Name", "MediaTypeId", "StorageMountId", "RelativePath") VALUES (1, 'Books', 3, 1, 'books');
+                INSERT INTO "WorkEditions" ("Id", "WorkId") SELECT "Id", "Id" FROM "Works" WHERE "Id" BETWEEN 601 AND 607;
+                INSERT INTO "WorkVersions" ("Id", "WorkId", "WorkEditionId") SELECT "Id", "Id", "Id" FROM "Works" WHERE "Id" BETWEEN 601 AND 607;
+                INSERT INTO "MediaAssets" ("Id", "WorkId", "WorkVersionId", "MediaAssetTypeId") VALUES (1, 601, 601, 3), (2, 602, 602, 3), (3, 603, 603, 3), (4, 605, 605, 3), (5, 606, 606, 3), (6, 607, 607, 3);
+                INSERT INTO "WorkVersions" ("Id", "WorkId", "WorkEditionId") VALUES (902, 602, 602);
+                INSERT INTO "MediaAssets" ("Id", "WorkId", "WorkVersionId", "MediaAssetTypeId") VALUES (7, 602, 902, 3);
+                INSERT INTO "StoredFiles" ("LibraryRootId", "RelativePath", "SizeBytes", "ModifiedAt", "MediaAssetId", "LastSeenAt", "ReleaseLanguages", "ReleaseName") VALUES
+                    (1, 'a.epub', 1, now(), 1, now(), '{de}', 'German only (DE) (epub)'),
+                    (1, 'b1.epub', 1, now(), 2, now(), '{de}', 'Both (DE) (epub)'),
+                    (1, 'b2.epub', 1, now(), 7, now(), '{id}', 'Both (ID) (epub)'),
+                    (1, 'c.epub', 1, now(), 3, now(), '{en}', 'Requested (EN) (epub)'),
+                    (1, 'e.epub', 1, now(), 4, now(), NULL, 'Unnamed (epub)'),
+                    (1, 'f.epub', 1, now(), 5, now(), NULL, 'Taken for (epub)'),
+                    (1, 'g.cbz', 1, now(), 6, now(), '{en}', 'Manga (EN)');
+                INSERT INTO "AcquisitionReleases" ("WantedItemId", "ReleaseIdentity", "Title", "AcquisitionReleaseStatusTypeId") VALUES (706, 'taken', 'Taken for (epub)', 2);
+                """);
+            await new DatabaseBaseline(cs, options, tools).StartAsync(CancellationToken.None);
+
+            // The data is kept; the new column is empty until a grab names its language (the one of the book whose file names none).
+            Assert.AreEqual(7L, await ScalarAsync(cs, """SELECT count(*) FROM "WantedItems" WHERE "WorkId" BETWEEN 601 AND 607"""));
+            await ExecuteAsync(cs, """UPDATE "AcquisitionReleases" SET "TargetLanguage" = 'id' WHERE "ReleaseIdentity" = 'taken'""");
+            const string Languages =
+                """
+                SELECT string_agg(language."WantedItemId" - 700 + 600 || ':' || language."Language" || CASE WHEN language."IsCovered" THEN '+' ELSE '-' END, ' ' ORDER BY language."WantedItemId", language."Position")
+                FROM "WantedBookLanguages" AS language
+                """;
+
+            // 601 has German; 602 both; 603 is asked for in Indonesian only, an English file covers nothing; 604 has nothing; 605's file without a language covers the first language still open
+            // (German, the first profile); 606's file was taken for Indonesian, so German is open; the manga has no languages.
+            Assert.AreEqual("601:de+ 601:id- 602:de+ 602:id+ 603:id- 604:de- 604:id- 605:de+ 605:id- 606:de- 606:id+", (string)(await ScalarAsync(cs, Languages))!);
+
+            // Every target that lacks a language is searched by the due search, once in the day; the complete one and the manga never.
+            var due = await DueOverADayAsync(cs, limit: 100, markSearched: false);
+            Assert.AreEqual("701 703 704 705 706", string.Join(' ', due.Keys.Where(id => id < 707).Order()));
+        }
+
+        // What the due search takes in every cycle (every two minutes) of one day, with a batch of `limit`; a target taken is searched, so it waits a day.
+        private static async Task<Dictionary<long, DateTime>> DueOverADayAsync(string cs, int limit, bool markSearched, int[]? perHour = null, int[]? perCycle = null)
+        {
+            var day = new DateTime(2026, 11, 6, 0, 0, 0, DateTimeKind.Utc);
+            var taken = new Dictionary<long, DateTime>();
+            await using var source = NpgsqlDataSource.Create(cs);
+            for (var minute = 0; minute < 1440; minute += 2)
+            {
+                var now = day.AddMinutes(minute);
+                await using var sql = new SqlContext(source);
+                await sql.BeginAsync(SqlAccessMode.ReadOnly);
+                var due = await new LogicContext(sql).ReadDueWantedItemsAsync(new WantedDueData(now, limit), default);
+                await sql.CommitAsync();
+                if (perCycle is not null) perCycle[minute / 2] = due.Count;
+                foreach (var item in due)
+                {
+                    taken.TryAdd(item.WantedItemId, now);
+                    if (perHour is not null) perHour[minute / 60]++;
+                    if (markSearched)
+                    {
+                        await ExecuteAsync(cs, $"UPDATE \"WantedItems\" SET \"LastSearchedAt\" = '{now:O}', \"NextSearchAt\" = '{now.AddHours(24):O}' WHERE \"Id\" = {item.WantedItemId}");
+                    }
+                }
+            }
+
+            return taken;
+        }
+
+        [TestMethod]
+        public async Task BookLanguages_DueSearch_SpreadsNewlyDueLanguagesOverTheDay_AndTakesAtMostABatchPerCycle()
+        {
+            using var folder = new LibraryTests.TemporaryDirectory();
+            var cs = TestPostgres.ResolveConnectionString(nameof(BookLanguages_DueSearch_SpreadsNewlyDueLanguagesOverTheDay_AndTakesAtMostABatchPerCycle));
+            var options = Backup(folder.Path, out _);
+            var tools = Tools(cs, FakeDump(folder.Path, true), null);
+            await new DatabaseBaseline(cs, migrations: DatabaseBaseline.Migrations.Where(migration => migration.Version < 44).ToArray()).StartAsync(CancellationToken.None);
+
+            // The first run after the update: 300 books with a German file whose profiles also want Indonesian, all of them due at once (last searched long ago).
+            await ExecuteAsync(cs,
+                """
+                INSERT INTO "UiLocales" ("Id", "Locale", "Name") VALUES (91, 'de-DE', 'Deutsch'), (92, 'id', 'Indonesia') ON CONFLICT ("Locale") DO NOTHING;
+                INSERT INTO "Accounts" ("Id", "Username", "Email", "DisplayName", "AccountRoleTypeId") VALUES (41, 'due_owner', 'due@example.test', 'Owner', 1);
+                INSERT INTO "Profiles" ("Id", "OwnerAccountId", "DisplayName", "UiLocaleId") VALUES
+                    (301, 41, 'Deutsch', (SELECT "Id" FROM "UiLocales" WHERE "Locale" = 'de-DE')), (302, 41, 'Indonesia', (SELECT "Id" FROM "UiLocales" WHERE "Locale" = 'id'));
+                INSERT INTO "AccountProfiles" ("AccountId", "ProfileId") VALUES (41, 301), (41, 302);
+                INSERT INTO "StorageMounts" ("Id", "Name", "StorageProtocolTypeId", "SharePath", "IsReadOnly") OVERRIDING SYSTEM VALUE VALUES (1, 'Books', 3, '/books', FALSE);
+                INSERT INTO "LibraryRoots" ("Id", "Name", "MediaTypeId", "StorageMountId", "RelativePath") VALUES (1, 'Books', 3, 1, 'books');
+                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle") SELECT 1000 + number, 3, 'Book ' || number FROM generate_series(1, 300) AS number;
+                INSERT INTO "WantedItems" ("Id", "WorkId", "NextSearchAt") SELECT 1000 + number * 13, 1000 + number, now() - interval '30 days' FROM generate_series(1, 300) AS number;
+                INSERT INTO "WorkEditions" ("Id", "WorkId") SELECT "Id", "Id" FROM "Works" WHERE "Id" > 1000;
+                INSERT INTO "WorkVersions" ("Id", "WorkId", "WorkEditionId") SELECT "Id", "Id", "Id" FROM "Works" WHERE "Id" > 1000;
+                INSERT INTO "MediaAssets" ("Id", "WorkId", "WorkVersionId", "MediaAssetTypeId") SELECT "Id", "Id", "Id", 3 FROM "Works" WHERE "Id" > 1000;
+                INSERT INTO "StoredFiles" ("LibraryRootId", "RelativePath", "SizeBytes", "ModifiedAt", "MediaAssetId", "LastSeenAt", "ReleaseLanguages", "ReleaseName")
+                SELECT 1, 'book' || "Id" || '.epub', 1, now(), "Id", now(), '{de}', 'Book (DE) (epub)' FROM "Works" WHERE "Id" > 1000;
+                """);
+            await new DatabaseBaseline(cs, options, tools).StartAsync(CancellationToken.None);
+
+            var perHour = new int[24];
+            var perCycle = new int[720];
+            var taken = await DueOverADayAsync(cs, limit: 5, markSearched: true, perHour, perCycle);
+
+            // Every book is searched once in the day, a batch (5) at most in a cycle; about 13 an hour (300 / 24) once the day is going, the first hour a few more (the books whose hour
+            // it is, at most 30): never all of them in the first cycles.
+            Assert.AreEqual(300, taken.Count);
+            Assert.IsLessThanOrEqualTo(5, perCycle.Max());
+            Assert.IsLessThanOrEqualTo(30, perHour[0], string.Join(",", perHour));
+            Assert.IsLessThanOrEqualTo(20, perHour.Skip(1).Max(), string.Join(",", perHour));
+            Assert.IsLessThanOrEqualTo(30, perCycle.Take(30).Sum());
+        }
+
+        [TestMethod]
+        public async Task LanguageChains_UpgradeKeepsWhatEveryBookTargetFollowed_StripsLanguagesFromProfiles_AndMergesProfilesThatOnlyHadLanguages()
+        {
+            using var folder = new LibraryTests.TemporaryDirectory();
+            var cs = TestPostgres.ResolveConnectionString(nameof(LanguageChains_UpgradeKeepsWhatEveryBookTargetFollowed_StripsLanguagesFromProfiles_AndMergesProfilesThatOnlyHadLanguages));
+            var options = Backup(folder.Path, out _);
+            var tools = Tools(cs, FakeDump(folder.Path, true), null);
+            await new DatabaseBaseline(cs, migrations: DatabaseBaseline.Migrations.Where(migration => migration.Version < 45).ToArray()).StartAsync(CancellationToken.None);
+
+            // The book default, a profile that only had a language ("Deutsch": German, original as fallback), one that also differs in quality ("Englisch": English, no fallback, upgrades),
+            // and targets: 801 on Deutsch, 802 on Englisch, 803 requested in Indonesian on the default, 804 nobody asked for, 805 on Deutsch with a request in Indonesian.
+            await ExecuteAsync(cs,
+                """
+                INSERT INTO "UiLocales" ("Id", "Locale", "Name") VALUES (91, 'de-DE', 'Deutsch'), (92, 'id', 'Indonesia') ON CONFLICT ("Locale") DO NOTHING;
+                INSERT INTO "Accounts" ("Id", "Username", "Email", "DisplayName", "AccountRoleTypeId") VALUES (41, 'chain_owner', 'chain@example.test', 'Owner', 1);
+                INSERT INTO "Profiles" ("Id", "OwnerAccountId", "DisplayName", "UiLocaleId") VALUES
+                    (301, 41, 'Deutsch', (SELECT "Id" FROM "UiLocales" WHERE "Locale" = 'de-DE')), (302, 41, 'Indonesia', (SELECT "Id" FROM "UiLocales" WHERE "Locale" = 'id'));
+                INSERT INTO "AccountProfiles" ("AccountId", "ProfileId") VALUES (41, 301), (41, 302);
+                INSERT INTO "AcquisitionProfiles" ("Id", "Name", "Definition")
+                SELECT 20, 'Deutsch', "Definition" || '{"LanguageOrder":["de"],"LanguageFallback":"Original"}'::jsonb FROM "AcquisitionProfiles" WHERE "Id" = (SELECT "AcquisitionProfileId" FROM "AcquisitionProfileDefaults" WHERE "AcquisitionMediaKindId" = 4)
+                UNION ALL
+                SELECT 21, 'Englisch', "Definition" || '{"LanguageOrder":["en"],"LanguageFallback":"None","UpgradeAllowed":true}'::jsonb FROM "AcquisitionProfiles" WHERE "Id" = (SELECT "AcquisitionProfileId" FROM "AcquisitionProfileDefaults" WHERE "AcquisitionMediaKindId" = 4);
+                INSERT INTO "AcquisitionProfileMediaKinds" ("AcquisitionProfileId", "AcquisitionMediaKindId") VALUES (20, 4), (21, 4);
+                INSERT INTO "RequestRules" ("Name", "PeriodDays", "IsAutomaticApproval", "AcquisitionProfileIds") VALUES ('Languages', 30, TRUE, '{20,21}');
+                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle") VALUES (701, 3, 'On Deutsch'), (702, 3, 'On Englisch'), (703, 3, 'Requested'), (704, 3, 'Monitored'), (705, 3, 'Deutsch and requested'), (706, 3, 'Requested in Indonesian by a German profile');
+                INSERT INTO "WantedItems" ("Id", "WorkId", "AcquisitionProfileId") VALUES (801, 701, 20), (802, 702, 21), (803, 703, NULL), (804, 704, NULL), (805, 705, 20), (806, 706, NULL);
+                INSERT INTO "AcquisitionRequests" ("Id", "WorkId", "RequestedByProfileId", "RequestedByAccountId", "UiLocaleId", "AcquisitionRequestStatusTypeId", "DecidedByAccountId", "DecidedAt", "AcquisitionProfileId") VALUES
+                    (901, 703, 302, 41, (SELECT "Id" FROM "UiLocales" WHERE "Locale" = 'id'), 2, 41, now(), NULL),
+                    (902, 705, 302, 41, (SELECT "Id" FROM "UiLocales" WHERE "Locale" = 'id'), 2, 41, now(), 20),
+                    (903, 706, 301, 41, (SELECT "Id" FROM "UiLocales" WHERE "Locale" = 'id'), 2, 41, now(), NULL);
+                INSERT INTO "RequestTargets" ("AcquisitionRequestId", "WantedItemId") VALUES (901, 803), (902, 805), (903, 806);
+                UPDATE "Profiles" SET "FirstContentLanguage" = 'de', "SecondContentLanguage" = 'en' WHERE "Id" = 301;
+                """);
+            await new DatabaseBaseline(cs, options, tools).StartAsync(CancellationToken.None);
+
+            // The profile that only had languages is gone and its targets, requests and rule follow the default; the other keeps its quality (upgrades) without languages.
+            Assert.AreEqual(0L, await ScalarAsync(cs, """SELECT count(*) FROM "AcquisitionProfiles" WHERE "Id" = 20"""));
+            Assert.AreEqual(1L, await ScalarAsync(cs, """SELECT count(*) FROM "AcquisitionProfiles" WHERE "Id" = 21 AND "Definition" ->> 'UpgradeAllowed' = 'true' AND NOT ("Definition" ? 'LanguageOrder') AND NOT ("Definition" ? 'LanguageFallback')"""));
+            Assert.AreEqual("801:- 802:21 805:-", (string)(await ScalarAsync(cs, """SELECT string_agg("Id" || ':' || coalesce("AcquisitionProfileId"::text, '-'), ' ' ORDER BY "Id") FROM "WantedItems" WHERE "Id" IN (801, 802, 805)"""))!);
+            Assert.AreEqual("{21}", (string)(await ScalarAsync(cs, """SELECT "AcquisitionProfileIds"::text FROM "RequestRules" WHERE "Name" = 'Languages'"""))!);
+            Assert.AreEqual(0L, await ScalarAsync(cs, """SELECT count(*) FROM "AcquisitionRequests" WHERE "AcquisitionProfileId" IS NOT NULL"""));
+
+            // What each target followed is written onto it: German with the original (801), English without the original (802); 805 keeps German and original too although a request asks for Indonesian.
+            Assert.AreEqual("801:de::t 802:en::f 805:de::t", (string)(await ScalarAsync(cs,
+                """SELECT string_agg("WantedItemId" || ':' || "FirstLanguage" || ':' || coalesce("SecondLanguage", '') || ':' || CASE WHEN "UsesOriginal" THEN 't' ELSE 'f' END, ' ' ORDER BY "WantedItemId") FROM "WantedItemLanguageChains" """))!);
+
+            // The chains of a target: its own, else its requests' (the requester's chain), else every profile's first language (the default setting).
+            Assert.AreEqual("801:de 802:en 803:id 804:de,id 805:de 806:id", (string)(await ScalarAsync(cs,
+                """SELECT string_agg("WantedItemId" || ':' || languages, ' ' ORDER BY "WantedItemId") FROM (SELECT "WantedItemId", string_agg("FirstLanguage", ',' ORDER BY "Position") AS languages FROM "WantedItemChains" GROUP BY "WantedItemId") AS chains"""))!);
+
+            // The language a request was made in survives, also where the requester's first content language is another (German): that request has no second language.
+            Assert.AreEqual("id::t", (string)(await ScalarAsync(cs, """SELECT "FirstLanguage" || ':' || coalesce("SecondLanguage", '') || ':' || CASE WHEN "UsesOriginal" THEN 't' ELSE 'f' END FROM "WantedItemChains" WHERE "WantedItemId" = 806"""))!);
+
+            // A fixed chain for titles nobody requested, and a chain of the requester that changed.
+            await ExecuteAsync(cs, """UPDATE "InstanceSettings" SET "MonitoredLanguageModeId" = 2, "MonitoredFirstLanguage" = 'de', "MonitoredSecondLanguage" = 'en'; UPDATE "Profiles" SET "FirstContentLanguage" = 'id', "SecondContentLanguage" = 'en', "LanguageUsesOriginal" = FALSE WHERE "Id" = 302;""");
+            Assert.AreEqual("de:en:t", (string)(await ScalarAsync(cs, """SELECT "FirstLanguage" || ':' || "SecondLanguage" || ':' || CASE WHEN "UsesOriginal" THEN 't' ELSE 'f' END FROM "WantedItemChains" WHERE "WantedItemId" = 804"""))!);
+            Assert.AreEqual("id:en:f", (string)(await ScalarAsync(cs, """SELECT "FirstLanguage" || ':' || "SecondLanguage" || ':' || CASE WHEN "UsesOriginal" THEN 't' ELSE 'f' END FROM "WantedItemChains" WHERE "WantedItemId" = 803"""))!);
         }
 
         [TestMethod]

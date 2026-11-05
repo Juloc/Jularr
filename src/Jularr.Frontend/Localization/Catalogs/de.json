@@ -318,6 +318,22 @@
   "jobs.about.searchQueue": ["Searches queued library selections and reassesses upgrades using current profiles.","Durchsucht vorgemerkte Bibliothekstitel und bewertet Upgrades nach aktuellen Profilen."],
   "profile.field.firstContentLanguage": ["First content language", "Erste Inhaltssprache"],
   "profile.field.secondContentLanguage": ["Second content language", "Zweite Inhaltssprache"],
+  "profile.field.languageUsesOriginal": ["Last, the original language", "Zuletzt die Originalsprache"],
+  "work.languages.title": ["Languages", "Sprachen"],
+  "work.languages.first": ["First language", "Erste Sprache"],
+  "work.languages.second": ["Second language", "Zweite Sprache"],
+  "work.languages.follow": ["As requested, or as set for monitored titles", "Wie angefragt bzw. wie für überwachte Titel eingestellt"],
+  "work.languages.none": ["None", "Keine"],
+  "work.languages.wanted": ["Wanted in", "Gewünscht in"],
+  "work.languages.missing": ["Still missing", "Noch fehlend"],
+  "work.languages.save": ["Save languages", "Sprachen speichern"],
+  "profile.languages.moved": ["A quality profile holds qualities only. The languages are chosen by each person in their profile settings; for titles nobody requested they follow the setting under Languages for monitored titles on the profiles page.", "Ein Qualitätsprofil enthält nur Qualitäten. Die Sprachen wählt jede Person in ihren Profil-Einstellungen; für Titel ohne Anfrage gilt die Einstellung „Sprachen für überwachte Titel“ auf der Profilseite."],
+  "arr.monitoredLanguages.title": ["Languages for monitored titles", "Sprachen für überwachte Titel"],
+  "arr.monitoredLanguages.info": ["Titles nobody requested (monitored or imported by an administrator) are wanted in these languages. A book is fetched once per language, each on its own.", "Titel, die niemand angefragt hat (überwacht oder von einem Admin importiert), werden in diesen Sprachen gewünscht. Ein Buch wird je Sprache einmal geholt, jede Sprache für sich."],
+  "arr.monitoredLanguages.profiles": ["First language of every profile", "Erste Sprache aller Profile"],
+  "arr.monitoredLanguages.mode": ["Languages", "Sprachen"],
+  "arr.monitoredLanguages.mode.AllProfiles": ["All profile languages", "Alle Profilsprachen"],
+  "arr.monitoredLanguages.mode.FixedChain": ["Fixed language chain", "Feste Sprachkette"],
   "profile.contentLanguage.none": ["No preference", "Keine Präferenz"],
   "hint.ProfileFields.FirstContentLanguage.info": ["Prefer this content language; it applies to text, audio and subtitle availability, independently of the interface language.", "Diese Inhaltssprache wird bevorzugt; sie gilt für die Verfügbarkeit von Text, Ton und Untertiteln, unabhängig von der Menüsprache."],
   "hint.ProfileFields.SecondContentLanguage.info": ["This content language is also accepted; it needs a first content language.", "Diese Inhaltssprache wird ebenfalls akzeptiert; sie braucht eine erste Inhaltssprache."],
@@ -8902,6 +8918,10 @@
   "wanted.selected": [
    "{0} selected",
    "{0} ausgewählt"
+  ],
+  "wanted.edition": [
+   "{0} edition",
+   "Ausgabe: {0}"
   ],
   "wanted.priority": [
    "Priority",

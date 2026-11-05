@@ -18,7 +18,7 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
     // default of), the custom formats once for every type with the release profiles, release groups and tags as sections under them, and the quality sizes as sliders.
     // A profile has its own page; adding is a dialog the address opens, settings of a card are inputs saved by the page's pill.
     public sealed partial class ProfilesModel(
-        ReadAcquisitionProfilesV1 profiles,
+        ReadAcquisitionProfilesV1 profiles, ReadMonitoredLanguagesV1 readMonitored, SaveMonitoredLanguagesV1 saveMonitored,
         ReadCustomFormatsV1 formats, ReadCustomFormatV1 format, SaveCustomFormatV1 saveFormat, DeleteCustomFormatV1 deleteFormat, ImportCustomFormatsV1 importFormats,
         ReadQualityDefinitionsV1 sizes, SaveQualityDefinitionsV1 saveSizes,
         ReadReleaseProfilesV1 releases, ReadReleaseProfileV1 release, SaveReleaseProfileV1 saveRelease, DeleteReleaseProfileV1 deleteRelease,
@@ -60,6 +60,8 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
         private PageResult<AcquisitionTagDetailsV1>? _tagPage;
         private PageResult<AcquisitionConnectionDetailsV1>? _indexerPage;
         private IReadOnlyList<AcquisitionProfileDetailsV1> _profiles = [];
+        private MonitoredLanguagesV1? _monitored;
+        private SaveMonitoredLanguagesDataV1? _monitoredInput;
         private IReadOnlyList<AcquisitionMediaKind> _kinds = [];
         private PageResult<CustomFormatDetailsV1>? _formats;
         private PageResult<ReleaseProfileDetailsV1>? _releases;
@@ -124,6 +126,7 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
                     item.Name);
             }).ToList();
             page.Content.Add(new ListPanel("admin.profiles.title", columns, rows, empty).Modifier("profiles-list"));
+            if (_monitored is not null && !SetupWizard.IsActive(Request)) page.Content.Add(MonitoredLanguages(_monitored));
 
             // A new profile starts with the media type it is for; the type decides its list of qualities.
             if (NewItem == ProfileItem)
@@ -134,6 +137,30 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
             }
 
             page.Content.Add(new ActionDock(assets, "arr.actions", [AddAction("profile.new", ProfileItem)]));
+        }
+
+        // The languages of the titles nobody requested: the first language of every profile, or one chain.
+        private UiSection MonitoredLanguages(MonitoredLanguagesV1 current)
+        {
+            var input = _monitoredInput ?? new SaveMonitoredLanguagesDataV1(current.ModeId, current.FirstLanguage, current.SecondLanguage, current.UsesOriginal);
+            IEnumerable<SelectOption> Languages(string emptyKey) => [new SelectOption("", texts[emptyKey]), .. Pages.Admin.Work.WorkLanguages.Choices.Select(code => new SelectOption(code, Pages.Admin.Work.WorkLanguages.Name(code)))];
+            var form = new Form<SaveMonitoredLanguagesDataV1>(fields =>
+            {
+                fields.Select(data => data.ModeId, "arr.monitoredLanguages.mode", Enum.GetValues<MonitoredLanguageMode>().Select(mode => new SelectOption(((int)mode).ToString(CultureInfo.InvariantCulture), texts["arr.monitoredLanguages.mode." + mode])));
+                fields.Select(data => data.FirstLanguage, "work.languages.first", Languages("work.languages.none"));
+                fields.Select(data => data.SecondLanguage, "work.languages.second", Languages("work.languages.none"));
+                fields.Toggle(data => data.UsesOriginal, "profile.field.languageUsesOriginal");
+                fields.Submit("common.save");
+            }, Address("MonitoredLanguages"), Token, input, _monitoredInput is null ? null : FormError);
+            var profileLanguages = current.Languages.Length == 0 ? "–" : string.Join(", ", current.Languages.Select(Pages.Admin.Work.WorkLanguages.Name));
+            return new UiSection("arr.monitoredLanguages.title", [new P(new Text("arr.monitoredLanguages.info")), new P(new Text("arr.monitoredLanguages.profiles"), new ValueText(": " + profileLanguages)), form]);
+        }
+
+        public async Task<IActionResult> OnPostMonitoredLanguagesAsync(MonitoredLanguageMode modeId, string? firstLanguage, string? secondLanguage, bool usesOriginal)
+        {
+            _monitoredInput = new SaveMonitoredLanguagesDataV1(modeId, string.IsNullOrWhiteSpace(firstLanguage) ? null : firstLanguage, string.IsNullOrWhiteSpace(secondLanguage) ? null : secondLanguage, usesOriginal);
+            await saveMonitored.ExecuteAsync<UpdateResult>(new MonitoredLanguagesParametersV1(), _monitoredInput, HttpContext.RequestAborted);
+            return LocalRedirect(Address());
         }
 
         // The media types as small chips, as the media-type bar names them; a default is tinted.
@@ -195,6 +222,7 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
             {
                 case DownloadPages.Profiles:
                     _profiles = await profiles.ExecuteAsync<BaseDataList<AcquisitionProfileDetailsV1>>(new ReadAcquisitionProfilesParametersV1(), cancellation);
+                    _monitored = await readMonitored.ExecuteAsync<MonitoredLanguagesV1>(new MonitoredLanguagesParametersV1(), cancellation);
                     if (NewItem == ProfileItem)
                     {
                         // The types the instance offers: a type that is switched off has no new profiles.

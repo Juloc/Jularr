@@ -151,8 +151,9 @@ namespace Jularr.Backend.Data.Admin.Wanted.V1
     public sealed class WantedDetailsV1 : BaseResponse
     {
         public WantedDetailsV1(long id, long workId, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string canonicalTitle, string? platformName, bool isPaused, WantedPriorityType wantedPriorityTypeId, long version, string[] requestedLanguages, bool hasMedia,
-            bool isDownloading, int? progressPercent, DateTime? lastSearchedAt, string? outcomeKey, long? acquisitionProfileId, long? libraryRootId, bool monitorsNewUnits, bool hasUnits, long[]? tagIds = null)
+            bool isDownloading, int? progressPercent, DateTime? lastSearchedAt, string? outcomeKey, long? acquisitionProfileId, long? libraryRootId, bool monitorsNewUnits, bool hasUnits, long[]? tagIds = null, string? bookLanguage = null)
         {
+            BookLanguage = bookLanguage;
             TagIds = tagIds ?? [];
             HasUnits = hasUnits;
             MonitorsNewUnits = monitorsNewUnits;
@@ -206,6 +207,10 @@ namespace Jularr.Backend.Data.Admin.Wanted.V1
 
         [DataField(typeof(WantedItemFields), nameof(WantedItemFields.RequestedLanguages))]
         public string[] RequestedLanguages { get; }
+
+        // The entry of a book is one language of it ("de"), with the status of that language; none for other media and for the title as a whole.
+        [DataField(typeof(WantedItemFields), nameof(WantedItemFields.BookLanguage), false)]
+        public string? BookLanguage { get; }
 
         [DataField(typeof(WantedItemFields), nameof(WantedItemFields.HasMedia))]
         public bool HasMedia { get; }

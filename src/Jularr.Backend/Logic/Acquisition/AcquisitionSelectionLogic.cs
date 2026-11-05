@@ -5,6 +5,7 @@ using System.Runtime.CompilerServices;
 using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Logic.Acquisition;
+using Jularr.Backend.Logic.Media;
 using Jularr.Integrations.Data.Newznab;
 
 namespace Jularr.Backend.Logic.Acquisition
@@ -32,11 +33,14 @@ namespace Jularr.Backend.Logic.Acquisition
         {
             var definition = JsonSerializer.Deserialize<AcquisitionProfileDefinition>(target.Definition!, DefinitionOptions)
                 ?? throw new InvalidOperationException("The acquisition profile is invalid.");
+            var chain = target.MediaTypeId == MediaType.Book && target.MediaSubtypeId != MediaSubtype.Manga ? Chain(target) : ([], true);
             var profile = new QualityProfile(target.AcquisitionProfileId!.Value.ToString(CultureInfo.InvariantCulture), target.ProfileName!, definition.AllowedQualities,
                 definition.QualityOrder, definition.UpgradeAllowed, definition.UpgradeCutoffQuality, definition.MinimumSizeBytes, definition.MaximumSizeBytes)
             {
-                LanguageOrder = definition.LanguageOrder.Length > 0 ? definition.LanguageOrder : target.RequestedLocales,
-                LanguageFallback = definition.LanguageFallback,
+                // A book is wanted once per language, each with its chain (first, second, the original): only the chains of the languages no file covers yet are asked for.
+                LanguageOrder = chain.Order.Length > 0 ? chain.Order : definition.LanguageOrder.Length > 0 ? definition.LanguageOrder : target.RequestedLocales,
+                LanguageFallback = chain.Order.Length > 0 ? chain.UsesOriginal ? LanguageFallbackType.Original : LanguageFallbackType.None : definition.LanguageFallback,
+                WantedLanguages = target.WantedLanguages,
                 IsMovie = target.MediaTypeId == MediaType.Movie,
                 IsBook = target.MediaTypeId == MediaType.Book && target.MediaSubtypeId != MediaSubtype.Manga,
                 Formats = Formats(target.Formats, definition.FormatScores),
@@ -172,7 +176,8 @@ namespace Jularr.Backend.Logic.Acquisition
         public static SelectionResult Select(QualityProfile profile, WantedTargetData target, AcquisitionKind kind, UnitScope? scope, IEnumerable<ReleaseOffer> offers, string? focusLanguage = null,
             bool automatic = true)
         {
-            var installed = scope is null || scope.UnitNumber is not null ? Installed(profile, target, scope?.Unit.Id) : null;
+            // A language no file covers is not an upgrade of the files in the others.
+            var installed = target.MissingLanguages.Length == 0 && (scope is null || scope.UnitNumber is not null) ? Installed(profile, target, scope?.Unit.Id) : null;
             // Failed and blocked releases stay visible but are never taken.
             var blocked = target.ReleaseIdentities.ToHashSet(StringComparer.Ordinal);
             return ReleaseSelectionEngine.Select(profile, [.. offers.Select(offer => kind switch
@@ -211,6 +216,44 @@ namespace Jularr.Backend.Logic.Acquisition
                     InstalledLanguages = installed?.Languages
                 };
             }
+        }
+
+        // The chains of a target as languages: "first|second|original" entries.
+        public static (string First, string? Second, bool UsesOriginal)[] Chains(WantedTargetData target) =>
+            [.. target.LanguageChains.Select(entry => entry.Split('|')).Where(parts => parts.Length == 3 && parts[0].Length > 0)
+                .Select(parts => (parts[0], parts[1].Length > 0 ? parts[1] : null, parts[2] == "1"))];
+
+        // The languages a search asks for in order, and whether the original is allowed: the first and the second language of every chain whose first language is still missing
+        // (every chain once a file covers them all); empty for a target without chains.
+        public static (string[] Order, bool UsesOriginal) Chain(WantedTargetData target)
+        {
+            var chains = Chains(target);
+            var open = target.MissingLanguages.Length == 0 ? chains : [.. chains.Where(item => target.MissingLanguages.Contains(item.First, StringComparer.OrdinalIgnoreCase))];
+            return ([.. open.Select(item => item.First).Concat(open.Select(item => item.Second).OfType<string>()).Distinct(StringComparer.OrdinalIgnoreCase)], open.Any(item => item.UsesOriginal));
+        }
+
+        // The language a grab of a book is for: the first missing language the release carries, else the first missing one when the release names none; no language for other media
+        // and for a release in a language nobody is missing.
+        public static string? TargetLanguage(WantedTargetData target, IReadOnlyList<string> languages)
+        {
+            if (target.MissingLanguages.Length == 0)
+            {
+                return null;
+            }
+
+            // The release is for the missing language it carries; one in the second language or in the original language of a chain stands in for that chain's first language
+            // until a release in it comes (the first language of a chain comes before the others, in the order of the missing languages).
+            var named = languages.Select(language => LanguageCodes.ToTwoLetter(language) ?? language.ToLowerInvariant()).ToArray();
+            if (target.MissingLanguages.FirstOrDefault(missing => named.Contains(missing, StringComparer.OrdinalIgnoreCase)) is { } direct)
+            {
+                return direct;
+            }
+
+            var chains = Chains(target);
+            var standIn = target.MissingLanguages.FirstOrDefault(missing => chains.Any(item => string.Equals(item.First, missing, StringComparison.OrdinalIgnoreCase)
+                && (item.Second is { } second && named.Contains(second, StringComparer.OrdinalIgnoreCase)
+                    || item.UsesOriginal && target.OriginalLanguage is { } original && named.Contains(original, StringComparer.OrdinalIgnoreCase))));
+            return standIn ?? (named.Length == 0 ? target.MissingLanguages[0] : null);
         }
 
         // "language|title" pairs of the target as pairs.

@@ -4,7 +4,9 @@ using AdminMedia = Jularr.Backend.Data.Admin.Media.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Enums.Playback;
+using Jularr.Backend.Data.Public.Authentication.V1;
 using Jularr.Backend.Data.Public.Localization.V1;
+using Jularr.Backend.Data.User.Profile.V1;
 using Jularr.Backend.Data.User.AniList.V1;
 using Jularr.Backend.Data.User.Request.V1;
 using Jularr.Backend.Data.User.Library.V1;
@@ -17,7 +19,9 @@ using Jularr.Backend.Service.User.Media.V1;
 using Jularr.Backend.Service.User.Collection.V1;
 using Jularr.Backend.Service.User.Discover.V1;
 using Jularr.Backend.Service.User.Request.V1;
+using Jularr.Backend.Service.Public.Authentication.V1;
 using Jularr.Backend.Service.Public.Localization.V1;
+using Jularr.Backend.Service.User.Profile.V1;
 using Jularr.Frontend.Framework;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Mvc;
@@ -31,7 +35,7 @@ namespace Jularr.Frontend.Pages.User.Details
         ReadUiLocalesV1 locales, ReadWorkPlatformsV1 readPlatforms, ReadRequestProfilesV1 readRequestProfiles, ReadWorkCollectionsV1 readCollections, AddCollectionWorkV1 addToCollection,
         RemoveCollectionWorkV1 removeFromCollection, ReadWorkSeasonsV1 readSeasons, ReadWorkEpisodesV1 readEpisodes, ReadWorkCreditsV1 readCredits,
         ReadWorkRecommendationsV1 readRecommendations, ReadWorkRelationsV1 readRelations, AdminServices.CreateWorkRelationV1 createRelation, AdminServices.DeleteWorkRelationV1 deleteRelation, SuggestDiscoverV1 suggest,
-        UpdateWorkProgressV1 updateProgress, ReadWorkAniListV1 readAniList, WithdrawRequestV1 withdraw, IAntiforgery antiforgery, FrontendAssets assets, UiText texts) : JularrPage
+        UpdateWorkProgressV1 updateProgress, ReadWorkAniListV1 readAniList, WithdrawRequestV1 withdraw, ReadAuthenticationV1 authentication, ReadProfileV1 readProfile, IAntiforgery antiforgery, FrontendAssets assets, UiText texts) : JularrPage
     {
         private WorkAniListV1? _aniList;
         private IReadOnlyList<DiscoverItemV1> _recommendations = [];
@@ -43,6 +47,7 @@ namespace Jularr.Frontend.Pages.User.Details
         private IReadOnlyList<WorkCollectionV1> _collections = [];
         private PageResult<WorkAvailabilityV1>? _availability;
         private BaseDataList<UiLocaleDetailsV1>? _locales;
+        private string? _contentLanguage;
         private BaseDataList<GamePlatformV1>? _platforms;
         private BaseDataList<RequestProfileOptionV1>? _requestProfiles;
         private CreateRequestDataV1? _requestInput;
@@ -265,7 +270,13 @@ namespace Jularr.Frontend.Pages.User.Details
             var recommendationsTask = ReadRecommendationsAsync(token);
             var localesTask = ReadWhenAsync(texts.CanRequest(), () => locales.ExecuteAsync<BaseDataList<UiLocaleDetailsV1>>(cancellationToken: token));
             var requestProfilesTask = ReadWhenAsync(texts.CanRequest(), () => readRequestProfiles.ExecuteAsync<BaseDataList<RequestProfileOptionV1>>(new CreateRequestParametersV1(Id), token));
-            Task[] reads = [workTask, availabilityTask, editionsTask, creditsTask, relationsTask, collectionsTask, recommendationsTask, localesTask, requestProfilesTask];
+            // A person requests in their first content language unless they choose another.
+            var contentLanguageTask = ReadWhenAsync(texts.CanRequest(), async () =>
+            {
+                var signedIn = await authentication.ExecuteAsync<AuthenticationResultV1>(cancellationToken: token);
+                return signedIn.ProfileId is { } profileId ? (await readProfile.ExecuteAsync<ReadProfileResultV1>(new ReadProfileParametersV1(profileId), token)).FirstContentLanguage ?? "" : "";
+            });
+            Task[] reads = [workTask, availabilityTask, editionsTask, creditsTask, relationsTask, collectionsTask, recommendationsTask, localesTask, requestProfilesTask, contentLanguageTask];
             try
             {
                 _work = await workTask;
@@ -296,6 +307,7 @@ namespace Jularr.Frontend.Pages.User.Details
                 _collections = await collectionsTask ?? _collections;
                 _platforms = platformsTask is null ? null : await platformsTask;
                 _locales = await localesTask;
+                _contentLanguage = await contentLanguageTask;
                 _requestProfiles = await requestProfilesTask;
                 _aniList = await aniListTask;
             }

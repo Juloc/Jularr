@@ -254,7 +254,7 @@ namespace Jularr.Backend.Tests
             }
 
             // The migrations that change the account and profile tables, for fixtures that install only the account schema.
-            public static IReadOnlyList<DatabaseMigration> AccountMigrations => [.. DatabaseBaseline.Migrations.Where(migration => migration.Name is "0009_pwa_main_profile_accent" or "0011_profile_content_languages")];
+            public static IReadOnlyList<DatabaseMigration> AccountMigrations => [.. DatabaseBaseline.Migrations.Where(migration => migration.Name is "0009_pwa_main_profile_accent" or "0011_profile_content_languages" or "0045_profile_language_original")];
 
             public static async Task<ProfileFixture> CreateAsync(bool appliesAccountMigrations = true)
             {
