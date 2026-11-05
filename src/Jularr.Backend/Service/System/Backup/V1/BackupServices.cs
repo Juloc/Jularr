@@ -36,7 +36,21 @@ namespace Jularr.Backend.Service.System.Backup.V1
         protected override async Task<IServiceOutput> OnExecute()
         {
             var root = _options.Path;
-            var settings = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadWorkerSettingsAsync(ct), CancellationToken);
+            var (settings, request) = await Context.ExecuteBatchAsync(async (ctx, ct) =>
+            {
+                var sql = new SqlStatement();
+                sql.Statement =
+                    """
+                    SELECT
+                        operation."RequestedByAccountId" IS NOT NULL AS "IsManual"
+                    FROM
+                        "Operations" AS operation
+                    WHERE
+                        operation."Id" = @OperationId;
+                    """;
+                sql.Parameters.Add(Parameters);
+                return (await ctx.ReadWorkerSettingsAsync(ct), await ctx.ReadSql.ReadRequiredAsync<BackupRequestData>(sql, ct));
+            }, CancellationToken);
             if (!_tools.CanBackUp)
             {
                 throw new ServiceUnavailableException("backup_unavailable");
@@ -44,16 +58,21 @@ namespace Jularr.Backend.Service.System.Backup.V1
 
             try
             {
-                await BackupFiles.CreateAsync(_options, _tools, _time.GetUtcNow().UtcDateTime, DatabaseBaseline.CurrentVersion, BackupFiles.SchemaFingerprint, CancellationToken);
+                await BackupFiles.CreateAsync(_options, _tools, _time.GetUtcNow().UtcDateTime, DatabaseBaseline.CurrentVersion, BackupFiles.SchemaFingerprint,
+                    request.IsManual ? BackupKindType.Manual : BackupKindType.Automatic, CancellationToken);
             }
             catch (PostgresToolException exception)
             {
                 throw new ServiceUnavailableException(exception.Code, exception);
             }
 
-            // The backup counts even when pruning fails.
+            // The backup counts even when pruning fails; a manual one leaves the others as they are.
             await Context.ExecuteBatchAsync((ctx, ct) => ctx.UpdateOperationAsync(new OperationProgressData(Parameters.OperationId, 1, OperationStatusType.Completed, null), ct), CancellationToken);
-            BackupFiles.Prune(root, settings.BackupKeep);
+            if (!request.IsManual)
+            {
+                BackupFiles.Prune(root, settings.BackupKeep);
+            }
+
             return new UpdateResult(true);
         }
     }

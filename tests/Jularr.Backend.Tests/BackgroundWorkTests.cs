@@ -81,7 +81,7 @@ namespace Jularr.Backend.Tests
             var jobs = host.Services.GetRequiredService<WorkerJobs>();
             using var read = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/instance/settings");
             var settings = (await read.Content.ReadFromJsonAsync<InstanceSettingsDetailsV1>())!;
-            Assert.AreEqual((24, 7, 30, 2), (settings.BackupIntervalHours, settings.BackupKeep, settings.ProviderSyncIntervalMinutes, settings.WantedSearchIntervalMinutes));
+            Assert.AreEqual((24, 3, 30, 2), (settings.BackupIntervalHours, settings.BackupKeep, settings.ProviderSyncIntervalMinutes, settings.WantedSearchIntervalMinutes));
 
             // Out-of-range values are refused.
             foreach (var invalid in new[] { new UpdateInstanceSettingsDataV1("Jularr", settings.UiLocaleId, 1, backupKeep: 0), new UpdateInstanceSettingsDataV1("Jularr", settings.UiLocaleId, 1, providerSyncIntervalMinutes: 4),
@@ -93,9 +93,9 @@ namespace Jularr.Backend.Tests
 
             // Saved settings are kept, shown on the Jobs rows and followed by the registry at once.
             using var saved = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/instance/settings",
-                new UpdateInstanceSettingsDataV1("Jularr", settings.UiLocaleId, 1, backupIntervalHours: 0, backupKeep: 3, providerSyncIntervalMinutes: 45, wantedSearchIntervalMinutes: 5));
+                new UpdateInstanceSettingsDataV1("Jularr", settings.UiLocaleId, 1, backupIntervalHours: 0, backupKeep: 5, providerSyncIntervalMinutes: 45, wantedSearchIntervalMinutes: 5));
             Assert.AreEqual(HttpStatusCode.OK, saved.StatusCode, await saved.Content.ReadAsStringAsync());
-            Assert.AreEqual((short)3, await host.ScalarAsync("SELECT \"BackupKeep\" FROM \"InstanceSettings\""));
+            Assert.AreEqual((short)5, await host.ScalarAsync("SELECT \"BackupKeep\" FROM \"InstanceSettings\""));
             Assert.AreEqual(TimeSpan.FromMinutes(45), jobs.Interval("providerSync"));
             using var listed = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/jobs");
             var rows = (await listed.Content.ReadFromJsonAsync<BaseDataList<WorkerJobV1>>())!;
