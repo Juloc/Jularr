@@ -490,12 +490,12 @@ namespace Jularr.Backend.Tests
             // (German, the first profile); 606's file was taken for Indonesian, so German is open; the manga has no languages.
             Assert.AreEqual("601:de+ 601:id- 602:de+ 602:id+ 603:id- 604:de- 604:id- 605:de+ 605:id- 606:de- 606:id+", (string)(await ScalarAsync(cs, Languages))!);
 
-            // Every target that lacks a language is searched by the due search, once in the day; the complete one and the manga never.
+            // Every target that lacks a language is taken by the due search; the complete one and the manga never.
             var due = await DueOverADayAsync(cs, limit: 100, markSearched: false);
             Assert.AreEqual("701 703 704 705 706", string.Join(' ', due.Keys.Where(id => id < 707).Order()));
         }
 
-        // What the due search takes in every cycle (every two minutes) of one day, with a batch of `limit`; a target taken is searched, so it waits a day.
+        // What the due search takes in every cycle (every two minutes) of one day, with a batch of `limit`; a target taken is searched, so it waits for its rhythm (a week).
         private static async Task<Dictionary<long, DateTime>> DueOverADayAsync(string cs, int limit, bool markSearched, int[]? perHour = null, int[]? perCycle = null)
         {
             var day = new DateTime(2026, 11, 6, 0, 0, 0, DateTimeKind.Utc);
@@ -515,7 +515,7 @@ namespace Jularr.Backend.Tests
                     if (perHour is not null) perHour[minute / 60]++;
                     if (markSearched)
                     {
-                        await ExecuteAsync(cs, $"UPDATE \"WantedItems\" SET \"LastSearchedAt\" = '{now:O}', \"NextSearchAt\" = '{now.AddHours(24):O}' WHERE \"Id\" = {item.WantedItemId}");
+                        await ExecuteAsync(cs, $"UPDATE \"WantedItems\" SET \"LastSearchedAt\" = '{now:O}', \"PeriodicSearchAt\" = '{now.AddDays(7):O}' WHERE \"Id\" = {item.WantedItemId}");
                     }
                 }
             }
@@ -524,15 +524,15 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
-        public async Task BookLanguages_DueSearch_SpreadsNewlyDueLanguagesOverTheDay_AndTakesAtMostABatchPerCycle()
+        public async Task BookLanguages_AfterTheFeedUpdate_BooksSearchedBeforeWaitForTheRhythmOfSourcesWithoutAFeed_ABatchPerCycle()
         {
             using var folder = new LibraryTests.TemporaryDirectory();
-            var cs = TestPostgres.ResolveConnectionString(nameof(BookLanguages_DueSearch_SpreadsNewlyDueLanguagesOverTheDay_AndTakesAtMostABatchPerCycle));
+            var cs = TestPostgres.ResolveConnectionString(nameof(BookLanguages_AfterTheFeedUpdate_BooksSearchedBeforeWaitForTheRhythmOfSourcesWithoutAFeed_ABatchPerCycle));
             var options = Backup(folder.Path, out _);
             var tools = Tools(cs, FakeDump(folder.Path, true), null);
             await new DatabaseBaseline(cs, migrations: DatabaseBaseline.Migrations.Where(migration => migration.Version < 44).ToArray()).StartAsync(CancellationToken.None);
 
-            // The first run after the update: 300 books with a German file whose profiles also want Indonesian, all of them due at once (last searched long ago).
+            // 300 books with a German file whose profiles also want Indonesian, searched daily before the update (each at its hour of the day).
             await ExecuteAsync(cs,
                 """
                 INSERT INTO "UiLocales" ("Id", "Locale", "Name") VALUES (91, 'de-DE', 'Deutsch'), (92, 'id', 'Indonesia') ON CONFLICT ("Locale") DO NOTHING;
@@ -543,7 +543,9 @@ namespace Jularr.Backend.Tests
                 INSERT INTO "StorageMounts" ("Id", "Name", "StorageProtocolTypeId", "SharePath", "IsReadOnly") OVERRIDING SYSTEM VALUE VALUES (1, 'Books', 3, '/books', FALSE);
                 INSERT INTO "LibraryRoots" ("Id", "Name", "MediaTypeId", "StorageMountId", "RelativePath") VALUES (1, 'Books', 3, 1, 'books');
                 INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle") SELECT 1000 + number, 3, 'Book ' || number FROM generate_series(1, 300) AS number;
-                INSERT INTO "WantedItems" ("Id", "WorkId", "NextSearchAt") SELECT 1000 + number * 13, 1000 + number, now() - interval '30 days' FROM generate_series(1, 300) AS number;
+                INSERT INTO "WantedItems" ("Id", "WorkId", "LastSearchedAt", "NextSearchAt", "LastOutcomeKey")
+                SELECT 1000 + number * 13, 1000 + number, '2026-11-05T00:00:00Z'::timestamptz + interval '1 minute' * (number * 13 % 1440), '2026-11-06T00:00:00Z'::timestamptz + interval '1 minute' * (number * 13 % 1440), 'no_candidates'
+                FROM generate_series(1, 300) AS number;
                 INSERT INTO "WorkEditions" ("Id", "WorkId") SELECT "Id", "Id" FROM "Works" WHERE "Id" > 1000;
                 INSERT INTO "WorkVersions" ("Id", "WorkId", "WorkEditionId") SELECT "Id", "Id", "Id" FROM "Works" WHERE "Id" > 1000;
                 INSERT INTO "MediaAssets" ("Id", "WorkId", "WorkVersionId", "MediaAssetTypeId") SELECT "Id", "Id", "Id", 3 FROM "Works" WHERE "Id" > 1000;
@@ -552,16 +554,17 @@ namespace Jularr.Backend.Tests
                 """);
             await new DatabaseBaseline(cs, options, tools).StartAsync(CancellationToken.None);
 
+            // The update keeps each book's time, but for the sources without a feed only: nothing waits for an event search.
+            Assert.AreEqual(300L, await ScalarAsync(cs, """SELECT count(*) FROM "WantedItems" WHERE "NextSearchAt" = 'infinity' AND "PeriodicSearchAt" IS NOT NULL AND "Id" > 1000"""));
+
             var perHour = new int[24];
             var perCycle = new int[720];
             var taken = await DueOverADayAsync(cs, limit: 5, markSearched: true, perHour, perCycle);
 
-            // Every book is searched once in the day, a batch (5) at most in a cycle; about 13 an hour (300 / 24) once the day is going, the first hour a few more (the books whose hour
-            // it is, at most 30): never all of them in the first cycles.
+            // Every book comes round once in the day at its old moment, a batch (5) at most in a cycle, about 13 an hour: never all of them in the first cycles.
             Assert.AreEqual(300, taken.Count);
             Assert.IsLessThanOrEqualTo(5, perCycle.Max());
-            Assert.IsLessThanOrEqualTo(30, perHour[0], string.Join(",", perHour));
-            Assert.IsLessThanOrEqualTo(20, perHour.Skip(1).Max(), string.Join(",", perHour));
+            Assert.IsLessThanOrEqualTo(20, perHour.Max(), string.Join(",", perHour));
             Assert.IsLessThanOrEqualTo(30, perCycle.Take(30).Sum());
         }
 

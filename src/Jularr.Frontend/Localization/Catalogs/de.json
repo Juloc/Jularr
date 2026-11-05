@@ -2830,8 +2830,8 @@
    "Keine Auswahl: Der Indexer wird für jeden Medientyp gefragt."
   ],
   "hint.AcquisitionConnectionFields.SearchesAutomatically.info": [
-   "Manual only: the indexer is asked only when you search by hand.",
-   "Nur manuell: Der Indexer wird nur gefragt, wenn du von Hand suchst."
+   "Asked when a title is added, a search button is pressed or a download failed.",
+   "Wird gefragt, wenn ein Titel hinzukommt, ein Suchknopf gedrückt wird oder ein Download fehlschlug."
   ],
   "hint.AcquisitionConnectionFields.QueryLimit.placeholder": [
    "No limit",
@@ -3665,17 +3665,53 @@
    "Media types",
    "Medientypen"
   ],
-  "acquisition.connection.searches": [
-   "Searches",
-   "Suchen"
+  "acquisition.connection.readsFeed": [
+   "RSS feed",
+   "RSS-Feed"
   ],
-  "acquisition.connection.automatic": [
-   "Automatic and manual",
-   "Automatisch und manuell"
+  "acquisition.connection.searchesAutomatically": [
+   "Automatic search",
+   "Automatische Suche"
   ],
-  "acquisition.connection.manualOnly": [
-   "Manual only",
-   "Nur manuell"
+  "acquisition.connection.searchesInteractively": [
+   "Interactive search",
+   "Interaktive Suche"
+  ],
+  "acquisition.connection.searchInterval": [
+   "Search without a feed",
+   "Suche ohne Feed"
+  ],
+  "acquisition.connection.interval.day": [
+   "Once a day",
+   "Einmal am Tag"
+  ],
+  "acquisition.connection.interval.days": [
+   "Every {0} days",
+   "Alle {0} Tage"
+  ],
+  "acquisition.connection.interval.hours": [
+   "Every {0} hours",
+   "Alle {0} Stunden"
+  ],
+  "hint.AcquisitionConnectionFields.ReadsFeed.info": [
+   "Every 15 minutes the newest releases are read and a fitting one is grabbed at once, as Sonarr's RSS sync; titles the feed covers are not searched on a schedule.",
+   "Alle 15 Minuten werden die neuesten Releases gelesen und ein passendes sofort geholt, wie Sonarrs RSS-Sync; Titel, die der Feed abdeckt, werden nicht nach Zeitplan gesucht."
+  ],
+  "hint.AcquisitionConnectionFields.SearchesInteractively.info": [
+   "Offered in the manual search, where you choose a release yourself.",
+   "Wird in der manuellen Suche gefragt, in der du selbst ein Release wählst."
+  ],
+  "hint.AcquisitionConnectionFields.SearchIntervalHours.info": [
+   "How often a wanted title is searched here when no feed covers it; the titles spread over the period.",
+   "Wie oft ein gesuchter Titel hier gesucht wird, wenn kein Feed ihn abdeckt; die Titel verteilen sich über den Zeitraum."
+  ],
+  "health.state.Paused": [
+   "Paused",
+   "Pausiert"
+  ],
+  "dashboard.services.pausedUntil": [
+   "Paused until {0}",
+   "Pausiert bis {0}"
   ],
   "acquisition.connection.queryLimit": [
    "Queries per day",

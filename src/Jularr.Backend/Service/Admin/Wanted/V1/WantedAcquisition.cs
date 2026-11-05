@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Globalization;
+using System.Text;
 using System.Text.Json;
 using Jularr.Backend.Data.Admin.Wanted.V1;
 using Jularr.Backend.Data.Common;
@@ -39,6 +40,8 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
         private const int PageLimit = 100;
         private const int MaximumCachedOffers = 2000;
         private static readonly TimeSpan OfferLifetime = TimeSpan.FromMinutes(30);
+        private static readonly TimeSpan IndexerWait = TimeSpan.FromMinutes(30);
+        private static readonly TimeSpan FailedGrabRetry = TimeSpan.FromMinutes(30);
 
         private readonly NewznabClient _newznab;
         private readonly SabnzbdClient _sabnzbd;
@@ -73,11 +76,11 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
 
         // The sources a search of this target asks, as the person sees them.
         public SearchSources ReadSources(WantedTargetData target, IReadOnlyList<AcquisitionConnectionData> connections, bool automatic = false) =>
-            SearchSources.Of(connections, AcquisitionSelectionLogic.GetKind(target.MediaTypeId, target.MediaSubtypeId), target.MediaTypeId, automatic, _time.GetUtcNow().UtcDateTime);
+            SearchSources.Of(connections, target, automatic, _time.GetUtcNow().UtcDateTime);
 
         // Automatic searches leave out manual-only, backed-off and exhausted indexers; every indexer asked records its use.
         public async Task<WantedSearchResult> SearchAsync(LogicContext context, WantedTargetData target, IReadOnlyList<AcquisitionConnectionData> indexers, SearchDepth depth, bool automatic,
-            CancellationToken ct, UnitScope? scope = null, string? focusLanguage = null)
+            CancellationToken ct, UnitScope? scope = null, string? focusLanguage = null, IReadOnlySet<long>? only = null)
         {
             // Only targets with a profile can be ranked.
             if (target.Definition is null)
@@ -95,7 +98,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             var failures = 0;
             var sourceErrors = new ConcurrentBag<string>();
             using var annaSearch = new AnnasArchiveSearchContext();
-            var served = SearchSources.Of(indexers, kind, target.MediaTypeId, automatic, now);
+            var served = SearchSources.Of(indexers, target, automatic, now, only);
             var newznab = served.Indexers;
             var catalogs = served.Catalogs;
             var torrents = served.Torrents;
@@ -382,6 +385,86 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             return grabbed ? "grabbed" : outcome;
         }
 
+        // The new releases a feed showed for one wanted title, judged as a search's would be (profile, languages, blocked releases, formats, upgrades), and the best taken at once.
+        // A series or Manga judges each release for the season, episodes or volumes it names; a season pack goes before its episodes. Returns the titles grabbed.
+        public async Task<IReadOnlyList<string>> TakeFromFeedAsync(LogicContext context, long wantedItemId, IReadOnlyList<ReleaseOffer> offers, IReadOnlyList<AcquisitionConnectionData> clients,
+            CancellationToken ct)
+        {
+            var target = await context.ExecuteBatchAsync((ctx, token) => ctx.ReadWantedTargetAsync(wantedItemId, token), ct);
+            if (target.IsPaused || target.Definition is null)
+            {
+                return [];
+            }
+
+            var profile = AcquisitionSelectionLogic.ReadProfile(target);
+            var kind = AcquisitionSelectionLogic.GetKind(target.MediaTypeId, target.MediaSubtypeId);
+            var grabbed = new List<string>();
+            if (target.MediaTypeId == MediaType.Series || target.MediaSubtypeId == MediaSubtype.Manga)
+            {
+                var units = await context.ExecuteBatchAsync((ctx, token) => ctx.ReadUnitStatesAsync(wantedItemId, token), ct);
+                if (target.MediaTypeId == MediaType.Series || units.Count > 0)
+                {
+                    units = AcquisitionSelectionLogic.ReassessUnits(profile, target, units);
+                    var episodes = EpisodeNumbering.Episodes(units);
+                    var groups = offers.Select(offer => (Offer: offer, Coverage: AcquisitionSelectionLogic.ReadCoverage(kind, offer.Title, episodes)))
+                        .Where(item => kind == AcquisitionKind.Manga || item.Coverage.Parent is not null)
+                        .GroupBy(item => (item.Coverage.Parent, item.Coverage.Start))
+                        .OrderBy(group => group.Key.Start is not null).ThenBy(group => group.Key.Parent).ThenBy(group => group.Key.Start);
+                    foreach (var group in groups)
+                    {
+                        var (parent, start) = group.Key;
+                        var end = group.Max(item => item.Coverage.End) ?? start;
+                        if (!units.Any(unit => unit.NeedsSearch && unit.ParentNumber == parent && (start is null || unit.Number >= start && unit.Number <= end)))
+                        {
+                            continue;
+                        }
+
+                        var scope = AcquisitionSelectionLogic.ReadUnitScope(units, parent, start);
+                        if (await TakeBestAsync(context, target, profile, kind, scope, group.Select(item => item.Offer), clients, ct) is { } winner)
+                        {
+                            grabbed.Add(winner.Offer.Title);
+                            units = AcquisitionSelectionLogic.Claim(units, scope, kind, winner.Parsed);
+                        }
+                    }
+
+                    return grabbed;
+                }
+            }
+
+            if (!target.IsDownloading && await TakeBestAsync(context, target, profile, kind, null, offers, clients, ct) is { } taken)
+            {
+                grabbed.Add(taken.Offer.Title);
+            }
+
+            return grabbed;
+        }
+
+        // The automatic choice among the releases, grabbed; a refused grab (a running download, a limit, no client) leaves the title for the next release.
+        private async Task<(ReleaseOffer Offer, ReleaseInfo? Parsed)?> TakeBestAsync(LogicContext context, WantedTargetData target, QualityProfile profile, AcquisitionKind kind, UnitScope? scope,
+            IEnumerable<ReleaseOffer> offers, IReadOnlyList<AcquisitionConnectionData> clients, CancellationToken ct)
+        {
+            var byIdentity = offers.GroupBy(offer => offer.Identity, StringComparer.Ordinal).ToDictionary(group => group.Key, group => group.Aggregate(AcquisitionSelectionLogic.Merge), StringComparer.Ordinal);
+            var selection = AcquisitionSelectionLogic.Select(profile, target, kind, scope, byIdentity.Values, automatic: true);
+            if (selection.Winner is not { } winner)
+            {
+                return null;
+            }
+
+            var offer = byIdentity[winner.Candidate.Id];
+            try
+            {
+                await GrabAsync(context, target, offer, winner.Score?.QualityKey, clients, ct, automatic: true, languages: winner.Candidate.Languages);
+            }
+            catch (Exception exception) when (exception is ServiceUnavailableException or DataValidationException)
+            {
+                _logger.LogInformation("The feed release \"{Release}\" for wanted target {WantedItemId} was not grabbed: {Reason}.", Limit(offer.Title, 200), target.WantedItemId,
+                    exception is ServiceUnavailableException unavailable ? unavailable.Code : ((DataValidationException)exception).Code);
+                return null;
+            }
+
+            return (offer, winner.Candidate.Parsed);
+        }
+
         // Returns whether the download also went first in its client's queue, when that was asked for.
         public async Task<bool> GrabAsync(LogicContext context, WantedTargetData target, ReleaseOffer offer, string? qualityKey, IReadOnlyList<AcquisitionConnectionData> clients, CancellationToken ct,
             long? accountId = null, bool automatic = false, bool startsNow = false, IReadOnlyList<string>? languages = null)
@@ -463,94 +546,14 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                 return await ctx.ReserveDownloadAsync(grab, token);
             }, ct);
 
-            // The best client by priority receives the release; Jularr's own downloader keeps the NZB in staging.
+            // The best client by priority receives the release; Jularr's own downloaders keep the NZB or the torrent in staging.
             string? failure = null;
             string? externalId = null;
             NewznabException? rateLimited = null;
-            if (client.AcquisitionConnectionTypeId == AcquisitionConnectionType.Usenet)
+            if (client.AcquisitionConnectionTypeId is AcquisitionConnectionType.Usenet or AcquisitionConnectionType.Torrent)
             {
-                var staging = await nativePaths!.PrepareIncompleteAsync(operationId, ct, target.MediaTypeId, target.MediaSubtypeId);
-                var stage = "workspace";
-                try
-                {
-                    Directory.CreateDirectory(staging);
-                    File.Delete(Path.Combine(staging, UsenetJob.NzbName));
-                    stage = "transfer";
-                    await _newznab.DownloadNzbAsync(offer.DownloadUri, Path.Combine(staging, UsenetJob.NzbName), ct,
-                        bytes => nativePaths.ReserveWrite(operationId, staging, bytes));
-                    externalId = UsenetJob.ExternalId;
-                }
-                catch (NewznabException exception)
-                {
-                    // Never log an exception: its message or inner exception can contain the signed URL.
-                    _logger.LogWarning("NZB download failed for operation {OperationId}, indexer {IndexerId}: {Failure}; HTTP {StatusCode}; timeout {TimedOut}; transport {TransportError}.",
-                        operationId, offer.ConnectionId, exception.Failure, (int?)exception.StatusCode, exception.InnerException is OperationCanceledException,
-                        exception.InnerException is HttpRequestException transport ? transport.HttpRequestError : (HttpRequestError?)null);
-                    failure = GrabFailureKey(exception);
-                    rateLimited = exception.Failure == NewznabFailure.RateLimited ? exception : null;
-                }
-                catch (IOException exception)
-                {
-                    _logger.LogWarning("NZB I/O failed for operation {OperationId}, indexer {IndexerId}, stage {Stage}: {ExceptionType}; HResult {HResult}.",
-                        operationId, offer.ConnectionId, stage, exception.GetType().Name, exception.HResult);
-                    failure = "acquisition_unavailable";
-                }
-                catch (UnauthorizedAccessException exception)
-                {
-                    _logger.LogWarning("NZB access denied for operation {OperationId}, indexer {IndexerId}, stage {Stage}: {ExceptionType}; HResult {HResult}.",
-                        operationId, offer.ConnectionId, stage, exception.GetType().Name, exception.HResult);
-                    throw;
-                }
-
-                if (failure is not null && Directory.Exists(staging))
-                {
-                    Directory.Delete(staging, recursive: true);
-                }
-            }
-            else if (client.AcquisitionConnectionTypeId == AcquisitionConnectionType.Torrent)
-            {
-                // Jularr's own engine keeps the magnet or the checked .torrent in staging; peers are reached only later, through the VPN.
-                var staging = await nativePaths!.PrepareIncompleteAsync(operationId, ct, target.MediaTypeId, target.MediaSubtypeId);
-                try
-                {
-                    Directory.CreateDirectory(staging);
-                    byte[] infoHash;
-                    if (offer.DownloadUri.Scheme.Equals("magnet", StringComparison.OrdinalIgnoreCase))
-                    {
-                        infoHash = MagnetLink.Parse(offer.DownloadUri.OriginalString).InfoHash;
-                        await File.WriteAllTextAsync(Path.Combine(staging, TorrentDownloader.MagnetName), offer.DownloadUri.OriginalString, ct);
-                    }
-                    else
-                    {
-                        var file = Path.Combine(staging, TorrentDownloader.TorrentName);
-                        File.Delete(file);
-                        await _newznab.DownloadNzbAsync(offer.DownloadUri, file, ct, bytes => nativePaths.ReserveWrite(operationId, staging, bytes));
-                        infoHash = TorrentMetainfo.Parse(await File.ReadAllBytesAsync(file, ct)).InfoHash;
-                    }
-
-                    // A retry of the same torrent goes on with the verified pieces of the earlier try.
-                    await TorrentResume.TakeOverAsync(staging, infoHash,
-                        async earlierId => (await context.ExecuteBatchAsync((ctx, token) => ctx.ReadActiveDownloadsAsync(token, earlierId), ct)).Count > 0, ct);
-                    externalId = TorrentJob.ExternalId;
-                }
-                catch (NewznabException exception)
-                {
-                    failure = GrabFailureKey(exception);
-                    rateLimited = exception.Failure == NewznabFailure.RateLimited ? exception : null;
-                }
-                catch (InvalidDataException)
-                {
-                    failure = "acquisition_grab_failed";
-                }
-                catch (IOException)
-                {
-                    failure = "acquisition_unavailable";
-                }
-
-                if (failure is not null && Directory.Exists(staging))
-                {
-                    Directory.Delete(staging, recursive: true);
-                }
+                (externalId, failure, rateLimited) = await FetchReleaseFileAsync(context, client.AcquisitionConnectionTypeId, nativePaths!, operationId, offer.DownloadUri, offer.ConnectionId,
+                    target.MediaTypeId, target.MediaSubtypeId, ct);
             }
             else if (client.AcquisitionConnectionTypeId == AcquisitionConnectionType.Qbittorrent)
             {
@@ -598,7 +601,14 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                 failure ??= externalId is null ? "acquisition_grab_failed" : null;
             }
 
-            // A refused grab releases the reservation and its indexer count; the target is searched again later.
+            // A limit of the indexer is no failure: the grab waits in the queue for the indexer's pause and is fetched again then (Sonarr's pending release).
+            if (rateLimited is not null)
+            {
+                await WaitForIndexerAsync(context, operationId, offer.ConnectionId, offer.DownloadUri, rateLimited, ct);
+                return false;
+            }
+
+            // A refused grab releases the reservation and its indexer count; the target is searched again.
             if (failure is not null)
             {
                 if (!manual)
@@ -610,16 +620,9 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                     }, ct);
                 }
 
-                // A rate-limited indexer rests for the wait it asked for, and the grab tries again after it.
-                var retryAfter = rateLimited?.RetryAfter is { } asked && asked > TimeSpan.FromMinutes(30) ? asked : TimeSpan.FromMinutes(30);
                 await context.ExecuteBatchAsync(async (ctx, token) =>
                 {
-                    if (rateLimited is not null)
-                    {
-                        await ctx.RecordIndexerUseAsync(new IndexerUseData(offer.ConnectionId, 0, false, rateLimited.RetryAfter is { } wait ? (int)Math.Ceiling(wait.TotalSeconds) : null), token);
-                    }
-
-                    await ctx.FailDownloadAsync(new DownloadFailureData(operationId, failure, DateTime.UtcNow + retryAfter), token);
+                    await ctx.FailDownloadAsync(new DownloadFailureData(operationId, failure, _time.GetUtcNow().UtcDateTime + FailedGrabRetry), token);
                     return true;
                 }, ct);
                 throw new ServiceUnavailableException(failure);
@@ -633,6 +636,194 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             _signals.Downloads.Notify();
             if (client.AcquisitionConnectionTypeId == AcquisitionConnectionType.Torrent) _signals.Torrents.Notify();
             return startsNow && await PrioritizeAsync(context, operationId, ct);
+        }
+
+        // The NZB or the torrent of a release into the staging folder of a job of Jularr's own Usenet or torrent downloader; a limit of the indexer comes back on its own.
+        private async Task<(string? ExternalId, string? Failure, NewznabException? RateLimited)> FetchReleaseFileAsync(LogicContext context, AcquisitionConnectionType clientType,
+            DownloadStoragePaths nativePaths, long operationId, Uri downloadUri, long indexerId, MediaType mediaType, MediaSubtype? subtype, CancellationToken ct)
+        {
+            string? failure = null;
+            string? externalId = null;
+            NewznabException? rateLimited = null;
+            if (clientType == AcquisitionConnectionType.Usenet)
+            {
+                var staging = await nativePaths.PrepareIncompleteAsync(operationId, ct, mediaType, subtype);
+                var stage = "workspace";
+                try
+                {
+                    Directory.CreateDirectory(staging);
+                    File.Delete(Path.Combine(staging, UsenetJob.NzbName));
+                    stage = "transfer";
+                    await _newznab.DownloadNzbAsync(downloadUri, Path.Combine(staging, UsenetJob.NzbName), ct,
+                        bytes => nativePaths.ReserveWrite(operationId, staging, bytes));
+                    externalId = UsenetJob.ExternalId;
+                }
+                catch (NewznabException exception)
+                {
+                    // Never log an exception: its message or inner exception can contain the signed URL.
+                    _logger.LogWarning("NZB download failed for operation {OperationId}, indexer {IndexerId}: {Failure}; HTTP {StatusCode}; timeout {TimedOut}; transport {TransportError}.",
+                        operationId, indexerId, exception.Failure, (int?)exception.StatusCode, exception.InnerException is OperationCanceledException,
+                        exception.InnerException is HttpRequestException transport ? transport.HttpRequestError : (HttpRequestError?)null);
+                    failure = GrabFailureKey(exception);
+                    rateLimited = exception.Failure == NewznabFailure.RateLimited ? exception : null;
+                }
+                catch (IOException exception)
+                {
+                    _logger.LogWarning("NZB I/O failed for operation {OperationId}, indexer {IndexerId}, stage {Stage}: {ExceptionType}; HResult {HResult}.",
+                        operationId, indexerId, stage, exception.GetType().Name, exception.HResult);
+                    failure = "acquisition_unavailable";
+                }
+                catch (UnauthorizedAccessException exception)
+                {
+                    _logger.LogWarning("NZB access denied for operation {OperationId}, indexer {IndexerId}, stage {Stage}: {ExceptionType}; HResult {HResult}.",
+                        operationId, indexerId, stage, exception.GetType().Name, exception.HResult);
+                    throw;
+                }
+
+                if (failure is not null && Directory.Exists(staging))
+                {
+                    Directory.Delete(staging, recursive: true);
+                }
+            }
+            else
+            {
+                // Jularr's own engine keeps the magnet or the checked .torrent in staging; peers are reached only later, through the VPN.
+                var staging = await nativePaths.PrepareIncompleteAsync(operationId, ct, mediaType, subtype);
+                try
+                {
+                    Directory.CreateDirectory(staging);
+                    byte[] infoHash;
+                    if (downloadUri.Scheme.Equals("magnet", StringComparison.OrdinalIgnoreCase))
+                    {
+                        infoHash = MagnetLink.Parse(downloadUri.OriginalString).InfoHash;
+                        await File.WriteAllTextAsync(Path.Combine(staging, TorrentDownloader.MagnetName), downloadUri.OriginalString, ct);
+                    }
+                    else
+                    {
+                        var file = Path.Combine(staging, TorrentDownloader.TorrentName);
+                        File.Delete(file);
+                        await _newznab.DownloadNzbAsync(downloadUri, file, ct, bytes => nativePaths.ReserveWrite(operationId, staging, bytes));
+                        infoHash = TorrentMetainfo.Parse(await File.ReadAllBytesAsync(file, ct)).InfoHash;
+                    }
+
+                    // A retry of the same torrent goes on with the verified pieces of the earlier try.
+                    await TorrentResume.TakeOverAsync(staging, infoHash,
+                        async earlierId => (await context.ExecuteBatchAsync((ctx, token) => ctx.ReadActiveDownloadsAsync(token, earlierId), ct)).Count > 0, ct);
+                    externalId = TorrentJob.ExternalId;
+                }
+                catch (NewznabException exception)
+                {
+                    failure = GrabFailureKey(exception);
+                    rateLimited = exception.Failure == NewznabFailure.RateLimited ? exception : null;
+                }
+                catch (InvalidDataException)
+                {
+                    failure = "acquisition_grab_failed";
+                }
+                catch (IOException)
+                {
+                    failure = "acquisition_unavailable";
+                }
+
+                if (failure is not null && Directory.Exists(staging))
+                {
+                    Directory.Delete(staging, recursive: true);
+                }
+            }
+
+            return (externalId, failure, rateLimited);
+        }
+
+        // The grab waits in the queue, not failed, until the indexer's pause ends; its link waits protected like a key. The indexer rests for the wait it asked for.
+        private async Task WaitForIndexerAsync(LogicContext context, long operationId, long indexerId, Uri downloadUri, NewznabException rateLimited, CancellationToken ct)
+        {
+            var until = _time.GetUtcNow().UtcDateTime + (rateLimited.RetryAfter is { } asked && asked > IndexerWait ? asked : IndexerWait);
+            await context.ExecuteBatchAsync(async (ctx, token) =>
+            {
+                await ctx.RecordIndexerUseAsync(new IndexerUseData(indexerId, 0, false, rateLimited.RetryAfter is { } wait ? (int)Math.Ceiling(wait.TotalSeconds) : null), token);
+                await ctx.WaitForIndexerAsync(new DownloadIndexerWaitData(operationId, until, _protector.Protect(Encoding.UTF8.GetBytes(downloadUri.OriginalString))), token);
+                return true;
+            }, ct);
+            _logger.LogInformation("The indexer {IndexerId} limited the grab of operation {OperationId}; it is fetched again after {WaitUntil:u}.", indexerId, operationId, until);
+        }
+
+        // A grab its indexer limited, once the pause is over: the same release is fetched again, with no new search. A pause that lasts longer keeps it waiting;
+        // anything else the fetch says is a failed download, which searches the title again.
+        public async Task ResumeLimitedGrabAsync(LogicContext context, DownloadData download, AcquisitionConnectionType clientType, CancellationToken ct)
+        {
+            var now = _time.GetUtcNow().UtcDateTime;
+            AcquisitionConnectionData? indexer = null;
+            try
+            {
+                indexer = download.IndexerConnectionId is { } indexerId ? await context.ExecuteBatchAsync((ctx, token) => ctx.ReadAcquisitionConnectionAsync(indexerId, token), ct) : null;
+            }
+            catch (KeyNotFoundException)
+            {
+            }
+
+            if (indexer is null || download.ProtectedDownloadUrl is null)
+            {
+                await context.ExecuteBatchAsync(async (ctx, token) =>
+                {
+                    await ctx.FailDownloadAsync(new DownloadFailureData(download.OperationId, "indexer_removed", now), token);
+                    return true;
+                }, ct);
+                return;
+            }
+
+            if (indexer.RetryAt is { } retryAt && retryAt > now)
+            {
+                await context.ExecuteBatchAsync(async (ctx, token) =>
+                {
+                    await ctx.WaitForIndexerAsync(new DownloadIndexerWaitData(download.OperationId, retryAt, download.ProtectedDownloadUrl), token);
+                    return true;
+                }, ct);
+                return;
+            }
+
+            // Without its storage the grab waits a while longer.
+            var downloadUri = new Uri(Encoding.UTF8.GetString(_protector.Unprotect(download.ProtectedDownloadUrl)));
+            DownloadStoragePaths paths;
+            try
+            {
+                paths = await _downloads.OpenAsync(context, clientType == AcquisitionConnectionType.Usenet ? DownloadStorageArea.Usenet : DownloadStorageArea.Torrent, ct);
+            }
+            catch (ServiceUnavailableException)
+            {
+                await context.ExecuteBatchAsync(async (ctx, token) =>
+                {
+                    await ctx.WaitForIndexerAsync(new DownloadIndexerWaitData(download.OperationId, now + IndexerWait, download.ProtectedDownloadUrl), token);
+                    return true;
+                }, ct);
+                return;
+            }
+
+            var (externalId, failure, rateLimited) = await FetchReleaseFileAsync(context, clientType, paths, download.OperationId, downloadUri, indexer.Id, download.MediaTypeId,
+                download.MediaSubtypeId, ct);
+            if (rateLimited is not null)
+            {
+                await WaitForIndexerAsync(context, download.OperationId, indexer.Id, downloadUri, rateLimited, ct);
+                return;
+            }
+
+            await context.ExecuteBatchAsync(async (ctx, token) =>
+            {
+                if (failure is not null)
+                {
+                    await ctx.FailDownloadAsync(new DownloadFailureData(download.OperationId, failure, now), token);
+                }
+                else
+                {
+                    await ctx.StartDownloadAsync(new DownloadStartData(download.OperationId, Limit(externalId!, 128)), token);
+                }
+
+                return true;
+            }, ct);
+            if (failure is null)
+            {
+                _signals.Downloads.Notify();
+                if (clientType == AcquisitionConnectionType.Torrent) _signals.Torrents.Notify();
+            }
         }
 
         // The download goes before the others: SABnzbd and Jularr's own downloaders take the forced priority, qBittorrent puts the torrent first. The download is queued either way.

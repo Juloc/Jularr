@@ -99,6 +99,33 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(mountId.ToString(System.Globalization.CultureInfo.InvariantCulture), off.Services.Single(service => service.HealthServiceTypeId == HealthServiceType.Storage).Key.Split(':')[1]);
         }
 
+        // An indexer in its backoff (it limited requests) is paused, not reachable: the check does not ask it, which would cost a request and end the pause.
+        [TestMethod]
+        public async Task Health_AnIndexerInItsBackoff_IsPausedUntilItEnds_AndIsNotAsked()
+        {
+            using var storage = new LibraryTests.TemporaryDirectory();
+            var servers = new FakeServers();
+            await using var host = await CreateHostAsync(storage.Path, servers);
+            await SaveConnectionAsync(host, new SaveAcquisitionConnectionDataV1("Indexer", AcquisitionConnectionType.Newznab, "https://indexer.example.test/", FakeServers.Key, true, 10, [], null, null, null));
+            Assert.AreEqual(HealthStateType.Available, (await CheckNowAsync(host)).Services.Single(service => service.HealthServiceTypeId == HealthServiceType.Indexer).HealthStateTypeId);
+            await host.Fixture.RunSqlAsync("""
+                UPDATE "AcquisitionConnections" SET "RetryAt" = now() + interval '3 hours', "FailureCount" = 1, "LastErrorKey" = 'acquisition_unavailable', "CheckedAt" = now() - interval '1 hour'
+                WHERE "Name" = 'Indexer'
+                """);
+
+            var paused = (await CheckNowAsync(host)).Services.Single(service => service.HealthServiceTypeId == HealthServiceType.Indexer);
+            Assert.AreEqual(HealthStateType.Paused, paused.HealthStateTypeId);
+            Assert.IsTrue(paused.PausedUntil > DateTime.UtcNow.AddHours(2.9));
+            Assert.AreEqual(1, servers.IndexerRequests, "A paused indexer is not tested.");
+            Assert.AreEqual(true, await host.ScalarAsync("SELECT \"RetryAt\" > now() + interval '2 hours' FROM \"AcquisitionConnections\" WHERE \"Name\" = 'Indexer'"));
+            Assert.AreEqual(HealthStateType.Paused, (await ReadHealthAsync(host)).Services.Single(service => service.HealthServiceTypeId == HealthServiceType.Indexer).HealthStateTypeId);
+
+            // Once the pause is over the indexer is asked again.
+            await host.Fixture.RunSqlAsync("UPDATE \"AcquisitionConnections\" SET \"RetryAt\" = now() - interval '1 minute' WHERE \"Name\" = 'Indexer'");
+            Assert.AreEqual(HealthStateType.Available, (await CheckNowAsync(host)).Services.Single(service => service.HealthServiceTypeId == HealthServiceType.Indexer).HealthStateTypeId);
+            Assert.AreEqual(2, servers.IndexerRequests);
+        }
+
         [TestMethod]
         public async Task Health_StorageAndProviders_AreJudgedFromWhatIsStoredAndObserved()
         {

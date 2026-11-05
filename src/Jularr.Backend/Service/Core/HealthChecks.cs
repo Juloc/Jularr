@@ -52,8 +52,9 @@ namespace Jularr.Backend.Service.Core
         public async Task<HealthV1> ReadStoredAsync(LogicContext ctx, CancellationToken ct)
         {
             var targets = await ctx.ReadHealthTargetsAsync(ct);
-            var services = Known(targets, time.GetUtcNow().UtcDateTime);
-            services.AddRange(targets.Connections.Select(HealthCheckLogic.StoredConnection));
+            var now = time.GetUtcNow().UtcDateTime;
+            var services = Known(targets, now);
+            services.AddRange(targets.Connections.Select(connection => HealthCheckLogic.StoredConnection(connection, now)));
             return HealthCheckLogic.Summarize(services, null);
         }
 
@@ -101,7 +102,7 @@ namespace Jularr.Backend.Service.Core
             {
                 if (!HealthCheckLogic.NeedsTest(row, now))
                 {
-                    services.Add(HealthCheckLogic.StoredConnection(row));
+                    services.Add(HealthCheckLogic.StoredConnection(row, now));
                     continue;
                 }
 

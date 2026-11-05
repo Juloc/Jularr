@@ -2432,18 +2432,6 @@
    "Media types",
    "Tipos de contenido"
   ],
-  "acquisition.connection.searches": [
-   "Searches",
-   "Búsquedas"
-  ],
-  "acquisition.connection.automatic": [
-   "Automatic and manual",
-   "Automáticas y manuales"
-  ],
-  "acquisition.connection.manualOnly": [
-   "Manual only",
-   "Solo manuales"
-  ],
   "acquisition.connection.queryLimit": [
    "Queries per day",
    "Consultas por día"

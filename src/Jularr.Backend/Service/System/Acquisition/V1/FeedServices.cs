@@ -6,16 +6,14 @@ using Jularr.Backend.Service.Core;
 
 namespace Jularr.Backend.Service.System.Acquisition.V1
 {
-    // Every 15 minutes: the recent feed of each indexer, and the wanted targets it makes due are searched at once.
+    // Every 15 minutes: the recent feed of each indexer; a new release a wanted title can take is grabbed at once.
     public sealed class SyncFeedsV1 : SystemService<AcquisitionCycleParametersV1, NoData>
     {
         private readonly FeedSync _feed;
-        private readonly AcquisitionSearchSignal _searchSignal;
 
-        internal SyncFeedsV1(FeedSync feed, AcquisitionSearchSignal searchSignal)
+        internal SyncFeedsV1(FeedSync feed)
         {
             _feed = feed;
-            _searchSignal = searchSignal;
         }
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
@@ -25,11 +23,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
 
         protected override async Task<IServiceOutput> OnExecute()
         {
-            if (await _feed.RunAsync(Context, CancellationToken) > 0)
-            {
-                _searchSignal.RequestSearch();
-            }
-
+            await _feed.RunAsync(Context, CancellationToken);
             return new UpdateResult(true);
         }
     }

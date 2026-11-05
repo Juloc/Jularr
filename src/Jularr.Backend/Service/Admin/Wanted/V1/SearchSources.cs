@@ -34,17 +34,40 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
         // Every one of them in the order of the connections.
         public IReadOnlyList<AcquisitionConnectionData> All { get; }
 
-        public static SearchSources Of(IReadOnlyList<AcquisitionConnectionData> connections, AcquisitionKind kind, MediaType mediaType, bool automatic, DateTime now)
+        // An automatic search asks a direct source only for a title it can have: Project Gutenberg holds public domain books.
+        // With a set of connections (a search of the sources without a feed on their rhythm) only those are asked.
+        public static SearchSources Of(IReadOnlyList<AcquisitionConnectionData> connections, WantedTargetData target, bool automatic, DateTime now, IReadOnlySet<long>? only = null)
         {
-            var allNewznab = connections.Where(connection => connection.AcquisitionConnectionTypeId == AcquisitionConnectionType.Newznab).ToArray();
+            var kind = AcquisitionSelectionLogic.GetKind(target.MediaTypeId, target.MediaSubtypeId);
+            var mediaType = target.MediaTypeId;
+            var asked = only is null ? connections : connections.Where(connection => only.Contains(connection.Id)).ToArray();
+            var allNewznab = asked.Where(connection => connection.AcquisitionConnectionTypeId == AcquisitionConnectionType.Newznab).ToArray();
             var newznab = allNewznab.Where(connection => AcquisitionConnectionLogic.CanSearch(connection, mediaType, automatic, now)).ToArray();
-            var catalogs = kind is AcquisitionKind.Book or AcquisitionKind.LightNovel ? connections.Where(connection => DirectSources.IsDirect(connection.AcquisitionConnectionTypeId)
-                && (kind == AcquisitionKind.LightNovel || connection.AcquisitionConnectionTypeId != AcquisitionConnectionType.Narou)).ToArray() : [];
-            var nyaa = kind is AcquisitionKind.LightNovel ? connections.Where(connection => connection.AcquisitionConnectionTypeId == AcquisitionConnectionType.Nyaa).ToArray() : [];
+            var catalogs = kind is AcquisitionKind.Book or AcquisitionKind.LightNovel ? asked.Where(connection => DirectSources.IsDirect(connection.AcquisitionConnectionTypeId)
+                && (kind == AcquisitionKind.LightNovel || connection.AcquisitionConnectionTypeId != AcquisitionConnectionType.Narou)
+                && AcquisitionConnectionLogic.Serves(connection, mediaType, automatic) && (!automatic || CanHave(connection, target, now))).ToArray() : [];
+            var nyaa = kind is AcquisitionKind.LightNovel ? asked.Where(connection => connection.AcquisitionConnectionTypeId == AcquisitionConnectionType.Nyaa).ToArray() : [];
             var torrents = nyaa.Where(connection => AcquisitionConnectionLogic.CanSearch(connection, mediaType, automatic, now)).ToArray();
             var skipped = allNewznab.Where(connection => AcquisitionConnectionLogic.Serves(connection, mediaType, automatic) && !newznab.Contains(connection))
                 .Concat(nyaa.Where(connection => AcquisitionConnectionLogic.Serves(connection, mediaType, automatic) && !torrents.Contains(connection))).ToArray();
             return new SearchSources(connections, newznab, catalogs, torrents, skipped);
         }
+
+        // Every source that an automatic search of the title can ask, whatever its backoff or limits today.
+        public static IReadOnlyList<AcquisitionConnectionData> Automatic(IReadOnlyList<AcquisitionConnectionData> connections, WantedTargetData target, DateTime now)
+        {
+            var kind = AcquisitionSelectionLogic.GetKind(target.MediaTypeId, target.MediaSubtypeId);
+            return [.. connections.Where(connection => AcquisitionConnectionLogic.Serves(connection, target.MediaTypeId, true) && (connection.AcquisitionConnectionTypeId switch
+            {
+                AcquisitionConnectionType.Newznab => true,
+                AcquisitionConnectionType.Nyaa => kind == AcquisitionKind.LightNovel,
+                AcquisitionConnectionType.Narou => kind == AcquisitionKind.LightNovel,
+                _ => DirectSources.IsDirect(connection.AcquisitionConnectionTypeId) && kind is AcquisitionKind.Book or AcquisitionKind.LightNovel && CanHave(connection, target, now)
+            }))];
+        }
+
+        // US public domain: published 95 years ago or earlier.
+        private static bool CanHave(AcquisitionConnectionData connection, WantedTargetData target, DateTime now) =>
+            connection.AcquisitionConnectionTypeId != AcquisitionConnectionType.Gutenberg || target.ReleaseYear is not { } year || year <= now.Year - 96;
     }
 }

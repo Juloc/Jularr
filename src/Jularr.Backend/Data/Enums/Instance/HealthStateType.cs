@@ -5,6 +5,8 @@ namespace Jularr.Backend.Data.Enums.Instance
     {
         Available = 1,
         Unavailable = 2,
-        Unknown = 3
+        Unknown = 3,
+        // An indexer resting after it limited or refused requests; it is not asked until its pause ends.
+        Paused = 4
     }
 }

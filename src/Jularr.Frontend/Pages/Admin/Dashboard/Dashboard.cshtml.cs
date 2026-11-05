@@ -120,11 +120,13 @@ namespace Jularr.Frontend.Pages.Admin.Dashboard
             var (tone, chip) = service.HealthStateTypeId switch
             {
                 HealthStateType.Available => ("good", UiTone.Success),
-                HealthStateType.Unavailable => ("warn", UiTone.Warning),
+                HealthStateType.Unavailable or HealthStateType.Paused => ("warn", UiTone.Warning),
                 _ => ("accent", UiTone.Accent)
             };
-            IUiComponent checkedAt = service.CheckedAt is { } at
-                ? LocalTime.Format(texts["dashboard.services.checked"], at, "time")
+
+            // A paused indexer says until when it rests instead of when it was last checked.
+            IUiComponent checkedAt = service.PausedUntil is { } until ? LocalTime.Format(texts["dashboard.services.pausedUntil"], until, "time")
+                : service.CheckedAt is { } at ? LocalTime.Format(texts["dashboard.services.checked"], at, "time")
                 : new ValueText(texts["dashboard.services.never"]);
             var detail = new List<IUiComponent> { new Strong(new Truncated(service.Name ?? "")), new Span(new ValueText(texts["health.type." + service.HealthServiceTypeId] + " · "), checkedAt).Class("dashboard-services__facts") };
             if (ErrorText(service) is { } error) detail.Add(new Span(new Truncated(error)).Class("dashboard-services__facts dashboard-services__error"));
@@ -132,10 +134,10 @@ namespace Jularr.Frontend.Pages.Admin.Dashboard
                 new StateChip(new Text("health.state." + service.HealthStateTypeId), chip)).Class("dashboard-services__row");
         }
 
-        // Why a service did not answer, in the words of the error or the storage problem.
+        // Why a service did not answer, in the words of the error or the storage problem; a paused indexer's pause says it.
         private string? ErrorText(HealthServiceV1 service)
         {
-            if (service.ErrorKey is not { } key) return null;
+            if (service.ErrorKey is not { } key || service.HealthStateTypeId == HealthStateType.Paused) return null;
 
             var resource = service.HealthServiceTypeId == HealthServiceType.Storage ? "storage.problem." + key : "errors." + key;
             return texts.Has(resource) ? texts[resource] : null;

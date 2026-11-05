@@ -82,7 +82,7 @@ namespace Jularr.Backend.Logic.Acquisition
             return await ctx.ExecuteAsyncForAffectedRows(sql, ct) == 1;
         }
 
-        // A target that is not searched now first waits a day.
+        // A target that is not searched now waits for the feed, as a Sonarr series added without its search; the sources without a feed first search it after a day.
         public static async Task DeferFirstWantedSearchAsync(this LogicContext ctx, long workId, CancellationToken ct)
         {
             var sql = new SqlStatement();
@@ -91,7 +91,8 @@ namespace Jularr.Backend.Logic.Acquisition
                 UPDATE
                     "WantedItems"
                 SET
-                    "NextSearchAt" = now() + interval '1 day'
+                    "NextSearchAt" = 'infinity',
+                    "PeriodicSearchAt" = now() + interval '1 day'
                 WHERE
                     "WorkId" = @Id
                     AND "NextSearchAt" IS NULL;
