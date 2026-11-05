@@ -2,6 +2,11 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Jularr.Backend.Data.Enums.Media;
+using Jularr.Backend.Data.Enums.Sql;
+using Jularr.Backend.Data.Logic.Acquisition;
+using Jularr.Backend.Infrastructure.Sql;
+using Jularr.Backend.Logic.Acquisition;
+using Microsoft.Extensions.DependencyInjection;
 using Jularr.Backend.Data.Public.Authentication.V1;
 using Host = Jularr.Backend.Tests.AuthenticationTests.Host;
 
@@ -53,6 +58,22 @@ namespace Jularr.Backend.Tests
 
             // Missing: the languages no file covers, and the film.
             Assert.AreEqual("A film:--,German only:id-,None:de-,None:id-", string.Join(',', (await EntriesAsync(1)).Select(Describe).Order(StringComparer.Ordinal)));
+
+            // A search of one language marks that language only; a search of the title marks every language still missing; a language that is there is not marked.
+            async Task RecordAsync(long wantedItemId, string? language)
+            {
+                await using var sql = new SqlContext(host.Services.GetRequiredService<SqlDatabase>().DataSource);
+                await sql.BeginAsync(SqlAccessMode.ReadWrite);
+                await new LogicContext(sql).RecordBookLanguageSearchAsync(new BookLanguageSearchData(wantedItemId, language), default);
+                await sql.CommitAsync();
+            }
+
+            string Searched(JsonElement item) => item.GetProperty("canonicalTitle").GetString() + ":" + item.GetProperty("bookLanguage").GetString() + (item.TryGetProperty("lastSearchedAt", out var at) && at.ValueKind == JsonValueKind.String ? "*" : "");
+            await RecordAsync(801, "id");
+            await RecordAsync(803, null);
+            await RecordAsync(802, null);
+            Assert.AreEqual("German only:de,German only:id*,None:de*,None:id*", string.Join(',', (await EntriesAsync(0)).Where(item => item.GetProperty("canonicalTitle").GetString() is "German only" or "None").Select(Searched).Order(StringComparer.Ordinal)));
+            Assert.AreEqual("Both:de,Both:id", string.Join(',', (await EntriesAsync(0)).Where(item => item.GetProperty("canonicalTitle").GetString() == "Both").Select(Searched).Order(StringComparer.Ordinal)));
 
             // The summary counts entries.
             using var summary = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/wanted/summary");

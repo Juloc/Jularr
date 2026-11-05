@@ -274,6 +274,22 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         public DateTime? NextSearchAt { get; }
     }
 
+    // A search of a book: of every language still missing, or of one.
+    internal sealed class BookLanguageSearchData : BaseData
+    {
+        public BookLanguageSearchData(long wantedItemId, string? language)
+        {
+            WantedItemId = wantedItemId;
+            Language = language;
+        }
+
+        [DataField(typeof(WantedItemFields), nameof(WantedItemFields.Id))]
+        public long WantedItemId { get; }
+
+        [DataField(typeof(WantedItemFields), nameof(WantedItemFields.BookLanguage), false)]
+        public string? Language { get; }
+    }
+
     internal sealed class AcquisitionGrabData : BaseData
     {
         [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.IndexerFlags))]

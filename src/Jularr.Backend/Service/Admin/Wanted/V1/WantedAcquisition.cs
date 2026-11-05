@@ -310,6 +310,12 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                 throw new ServiceUnavailableException(result.ErrorKey ?? "acquisition_unavailable");
             }
 
+            // The language a book was searched for is searched now, whatever came of it.
+            if (language is { Length: 2 })
+            {
+                await context.ExecuteBatchAsync(async (ctx, token) => { await ctx.RecordBookLanguageSearchAsync(new BookLanguageSearchData(wantedItemId, language.ToLowerInvariant()), token); return true; }, ct);
+            }
+
             if (result.Selection.Winner is not { } winner)
             {
                 return new AutomaticSearchResultV1(result.OutcomeKey, null);
