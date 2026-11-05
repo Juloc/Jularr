@@ -104,6 +104,21 @@ namespace Jularr.Backend.Logic.Reading
         public static string ResourceUrl(long documentId, string path) =>
             "/api/v1/reading/documents/" + documentId.ToString(CultureInfo.InvariantCulture) + "/resource?path=" + Uri.EscapeDataString(path);
 
+        // The resources of the document a prepared section shows, by their path in the book.
+        public static IEnumerable<string> ResourcePaths(string html, long documentId)
+        {
+            var prefix = ResourceUrl(documentId, "");
+            for (var start = html.IndexOf(prefix, StringComparison.Ordinal); start >= 0; start = html.IndexOf(prefix, start + prefix.Length, StringComparison.Ordinal))
+            {
+                var from = start + prefix.Length;
+                var end = html.IndexOfAny(['"', '\'', '&', ' ', '>'], from);
+                if (end > from)
+                {
+                    yield return Uri.UnescapeDataString(html[from..end]);
+                }
+            }
+        }
+
         // The kind of figure a picture of this size is; none for decoration and small pictures that stay in the line.
         public static string? FigureKind(int width, int height, bool alone)
         {

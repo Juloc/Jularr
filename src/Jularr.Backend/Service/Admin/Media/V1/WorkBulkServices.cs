@@ -190,12 +190,14 @@ namespace Jularr.Backend.Service.Admin.Media.V1
     {
         private readonly LibraryReplacements _replacements;
         private readonly CoverStore _covers;
+        private readonly ReadingFiles _readingFiles;
         private readonly WorkDownloadClients _clients;
 
-        internal DeleteWorksV1(LibraryReplacements replacements, CoverStore covers, SabnzbdClient sabnzbd, QbittorrentClient qbittorrent, DownloadStorage downloads, TimeProvider time, IDataProtectionProvider protection)
+        internal DeleteWorksV1(LibraryReplacements replacements, CoverStore covers, ReadingFiles readingFiles, SabnzbdClient sabnzbd, QbittorrentClient qbittorrent, DownloadStorage downloads, TimeProvider time, IDataProtectionProvider protection)
         {
             _replacements = replacements;
             _covers = covers;
+            _readingFiles = readingFiles;
             _clients = new WorkDownloadClients(sabnzbd, qbittorrent, downloads, time, protection.CreateProtector(AcquisitionConnectionInput.ProtectorPurpose));
         }
 
@@ -219,7 +221,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
 
                 outcomes.Add(await WorkBulkOutcomes.TryAsync(id, target.CanonicalTitle, async () =>
                 {
-                    await DeleteWorkV1.DeleteAsync(Context, _replacements, _covers, _clients, id, Data.DeletesFiles, Data.AddsExclusion, Auth.AccountId!.Value, CancellationToken);
+                    await DeleteWorkV1.DeleteAsync(Context, _replacements, _covers, _readingFiles, _clients, id, Data.DeletesFiles, Data.AddsExclusion, Auth.AccountId!.Value, CancellationToken);
                     return "done";
                 }));
             }

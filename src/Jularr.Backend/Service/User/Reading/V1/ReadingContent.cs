@@ -23,7 +23,8 @@ using Jularr.Integrations.Logic.Usenet;
 
 namespace Jularr.Backend.Service.User.Reading.V1
 {
-    // Prepares books and comics from storage into the shared reading cache; I/O stays outside transactions.
+    // Prepares books and comics from storage: text, structure and translations into the database, pictures and pages the server draws onto disk (ReadingFiles);
+    // an EPUB's pictures and a CBZ's pages are read from the file itself when they are shown. I/O stays outside transactions.
     internal sealed partial class ReadingContent
     {
         [GeneratedRegex("<[^>]+>")]
@@ -36,16 +37,21 @@ namespace Jularr.Backend.Service.User.Reading.V1
         private const long MaximumDjvuBytes = 2L * 1024 * 1024 * 1024;
         private static readonly SemaphoreSlim DjvuGate = new(1, 1);
 
+        // A book's pictures drawn again because its files left the disk: one book at a time.
+        private static readonly SemaphoreSlim RedrawGate = new(1, 1);
+
         private readonly StorageAccess _storage;
         private readonly ArchiveTools _archives;
         private readonly DjvuTools _djvu;
+        private readonly ReadingFiles _files;
         private readonly TimeProvider _time;
 
-        public ReadingContent(StorageAccess storage, ArchiveTools archives, DjvuTools djvu, TimeProvider time)
+        public ReadingContent(StorageAccess storage, ArchiveTools archives, DjvuTools djvu, ReadingFiles files, TimeProvider time)
         {
             _storage = storage;
             _archives = archives;
             _djvu = djvu;
+            _files = files;
             _time = time;
         }
 
@@ -53,18 +59,17 @@ namespace Jularr.Backend.Service.User.Reading.V1
 
         public static bool IsDjvu(string relativePath) => Path.GetExtension(relativePath).ToLowerInvariant() is ".djvu" or ".djv";
 
+        // Pictures the server makes (a PDF's, a book read through a copy made on opening, a comic unpacked by 7-Zip) are kept on disk when the book is prepared.
+        public static bool KeepsFiles(string relativePath) => relativePath.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase) || BookConversion.IsConverted(relativePath)
+            || ComicPages.IsComic(relativePath) && !ComicPages.IsZip(relativePath);
+
         // A scanned PDF's pages the recognizer has read go into the text.
         public async Task<long> OpenAsync(LogicContext context, ReadingSourceData source, CancellationToken ct)
         {
-            // A complete cache needs no storage.
-            if (source is { DocumentId: { } cached, IsCached: true })
+            // A prepared book needs no storage once the pictures the server makes are on disk; with the storage offline its text still reads.
+            if (source is { DocumentId: { } cached, IsCached: true } && (source.IsMissing || !KeepsFiles(source.RelativePath) || _files.IsComplete(cached)))
             {
-                await context.ExecuteBatchAsync(async (ctx, token) =>
-                {
-                    await ctx.TouchReadingDocumentAsync(new ReadingDocumentIdData(cached), token);
-                    return true;
-                }, ct);
-                return cached;
+                return await TouchAsync(context, cached, ct);
             }
 
             if (source.IsMissing)
@@ -72,7 +77,16 @@ namespace Jularr.Backend.Service.User.Reading.V1
                 throw new ServiceUnavailableException("reading_unavailable");
             }
 
-            var file = await OpenFileAsync(context, source.StorageMountId, source.RootRelativePath, source.RelativePath, ct);
+            Stream file;
+            try
+            {
+                file = await OpenFileAsync(context, source.StorageMountId, source.RootRelativePath, source.RelativePath, ct);
+            }
+            catch (ServiceUnavailableException) when (source is { DocumentId: { } offline, IsCached: true })
+            {
+                return await TouchAsync(context, offline, ct);
+            }
+
             await using (file)
             {
                 if (ComicPages.IsComic(source.RelativePath))
@@ -92,56 +106,10 @@ namespace Jularr.Backend.Service.User.Reading.V1
 
                 byte[] hash;
                 Stream epub = file;
-                if (BookConversion.IsConverted(source.RelativePath))
+                var converted = BookConversion.IsConverted(source.RelativePath);
+                if (converted)
                 {
-                    // A format the reader does not read opens through its reading copy, an EPUB made in memory; the file itself stays as it is.
-                    if (file.CanSeek && file.Length > BookConversion.MaximumSourceBytes)
-                    {
-                        throw new ServiceUnavailableException("reading_invalid_file");
-                    }
-
-                    // Read once into an array of its size where the length is known.
-                    byte[] bytes;
-                    if (file.CanSeek)
-                    {
-                        bytes = new byte[file.Length];
-                        await file.ReadExactlyAsync(bytes, ct);
-                    }
-                    else
-                    {
-                        using var copy = new MemoryStream();
-                        var buffer = new byte[81920];
-                        int read;
-                        while ((read = await file.ReadAsync(buffer, ct)) > 0)
-                        {
-                            if (copy.Length + read > BookConversion.MaximumSourceBytes)
-                            {
-                                throw new ServiceUnavailableException("reading_invalid_file");
-                            }
-
-                            copy.Write(buffer, 0, read);
-                        }
-
-                        bytes = copy.ToArray();
-                    }
-
-                    hash = SHA256.HashData(bytes);
-                    try
-                    {
-                        epub = new MemoryStream(BookConversion.ToEpub(source.RelativePath, bytes));
-                    }
-                    catch (BookProtectedException)
-                    {
-                        throw new ServiceUnavailableException("reading_drm");
-                    }
-                    catch (BookCompressionException)
-                    {
-                        throw new ServiceUnavailableException("reading_kindle_compression");
-                    }
-                    catch (InvalidDataException)
-                    {
-                        throw new ServiceUnavailableException("reading_invalid_file");
-                    }
+                    (hash, epub) = await ConvertAsync(file, source.RelativePath, ct);
                 }
                 else
                 {
@@ -168,7 +136,13 @@ namespace Jularr.Backend.Service.User.Reading.V1
                     var state = await context.ExecuteBatchAsync((ctx, token) => ctx.CreateReadingDocumentAsync(save, token), ct);
                     if (!state.IsCached)
                     {
-                        await PrepareAsync(context, state.DocumentId, archive, package, ct);
+                        await PrepareAsync(context, state.DocumentId, archive, package, converted, ct);
+                    }
+                    else if (converted && !_files.IsComplete(state.DocumentId))
+                    {
+                        // The text is kept; the copy's pictures are made again.
+                        await WritePicturesAsync(state.DocumentId, archive, package, ct);
+                        await TrimAsync(context, ct);
                     }
 
                     return state.DocumentId;
@@ -176,18 +150,64 @@ namespace Jularr.Backend.Service.User.Reading.V1
             }
         }
 
-        private async Task PrepareAsync(LogicContext context, long documentId, ZipArchive archive, EpubPackage package, CancellationToken ct)
+        // A format the reader does not read opens through its reading copy, an EPUB made in memory; the file itself stays as it is. Its hash is the file's.
+        private static async Task<(byte[] Hash, Stream Epub)> ConvertAsync(Stream file, string relativePath, CancellationToken ct)
         {
-            await context.ExecuteBatchAsync(async (ctx, token) =>
+            if (file.CanSeek && file.Length > BookConversion.MaximumSourceBytes)
             {
-                await ctx.ClearReadingResourcesAsync(new ReadingDocumentIdData(documentId), token);
-                return true;
-            }, ct);
+                throw new ServiceUnavailableException("reading_invalid_file");
+            }
+
+            // Read once into an array of its size where the length is known.
+            byte[] bytes;
+            if (file.CanSeek)
+            {
+                bytes = new byte[file.Length];
+                await file.ReadExactlyAsync(bytes, ct);
+            }
+            else
+            {
+                using var copy = new MemoryStream();
+                var buffer = new byte[81920];
+                int read;
+                while ((read = await file.ReadAsync(buffer, ct)) > 0)
+                {
+                    if (copy.Length + read > BookConversion.MaximumSourceBytes)
+                    {
+                        throw new ServiceUnavailableException("reading_invalid_file");
+                    }
+
+                    copy.Write(buffer, 0, read);
+                }
+
+                bytes = copy.ToArray();
+            }
+
+            try
+            {
+                return (SHA256.HashData(bytes), new MemoryStream(BookConversion.ToEpub(relativePath, bytes)));
+            }
+            catch (BookProtectedException)
+            {
+                throw new ServiceUnavailableException("reading_drm");
+            }
+            catch (BookCompressionException)
+            {
+                throw new ServiceUnavailableException("reading_kindle_compression");
+            }
+            catch (InvalidDataException)
+            {
+                throw new ServiceUnavailableException("reading_invalid_file");
+            }
+        }
+
+        private async Task PrepareAsync(LogicContext context, long documentId, ZipArchive archive, EpubPackage package, bool converted, CancellationToken ct)
+        {
+            await ClearAsync(context, documentId, ct);
 
             // Section by section in bounded batches.
             var indexes = package.Spine.Select((item, index) => (item.Path, index)).ToDictionary(pair => pair.Path, pair => pair.index, StringComparer.Ordinal);
             var sections = new List<ReadingStructureSection>();
-            var images = new HashSet<string>(StringComparer.Ordinal);
             var writer = new ResourceWriter(context, ct);
             var sizes = new Dictionary<string, (int Width, int Height)?>(StringComparer.Ordinal);
             (int Width, int Height)? SizeOf(string path)
@@ -212,22 +232,33 @@ namespace Jularr.Backend.Service.User.Reading.V1
                 {
                     guessText.Add(Tags().Replace(prepared.Html, " "));
                 }
-
-                foreach (var image in prepared.Resources.Where(images.Add))
-                {
-                    if (archive.GetEntry(image) is { } entry)
-                    {
-                        await writer.AddAsync(new ReadingResourceData(documentId, image, package.Manifest[image], EpubReader.ReadBytes(entry)));
-                    }
-                }
             }
 
             await writer.FlushAsync();
+            if (converted)
+            {
+                await WritePicturesAsync(documentId, archive, package, ct);
+            }
+
             var toc = package.Toc.Where(entry => indexes.ContainsKey(entry.Path)).Select(entry => new ReadingStructureEntry(entry.Title, indexes[entry.Path], entry.Level, entry.Anchor)).ToArray();
             var structure = JsonSerializer.Serialize(new ReadingStructure([.. sections], toc));
             // An EPUB without its language tag: the text of its first sections tells.
             var language = package.Language ?? ReadingLanguage.Guess(string.Concat(guessText));
             await CompleteAsync(context, new ReadingDocumentCompleteData(documentId, package.Title, language, structure, sections.Sum(section => section.Characters)), ct);
+        }
+
+        // The pictures of a book read through a copy made on opening, which its file cannot answer.
+        private async Task WritePicturesAsync(long documentId, ZipArchive archive, EpubPackage package, CancellationToken ct)
+        {
+            foreach (var (path, mediaType) in package.Manifest.Where(item => item.Value.StartsWith("image/", StringComparison.Ordinal)))
+            {
+                if (archive.GetEntry(path) is { } entry)
+                {
+                    await _files.WriteAsync(documentId, path, mediaType, EpubReader.ReadBytes(entry), ct);
+                }
+            }
+
+            _files.Complete(documentId);
         }
 
         // A PDF reads like an EPUB once its text is reflowed, with the pages that do not reflow as the original's; one without text stays for the original pages. The document says whether it is fit to open by itself.
@@ -237,32 +268,12 @@ namespace Jularr.Backend.Service.User.Reading.V1
             file.Position = 0;
 
             // Only a PDF with text becomes a document; a scan waits for recognition where the Ocr module reads it, a page at a time.
-            var recognized = await context.ExecuteBatchAsync((ctx, token) => ReadRecognizedAsync(ctx, source, token), ct);
-
-            // Pictures the recognizer found on scanned pages, and pages that show best whole, are cut from the pages PDFium draws.
-            PdfRendering? rendering = null;
-            if (recognized.Values.Any(page => page.Reason == RecognizedPage.Recognized) && file.Length <= PdfBook.MaximumRenderBytes)
-            {
-                using var copy = new MemoryStream();
-                await file.CopyToAsync(copy, ct);
-                file.Position = 0;
-                try
-                {
-                    rendering = PdfRendering.Open(copy.ToArray());
-                }
-                catch (InvalidDataException)
-                {
-                    // Without a drawing the scan's pictures stay with the original pages.
-                }
-            }
+            var recognized = await context.ExecuteBatchAsync((ctx, token) => ReadRecognizedAsync(ctx, new ReadingRecognitionData(source.StoredFileId, source.SizeBytes, source.ModifiedAt), token), ct);
 
             PdfBookContent book;
             try
             {
-                using (rendering)
-                {
-                    book = PdfBook.Read(file, recognized, rendering);
-                }
+                book = await ReadPdfAsync(file, recognized, ct);
             }
             catch (PdfWithoutTextException)
             {
@@ -292,31 +303,25 @@ namespace Jularr.Backend.Service.User.Reading.V1
             var state = await context.ExecuteBatchAsync((ctx, token) => ctx.CreateReadingDocumentAsync(save, token), ct);
             if (state.IsCached)
             {
+                // The text is kept; the pictures just drawn are kept on disk again.
+                if (!_files.IsComplete(state.DocumentId))
+                {
+                    await WritePdfFilesAsync(state.DocumentId, book, ct);
+                    await TrimAsync(context, ct);
+                }
+
                 return state.DocumentId;
             }
 
-            await context.ExecuteBatchAsync(async (ctx, token) =>
-            {
-                await ctx.ClearReadingResourcesAsync(new ReadingDocumentIdData(state.DocumentId), token);
-                return true;
-            }, ct);
+            await ClearAsync(context, state.DocumentId, ct);
 
-            // Each chapter becomes one section of plain paragraphs, pictures and figures, prepared like any book text.
+            // Each chapter becomes one section of plain paragraphs, pictures and figures, prepared like any book text; the pictures go to disk.
             var prepared = PdfBookHtml.Prepare(book, state.DocumentId);
+            await WritePdfFilesAsync(state.DocumentId, book, ct);
             var writer = new ResourceWriter(context, ct);
-            foreach (var image in book.Images)
-            {
-                await writer.AddAsync(new ReadingResourceData(state.DocumentId, image.Path, image.MediaType, image.Bytes));
-            }
-
             for (var index = 0; index < prepared.Sections.Count; index++)
             {
                 await writer.AddAsync(new ReadingResourceData(state.DocumentId, SectionPath(index), "text/html; charset=utf-8", Encoding.UTF8.GetBytes(prepared.Sections[index].Html)));
-            }
-
-            foreach (var page in book.SmartPages)
-            {
-                await writer.AddAsync(new ReadingResourceData(state.DocumentId, PdfBookHtml.SmartImagePath(page.Number), "image/jpeg", page.Image));
             }
 
             for (var index = 0; index < prepared.SmartPages.Count; index++)
@@ -336,8 +341,48 @@ namespace Jularr.Backend.Service.User.Reading.V1
             return state.DocumentId;
         }
 
+        // Pictures the recognizer found on scanned pages, and pages that show best whole, are cut from the pages PDFium draws.
+        private static async Task<PdfBookContent> ReadPdfAsync(Stream file, IReadOnlyDictionary<int, RecognizedPage> recognized, CancellationToken ct)
+        {
+            PdfRendering? rendering = null;
+            if (recognized.Values.Any(page => page.Reason == RecognizedPage.Recognized) && file.Length <= PdfBook.MaximumRenderBytes)
+            {
+                using var copy = new MemoryStream();
+                await file.CopyToAsync(copy, ct);
+                file.Position = 0;
+                try
+                {
+                    rendering = PdfRendering.Open(copy.ToArray());
+                }
+                catch (InvalidDataException)
+                {
+                    // Without a drawing the scan's pictures stay with the original pages.
+                }
+            }
+
+            using (rendering)
+            {
+                return PdfBook.Read(file, recognized, rendering);
+            }
+        }
+
+        private async Task WritePdfFilesAsync(long documentId, PdfBookContent book, CancellationToken ct)
+        {
+            foreach (var image in book.Images)
+            {
+                await _files.WriteAsync(documentId, image.Path, image.MediaType, image.Bytes, ct);
+            }
+
+            foreach (var page in book.SmartPages)
+            {
+                await _files.WriteAsync(documentId, PdfBookHtml.SmartImagePath(page.Number), "image/jpeg", page.Image, ct);
+            }
+
+            _files.Complete(documentId);
+        }
+
         // What the recognizer has read of this version of the PDF so far, by page.
-        private static async Task<IReadOnlyDictionary<int, RecognizedPage>> ReadRecognizedAsync(LogicContext ctx, ReadingSourceData source, CancellationToken ct)
+        private static async Task<IReadOnlyDictionary<int, RecognizedPage>> ReadRecognizedAsync(LogicContext ctx, ReadingRecognitionData source, CancellationToken ct)
         {
             var sql = new SqlStatement();
             sql.Statement =
@@ -356,7 +401,7 @@ namespace Jularr.Backend.Service.User.Reading.V1
                 WHERE
                     page."StoredFileId" = @StoredFileId;
                 """;
-            sql.Parameters.Add(new ReadingRecognitionData(source.StoredFileId, source.SizeBytes, source.ModifiedAt));
+            sql.Parameters.Add(source);
             var pages = await ctx.ReadSql.ReadListAsync<ReadingRecognizedPageData>(sql, ct);
             return pages.ToDictionary(page => page.PageNumber, page => new RecognizedPage(page.Reason, (double)page.Quality, RecognizedPage.Parse(page.Lines)));
         }
@@ -368,13 +413,25 @@ namespace Jularr.Backend.Service.User.Reading.V1
             var save = new ReadingDocumentSaveData(source.StoredFileId, source.SizeBytes, source.ModifiedAt, hash, ComicPages.AnalyzerVersion, ReadingFormatType.Comic, null, null,
                 JsonSerializer.Serialize(new ReadingStructure([], [])), 0);
             var state = await context.ExecuteBatchAsync((ctx, token) => ctx.CreateReadingDocumentAsync(save, token), ct);
-            if (state.IsCached)
+            if (state.IsCached && (!KeepsFiles(source.RelativePath) || _files.IsComplete(state.DocumentId)))
             {
                 return state.DocumentId;
             }
 
-            // CBZ is read in place; CBR, CB7 and mislabelled archives are unpacked once by the approved 7-Zip into a private folder.
-            if (ComicPages.IsZip(source.RelativePath))
+            // The pages are counted (and for an unpacked archive kept on disk) the same way each time, so a page's number stays the same.
+            await ReadComicAsync(source.RelativePath, file, (pages, keepsPages) => PrepareComicAsync(state.IsCached ? null : context, state.DocumentId, pages, keepsPages, ct), ct);
+            if (state.IsCached)
+            {
+                await TrimAsync(context, ct);
+            }
+
+            return state.DocumentId;
+        }
+
+        // CBZ is read in place; CBR, CB7 and mislabelled archives are unpacked once by the approved 7-Zip into a private folder, whose pages are kept on disk.
+        private async Task ReadComicAsync(string relativePath, Stream file, Func<ComicPage[], bool, Task> use, CancellationToken ct)
+        {
+            if (ComicPages.IsZip(relativePath))
             {
                 ZipArchive? archive = null;
                 try
@@ -390,11 +447,10 @@ namespace Jularr.Backend.Service.User.Reading.V1
                 {
                     using (archive)
                     {
-                        await PrepareComicAsync(context, state.DocumentId,
-                            [.. archive.Entries.Where(entry => ComicPages.IsPage(entry.FullName)).Select(entry => new ComicPage(entry.FullName, entry.Length, entry.Open))], ct);
+                        await use([.. archive.Entries.Where(entry => ComicPages.IsPage(entry.FullName)).Select(entry => new ComicPage(entry.FullName, entry.Length, entry.Open))], false);
                     }
 
-                    return state.DocumentId;
+                    return;
                 }
             }
 
@@ -405,7 +461,7 @@ namespace Jularr.Backend.Service.User.Reading.V1
 
             // 7-Zip reads a file on this host; an archive on a direct share is copied aside first.
             var folder = Directory.CreateTempSubdirectory("jularr-comic-").FullName;
-            var copy = file is FileStream ? null : folder + Path.GetExtension(source.RelativePath);
+            var copy = file is FileStream ? null : folder + Path.GetExtension(relativePath);
             try
             {
                 if (copy is not null)
@@ -423,8 +479,7 @@ namespace Jularr.Backend.Service.User.Reading.V1
                 var pages = new DirectoryInfo(folder).EnumerateFiles("*", new EnumerationOptions { RecurseSubdirectories = true, AttributesToSkip = FileAttributes.ReparsePoint })
                     .Where(info => ComicPages.IsPage(Path.GetRelativePath(folder, info.FullName)))
                     .Select(info => new ComicPage(Path.GetRelativePath(folder, info.FullName), info.Length, info.OpenRead));
-                await PrepareComicAsync(context, state.DocumentId, [.. pages], ct);
-                return state.DocumentId;
+                await use([.. pages], true);
             }
             finally
             {
@@ -440,17 +495,16 @@ namespace Jularr.Backend.Service.User.Reading.V1
             }
         }
 
-        private async Task PrepareComicAsync(LogicContext context, long documentId, ComicPage[] candidates, CancellationToken ct)
+        // Without a context only the pages of a prepared comic are kept on disk again.
+        private async Task PrepareComicAsync(LogicContext? context, long documentId, ComicPage[] candidates, bool keepsPages, CancellationToken ct)
         {
-            await context.ExecuteBatchAsync(async (ctx, token) =>
+            if (context is not null)
             {
-                await ctx.ClearReadingResourcesAsync(new ReadingDocumentIdData(documentId), token);
-                return true;
-            }, ct);
+                await ClearAsync(context, documentId, ct);
+            }
 
             // Pages in natural order; each one is an image by its bytes, not its name; unreadable entries are skipped.
             var pages = new List<ReadingStructureSection>();
-            var writer = new ResourceWriter(context, ct);
             long total = 0;
             foreach (var candidate in candidates.OrderBy(page => ComicPages.SortKey(page.Path), StringComparer.Ordinal).ThenBy(page => page.Path, StringComparer.Ordinal))
             {
@@ -492,7 +546,11 @@ namespace Jularr.Backend.Service.User.Reading.V1
                     continue;
                 }
 
-                await writer.AddAsync(new ReadingResourceData(documentId, ComicPages.PagePath(pages.Count), contentType, bytes));
+                if (keepsPages)
+                {
+                    await _files.WriteAsync(documentId, ComicPages.PagePath(pages.Count), contentType, bytes, ct);
+                }
+
                 pages.Add(new ReadingStructureSection(candidate.Path, null, 0, 1));
             }
 
@@ -501,8 +559,15 @@ namespace Jularr.Backend.Service.User.Reading.V1
                 throw new ServiceUnavailableException("reading_invalid_file");
             }
 
-            await writer.FlushAsync();
-            await CompleteAsync(context, new ReadingDocumentCompleteData(documentId, null, null, JsonSerializer.Serialize(new ReadingStructure([.. pages], [])), 0), ct);
+            if (keepsPages)
+            {
+                _files.Complete(documentId);
+            }
+
+            if (context is not null)
+            {
+                await CompleteAsync(context, new ReadingDocumentCompleteData(documentId, null, null, JsonSerializer.Serialize(new ReadingStructure([.. pages], [])), 0), ct);
+            }
         }
 
         private async Task<Stream> OpenFileAsync(LogicContext context, long storageMountId, string rootRelativePath, string relativePath, CancellationToken ct)
@@ -537,21 +602,21 @@ namespace Jularr.Backend.Service.User.Reading.V1
                 return state.DocumentId;
             }
 
-            await context.ExecuteBatchAsync(async (ctx, token) =>
-            {
-                await ctx.ClearReadingResourcesAsync(new ReadingDocumentIdData(state.DocumentId), token);
-                return true;
-            }, ct);
-
+            await ClearAsync(context, state.DocumentId, ct);
             var count = await WithDjvuAsync(file, path => _djvu.CountPagesAsync(path, ct), ct);
             var pages = Enumerable.Range(1, Math.Min(count, DjvuTools.MaximumPages)).Select(number => new ReadingStructureSection("page " + number.ToString(CultureInfo.InvariantCulture), null, 0, 1));
             await CompleteAsync(context, new ReadingDocumentCompleteData(state.DocumentId, null, null, JsonSerializer.Serialize(new ReadingStructure([.. pages], [], rendersPages: true)), 0), ct);
             return state.DocumentId;
         }
 
-        // A page of a DjVu book from the cache, else drawn now with the next pages not drawn yet; only the asked page must succeed.
+        // A page of a DjVu book from the disk, else drawn now with the next pages not drawn yet; only the asked page must succeed.
         public async Task<ReadingResourceV1> RenderPageAsync(LogicContext context, ReadingPageSourceData source, int index, CancellationToken ct)
         {
+            if (_files.Find(source.DocumentId, ComicPages.PagePath(index)) is { } kept)
+            {
+                return new ReadingResourceV1(await File.ReadAllBytesAsync(kept.FullPath, ct), kept.MediaType);
+            }
+
             if (!source.IsCurrent)
             {
                 throw new ServiceUnavailableException("reading_unavailable");
@@ -567,13 +632,12 @@ namespace Jularr.Backend.Service.User.Reading.V1
             {
                 // Another request may have drawn these pages while this one waited.
                 var paths = Enumerable.Range(index, Math.Min(PagesAhead, source.SectionCount - index)).Select(ComicPages.PagePath).ToArray();
-                var cached = await context.ExecuteBatchAsync((ctx, token) => ReadPagesAsync(ctx, new ReadingResourcePathsData(source.DocumentId, paths), token), ct);
-                if (cached.FirstOrDefault(page => page.Path == paths[0]) is { } ready)
+                if (_files.Find(source.DocumentId, paths[0]) is { } ready)
                 {
-                    return new ReadingResourceV1(ready.Bytes, ready.MediaType);
+                    return new ReadingResourceV1(await File.ReadAllBytesAsync(ready.FullPath, ct), ready.MediaType);
                 }
 
-                var missing = paths.Select((path, offset) => (Path: path, Number: index + offset + 1)).Where(page => cached.All(other => other.Path != page.Path)).ToArray();
+                var missing = paths.Select((path, offset) => (Path: path, Number: index + offset + 1)).Where(page => _files.Find(source.DocumentId, page.Path) is null).ToArray();
                 var file = await OpenFileAsync(context, source.StorageMountId, source.RootRelativePath, source.RelativePath, ct);
                 DjvuPageImage?[] drawn;
                 await using (file)
@@ -598,44 +662,21 @@ namespace Jularr.Backend.Service.User.Reading.V1
                     }, ct);
                 }
 
-                await context.ExecuteBatchAsync(async (ctx, token) =>
+                for (var offset = 0; offset < drawn.Length; offset++)
                 {
-                    for (var offset = 0; offset < drawn.Length; offset++)
+                    if (drawn[offset] is { } image)
                     {
-                        if (drawn[offset] is { } image)
-                        {
-                            await ctx.SaveReadingResourceAsync(new ReadingResourceData(source.DocumentId, missing[offset].Path, image.ContentType, image.Bytes), token);
-                        }
+                        await _files.WriteAsync(source.DocumentId, missing[offset].Path, image.ContentType, image.Bytes, ct);
                     }
+                }
 
-                    await ctx.RecountReadingCacheAsync(new ReadingDocumentIdData(source.DocumentId), token);
-                    return true;
-                }, ct);
+                _files.Trim(source.CacheBudgetBytes);
                 return new ReadingResourceV1(drawn[0]!.Bytes, drawn[0]!.ContentType);
             }
             finally
             {
                 DjvuGate.Release();
             }
-        }
-
-        private static async Task<IReadOnlyList<ReadingEbookResourceData>> ReadPagesAsync(LogicContext ctx, ReadingResourcePathsData data, CancellationToken ct)
-        {
-            var sql = new SqlStatement();
-            sql.Statement =
-                """
-                SELECT
-                    resource."Path",
-                    resource."MediaType",
-                    resource."Bytes"
-                FROM
-                    "ReadingResources" AS resource
-                WHERE
-                    resource."ReadingDocumentId" = @DocumentId
-                    AND resource."Path" = ANY(@Paths);
-                """;
-            sql.Parameters.Add(data);
-            return await ctx.ReadSql.ReadListAsync<ReadingEbookResourceData>(sql, ct);
         }
 
         // DjVuLibre reads a file on this host: a book on a direct share is copied aside into a private folder first. A file it cannot read is an invalid book.
@@ -684,19 +725,202 @@ namespace Jularr.Backend.Service.User.Reading.V1
             }
         }
 
+        // Documents leaving the database cache take their files along; the disk stays within the same budget.
         private async Task CompleteAsync(LogicContext context, ReadingDocumentCompleteData complete, CancellationToken ct)
+        {
+            var (evicted, budget) = await context.ExecuteBatchAsync(async (ctx, token) =>
+            {
+                await ctx.CompleteReadingDocumentAsync(complete, token);
+                var budget = await ReadBudgetAsync(ctx, token);
+                return (await ctx.EvictReadingCacheAsync(budget, token), budget.CacheBudgetBytes);
+            }, ct);
+            _files.Delete(evicted);
+            _files.Trim(budget);
+        }
+
+        // An interrupted or outdated preparation starts over, on disk as well.
+        private async Task ClearAsync(LogicContext context, long documentId, CancellationToken ct)
         {
             await context.ExecuteBatchAsync(async (ctx, token) =>
             {
-                await ctx.CompleteReadingDocumentAsync(complete, token);
-                await ctx.EvictReadingCacheAsync(await ReadBudgetAsync(ctx, token), token);
+                await ctx.ClearReadingResourcesAsync(new ReadingDocumentIdData(documentId), token);
                 return true;
             }, ct);
+            _files.Delete([documentId]);
+        }
+
+        private static async Task<long> TouchAsync(LogicContext context, long documentId, CancellationToken ct)
+        {
+            await context.ExecuteBatchAsync(async (ctx, token) =>
+            {
+                await ctx.TouchReadingDocumentAsync(new ReadingDocumentIdData(documentId), token);
+                return true;
+            }, ct);
+            return documentId;
+        }
+
+        private async Task TrimAsync(LogicContext context, CancellationToken ct) =>
+            _files.Trim((await context.ExecuteBatchAsync((ctx, token) => ReadBudgetAsync(ctx, token), ct)).CacheBudgetBytes);
+
+        // A document's file and whether it is still the version the document was made of, for a reader that may open it; the page's entry where it names a comic page.
+        public static Task<ReadingFileSourceData?> ReadFileSourceAsync(LogicContext ctx, long documentId, long profileId, string? path, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    document."Id" AS "DocumentId",
+                    document."ReadingFormatTypeId",
+                    file."Id" AS "StoredFileId",
+                    file."RelativePath",
+                    file."SizeBytes",
+                    file."ModifiedAt",
+                    root."RelativePath" AS "RootRelativePath",
+                    mount."Id" AS "StorageMountId",
+                    (file."MissingSince" IS NULL
+                        AND file."SizeBytes" = document."SourceSizeBytes"
+                        AND file."ModifiedAt" = document."SourceModifiedAt") AS "IsCurrent",
+                    CASE WHEN document."ReadingFormatTypeId" = 4 AND @PageIndex >= 0 THEN document."Structure" -> 'Sections' -> @PageIndex ->> 'Path' END AS "PageEntry",
+                    coalesce((SELECT settings."ReadingCacheBytes" FROM "InstanceSettings" AS settings), 2147483648) AS "CacheBudgetBytes"
+                FROM
+                    "ReadingDocuments" AS document
+                    JOIN "StoredFiles" AS file ON file."Id" = document."StoredFileId"
+                    JOIN "MediaAssets" AS asset ON asset."Id" = file."MediaAssetId"
+                    JOIN "LibraryRoots" AS root ON root."Id" = file."LibraryRootId"
+                    JOIN "StorageMounts" AS mount ON mount."Id" = root."StorageMountId"
+                WHERE
+                    document."Id" = @DocumentId
+                    AND EXISTS (SELECT 1 FROM "ProfileWorks" AS visible WHERE visible."WorkId" = asset."WorkId" AND visible."ProfileId" = @ProfileId);
+                """;
+            var page = path is not null && path.StartsWith(":page/", StringComparison.Ordinal) && int.TryParse(path.AsSpan(6), NumberStyles.None, CultureInfo.InvariantCulture, out var number)
+                && number < ComicPages.MaximumPages ? number : -1;
+            sql.Parameters.Add(new ReadingFileLookupData(documentId, profileId, page));
+            return ctx.ReadSql.ReadOptionalAsync<ReadingFileSourceData>(sql, ct);
+        }
+
+        // A picture or page a reader shows (in a read-only service): kept on disk, else read from an EPUB or CBZ itself and kept, else the book's pictures drawn again.
+        // None when the book has no such picture.
+        public async Task<ReadingFile?> ReadFileAsync(LogicContext context, ReadingFileSourceData source, string path, CancellationToken ct)
+        {
+            if (_files.Find(source.DocumentId, path) is { } kept)
+            {
+                return kept;
+            }
+
+            // A complete set has no such picture; a DjVu page is drawn through the reader's page handler only.
+            if (_files.IsComplete(source.DocumentId) || IsDjvu(source.RelativePath))
+            {
+                return null;
+            }
+
+            if (!source.IsCurrent)
+            {
+                throw new ServiceUnavailableException("reading_unavailable");
+            }
+
+            Stream file;
+            try
+            {
+                file = await _storage.Open(await context.ReadStorageMountAsync(source.StorageMountId, ct)).OpenReadAsync(StoragePath.Combine(source.RootRelativePath, source.RelativePath), ct);
+            }
+            catch (Exception exception) when (exception is NasMountException or IOException or UnauthorizedAccessException)
+            {
+                throw new ServiceUnavailableException("reading_unavailable");
+            }
+
+            await using (file)
+            {
+                // An EPUB's picture and a CBZ's page, read from the archive itself; a mislabelled CBZ goes through 7-Zip below.
+                var entryPath = source.ReadingFormatTypeId == ReadingFormatType.Comic ? source.PageEntry : path;
+                if (!KeepsFiles(source.RelativePath))
+                {
+                    if (entryPath is null)
+                    {
+                        return null;
+                    }
+
+                    try
+                    {
+                        using var archive = new ZipArchive(file, ZipArchiveMode.Read, leaveOpen: true);
+                        if (archive.GetEntry(entryPath) is not { Length: > 0 and <= EpubReader.MaximumEntryBytes } entry)
+                        {
+                            return null;
+                        }
+
+                        var bytes = EpubReader.ReadBytes(entry);
+                        var mediaType = ComicPages.ContentType(bytes.AsSpan(0, Math.Min(16, bytes.Length)))
+                            ?? (source.ReadingFormatTypeId == ReadingFormatType.Epub && entryPath.EndsWith(".svg", StringComparison.OrdinalIgnoreCase) ? "image/svg+xml" : null);
+                        if (mediaType is null)
+                        {
+                            return null;
+                        }
+
+                        var written = await _files.WriteAsync(source.DocumentId, path, mediaType, bytes, ct);
+                        _files.Trim(source.CacheBudgetBytes);
+                        return written;
+                    }
+                    catch (InvalidDataException) when (source.ReadingFormatTypeId == ReadingFormatType.Comic)
+                    {
+                        file.Position = 0;
+                    }
+                    catch (InvalidDataException)
+                    {
+                        return null;
+                    }
+                }
+
+                // Pictures the server makes are drawn again for the whole book, one book at a time; a request that waited finds them kept.
+                await RedrawGate.WaitAsync(ct);
+                try
+                {
+                    if (_files.IsComplete(source.DocumentId))
+                    {
+                        return _files.Find(source.DocumentId, path);
+                    }
+
+                    if (source.ReadingFormatTypeId == ReadingFormatType.Pdf)
+                    {
+                        var recognized = await ReadRecognizedAsync(context, new ReadingRecognitionData(source.StoredFileId, source.SizeBytes, source.ModifiedAt), ct);
+                        try
+                        {
+                            await WritePdfFilesAsync(source.DocumentId, await ReadPdfAsync(file, recognized, ct), ct);
+                        }
+                        catch (Exception exception) when (exception is PdfWithoutTextException or InvalidDataException)
+                        {
+                            throw new ServiceUnavailableException("reading_invalid_file");
+                        }
+                    }
+                    else if (source.ReadingFormatTypeId == ReadingFormatType.Comic)
+                    {
+                        await ReadComicAsync(source.RelativePath, file, (pages, _) => PrepareComicAsync(null, source.DocumentId, pages, true, ct), ct);
+                    }
+                    else if (BookConversion.IsConverted(source.RelativePath))
+                    {
+                        var (_, epub) = await ConvertAsync(file, source.RelativePath, ct);
+                        try
+                        {
+                            using var archive = new ZipArchive(epub, ZipArchiveMode.Read);
+                            await WritePicturesAsync(source.DocumentId, archive, EpubReader.Read(archive), ct);
+                        }
+                        catch (InvalidDataException)
+                        {
+                            throw new ServiceUnavailableException("reading_invalid_file");
+                        }
+                    }
+                }
+                finally
+                {
+                    RedrawGate.Release();
+                }
+
+                _files.Trim(source.CacheBudgetBytes);
+                return _files.Find(source.DocumentId, path);
+            }
         }
 
         private sealed record ComicPage(string Path, long Length, Func<Stream> Open);
 
-        // Resources reach the cache in bounded batches.
+        // Sections reach the database in bounded batches.
         private sealed class ResourceWriter(LogicContext context, CancellationToken ct)
         {
             private readonly List<ReadingResourceData> _batch = [];

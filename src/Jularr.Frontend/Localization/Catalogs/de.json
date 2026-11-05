@@ -3106,16 +3106,16 @@
    "2048"
   ],
   "hint.InstanceSettingsFields.ReadingCacheMegabytes.info": [
-   "Space for prepared comics; the oldest are removed first. Prepared books stay while their file does.",
-   "Platz für aufbereitete Comics; die ältesten werden zuerst entfernt. Aufbereitete Bücher bleiben, solange ihre Datei da ist."
+   "Disk space for the pictures and pages of books; the books read longest ago are removed first and drawn again when needed.",
+   "Platz auf der Festplatte für Bilder und Seiten von Büchern; die am längsten nicht gelesenen werden zuerst entfernt und bei Bedarf neu erzeugt."
   ],
   "hint.InstanceSettingsFields.ReadingCacheWorks.placeholder": [
    "100",
    "100"
   ],
   "hint.InstanceSettingsFields.ReadingCacheWorks.info": [
-   "Most comics kept prepared at once; prepared books do not count.",
-   "Höchstzahl an Comics, die gleichzeitig aufbereitet bleiben; aufbereitete Bücher zählen nicht mit."
+   "Most books of changed or removed files whose prepared text is kept; books with a current file do not count.",
+   "Höchstzahl an Büchern geänderter oder entfernter Dateien, deren aufbereiteter Text bleibt; Bücher mit aktueller Datei zählen nicht."
   ],
   "hint.InstanceSettingsFields.SubtitleLanguages.placeholder": [
    "de, en",

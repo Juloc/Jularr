@@ -44,12 +44,14 @@ namespace Jularr.Backend.Service.Admin.Media.V1
     {
         private readonly LibraryReplacements _replacements;
         private readonly CoverStore _covers;
+        private readonly ReadingFiles _readingFiles;
         private readonly WorkDownloadClients _clients;
 
-        internal DeleteWorkV1(LibraryReplacements replacements, CoverStore covers, SabnzbdClient sabnzbd, QbittorrentClient qbittorrent, DownloadStorage downloads, TimeProvider time, IDataProtectionProvider protection)
+        internal DeleteWorkV1(LibraryReplacements replacements, CoverStore covers, ReadingFiles readingFiles, SabnzbdClient sabnzbd, QbittorrentClient qbittorrent, DownloadStorage downloads, TimeProvider time, IDataProtectionProvider protection)
         {
             _replacements = replacements;
             _covers = covers;
+            _readingFiles = readingFiles;
             _clients = new WorkDownloadClients(sabnzbd, qbittorrent, downloads, time, protection.CreateProtector(AcquisitionConnectionInput.ProtectorPurpose));
         }
 
@@ -60,12 +62,12 @@ namespace Jularr.Backend.Service.Admin.Media.V1
 
         protected override async Task<IServiceOutput> OnExecute()
         {
-            await DeleteAsync(Context, _replacements, _covers, _clients, Parameters.WorkId, Data.DeletesFiles, Data.AddsExclusion, Auth.AccountId!.Value, CancellationToken);
+            await DeleteAsync(Context, _replacements, _covers, _readingFiles, _clients, Parameters.WorkId, Data.DeletesFiles, Data.AddsExclusion, Auth.AccountId!.Value, CancellationToken);
             return new UpdateResult(true);
         }
 
         // One title as Sonarr's dialog deletes it; the mass editor does the same for each chosen title.
-        internal static async Task DeleteAsync(LogicContext context, LibraryReplacements replacements, CoverStore covers, WorkDownloadClients clients, long workId, bool deletesFiles, bool addsExclusion, long accountId, CancellationToken ct)
+        internal static async Task DeleteAsync(LogicContext context, LibraryReplacements replacements, CoverStore covers, ReadingFiles readingFiles, WorkDownloadClients clients, long workId, bool deletesFiles, bool addsExclusion, long accountId, CancellationToken ct)
         {
             // A running download would be left in its client: deleting with its data discards it first, deleting only the title refuses.
             var facts = await context.ExecuteBatchAsync((ctx, token) => ctx.ReadWorkDeletionFactsAsync(new WorkParametersV1(workId), token), ct);
@@ -99,8 +101,9 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                 return true;
             }, ct);
 
-            // The title's covers leave with it.
+            // The title's covers and its books' pictures leave with it.
             covers.Delete(workId);
+            readingFiles.Delete(facts.ReadingDocumentIds);
         }
     }
 

@@ -68,32 +68,6 @@ namespace Jularr.Backend.Logic.Reading
             await ctx.ExecuteAsyncForAffectedRows(sql, ct);
         }
 
-        // Pages drawn after the document was complete count towards the cache budget; an evicted document stays evicted.
-        public static async Task RecountReadingCacheAsync(this LogicContext ctx, ReadingDocumentIdData data, CancellationToken ct)
-        {
-            var sql = new SqlStatement();
-            sql.Statement =
-                """
-                UPDATE
-                    "ReadingDocuments" AS document
-                SET
-                    "CacheBytes" = (
-                        SELECT
-                            coalesce(sum(length(resource."Bytes")), 0)
-                        FROM
-                            "ReadingResources" AS resource
-                        WHERE
-                            resource."ReadingDocumentId" = document."Id"
-                    ),
-                    "LastReadAt" = now()
-                WHERE
-                    document."Id" = @DocumentId
-                    AND document."CacheCompletedAt" IS NOT NULL;
-                """;
-            sql.Parameters.Add(data);
-            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
-        }
-
         public static async Task CompleteReadingDocumentAsync(this LogicContext ctx, ReadingDocumentCompleteData data, CancellationToken ct)
         {
             // Only a complete package counts as readable without the storage.
@@ -141,7 +115,8 @@ namespace Jularr.Backend.Logic.Reading
             await ctx.ExecuteAsyncForAffectedRows(sql, ct);
         }
 
-        public static async Task<int> EvictReadingCacheAsync(this LogicContext ctx, ReadingCacheBudgetData data, CancellationToken ct)
+        // The documents that left the cache; their files on disk go with them.
+        public static async Task<long[]> EvictReadingCacheAsync(this LogicContext ctx, ReadingCacheBudgetData data, CancellationToken ct)
         {
             // Prepared books stay while their file does (the library is prepared ahead); comics and documents of changed or vanished files
             // share the budget: newest reads keep their place, older ones beyond the bytes or works budget leave the cache.
@@ -191,12 +166,12 @@ namespace Jularr.Backend.Logic.Reading
                         resource."ReadingDocumentId" = evicted."Id"
                 )
                 SELECT
-                    count(*)::integer AS "Count"
+                    evicted."Id" AS "DocumentId"
                 FROM
                     evicted;
                 """;
             sql.Parameters.Add(data);
-            return (await ctx.ReadRequiredAsync<ReadingEvictionData>(sql, ct)).Count;
+            return [.. (await ctx.Sql.ReadListAsync<ReadingDocumentIdData>(sql, ct)).Select(evicted => evicted.DocumentId)];
         }
 
         // The choice belongs to the book the asset is part of, if the profile may open it. Language and view share one row; a row with neither is gone.
