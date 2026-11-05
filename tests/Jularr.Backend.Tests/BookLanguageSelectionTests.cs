@@ -40,9 +40,9 @@ namespace Jularr.Backend.Tests
         ];
 
         [TestMethod]
-        public void Flexible_OnlyOtherOrUnknownLanguages_NothingIsTakenAutomatically_EveryRowSaysWhy()
+        public void Flexible_OnlyOtherKnownLanguages_NothingIsTakenAutomatically_EveryRowSaysWhy()
         {
-            var result = ReleaseSelectionEngine.Select(Profile(LanguageFallbackType.Any, original: "JA"), NoGermanEdition());
+            var result = ReleaseSelectionEngine.Select(Profile(LanguageFallbackType.Any, original: "JA"), NoGermanEdition().Where(candidate => candidate.Languages.Count > 0).ToArray());
 
             Assert.IsNull(result.Winner);
             Assert.AreEqual(SelectionOutcome.ManualReviewOnly, result.Outcome);
@@ -51,26 +51,33 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(("LanguageNotAllowed", "PL"), (reasons["PL"].Code, reasons["PL"].Value));
             Assert.AreEqual(("LanguageNotAllowed", "ZH"), (reasons["ZH"].Code, reasons["ZH"].Value));
             Assert.AreEqual(("LanguageNotAllowed", "EN"), (reasons["EN"].Code, reasons["EN"].Value));
-            Assert.AreEqual("LanguageUnknown", result.Ranked.Single(evaluation => evaluation.Candidate.Languages.Count == 0).Reasons[^1].Code);
         }
 
         [TestMethod]
-        public void UnknownLanguage_IsNeverTakenAutomatically_UnderAnyFallback()
+        public void UnknownLanguage_IsTheLastResort_OnlyWhenNothingInTheChainIsFound_AndNeverForAStrictProfile()
         {
             var unknown = Candidate("Sun-mi Hwang - Almond (epub)", priority: 1, connection: "OPDS");
-            foreach (var fallback in Enum.GetValues<LanguageFallbackType>())
+
+            // Alone, or next to files in other known languages (which stay manual), it is taken and says why.
+            foreach (var fallback in new[] { LanguageFallbackType.Any, LanguageFallbackType.Original, LanguageFallbackType.English })
             {
-                var result = ReleaseSelectionEngine.Select(Profile(fallback), [unknown]);
-                Assert.IsNull(result.Winner, fallback.ToString());
-                Assert.AreEqual(SelectionDecision.ManualReview, result.Ranked.Single().Decision);
-                Assert.AreEqual("LanguageUnknown", result.Ranked.Single().Reasons[^1].Code);
+                var others = NoGermanEdition().Where(candidate => candidate.Languages.Count > 0 && !candidate.Languages.Contains("EN"));
+                var result = ReleaseSelectionEngine.Select(Profile(fallback), [unknown, .. others]);
+                Assert.AreEqual(unknown.Id, result.Winner!.Candidate.Id, fallback.ToString());
+                Assert.AreEqual("LanguageUnknownLastResort", result.WinnerReason!.Code);
+                Assert.IsTrue(result.Ranked.Where(row => row.Candidate.Id != unknown.Id).All(row => row.Decision == SelectionDecision.ManualReview));
             }
 
-            // Next to a file in the original language, the unknown one stays a row for a person.
+            var strict = ReleaseSelectionEngine.Select(Profile(LanguageFallbackType.None), [unknown]);
+            Assert.IsNull(strict.Winner);
+            Assert.AreEqual("LanguageUnknown", strict.Ranked.Single().Reasons[^1].Code);
+
+            // Any release in the chain wins over it, the original language included; then it is only a row for a person.
             var korean = Candidate("Sun-mi Hwang - Almond (KO) (epub)", priority: 50);
             var mixed = ReleaseSelectionEngine.Select(Profile(LanguageFallbackType.Any), [unknown, korean]);
             Assert.AreEqual(korean.Id, mixed.Winner!.Candidate.Id);
-            Assert.AreEqual(SelectionDecision.ManualReview, mixed.Ranked.Single(row => row.Candidate.Id == unknown.Id).Decision);
+            var row = mixed.Ranked.Single(item => item.Candidate.Id == unknown.Id);
+            Assert.AreEqual(("LanguageUnknown", SelectionDecision.ManualReview), (row.Reasons[^1].Code, row.Decision));
         }
 
         [TestMethod]
@@ -98,7 +105,7 @@ namespace Jularr.Backend.Tests
         public void OriginalFallback_AllowsOnlyTheOriginal_EnglishFallback_OnlyEnglish_StrictNeither()
         {
             var offers = NoGermanEdition();
-            Assert.IsNull(ReleaseSelectionEngine.Select(Profile(LanguageFallbackType.Original), offers).Winner);
+            Assert.IsNull(ReleaseSelectionEngine.Select(Profile(LanguageFallbackType.Original), offers.Where(candidate => candidate.Languages.Count > 0).ToArray()).Winner);
             Assert.AreEqual("Sun-mi Hwang - Almond (EN) (epub)", ReleaseSelectionEngine.Select(Profile(LanguageFallbackType.English), offers).Winner!.Candidate.Parsed!.RawTitle);
             Assert.AreEqual("Sun-mi Hwang - Almond (EN) (epub)", ReleaseSelectionEngine.Select(Profile(LanguageFallbackType.Original, original: "EN"), offers).Winner!.Candidate.Parsed!.RawTitle);
             Assert.IsNull(ReleaseSelectionEngine.Select(Profile(LanguageFallbackType.None, original: "EN"), offers).Winner);

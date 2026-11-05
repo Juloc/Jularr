@@ -110,9 +110,11 @@ volume beats a pack, because every further volume costs coverage. The table show
 ## Book language
 
 A book request's languages are the profile's language order, else the request's language. The profile's fallback decides what an **automatic** search may
-take beyond them: Original the original language of the work, English English, None nothing, Flexible (Any) the original language. Any other language
-(Polish, Chinese or English for a German request of an Almond) and a file that states no language are Manual review: "Language not allowed by the request · PL"
-or "File language is unknown"; a person can still take them in the manual search, which shows every row with its languages, ranked: asked languages in the
+take beyond them: Original the original language of the work, English English, None nothing, Flexible (Any) the original language. Any other known language
+(Polish, Chinese or English for a German request of an Almond) is Manual review: "Language not allowed by the request · PL". A file that states no language, and
+whose title says none either (below), is "File language is unknown" (Manual review) as long as a release in the chain can be taken; when none can, it is the **last resort**
+and is taken automatically ("Language unknown · last resort", ranked after every release with a matching language; a strict profile (None) never does). A release in the requested language
+that appears later is an upgrade of it. A person can still take everything else in the manual search, which shows every row with its languages, ranked: asked languages in the
 profile's order, original, other known, unknown. Direct sources state their languages (Anna's Archive names every language of a file, `de, en` counts for both);
 a source that states none gives an unknown language.
 

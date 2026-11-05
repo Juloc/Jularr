@@ -94,9 +94,14 @@ namespace Jularr.Backend.Tests
 
             Assert.AreEqual(0, judged.Languages!.Count);
             Assert.IsFalse(judged.LanguagesFromTitle);
-            var result = ReleaseSelectionEngine.Select(Profile(LanguageFallbackType.Any), [candidate]);
-            Assert.IsNull(result.Winner);
-            Assert.AreEqual("LanguageUnknown", result.Ranked.Single().Reasons[^1].Code);
+
+            // Nothing in the chain is found: the release of unknown language is the last resort; next to a release in the chain it is a row for a person.
+            var alone = ReleaseSelectionEngine.Select(Profile(LanguageFallbackType.Any), [candidate]);
+            Assert.AreEqual("LanguageUnknownLastResort", alone.WinnerReason!.Code);
+            var german = Candidate("Jane Austen - Stolz und Vorurteil (epub)", "Stolz und Vorurteil").Candidate;
+            var both = ReleaseSelectionEngine.Select(Profile(LanguageFallbackType.Any), [candidate, german]);
+            Assert.AreEqual(german.Id, both.Winner!.Candidate.Id);
+            Assert.AreEqual("LanguageUnknown", both.Ranked.Single(row => row.Candidate.Id == candidate.Id).Reasons[^1].Code);
         }
 
         [TestMethod]

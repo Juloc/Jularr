@@ -183,11 +183,12 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
-        [DataRow("en", "de", "LanguageNotAllowed", "EN")]
-        [DataRow(null, "en", "LanguageUnknown", null)]
-        [DataRow("eng", "en", null, null)]
-        [DataRow("de", "de", null, null)]
-        public async Task Opds_OnlyTheRequestedLanguageIsTakenAutomatically_OthersAreOfferedWithTheirReason(string? catalogLanguage, string requested, string? reason, string? value)
+        [DataRow("en", "de", ReleaseDecisionType.ManualReview, "LanguageNotAllowed", "EN", 1)]
+        [DataRow(null, "en", ReleaseDecisionType.Eligible, "LanguageUnknownLastResort", null, 0)]
+        [DataRow("eng", "en", ReleaseDecisionType.Eligible, "OnlyCandidate", null, 1)]
+        [DataRow("de", "de", ReleaseDecisionType.Eligible, "OnlyCandidate", null, 1)]
+        public async Task Opds_OnlyTheRequestedLanguageIsTakenAutomatically_UnknownOnlyAsTheLastResort_OthersAreOfferedWithTheirReason(string? catalogLanguage, string requested,
+            ReleaseDecisionType decision, string reason, string? value, int languages)
         {
             using var storage = new TemporaryDirectory();
             using var downloads = new TemporaryDirectory();
@@ -198,19 +199,13 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.OK, created.StatusCode, await created.Content.ReadAsStringAsync());
             var wantedId = await CreateWantedBookAsync(host, locale: requested);
 
+            // The language, the decision and the reason are what a person sees in the manual search.
             using var searched = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/wanted/" + wantedId + "/search", new SearchWantedDataV1());
             var opds = (await searched.Content.ReadFromJsonAsync<BaseDataList<WantedReleaseCandidateV1>>())!.Single(candidate => candidate.ConnectionName == "Calibre");
-            if (reason is null)
+            Assert.AreEqual((decision, reason, value, languages), (opds.ReleaseDecisionTypeId, opds.ReasonCode, opds.ReasonValue, opds.Languages.Length));
+            if (decision == ReleaseDecisionType.ManualReview)
             {
-                Assert.AreEqual(ReleaseDecisionType.Eligible, opds.ReleaseDecisionTypeId);
-                Assert.AreEqual(1, opds.Languages.Length);
-            }
-            else
-            {
-                // A manual search still offers it, with the language and the reason; nothing is taken without a person.
-                Assert.AreEqual(ReleaseDecisionType.ManualReview, opds.ReleaseDecisionTypeId);
-                Assert.AreEqual(reason, opds.ReasonCode);
-                Assert.AreEqual(value, opds.ReasonValue);
+                // Nothing is taken without a person.
                 await RunAsync<SearchDueWantedV1>(host);
                 Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"Operations\" WHERE \"OperationTypeId\" = 2"));
             }

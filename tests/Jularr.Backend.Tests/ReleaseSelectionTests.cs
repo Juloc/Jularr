@@ -160,15 +160,21 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
-        public void Selection_UntaggedBookDoesNotGuessOriginalLanguage()
+        public void Selection_UntaggedBookIsOnlyTheLastResort_NeverGuessedAsTheOriginalLanguage()
         {
             var candidate = Candidate("Héctor García - IKIGAI (epub)");
             Assert.AreEqual(0, candidate.Languages.Count);
-            var result = ReleaseSelectionEngine.Select(ProfileWithFallback(LanguageFallbackType.Original, "EN"), [candidate]);
 
-            Assert.IsNull(result.Winner);
-            Assert.AreEqual(SelectionDecision.ManualReview, result.Ranked.Single().Decision);
-            Assert.AreEqual("LanguageUnknown", result.Ranked.Single().Reasons.Last().Code);
+            // Nothing else can be taken: the release of unknown language is, and says so.
+            var alone = ReleaseSelectionEngine.Select(ProfileWithFallback(LanguageFallbackType.Original, "EN"), [candidate]);
+            Assert.AreEqual(candidate.Id, alone.Winner!.Candidate.Id);
+            Assert.AreEqual("LanguageUnknownLastResort", alone.WinnerReason!.Code);
+
+            // A release in the chain comes first; the unknown one stays a row for a person.
+            var original = Candidate("Héctor García - IKIGAI (EN) (epub)");
+            var both = ReleaseSelectionEngine.Select(ProfileWithFallback(LanguageFallbackType.Original, "EN"), [candidate, original]);
+            Assert.AreEqual(original.Id, both.Winner!.Candidate.Id);
+            Assert.AreEqual("LanguageUnknown", both.Ranked.Single(row => row.Candidate.Id == candidate.Id).Reasons.Last().Code);
         }
 
         [TestMethod]
@@ -207,9 +213,10 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
-        public void Selection_FlexibleFallbackNeverTakesAnUnknownLanguageAutomatically()
+        public void Selection_FlexibleFallbackTakesAnUnknownLanguageOnlyWhenNothingInTheChainIsFound()
         {
-            var result = ReleaseSelectionEngine.Select(ProfileWithFallback(LanguageFallbackType.Any, "JA"),
+            var profile = ProfileWithFallback(LanguageFallbackType.Any, "JA");
+            var result = ReleaseSelectionEngine.Select(profile,
                 [Candidate("Héctor García - IKIGAI (epub)", false, 1, "Usenet"),
                  Candidate("Héctor García - IKIGAI (JA) (epub)", false, 50, "Anna")]);
 
@@ -217,7 +224,14 @@ namespace Jularr.Backend.Tests
             var unknown = result.Ranked.Single(row => row.Candidate.Languages.Count == 0);
             Assert.AreEqual(SelectionDecision.ManualReview, unknown.Decision);
             Assert.AreEqual("LanguageUnknown", unknown.Reasons[^1].Code);
-            Assert.IsNull(ReleaseSelectionEngine.Select(ProfileWithFallback(LanguageFallbackType.Any, "JA"), [Candidate("Héctor García - IKIGAI (epub)")]).Winner);
+
+            // A release in another known language does not count as found, and is never taken: the unknown one is the last resort.
+            var other = ReleaseSelectionEngine.Select(profile, [Candidate("Héctor García - IKIGAI (epub)"), Candidate("Héctor García - IKIGAI (ES) (epub)", false, 1, "Usenet")]);
+            Assert.AreEqual(0, other.Winner!.Candidate.Languages.Count);
+            Assert.AreEqual(SelectionDecision.ManualReview, other.Ranked.Single(row => row.Candidate.Languages.Contains("ES")).Decision);
+
+            // A strict profile never takes it.
+            Assert.IsNull(ReleaseSelectionEngine.Select(ProfileWithFallback(LanguageFallbackType.None, "JA"), [Candidate("Héctor García - IKIGAI (epub)")]).Winner);
         }
 
         [TestMethod]
