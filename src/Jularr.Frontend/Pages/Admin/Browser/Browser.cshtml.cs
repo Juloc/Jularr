@@ -214,7 +214,9 @@ namespace Jularr.Frontend.Pages.Admin.Browser
             var details = await connection.ExecuteAsync<AcquisitionConnectionDetailsV1>(new AcquisitionConnectionParametersV1(acquisitionConnectionId), HttpContext.RequestAborted);
             await update.ExecuteAsync<UpdateResult>(new AcquisitionConnectionParametersV1(acquisitionConnectionId), new SaveAcquisitionConnectionDataV1(details.Name, details.AcquisitionConnectionTypeId, details.BaseUrl, null,
                 false, details.Priority, details.Categories, details.DownloadCategory, details.RemotePath, details.LocalPath, details.Username, details.MaxConnections, null,
-                details.MediaTypeIds, details.SearchesAutomatically, details.QueryLimit, details.GrabLimit, details.Host, details.Port, details.UseSsl, details.DownloadStorageMountId), HttpContext.RequestAborted);
+                details.MediaTypeIds, details.SearchesAutomatically, details.QueryLimit, details.GrabLimit, details.Host, details.Port, details.UseSsl, details.DownloadStorageMountId,
+                details.RemovesCompleted, details.IncompleteRemotePath, details.IncompleteLocalPath, details.RemovesFailed, details.ReadsFeed, details.SearchesInteractively, details.SearchIntervalHours),
+                HttpContext.RequestAborted);
             Hint("admin.browser.sourceOff");
             await LoadDataAsync();
             PreparePage();

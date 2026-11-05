@@ -59,7 +59,7 @@ namespace Jularr.Backend.Logic.Instance
                 checks.Add(new SetupCheckData("storage.unavailable", false));
             }
 
-            var failing = targets.Connections.Where(connection => HealthCheckLogic.StoredConnection(connection).HealthStateTypeId == HealthStateType.Unavailable).ToList();
+            var failing = targets.Connections.Where(connection => HealthCheckLogic.StoredConnection(connection, DateTime.UtcNow).HealthStateTypeId == HealthStateType.Unavailable).ToList();
             if (failing.Any(connection => HealthCheckLogic.ServiceType(connection) == HealthServiceType.Indexer))
             {
                 checks.Add(new SetupCheckData("indexer.failing", false));

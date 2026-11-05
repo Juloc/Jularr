@@ -5,6 +5,7 @@ using System.Net.Sockets;
 using System.Text;
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Acquisition.V1;
+using Jularr.Backend.Data.Admin.Activity.V1;
 using Jularr.Backend.Data.Admin.Media.V1;
 using Jularr.Backend.Data.Admin.Storage.V1;
 using Jularr.Backend.Data.Common;
@@ -34,12 +35,12 @@ namespace Jularr.Backend.Tests
         [TestMethod]
         [DataRow("redirect", "HTTP 302", "acquisition_unavailable")]
         [DataRow("authentication", "HTTP 403", "acquisition_grab_failed")]
-        [DataRow("rate-limit", "HTTP 429", "acquisition_rate_limited")]
+        [DataRow("rate-limit", "HTTP 429", null)]
         [DataRow("server", "HTTP 503", "acquisition_unavailable")]
         [DataRow("timeout", "timeout True", "acquisition_unavailable")]
         [DataRow("network", "transport NameResolutionError", "acquisition_unavailable")]
         [DataRow("write", "stage transfer: IOException", "acquisition_unavailable")]
-        public async Task Usenet_NzbGrabFailure_LogsSafeDiagnosticsAndPreservesTheFailureState(string scenario, string diagnostic, string reason)
+        public async Task Usenet_NzbGrabFailure_LogsSafeDiagnosticsAndPreservesTheFailureState(string scenario, string diagnostic, string? reason)
         {
             using var storage = new TemporaryDirectory();
             using var staging = new TemporaryDirectory();
@@ -85,39 +86,72 @@ namespace Jularr.Backend.Tests
             Assert.IsFalse(log.Message.Contains("https://", StringComparison.OrdinalIgnoreCase));
             Assert.IsFalse(log.Message.Contains(staging.Path, StringComparison.Ordinal));
             Assert.AreEqual(1, indexer.NzbRequests, "Diagnostics must not retry or follow a redirect.");
-            Assert.AreEqual(reason, await host.ScalarAsync("SELECT \"ErrorKey\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"));
-            Assert.AreEqual((short)4, await host.ScalarAsync("SELECT \"OperationStatusTypeId\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"));
+            // A limit of the indexer is no failure: the grab waits open for the pause.
+            Assert.AreEqual((object?)reason ?? DBNull.Value, await host.ScalarAsync("SELECT \"ErrorKey\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"));
+            Assert.AreEqual(reason is null ? (short)1 : (short)4, await host.ScalarAsync("SELECT \"OperationStatusTypeId\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"));
             Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"MediaAssets\""));
             Assert.IsFalse(Directory.EnumerateFiles(staging.Path, "*", SearchOption.AllDirectories).Any());
         }
 
-        // An NZB refused with 429 rests the whole indexer for the wait it asked for: the grab is given back and no cycle asks the indexer again before then.
+        // An NZB refused with 429 is no failure (Sonarr's pending release): the grab waits in the queue for the indexer's pause, is neither blocked nor searched again,
+        // no cycle asks the resting indexer, and once the pause is over the same release is fetched.
         [TestMethod]
-        public async Task Usenet_NzbRateLimited_RestsTheIndexer_AndNoCycleAsksItBeforeItsPauseEnds()
+        public async Task Usenet_NzbRateLimited_WaitsInTheQueueForThePause_AndTheSameReleaseIsFetchedThen()
         {
             using var storage = new TemporaryDirectory();
             using var staging = new TemporaryDirectory();
+            var limited = true;
             var indexer = new FakeIndexer("<nzb />")
             {
-                NzbResponse = () => new HttpResponseMessage(HttpStatusCode.TooManyRequests) { Headers = { RetryAfter = new System.Net.Http.Headers.RetryConditionHeaderValue(TimeSpan.FromHours(2)) } }
+                NzbResponse = () => limited
+                    ? new HttpResponseMessage(HttpStatusCode.TooManyRequests) { Headers = { RetryAfter = new System.Net.Http.Headers.RetryConditionHeaderValue(TimeSpan.FromSeconds(2)) } }
+                    : new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("<nzb />", Encoding.UTF8, "application/x-nzb") }
             };
             await using var host = await CreateHostAsync(storage.Path, staging.Path, indexer, 1);
             await CreateWantedMovieAsync(host);
 
             await RunAsync<SearchDueWantedV1>(host);
             Assert.AreEqual(1, indexer.NzbRequests);
-            Assert.AreEqual("acquisition_rate_limited", await host.ScalarAsync("SELECT \"LastOutcomeKey\" FROM \"WantedItems\""));
-            Assert.AreEqual(true, await host.ScalarAsync("SELECT \"RetryAt\" > now() + interval '110 minutes' AND \"GrabCount\" = 0 FROM \"AcquisitionConnections\" WHERE \"AcquisitionConnectionTypeId\" = 1"));
+            Assert.AreEqual(true, await host.ScalarAsync("SELECT \"RetryAt\" > now() FROM \"AcquisitionConnections\" WHERE \"AcquisitionConnectionTypeId\" = 1"));
 
-            // Even a target made due at once in every cycle leaves the resting indexer alone.
+            // The download stays open and waits: not failed, no failure in the history, the release not blocked, its link kept protected.
+            Assert.AreEqual(true, await host.ScalarAsync("""
+                SELECT operation."OperationStatusTypeId" = 1 AND operation."DownloadWaitUntil" > now() + interval '25 minutes'
+                    AND release."AcquisitionReleaseStatusTypeId" = 1 AND release."ProtectedDownloadUrl" IS NOT NULL
+                FROM "Operations" AS operation JOIN "AcquisitionReleases" AS release ON release."Id" = operation."AcquisitionReleaseId"
+                """));
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"ActivityEvents\" WHERE \"ActivityEventTypeId\" IN (2, 8)"));
+            Assert.AreEqual(false, await host.ScalarAsync("SELECT position('https' IN encode(\"ProtectedDownloadUrl\", 'escape')) > 0 FROM \"AcquisitionReleases\""));
+
+            // The queue shows it waiting until the pause ends.
+            using var queue = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/activity?ActivityFilterTypeId=1&QueueOnly=true");
+            Assert.AreEqual(HttpStatusCode.OK, queue.StatusCode, await queue.Content.ReadAsStringAsync());
+            Assert.IsNotNull((await queue.Content.ReadFromJsonAsync<PageResult<ActivityItemV1>>())!.Items.Single().WaitUntil);
+
+            // Even a target made due in every cycle searches nothing while it waits, and the downloader leaves the resting indexer alone.
             var searches = indexer.SearchRequests;
             for (var cycle = 0; cycle < 5; cycle++)
             {
                 await host.Fixture.RunSqlAsync("UPDATE \"WantedItems\" SET \"NextSearchAt\" = NULL");
                 await RunAsync<SearchDueWantedV1>(host);
+                await RunAsync<DownloadUsenetV1>(host);
             }
 
             Assert.AreEqual((1, searches), (indexer.NzbRequests, indexer.SearchRequests));
+
+            // The pause is over: the same release is fetched, with no new search, and the download starts.
+            limited = false;
+            await Task.Delay(TimeSpan.FromSeconds(2.5));
+            await host.Fixture.RunSqlAsync("""
+                UPDATE "Operations" SET "DownloadWaitUntil" = now() - interval '1 minute', "StartedAt" = now() - interval '3 hours';
+                UPDATE "AcquisitionConnections" SET "RetryAt" = NULL WHERE "AcquisitionConnectionTypeId" = 1;
+                """);
+            await RunAsync<DownloadUsenetV1>(host);
+            Assert.AreEqual((2, searches), (indexer.NzbRequests, indexer.SearchRequests));
+            Assert.AreEqual(true, await host.ScalarAsync("""
+                SELECT operation."OperationStatusTypeId" = 2 AND operation."DownloadWaitUntil" IS NULL AND release."ProtectedDownloadUrl" IS NULL
+                FROM "Operations" AS operation JOIN "AcquisitionReleases" AS release ON release."Id" = operation."AcquisitionReleaseId"
+                """));
         }
 
         [TestMethod]

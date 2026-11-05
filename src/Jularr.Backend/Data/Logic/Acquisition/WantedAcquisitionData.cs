@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using Jularr.Backend.Data.Enums.Operation;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
@@ -260,14 +261,28 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         public bool NeedsSearch => IsAvailable && (!HasMedia || NeedsUpgrade) && !IsCovered;
     }
 
+    // NextSearchAt: a retry of every source (null: none, the title waits for an event); PeriodicSearchAt: the next search of the sources without a feed (null: none).
     internal sealed class WantedSearchOutcomeData : BaseData
     {
-        public WantedSearchOutcomeData(long wantedItemId, string outcomeKey, DateTime? nextSearchAt)
+        // SearchesAll: the search asked every source, so NextSearchAt is its retry; otherwise it keeps what it was. IsAnswered: a source answered, so the title counts as searched.
+        public WantedSearchOutcomeData(long wantedItemId, string outcomeKey, DateTime? nextSearchAt, DateTime? periodicSearchAt = null, bool searchesAll = true, bool isAnswered = true)
         {
             WantedItemId = wantedItemId;
             OutcomeKey = outcomeKey;
             NextSearchAt = nextSearchAt;
+            PeriodicSearchAt = periodicSearchAt;
+            SearchesAll = searchesAll;
+            IsAnswered = isAnswered;
         }
+
+        [DataField(typeof(WantedItemFields), nameof(WantedItemFields.PeriodicSearchAt))]
+        public DateTime? PeriodicSearchAt { get; }
+
+        [DataField(typeof(WantedItemFields), nameof(WantedItemFields.SearchesAll))]
+        public bool SearchesAll { get; }
+
+        [DataField(typeof(WantedItemFields), nameof(WantedItemFields.IsAnswered))]
+        public bool IsAnswered { get; }
 
         [DataField(typeof(WantedItemFields), nameof(WantedItemFields.Id))]
         public long WantedItemId { get; }
@@ -403,8 +418,10 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         public DownloadData(long operationId, long wantedItemId, long workId, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string canonicalTitle, int? releaseYear, long acquisitionConnectionId,
             string? externalId, string title, DateTime startedAt, string? qualityKey, string? author, string? sourceUrl,
             string? sourceLinkUrl, int trackCount, long? gamePlatformId, string? platformName, DateTime? downloadWaitUntil, int? expectedParentUnitNumber = null, int? expectedUnitStart = null, int? expectedUnitEnd = null,
-            bool isPaused = false)
+            bool isPaused = false, long? indexerConnectionId = null, byte[]? protectedDownloadUrl = null)
         {
+            IndexerConnectionId = indexerConnectionId;
+            ProtectedDownloadUrl = protectedDownloadUrl;
             DownloadWaitUntil = downloadWaitUntil;
             IsPaused = isPaused;
             ExpectedParentUnitNumber = expectedParentUnitNumber;
@@ -482,6 +499,14 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         // A download told to wait is not run.
         [DataField(typeof(OperationFields), nameof(OperationFields.IsPaused))]
         public bool IsPaused { get; }
+
+        // The indexer the release came from, and its link while the grab waits for the indexer's pause.
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.Id), false)]
+        public long? IndexerConnectionId { get; }
+
+        [JsonIgnore]
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.ProtectedDownloadUrl))]
+        public byte[]? ProtectedDownloadUrl { get; }
 
         // Tracks the album's edition names; files are tied to them only when the counts agree.
         [DataField(typeof(WorkFields), nameof(WorkFields.TrackCount))]
@@ -610,19 +635,59 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         public string Folders { get; }
     }
 
+    // The wanted titles due now, or with AnyTime every wanted title whatever its times (the feed judges for all of them).
     internal sealed class WantedDueData : BaseData
     {
-        public WantedDueData(DateTime now, int limit)
+        public WantedDueData(DateTime now, int limit, bool anyTime = false)
         {
             Now = now;
             Limit = limit;
+            AnyTime = anyTime;
         }
+
+        [DataField(typeof(WantedItemFields), nameof(WantedItemFields.AnyTime))]
+        public bool AnyTime { get; }
 
         [DataField(typeof(WantedItemFields), nameof(WantedItemFields.NextSearchAt), true)]
         public DateTime Now { get; }
 
         [DataField(typeof(WantedItemFields), nameof(WantedItemFields.SearchCount))]
         public int Limit { get; }
+    }
+
+    internal sealed class WantedPeriodicData : BaseData
+    {
+        public WantedPeriodicData(long wantedItemId, DateTime? periodicSearchAt)
+        {
+            WantedItemId = wantedItemId;
+            PeriodicSearchAt = periodicSearchAt;
+        }
+
+        [DataField(typeof(WantedItemFields), nameof(WantedItemFields.Id))]
+        public long WantedItemId { get; }
+
+        [DataField(typeof(WantedItemFields), nameof(WantedItemFields.PeriodicSearchAt))]
+        public DateTime? PeriodicSearchAt { get; }
+    }
+
+    // A due title: SearchesAll when an event or a retry made it due (every source), else its sources without a feed are due on their rhythm.
+    internal sealed class WantedDueItemData : BaseData
+    {
+        public WantedDueItemData(long wantedItemId, bool searchesAll, DateTime? lastSearchedAt)
+        {
+            WantedItemId = wantedItemId;
+            SearchesAll = searchesAll;
+            LastSearchedAt = lastSearchedAt;
+        }
+
+        [DataField(typeof(WantedItemFields), nameof(WantedItemFields.Id))]
+        public long WantedItemId { get; }
+
+        [DataField(typeof(WantedItemFields), nameof(WantedItemFields.SearchesAll))]
+        public bool SearchesAll { get; }
+
+        [DataField(typeof(WantedItemFields), nameof(WantedItemFields.LastSearchedAt))]
+        public DateTime? LastSearchedAt { get; }
     }
 
     internal sealed class RequestProgressData : BaseData
@@ -914,6 +979,27 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
         [DataField(typeof(OperationFields), nameof(OperationFields.EtaSeconds))]
         public int EtaSeconds { get; }
+    }
+
+    // A grab its indexer limited: when it is fetched again, and the protected link it is fetched from.
+    internal sealed class DownloadIndexerWaitData : BaseData
+    {
+        public DownloadIndexerWaitData(long operationId, DateTime downloadWaitUntil, byte[] protectedDownloadUrl)
+        {
+            OperationId = operationId;
+            DownloadWaitUntil = downloadWaitUntil;
+            ProtectedDownloadUrl = protectedDownloadUrl;
+        }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.Id))]
+        public long OperationId { get; }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.DownloadWaitUntil), true)]
+        public DateTime DownloadWaitUntil { get; }
+
+        [JsonIgnore]
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.ProtectedDownloadUrl), true)]
+        public byte[] ProtectedDownloadUrl { get; }
     }
 
     internal sealed class DownloadFinishedData : BaseData

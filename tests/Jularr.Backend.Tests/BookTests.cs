@@ -136,6 +136,35 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(0, Directory.EnumerateFiles(downloads.Path, "*", SearchOption.AllDirectories).Count());
         }
 
+        // A book comes from the indexer's feed as a film does: the release is judged for the wanted book and grabbed, with no search of the indexer or of the direct source.
+        [TestMethod]
+        public async Task Book_FeedRelease_IsJudgedAndGrabbedDirectly_WithoutASearch()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            var sources = new FakeBookSources();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, sources);
+            using var imported = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works/metadata", new ImportMetadataWorkDataV1(MediaType.Book, "OL66554W"));
+            Assert.AreEqual(HttpStatusCode.OK, imported.StatusCode, await imported.Content.ReadAsStringAsync());
+            var wantedId = await CreateWantedAsync(host, (await imported.Content.ReadFromJsonAsync<WorkDetailsV1>())!.Id);
+            await host.Fixture.RunSqlAsync("UPDATE \"WantedItems\" SET \"NextSearchAt\" = 'infinity'");
+            var (indexerBefore, directBefore) = (sources.IndexerSearches, sources.DirectSearches);
+
+            // The first read learns the feed; a new release of the wanted book is taken from the next one.
+            sources.IndexerResults = """<rss><channel><item><title>Some.Other.Author.Another.Book.2020.EPUB</title><guid>other</guid><link>https://indexer.example.test/getnzb/other</link><size>1000000</size></item></channel></rss>""";
+            await RunAsync<SyncFeedsV1>(host);
+            sources.IndexerResults = """
+                <rss><channel>
+                  <item><title>Some.Other.Author.Another.Book.2020.EPUB</title><guid>other</guid><link>https://indexer.example.test/getnzb/other</link><size>1000000</size></item>
+                  <item><title>Jane.Austen.Pride.and.Prejudice.1813.EPUB</title><guid>feed-epub</guid><link>https://indexer.example.test/getnzb/feed-epub</link><size>1000000</size></item>
+                </channel></rss>
+                """;
+            await RunAsync<SyncFeedsV1>(host);
+            Assert.AreEqual(1, sources.SabGrabs);
+            Assert.AreEqual((indexerBefore + 2, directBefore), (sources.IndexerSearches, sources.DirectSearches));
+            Assert.AreEqual(true, await host.ScalarAsync("SELECT \"Title\" = 'Jane.Austen.Pride.and.Prejudice.1813.EPUB' AND \"AcquisitionReleaseStatusTypeId\" = 1 FROM \"AcquisitionReleases\" WHERE \"WantedItemId\" = " + wantedId));
+        }
+
         [TestMethod]
         public async Task Scan_BookFolders_TakeTheWorkOfTheirTitle_FromTheCatalogOrFromHere()
         {
@@ -729,6 +758,7 @@ namespace Jularr.Backend.Tests
             public int SabGrabs { get; private set; }
             public int IndexerSearches { get; private set; }
             public bool WaitForIndexer { get; set; }
+            public string? IndexerResults { get; set; }
 
             public int DirectSearches { get; private set; }
             public bool BlockDirectSearch { get; set; }
@@ -808,6 +838,7 @@ namespace Jularr.Backend.Tests
                         }
 
                         Order.Enqueue("indexer-end");
+                        if (IndexerResults is not null && !uri.Query.Contains("t=caps", StringComparison.Ordinal)) return Xml(IndexerResults);
                         return Xml("""
                             <rss><channel>
                               <item><title>Seth Grahame-Smith - Pride and Prejudice and Zombies (epub)</title><guid>zombies</guid><link>https://indexer.example.test/getnzb/zombies</link><size>1000000</size></item>
@@ -818,7 +849,12 @@ namespace Jularr.Backend.Tests
                             """);
                     default:
                         var form = await request.Content!.ReadAsStringAsync(cancellationToken);
-                        if (form.Contains("mode=addurl", StringComparison.Ordinal)) SabGrabs++;
+                        if (form.Contains("mode=addurl", StringComparison.Ordinal))
+                        {
+                            SabGrabs++;
+                            return Json("""{"status":true,"nzo_ids":["SABnzbd_nzo_book"]}""");
+                        }
+
                         return form.Contains("mode=queue", StringComparison.Ordinal) ? Json("""{"queue":{"paused":false,"slots":[]}}""")
                             : form.Contains("mode=history", StringComparison.Ordinal) ? Json("""{"history":{"slots":[]}}""")
                             : Json("""{"version":"4.5.0"}""");

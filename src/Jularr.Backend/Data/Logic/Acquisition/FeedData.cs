@@ -27,8 +27,9 @@ namespace Jularr.Backend.Data.Logic.Acquisition
     // A wanted target the feed can make due: its titles and provider ids.
     internal sealed class FeedTargetData : BaseData
     {
-        public FeedTargetData(long wantedItemId, MediaType mediaTypeId, string canonicalTitle, string[] titles, string[] externalIdentities)
+        public FeedTargetData(long wantedItemId, MediaType mediaTypeId, string canonicalTitle, string[] titles, string[] externalIdentities, string? author = null)
         {
+            Author = author;
             WantedItemId = wantedItemId;
             MediaTypeId = mediaTypeId;
             CanonicalTitle = canonicalTitle;
@@ -51,6 +52,10 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         // Provider mappings as namespace:value pairs.
         [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.ExternalIdentityList))]
         public string[] ExternalIdentities { get; }
+
+        // A book's or album's author or artist, which its release names too.
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Value), false)]
+        public string? Author { get; }
     }
 
     internal sealed class FeedTargetQueryData : BaseData
@@ -104,44 +109,5 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
         [DataField(typeof(FeedFields), nameof(FeedFields.SeenBefore))]
         public DateTime SeenBefore { get; }
-    }
-
-    // The targets a feed made due: not before the gap since their last search.
-    internal sealed class FeedDueData : BaseData
-    {
-        public FeedDueData(long[] wantedItemIds, string outcomeKey, DateTime now, int gapMinutes)
-        {
-            WantedItemIds = wantedItemIds;
-            OutcomeKey = outcomeKey;
-            Now = now;
-            GapMinutes = gapMinutes;
-        }
-
-        [DataField(typeof(WantedItemFields), nameof(WantedItemFields.Ids))]
-        public long[] WantedItemIds { get; }
-
-        [DataField(typeof(WantedItemFields), nameof(WantedItemFields.OutcomeKey), true)]
-        public string OutcomeKey { get; }
-
-        [DataField(typeof(FeedFields), nameof(FeedFields.Now))]
-        public DateTime Now { get; }
-
-        [DataField(typeof(FeedFields), nameof(FeedFields.GapMinutes))]
-        public int GapMinutes { get; }
-    }
-
-    internal sealed class WantedReleaseDayData : BaseData
-    {
-        public WantedReleaseDayData(long wantedItemId, DateTime now)
-        {
-            WantedItemId = wantedItemId;
-            Now = now;
-        }
-
-        [DataField(typeof(WantedItemFields), nameof(WantedItemFields.Id))]
-        public long WantedItemId { get; }
-
-        [DataField(typeof(FeedFields), nameof(FeedFields.Now))]
-        public DateTime Now { get; }
     }
 }

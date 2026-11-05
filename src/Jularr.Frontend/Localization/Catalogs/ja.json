@@ -2432,18 +2432,6 @@
    "Media types",
    "メディアタイプ"
   ],
-  "acquisition.connection.searches": [
-   "Searches",
-   "検索"
-  ],
-  "acquisition.connection.automatic": [
-   "Automatic and manual",
-   "自動と手動"
-  ],
-  "acquisition.connection.manualOnly": [
-   "Manual only",
-   "手動のみ"
-  ],
   "acquisition.connection.queryLimit": [
    "Queries per day",
    "1日あたりの検索数"

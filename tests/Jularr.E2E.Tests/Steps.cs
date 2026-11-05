@@ -172,8 +172,18 @@ namespace Jularr.E2E.Tests
             await page.FillAsync("dialog#connection-editor form [name=BaseUrl]", new Uri(fakes.Address, "newznab/").ToString());
             await page.FillAsync("dialog#connection-editor form [name=ApiKey]", FakeServices.IndexerKey);
             await page.FillAsync("dialog#connection-editor form [name=Categories]", categories);
-            // Two short choices are a segmented control of radios.
-            await page.Locator("dialog#connection-editor form").GetByLabel(searchesAutomatically ? "Automatic and manual" : "Manual only", new() { Exact = true }).CheckAsync();
+            // As Sonarr's indexer flags: a manual-flow indexer neither reads its feed nor searches automatically.
+            foreach (var flag in new[] { "RSS feed", "Automatic search" })
+            {
+                var toggle = page.Locator("dialog#connection-editor form").GetByRole(AriaRole.Switch, new() { Name = flag, Exact = true });
+                if (await toggle.IsCheckedAsync() != searchesAutomatically)
+                {
+                    await toggle.FocusAsync();
+                    await page.Keyboard.PressAsync("Space");
+                }
+
+                Assert.AreEqual(searchesAutomatically, await toggle.IsCheckedAsync());
+            }
             await SubmitAsync(page, page.Locator("dialog#connection-editor form"));
             await page.GotoAsync("/Admin/Downloads/Clients");
             await page.GetByRole(AriaRole.Button, new() { Name = "Add client", Exact = true }).ClickAsync();

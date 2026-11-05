@@ -101,7 +101,7 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
                             AND (unit."WorkUnitTypeId" = 3 OR season."Number" IS NOT DISTINCT FROM release."ParentUnitNumber")
                         LIMIT 1
                     ) END AS "UnitTitle",
-                    CASE WHEN operation."OperationStatusTypeId" = 4 AND operation."ErrorKey" = 'acquisition_rate_limited' THEN wanted."NextSearchAt" END AS "WaitUntil"
+                    CASE WHEN operation."OperationStatusTypeId" IN (1, 2) AND release."ProtectedDownloadUrl" IS NOT NULL THEN operation."DownloadWaitUntil" END AS "WaitUntil"
                 FROM
                     "Operations" AS operation
                     LEFT JOIN "LibraryRoots" AS root ON root."Id" = operation."LibraryRootId"
@@ -128,11 +128,8 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
                     AND (NOT @TorrentOnly OR connection."AcquisitionConnectionTypeId" IN (2, 9))
                     AND (NOT @FailedOnly OR operation."OperationStatusTypeId" = 4)
                     AND (NOT @TasksOnly OR operation."OperationTypeId" <> 2)
-                    -- The Queue: what is still open, and a grab the indexer limited until its pause ends (then the next search takes over).
-                    AND (NOT @QueueOnly OR operation."OperationTypeId" = 2 AND (
-                        operation."OperationStatusTypeId" IN (1, 2)
-                        OR operation."OperationStatusTypeId" = 4 AND operation."ErrorKey" = 'acquisition_rate_limited' AND wanted."NextSearchAt" > now()
-                    ))
+                    -- The Queue: what is still open, a grab its indexer limited among it (it waits for the indexer's pause).
+                    AND (NOT @QueueOnly OR operation."OperationTypeId" = 2 AND operation."OperationStatusTypeId" IN (1, 2))
                     AND (@AcquisitionConnectionId::bigint IS NULL OR connection."Id" = @AcquisitionConnectionId)
                     AND (@MediaTypeId::smallint IS NULL OR work."MediaTypeId" = @MediaTypeId)
                     AND (@DownloadPriorityTypeId::smallint IS NULL OR operation."DownloadPriorityTypeId" = @DownloadPriorityTypeId)

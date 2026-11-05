@@ -38,12 +38,13 @@ using OperationKind = Jularr.Backend.Data.Enums.Operation.OperationType;
 
 namespace Jularr.Backend.Service.System.Acquisition.V1
 {
+    // The automatic search, as Sonarr's: a title is searched at every source once an event makes it due (it was added, its monitor resumed, a person pressed a search button,
+    // a download of it failed) and again only for a retry. New releases and upgrades come from the indexers' feeds; only the sources without a feed are searched on their own rhythm.
     public sealed class SearchDueWantedV1 : SystemService<AcquisitionCycleParametersV1, NoData>
     {
         private const int BatchSize = 5;
-        private const int GroupsPerPass = 3;
-        private const int GrabsPerGroup = 5;
         private const string InUseKey = "in_use";
+        private static readonly TimeSpan Retry = TimeSpan.FromMinutes(30);
         private readonly WantedAcquisition _acquisition;
         private readonly TimeProvider _time;
 
@@ -61,27 +62,28 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
         protected override async Task<IServiceOutput> OnExecute()
         {
             var now = _time.GetUtcNow().UtcDateTime;
-            var (due, indexers, clients) = await Context.ExecuteBatchAsync(async (ctx, ct) => (await ctx.ReadDueWantedItemsAsync(new WantedDueData(now, BatchSize), ct),
+            var (due, connections, clients) = await Context.ExecuteBatchAsync(async (ctx, ct) => (await ctx.ReadDueWantedItemsAsync(new WantedDueData(now, BatchSize), ct),
                 await ctx.ReadEnabledConnectionsAsync(AcquisitionConnectionRole.Search, ct), await ctx.ReadEnabledConnectionsAsync(AcquisitionConnectionRole.Download, ct)),
                 CancellationToken);
-            if (indexers.Count == 0)
+            if (connections.Count == 0)
             {
                 return new UpdateResult(due.Count == 0);
             }
 
             foreach (var item in due)
             {
-                // Indexers are read per search, so today's counts and backoffs stay current through the cycle.
-                (var target, indexers) = await Context.ExecuteBatchAsync(async (ctx, ct) =>
+                // Sources are read per search, so today's counts and backoffs stay current through the cycle.
+                (var target, connections) = await Context.ExecuteBatchAsync(async (ctx, ct) =>
                     (await ctx.ReadWantedTargetAsync(item.WantedItemId, ct), await ctx.ReadEnabledConnectionsAsync(AcquisitionConnectionRole.Search, ct)), CancellationToken);
+                var plan = Plan(target, item, connections, now);
                 try
                 {
-                    await SearchTargetAsync(target, indexers, clients, now);
+                    await SearchTargetAsync(target, plan, connections, clients);
                 }
                 catch (Exception) when (!CancellationToken.IsCancellationRequested)
                 {
                     // A failed search still moves its target on, so it is not searched again in every cycle; the failure is raised.
-                    await RecordAsync(target.WantedItemId, "search_failed", now.AddMinutes(30), now);
+                    await RecordAsync(target.WantedItemId, plan, "search_failed", true);
                     throw;
                 }
             }
@@ -89,11 +91,32 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
             return new UpdateResult(true);
         }
 
-        private async Task SearchTargetAsync(WantedTargetData target, IReadOnlyList<AcquisitionConnectionData> indexers, IReadOnlyList<AcquisitionConnectionData> clients, DateTime now)
+        // Which sources a due title asks: all on an event or a retry, else the sources without a feed whose rhythm came round; and when those are next due.
+        internal static SearchPlan Plan(WantedTargetData target, WantedDueItemData due, IReadOnlyList<AcquisitionConnectionData> connections, DateTime now)
         {
+            var rhythm = SearchSources.Automatic(connections, target, now).Where(source => !AcquisitionConnectionLogic.HasFeed(source, target.MediaTypeId)).ToArray();
+            DateTime? next = rhythm.Length == 0 ? null : rhythm.Min(source => AcquisitionConnectionLogic.NextPeriodicSearch(source, target.WantedItemId, now));
+            var only = due.SearchesAll ? null : rhythm.Where(source => AcquisitionConnectionLogic.IsPeriodicDue(source, target.WantedItemId, due.LastSearchedAt, now))
+                .Select(source => source.Id).ToHashSet();
+            return new SearchPlan(due.SearchesAll, only, next, now);
+        }
+
+        private async Task SearchTargetAsync(WantedTargetData target, SearchPlan plan, IReadOnlyList<AcquisitionConnectionData> connections, IReadOnlyList<AcquisitionConnectionData> clients)
+        {
+            // Nothing of the rhythm is due (an interval changed since): only the next moment is kept.
+            if (plan.Only is { Count: 0 })
+            {
+                await Context.ExecuteBatchAsync(async (ctx, ct) =>
+                {
+                    await ctx.ScheduleWantedRhythmAsync(new WantedPeriodicData(target.WantedItemId, plan.NextPeriodic), ct);
+                    return true;
+                }, CancellationToken);
+                return;
+            }
+
             if (target.Definition is null)
             {
-                await RecordAsync(target.WantedItemId, "profile_missing", now.AddDays(1), now);
+                await RecordAsync(target.WantedItemId, plan, "profile_missing", false, plan.Now.AddDays(1));
                 return;
             }
 
@@ -103,54 +126,57 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                 var units = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadUnitStatesAsync(target.WantedItemId, ct), CancellationToken);
                 if (target.MediaTypeId == MediaType.Series || units.Count > 0)
                 {
-                    await SearchUnitsAsync(target, units, indexers, clients, now);
+                    await SearchUnitsAsync(target, plan, units, clients);
                     return;
                 }
             }
 
-            var result = await _acquisition.SearchAsync(Context, target, indexers, SearchDepth.Normal, automatic: true, CancellationToken);
+            var result = await _acquisition.SearchAsync(Context, target, connections, SearchDepth.Normal, automatic: true, CancellationToken, only: plan.Only);
             if (result.Selection.Winner is not { } winner)
             {
-                // Indexer problems retry soon; empty results back off, an upgrade is looked for at its own interval.
-                await RecordAsync(target.WantedItemId, result.OutcomeKey, result.IndexersUnavailable ? now.AddMinutes(30)
-                    : target.HasMedia ? now + UpgradePolicy.SearchInterval : now + Backoff(target.MediaTypeId, target.WantedItemId, target.SearchCount, indexers), now);
+                await RecordAsync(target.WantedItemId, plan, result.OutcomeKey, result.IndexersUnavailable);
                 return;
             }
 
-            await RecordAsync(target.WantedItemId, result.OutcomeKey, now + Backoff(target.MediaTypeId, target.WantedItemId, target.SearchCount, indexers), now);
             try
             {
                 await _acquisition.GrabAsync(Context, target, result.Offers[winner.Candidate.Id], winner.Score?.QualityKey, clients, CancellationToken, automatic: true, languages: winner.Candidate.Languages);
             }
             catch (ServiceUnavailableException exception)
             {
-                await RecordAsync(target.WantedItemId, exception.Code, now.AddMinutes(30), now);
+                await RecordAsync(target.WantedItemId, plan, exception.Code, true);
+                return;
             }
             catch (DataValidationException exception) when (exception.Code == InUseKey)
             {
-                // A running download holds the target; its end makes the target due again.
-                await RecordAsync(target.WantedItemId, InUseKey, now + Backoff(target.MediaTypeId, target.WantedItemId, target.SearchCount, indexers), now);
+                // A running download holds the target; what it does not bring comes from the feed or the next event.
+                await RecordAsync(target.WantedItemId, plan, InUseKey, false);
+                return;
             }
+
+            await RecordAsync(target.WantedItemId, plan, "grabbed", false);
         }
 
-        private async Task SearchUnitsAsync(WantedTargetData target, IReadOnlyList<UnitStateData> units, IReadOnlyList<AcquisitionConnectionData> indexers,
-            IReadOnlyList<AcquisitionConnectionData> clients, DateTime now)
+        // As Sonarr's season search: a season with nothing yet is searched as a pack first, then episode by episode; every season with something missing in one pass,
+        // each until a search finds nothing to take. A Manga's volumes are one group.
+        private async Task SearchUnitsAsync(WantedTargetData target, SearchPlan plan, IReadOnlyList<UnitStateData> units, IReadOnlyList<AcquisitionConnectionData> clients)
         {
             var grabbed = 0;
             var unavailable = false;
             string? outcome = null;
-            foreach (var parentNumber in units.Where(unit => unit.NeedsSearch).Select(unit => unit.ParentNumber).Distinct().Take(GroupsPerPass).ToArray())
+            foreach (var parentNumber in units.Where(unit => unit.NeedsSearch).Select(unit => unit.ParentNumber).Distinct().ToArray())
             {
-                for (var attempt = 0; attempt < GrabsPerGroup; attempt++)
+                var size = units.Count(unit => unit.ParentNumber == parentNumber);
+                for (var attempt = 0; attempt <= size && !unavailable; attempt++)
                 {
                     if (AcquisitionSelectionLogic.ReadNextUnitScope(units, parentNumber, attempt == 0) is not { } scope)
                     {
                         break;
                     }
 
-                    indexers = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadEnabledConnectionsAsync(AcquisitionConnectionRole.Search, ct), CancellationToken);
-                    var result = await _acquisition.SearchAsync(Context, target, indexers, SearchDepth.Normal, automatic: true, CancellationToken, scope);
-                    unavailable |= result.IndexersUnavailable;
+                    var indexers = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadEnabledConnectionsAsync(AcquisitionConnectionRole.Search, ct), CancellationToken);
+                    var result = await _acquisition.SearchAsync(Context, target, indexers, SearchDepth.Normal, automatic: true, CancellationToken, scope, only: plan.Only);
+                    unavailable = result.IndexersUnavailable;
                     if (result.Selection.Winner is not { } winner)
                     {
                         outcome ??= result.OutcomeKey;
@@ -163,12 +189,12 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                     }
                     catch (ServiceUnavailableException exception)
                     {
-                        await RecordAsync(target.WantedItemId, exception.Code, now.AddMinutes(30), now);
+                        await RecordAsync(target.WantedItemId, plan, exception.Code, true);
                         return;
                     }
                     catch (DataValidationException exception) when (exception.Code == InUseKey)
                     {
-                        // A running download already holds part of the release; the group waits for it, and its end makes the target due again.
+                        // A running download already holds part of the release; the group waits for it.
                         outcome ??= InUseKey;
                         break;
                     }
@@ -176,43 +202,30 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                     grabbed++;
                     units = AcquisitionSelectionLogic.Claim(units, scope, AcquisitionSelectionLogic.GetKind(target.MediaTypeId, target.MediaSubtypeId), winner.Candidate.Parsed);
                 }
+
+                if (unavailable)
+                {
+                    break;
+                }
             }
 
-            // Grabs continue soon; empty results back off.
-            var nextSearch = grabbed > 0 ? now.AddMinutes(15) : unavailable ? now.AddMinutes(30) : now + Backoff(target.MediaTypeId, target.WantedItemId, target.SearchCount, indexers);
-            await RecordAsync(target.WantedItemId, grabbed > 0 ? "grabbed" : outcome ?? "no_candidates", nextSearch, now);
+            await RecordAsync(target.WantedItemId, plan, grabbed > 0 ? "grabbed" : outcome ?? "no_candidates", unavailable && grabbed == 0);
         }
 
-        // The next search is never later than the end of the release day of a missing episode or movie, when the feed found nothing by then.
-        private Task RecordAsync(long wantedItemId, string outcomeKey, DateTime nextSearchAt, DateTime now) =>
-            Context.ExecuteBatchAsync(async (ctx, ct) =>
+        // A search no source could answer is tried again after a while; any other waits for the next event, and the sources without a feed for their rhythm.
+        private Task RecordAsync(long wantedItemId, SearchPlan plan, string outcomeKey, bool unavailable, DateTime? retryAt = null)
+        {
+            var retry = retryAt ?? (unavailable ? plan.Now + Retry : null);
+            var periodic = !plan.SearchesAll && retry is not null ? retry : plan.NextPeriodic;
+            return Context.ExecuteBatchAsync(async (ctx, ct) =>
             {
-                var releaseDay = await ctx.ReadNextReleaseDayAsync(new WantedReleaseDayData(wantedItemId, now), ct);
-                await ctx.RecordWantedSearchAsync(new WantedSearchOutcomeData(wantedItemId, outcomeKey, releaseDay is { } day && day < nextSearchAt ? day : nextSearchAt), ct);
+                await ctx.RecordWantedSearchAsync(new WantedSearchOutcomeData(wantedItemId, outcomeKey, retry, periodic, plan.SearchesAll, !unavailable), ct);
                 return true;
             }, CancellationToken);
-
-        // The wait after a search that found nothing. Movies and series are caught by the indexers' feeds (every 15 minutes), so one search a week finds what the feed missed;
-        // without a feed they keep the earlier rhythm. Books and manga have no feed: one search a day, spread over the day by the target's number.
-        internal static TimeSpan Backoff(MediaType mediaType, long wantedItemId, int searchCount, IReadOnlyList<AcquisitionConnectionData> indexers)
-        {
-            if (mediaType is MediaType.Movie or MediaType.Series && indexers.Any(indexer => AcquisitionConnectionLogic.HasFeed(indexer, mediaType)))
-            {
-                return TimeSpan.FromDays(7);
-            }
-
-            if (mediaType == MediaType.Book)
-            {
-                return TimeSpan.FromHours(24) + TimeSpan.FromMinutes(wantedItemId % 1440);
-            }
-
-            return searchCount switch
-            {
-                0 => TimeSpan.FromHours(6),
-                1 => TimeSpan.FromHours(12),
-                _ => TimeSpan.FromHours(24)
-            };
         }
+
+        // Only: the sources asked (null: every automatic one); NextPeriodic: the next moment of the rhythm of the sources without a feed (null: there are none).
+        internal sealed record SearchPlan(bool SearchesAll, IReadOnlySet<long>? Only, DateTime? NextPeriodic, DateTime Now);
     }
 
     public sealed class RefreshWantedMetadataV1 : SystemService<AcquisitionCycleParametersV1, NoData>
@@ -342,12 +355,14 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
         private static readonly TimeSpan InterruptedRetry = TimeSpan.FromMinutes(30);
         private readonly RunUsenetJobV1 _runner;
         private readonly DownloadImport _import;
+        private readonly WantedAcquisition _acquisition;
         private readonly TimeProvider _time;
 
-        internal DownloadUsenetV1(RunUsenetJobV1 runner, DownloadImport import, TimeProvider time)
+        internal DownloadUsenetV1(RunUsenetJobV1 runner, DownloadImport import, WantedAcquisition acquisition, TimeProvider time)
         {
             _runner = runner;
             _import = import;
+            _acquisition = acquisition;
             _time = time;
         }
 
@@ -366,8 +381,15 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
             {
                 var connection = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadAcquisitionConnectionAsync(group.Key, ct), CancellationToken);
                 if (connection.AcquisitionConnectionTypeId != AcquisitionConnectionType.Usenet) continue;
+                // A grab its indexer limited is fetched again once the pause is over; any other reservation without its NZB was interrupted.
                 foreach (var stuck in group.Where(download => download.ExternalId is null && now - download.StartedAt > ReservationGrace))
                 {
+                    if (stuck.ProtectedDownloadUrl is not null)
+                    {
+                        await _acquisition.ResumeLimitedGrabAsync(Context, stuck, AcquisitionConnectionType.Usenet, CancellationToken);
+                        continue;
+                    }
+
                     await _import.FailAsync(Context, stuck.OperationId, DownloadLogic.InterruptedReasonKey, now + InterruptedRetry, CancellationToken);
                 }
 

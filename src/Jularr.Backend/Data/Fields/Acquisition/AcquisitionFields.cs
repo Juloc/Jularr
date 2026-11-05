@@ -40,6 +40,9 @@ namespace Jularr.Backend.Data.Fields.Acquisition
         public static readonly DateTimeField CheckedAt = new() { Required = false };
         public static readonly IntArrayField MediaTypeIds = new() { Minimum = 1, Maximum = 7, MaximumLength = 5, Required = false, IsSet = true };
         public static readonly BoolField SearchesAutomatically = new();
+        public static readonly BoolField ReadsFeed = new();
+        public static readonly BoolField SearchesInteractively = new();
+        public static readonly IntField SearchIntervalHours = new() { Minimum = 6, Maximum = 8760 };
         public static readonly IntField QueryLimit = new() { Minimum = 1, Maximum = 100000, Required = false };
         public static readonly IntField GrabLimit = new() { Minimum = 1, Maximum = 100000, Required = false };
         public static readonly IntField QueryCount = new() { Minimum = 0 };
@@ -62,6 +65,7 @@ namespace Jularr.Backend.Data.Fields.Acquisition
         public static readonly StringField TargetLanguage = new(NpgsqlDbType.Varchar) { MaximumLength = 2, Required = false };
         public static readonly StringField Title = new(NpgsqlDbType.Varchar) { MaximumLength = 1000, AllowBlank = false };
         public static readonly StringField SourceUrl = new(NpgsqlDbType.Varchar) { MaximumLength = 2048, Required = false, Format = StringFormat.HttpUrl };
+        public static readonly ByteArrayField ProtectedDownloadUrl = new() { Required = false };
         public static readonly StringField QualityKey = new(NpgsqlDbType.Varchar) { MaximumLength = 64, Required = false };
         public static readonly EnumField AcquisitionReleaseStatusTypeId = new(typeof(AcquisitionReleaseStatusType));
         public static readonly StringField ReasonKey = new(NpgsqlDbType.Varchar) { MaximumLength = 64, Required = false };

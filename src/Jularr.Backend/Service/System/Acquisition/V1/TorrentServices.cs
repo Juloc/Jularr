@@ -28,11 +28,13 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
     {
         private readonly RunTorrentJobV1 _runner;
         private readonly DownloadSpeeds _speeds;
+        private readonly WantedAcquisition _acquisition;
 
-        internal DownloadTorrentsV1(RunTorrentJobV1 runner, DownloadSpeeds speeds)
+        internal DownloadTorrentsV1(RunTorrentJobV1 runner, DownloadSpeeds speeds, WantedAcquisition acquisition)
         {
             _runner = runner;
             _speeds = speeds;
+            _acquisition = acquisition;
         }
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
@@ -48,10 +50,18 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
             _speeds.Torrent.BytesPerSecond = settings.MaxBytesPerSecond ?? 0;
 
             var jobs = new List<DownloadData>();
-            foreach (var group in downloads.Where(download => download.ExternalId == TorrentJob.ExternalId).GroupBy(download => download.AcquisitionConnectionId))
+            foreach (var group in downloads.Where(download => download.ExternalId == TorrentJob.ExternalId || download.ProtectedDownloadUrl is not null).GroupBy(download => download.AcquisitionConnectionId))
             {
                 var connection = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadAcquisitionConnectionAsync(group.Key, ct), CancellationToken);
-                if (connection.AcquisitionConnectionTypeId == AcquisitionConnectionType.Torrent) jobs.AddRange(group);
+                if (connection.AcquisitionConnectionTypeId != AcquisitionConnectionType.Torrent) continue;
+
+                // A grab its indexer limited is fetched again once the pause is over.
+                foreach (var waiting in group.Where(download => download.ExternalId is null))
+                {
+                    await _acquisition.ResumeLimitedGrabAsync(Context, waiting, AcquisitionConnectionType.Torrent, CancellationToken);
+                }
+
+                jobs.AddRange(group.Where(download => download.ExternalId == TorrentJob.ExternalId));
             }
 
             var progressed = 0;

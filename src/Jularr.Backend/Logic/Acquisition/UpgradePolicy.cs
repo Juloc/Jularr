@@ -6,9 +6,6 @@ namespace Jularr.Backend.Logic.Acquisition
     // The one cutoff and upgrade policy of every media type (Movie, TV, Anime, Music, Books).
     internal static class UpgradePolicy
     {
-        // How often a target that is installed but not final is searched again for a better release.
-        public static readonly TimeSpan SearchInterval = TimeSpan.FromHours(12);
-
         public static int RankOf(QualityProfile profile, string? quality)
         {
             if (string.IsNullOrWhiteSpace(quality))

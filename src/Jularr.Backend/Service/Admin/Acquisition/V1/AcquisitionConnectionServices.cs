@@ -70,6 +70,9 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                     connection."Version",
                     connection."MediaTypeIds",
                     connection."SearchesAutomatically",
+                    connection."ReadsFeed",
+                    connection."SearchesInteractively",
+                    connection."SearchIntervalHours",
                     connection."QueryLimit",
                     connection."GrabLimit",
                     CASE WHEN connection."CountedOn" = current_date THEN connection."QueryCount" ELSE 0 END AS "QueryCount",
@@ -135,6 +138,9 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                     connection."Version",
                     connection."MediaTypeIds",
                     connection."SearchesAutomatically",
+                    connection."ReadsFeed",
+                    connection."SearchesInteractively",
+                    connection."SearchIntervalHours",
                     connection."QueryLimit",
                     connection."GrabLimit",
                     CASE WHEN connection."CountedOn" = current_date THEN connection."QueryCount" ELSE 0 END AS "QueryCount",
@@ -430,7 +436,8 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                     or AcquisitionConnectionType.Qbittorrent ? data.Username : null,
                 data.AcquisitionConnectionTypeId == AcquisitionConnectionType.Usenet ? data.MaxConnections ?? 8 : null, password, data.MediaTypeIds,
                 data.SearchesAutomatically, data.QueryLimit, data.GrabLimit, data.Host, data.Port, data.UseSsl, data.DownloadStorageMountId,
-                data.AcquisitionConnectionTypeId != AcquisitionConnectionType.Sabnzbd || data.RemovesCompleted, data.IncompleteRemotePath, data.IncompleteLocalPath, data.RemovesFailed);
+                data.AcquisitionConnectionTypeId != AcquisitionConnectionType.Sabnzbd || data.RemovesCompleted, data.IncompleteRemotePath, data.IncompleteLocalPath, data.RemovesFailed,
+                data.AcquisitionConnectionTypeId != AcquisitionConnectionType.Newznab || data.ReadsFeed, data.SearchesInteractively, data.SearchIntervalHours);
         }
 
         // Keyless indexers send no key.
