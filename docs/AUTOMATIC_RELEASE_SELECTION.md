@@ -114,7 +114,13 @@ take beyond them: Original the original language of the work, English English, N
 (Polish, Chinese or English for a German request of an Almond) and a file that states no language are Manual review: "Language not allowed by the request · PL"
 or "File language is unknown"; a person can still take them in the manual search, which shows every row with its languages, ranked: asked languages in the
 profile's order, original, other known, unknown. Direct sources state their languages (Anna's Archive names every language of a file, `de, en` counts for both);
-a source that states none gives an unknown language. Manga has no language rule yet.
+a source that states none gives an unknown language.
+
+**Language from the title.** A book or light-novel release that names no language is in the language its title is known in: after removing the author, the title
+(cleaned as in the series matcher) must equal a title of the Work that carries a language: an edition's title (`WorkEditions`), a localized title (`WorkTitles` by
+UI locale) or the original title in the original language. One language counts (the manual search shows it as "German (from title)"); a title several languages share
+("Emma"), one no language is known to carry, or the Work's main title alone (it may be a translated title) leaves the language unknown. A language the release names is never replaced.
+Manga has no language rule yet.
 
 ## Tests
 

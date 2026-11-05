@@ -45,8 +45,9 @@ namespace Jularr.Backend.Data.Logic.Acquisition
             string[] requestedLocales, string? author, string? platformAbbreviation, int? platformIgdbId, string? installedFiles = null,
             string[]? editionTitles = null, string[]? isbns = null, string? originalLanguage = null, string? formats = null, string? qualitySizes = null,
             int? runtimeMinutes = null, string? releaseProfiles = null, string[]? monitoredEditionLanguages = null, string[]? unmonitoredEditionLanguages = null,
-            string? releaseGroupRatings = null)
+            string? releaseGroupRatings = null, string[]? languageTitles = null)
         {
+            LanguageTitles = languageTitles ?? [];
             ReleaseGroupRatings = releaseGroupRatings ?? "{}";
             MonitoredEditionLanguages = monitoredEditionLanguages ?? [];
             UnmonitoredEditionLanguages = unmonitoredEditionLanguages ?? [];
@@ -153,6 +154,10 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
         [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Isbns))]
         public string[] Isbns { get; }
+
+        // The titles the Work is known by in a language, "language|title": its editions, its localized titles and its original title in the original language.
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.LanguageTitles))]
+        public string[] LanguageTitles { get; }
 
         // The languages of the book's editions an administrator wants and those switched off.
         [DataField(typeof(WorkManagementFields), nameof(WorkManagementFields.EditionLanguages))]

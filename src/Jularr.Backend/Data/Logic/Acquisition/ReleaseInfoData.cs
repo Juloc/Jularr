@@ -145,5 +145,9 @@ namespace Jularr.Backend.Data.Logic.Acquisition
     internal sealed record ScorePoint(string Code, string? Value, int Points);
 
     // What a book search asks besides the title: a series (light novels) or one book, the size limits per volume of the kinds, and whether a person decides (manual search).
-    internal sealed record BookSearch(bool IsSeries, IReadOnlyDictionary<string, QualitySize> Sizes, bool Automatic);
+    internal sealed record BookSearch(bool IsSeries, IReadOnlyDictionary<string, QualitySize> Sizes, bool Automatic)
+    {
+        // The titles the Work is known by in a language; a release that names no language is in the language its title is known in.
+        public IReadOnlyList<(string Language, string Title)> LanguageTitles { get; init; } = [];
+    }
 }

@@ -164,6 +164,30 @@ namespace Jularr.Backend.Logic.Acquisition
                             AND edition."Title" <> work."CanonicalTitle"
                     ) AS "EditionTitles",
                     ARRAY(
+                        SELECT
+                            lower(edition."LanguageCode") || '|' || edition."Title"
+                        FROM
+                            "WorkEditions" AS edition
+                        WHERE
+                            edition."WorkId" = work."Id"
+                            AND edition."LanguageCode" IS NOT NULL
+                            AND edition."Title" IS NOT NULL
+                        UNION
+                        SELECT
+                            lower(split_part(locale."Locale", '-', 1)) || '|' || localized."Title"
+                        FROM
+                            "WorkTitles" AS localized
+                            JOIN "UiLocales" AS locale ON locale."Id" = localized."UiLocaleId"
+                        WHERE
+                            localized."WorkId" = work."Id"
+                        UNION
+                        SELECT
+                            work."OriginalLanguage" || '|' || work."OriginalTitle"
+                        WHERE
+                            work."OriginalLanguage" IS NOT NULL
+                            AND work."OriginalTitle" IS NOT NULL
+                    ) AS "LanguageTitles",
+                    ARRAY(
                         SELECT DISTINCT
                             identity."Value"
                         FROM

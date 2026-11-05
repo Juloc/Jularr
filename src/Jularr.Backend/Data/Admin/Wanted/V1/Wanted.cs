@@ -362,8 +362,9 @@ namespace Jularr.Backend.Data.Admin.Wanted.V1
         public WantedReleaseCandidateV1(string candidateId, string title, string connectionName, long? sizeBytes, DateTime? publishedAt, string? qualityKey,
             ReleaseDecisionType releaseDecisionTypeId, int score, string reasonCode, string? reasonValue, BookReleaseKind? bookReleaseKindId = null, int? volumeStart = null,
             int? volumeEnd = null, bool isComplete = false, ReleaseSizeMark? releaseSizeMarkId = null, BaseDataList<ReleaseScorePointV1>? scorePoints = null, string? releaseGroup = null,
-            ReleaseProtocol releaseProtocolId = ReleaseProtocol.Usenet, string[]? languages = null)
+            ReleaseProtocol releaseProtocolId = ReleaseProtocol.Usenet, string[]? languages = null, bool languagesFromTitle = false)
         {
+            LanguagesFromTitle = languagesFromTitle;
             ReleaseProtocolId = releaseProtocolId;
             Languages = languages ?? [];
             ReleaseGroup = releaseGroup;
@@ -445,6 +446,10 @@ namespace Jularr.Backend.Data.Admin.Wanted.V1
 
         [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.Languages))]
         public string[] Languages { get; }
+
+        // The release names no language; they come from its title (a localized or the original title of the Work).
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.LanguagesFromTitle))]
+        public bool LanguagesFromTitle { get; }
     }
 
     // The points of one score rule and what it saw.

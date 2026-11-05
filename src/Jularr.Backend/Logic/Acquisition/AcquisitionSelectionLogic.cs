@@ -178,7 +178,7 @@ namespace Jularr.Backend.Logic.Acquisition
             return ReleaseSelectionEngine.Select(profile, [.. offers.Select(offer => kind switch
             {
                 AcquisitionKind.Book or AcquisitionKind.LightNovel => Candidate(offer, BookReleaseJudge.Judge([target.CanonicalTitle, .. target.EditionTitles], target.Author, offer,
-                    target.OriginalLanguage, new BookSearch(kind == AcquisitionKind.LightNovel, profile.Sizes, automatic))),
+                    target.OriginalLanguage, new BookSearch(kind == AcquisitionKind.LightNovel, profile.Sizes, automatic) { LanguageTitles = ReadLanguageTitles(target) })),
                 AcquisitionKind.Manga => Candidate(offer, MangaReleaseJudge.Judge([target.CanonicalTitle, .. target.Titles], scope, offer, automatic)),
                 AcquisitionKind.Music => Candidate(offer, MusicReleaseJudge.Judge([target.CanonicalTitle, .. target.Titles], target.Author, offer)),
                 AcquisitionKind.Game => Candidate(offer, GameReleaseJudge.Judge([target.CanonicalTitle, .. target.Titles], target.PlatformIgdbId, target.PlatformAbbreviation, offer)),
@@ -202,6 +202,7 @@ namespace Jularr.Backend.Logic.Acquisition
                     Flag = automatic ? judgement.Flag : blockedGroup ?? judgement.Flag,
                     SizeMark = judgement.SizeMark,
                     Languages = judgement.Languages ?? judgement.Parsed?.AudioLanguages ?? [],
+                    LanguagesFromTitle = judgement.LanguagesFromTitle,
                     InstalledQuality = installed?.Quality,
                     InstalledNeedsReplacement = installed?.NeedsReplacement ?? false,
                     RuntimeMinutes = judgement.Parsed?.IsSeasonPack == true && scope is { Units.All.Count: > 0 } && profile.RuntimeMinutes is { } minutes
@@ -211,6 +212,10 @@ namespace Jularr.Backend.Logic.Acquisition
                 };
             }
         }
+
+        // "language|title" pairs of the target as pairs.
+        private static (string Language, string Title)[] ReadLanguageTitles(WantedTargetData target) =>
+            [.. target.LanguageTitles.Select(entry => entry.Split('|', 2)).Where(pair => pair.Length == 2 && pair[0].Length > 0 && pair[1].Length > 0).Select(pair => (pair[0], pair[1]))];
 
         // The outcome a target remembers for the next automatic search.
         public static string OutcomeKey(SelectionOutcome outcome, bool indexersUnavailable) => indexersUnavailable ? "indexers_unavailable" : outcome switch

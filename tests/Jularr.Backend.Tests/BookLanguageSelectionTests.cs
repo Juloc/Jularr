@@ -21,7 +21,8 @@ namespace Jularr.Backend.Tests
         private static SelectionCandidate Candidate(string title, int priority = 0, string connection = "Anna's Archive")
         {
             var offer = new ReleaseOffer(title, 1, connection, priority, title, new Uri("https://example.org/" + Uri.EscapeDataString(title)), null, 1_000_000, null, ["title"]);
-            var judgement = BookReleaseJudge.Judge(["Almond"], "Sun-mi Hwang", offer, "KO");
+            // The Work's original language is not recorded, so a title alone says nothing about the language.
+            var judgement = BookReleaseJudge.Judge(["Almond"], "Sun-mi Hwang", offer, null);
             return new SelectionCandidate(offer.Identity, judgement.Parsed, offer.SizeBytes, offer.ConnectionName, offer.ConnectionPriority, offer.PublishedAt, judgement.Evidence, judgement.Coverage)
             {
                 IndexerId = offer.ConnectionId,

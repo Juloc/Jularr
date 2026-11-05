@@ -158,10 +158,13 @@ namespace Jularr.Backend.Logic.Acquisition
 
             // At equal quality a single volume comes before a pack: every further volume costs coverage.
             var coverage = name.VolumeCount is { } count and > 1 ? new SelectionCoverage(1, 1, count - 1) : SelectionCoverage.Single;
+            // A release that names no language is in the language its title is known in (an edition's title, a localized title, the original title).
+            var fromTitle = name.Languages.Count == 0 ? InferLanguages(name, author, search) : [];
             return new ReleaseJudgement<BookIdentityMatch>(rejection is not null ? BookIdentityMatch.WrongKind
                 : identity.Confidence == IdentityConfidence.Ambiguous ? BookIdentityMatch.AmbiguousTitle : BookIdentityMatch.Matches, parsed, identity, coverage, null)
             {
-                Languages = name.Languages,
+                Languages = fromTitle.Count > 0 ? fromTitle : name.Languages,
+                LanguagesFromTitle = fromTitle.Count > 0,
                 Points = points,
                 Rejection = rejection ?? (automatic ? size : null),
                 Flag = automatic ? null : size,
@@ -170,6 +173,21 @@ namespace Jularr.Backend.Logic.Acquisition
 
             ReleaseJudgement<BookIdentityMatch> Result(BookIdentityMatch match, ReleaseIdentityEvidence evidence) =>
                 new(match, parsed, evidence, SelectionCoverage.Single, null) { Languages = name.Languages, SizeMark = sizeMark.Mark };
+        }
+
+        // The language a release without one is in: the one language a title of the Work (an edition's, a localized one, the original title) equals the release's title in, author left
+        // out. A title that exists in several languages says nothing, and so does one no language is known to carry.
+        private static IReadOnlyList<string> InferLanguages(BookReleaseName name, string? author, BookSearch? search)
+        {
+            var authorWords = ReleaseWords.Tokens(author ?? "").Select(word => word.ToLowerInvariant()).ToHashSet(StringComparer.Ordinal);
+            var released = TitleMatcher.Key(string.Join(' ', ReleaseWords.Tokens(name.Title).Where(word => !authorWords.Contains(word.ToLowerInvariant()))));
+            if (released.Length == 0)
+            {
+                return [];
+            }
+
+            var known = (search?.LanguageTitles ?? []).Where(entry => TitleMatcher.Key(entry.Title) == released).Select(entry => entry.Language.ToUpperInvariant()).Distinct(StringComparer.Ordinal).ToArray();
+            return known.Length == 1 ? known : [];
         }
 
         // The size per volume against the limits of the release's kind; an illustrated edition has its own.

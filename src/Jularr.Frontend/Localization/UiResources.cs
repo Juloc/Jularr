@@ -2178,6 +2178,7 @@ namespace Jularr.Frontend.Localization
             new("wanted.search.filters.clear", "Clear filters"),
             new("wanted.search.noMatch", "No release matches the filters."),
             new("wanted.search.queue", "In queue"),
+            new("wanted.search.languageFromTitle", " (from title)"),
             new("wanted.search.startNow", "Start now"),
             new("wanted.search.override", "Take anyway"),
             new("wanted.search.overrideMenu", "Take a rejected release"),

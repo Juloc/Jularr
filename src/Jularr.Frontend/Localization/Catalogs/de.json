@@ -5377,6 +5377,10 @@
    "In queue",
    "In Queue"
   ],
+  "wanted.search.languageFromTitle": [
+   " (from title)",
+   " (aus Titel)"
+  ],
   "wanted.search.startNow": [
    "Start now",
    "Jetzt starten"
