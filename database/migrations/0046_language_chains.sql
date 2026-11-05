@@ -98,14 +98,15 @@ BEGIN
 END $$;
 DELETE FROM "AcquisitionProfiles" AS profile USING "LanguageProfiles" AS merged WHERE profile."Id" = merged."ProfileId";
 
--- The chains of a target, one per language it is wanted in, in order: its own, else those of its requests (the requester's current content languages and switch, the language of the
--- request where the requester has no first content language or is gone), else the setting for titles nobody requested.
+-- The chains of a target, one per language it is wanted in, in order: its own, else those of its requests (the language the request was made in, with the requester's second content
+-- language when that is the requester's first language, and the requester's switch), else the setting for titles nobody requested.
 CREATE VIEW "WantedItemChains" AS
 WITH sources AS (
     SELECT own."WantedItemId", own."FirstLanguage", own."SecondLanguage", own."UsesOriginal", 0::bigint AS "Rank"
     FROM "WantedItemLanguageChains" AS own
     UNION ALL
-    SELECT target."WantedItemId", coalesce(requester."FirstContentLanguage", lower(split_part(locale."Locale", '-', 1)))::varchar(2), requester."SecondContentLanguage",
+    SELECT target."WantedItemId", lower(split_part(locale."Locale", '-', 1))::varchar(2),
+        CASE WHEN requester."FirstContentLanguage" = lower(split_part(locale."Locale", '-', 1)) THEN requester."SecondContentLanguage" END,
         coalesce(requester."LanguageUsesOriginal", TRUE), request."Id"
     FROM "RequestTargets" AS target
         JOIN "AcquisitionRequests" AS request ON request."Id" = target."AcquisitionRequestId" AND request."AcquisitionRequestStatusTypeId" BETWEEN 2 AND 6

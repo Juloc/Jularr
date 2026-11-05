@@ -589,12 +589,14 @@ namespace Jularr.Backend.Tests
                 SELECT 21, 'Englisch', "Definition" || '{"LanguageOrder":["en"],"LanguageFallback":"None","UpgradeAllowed":true}'::jsonb FROM "AcquisitionProfiles" WHERE "Id" = (SELECT "AcquisitionProfileId" FROM "AcquisitionProfileDefaults" WHERE "AcquisitionMediaKindId" = 4);
                 INSERT INTO "AcquisitionProfileMediaKinds" ("AcquisitionProfileId", "AcquisitionMediaKindId") VALUES (20, 4), (21, 4);
                 INSERT INTO "RequestRules" ("Name", "PeriodDays", "IsAutomaticApproval", "AcquisitionProfileIds") VALUES ('Languages', 30, TRUE, '{20,21}');
-                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle") VALUES (701, 3, 'On Deutsch'), (702, 3, 'On Englisch'), (703, 3, 'Requested'), (704, 3, 'Monitored'), (705, 3, 'Deutsch and requested');
-                INSERT INTO "WantedItems" ("Id", "WorkId", "AcquisitionProfileId") VALUES (801, 701, 20), (802, 702, 21), (803, 703, NULL), (804, 704, NULL), (805, 705, 20);
+                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle") VALUES (701, 3, 'On Deutsch'), (702, 3, 'On Englisch'), (703, 3, 'Requested'), (704, 3, 'Monitored'), (705, 3, 'Deutsch and requested'), (706, 3, 'Requested in Indonesian by a German profile');
+                INSERT INTO "WantedItems" ("Id", "WorkId", "AcquisitionProfileId") VALUES (801, 701, 20), (802, 702, 21), (803, 703, NULL), (804, 704, NULL), (805, 705, 20), (806, 706, NULL);
                 INSERT INTO "AcquisitionRequests" ("Id", "WorkId", "RequestedByProfileId", "RequestedByAccountId", "UiLocaleId", "AcquisitionRequestStatusTypeId", "DecidedByAccountId", "DecidedAt", "AcquisitionProfileId") VALUES
                     (901, 703, 302, 41, (SELECT "Id" FROM "UiLocales" WHERE "Locale" = 'id'), 2, 41, now(), NULL),
-                    (902, 705, 302, 41, (SELECT "Id" FROM "UiLocales" WHERE "Locale" = 'id'), 2, 41, now(), 20);
-                INSERT INTO "RequestTargets" ("AcquisitionRequestId", "WantedItemId") VALUES (901, 803), (902, 805);
+                    (902, 705, 302, 41, (SELECT "Id" FROM "UiLocales" WHERE "Locale" = 'id'), 2, 41, now(), 20),
+                    (903, 706, 301, 41, (SELECT "Id" FROM "UiLocales" WHERE "Locale" = 'id'), 2, 41, now(), NULL);
+                INSERT INTO "RequestTargets" ("AcquisitionRequestId", "WantedItemId") VALUES (901, 803), (902, 805), (903, 806);
+                UPDATE "Profiles" SET "FirstContentLanguage" = 'de', "SecondContentLanguage" = 'en' WHERE "Id" = 301;
                 """);
             await new DatabaseBaseline(cs, options, tools).StartAsync(CancellationToken.None);
 
@@ -610,8 +612,11 @@ namespace Jularr.Backend.Tests
                 """SELECT string_agg("WantedItemId" || ':' || "FirstLanguage" || ':' || coalesce("SecondLanguage", '') || ':' || CASE WHEN "UsesOriginal" THEN 't' ELSE 'f' END, ' ' ORDER BY "WantedItemId") FROM "WantedItemLanguageChains" """))!);
 
             // The chains of a target: its own, else its requests' (the requester's chain), else every profile's first language (the default setting).
-            Assert.AreEqual("801:de 802:en 803:id 804:de,id 805:de", (string)(await ScalarAsync(cs,
+            Assert.AreEqual("801:de 802:en 803:id 804:de,id 805:de 806:id", (string)(await ScalarAsync(cs,
                 """SELECT string_agg("WantedItemId" || ':' || languages, ' ' ORDER BY "WantedItemId") FROM (SELECT "WantedItemId", string_agg("FirstLanguage", ',' ORDER BY "Position") AS languages FROM "WantedItemChains" GROUP BY "WantedItemId") AS chains"""))!);
+
+            // The language a request was made in survives, also where the requester's first content language is another (German): that request has no second language.
+            Assert.AreEqual("id::t", (string)(await ScalarAsync(cs, """SELECT "FirstLanguage" || ':' || coalesce("SecondLanguage", '') || ':' || CASE WHEN "UsesOriginal" THEN 't' ELSE 'f' END FROM "WantedItemChains" WHERE "WantedItemId" = 806"""))!);
 
             // A fixed chain for titles nobody requested, and a chain of the requester that changed.
             await ExecuteAsync(cs, """UPDATE "InstanceSettings" SET "MonitoredLanguageModeId" = 2, "MonitoredFirstLanguage" = 'de', "MonitoredSecondLanguage" = 'en'; UPDATE "Profiles" SET "FirstContentLanguage" = 'id', "SecondContentLanguage" = 'en', "LanguageUsesOriginal" = FALSE WHERE "Id" = 302;""");
