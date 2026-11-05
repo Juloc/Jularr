@@ -145,6 +145,18 @@ a release with subtitles in the first or second language comes before one withou
 subtitles. **Manga** follows the same chain and ranking; a manga release name rarely names a language, so it is unknown (not English) and only the last resort when no release in the
 chain exists. There are no per-language volume targets for manga.
 
+**Several first languages and upgrades by language (video, migration `0050`).** A title wanted in several first languages (two people with different first languages) prefers a release whose audio
+has **all** of them (a Multi/DL release): the number of first languages a release covers ranks before the chain step, so such a release wins; otherwise the best single language is taken. There is no
+second file per language: a file in one first language stays until a Multi release (or one in an earlier step) replaces it. The language of a film or series file comes from its release name
+(`StoredFileFormatLogic.AudioLanguages`, kept in `StoredFiles.ReleaseLanguages` by the evidence refresh: a name without a language is the work's original language; a file without a release name, or a
+work without an original language, states none). **A file with no recorded language covers every language and is never searched for.** A file whose language is known but lacks a first language of
+the chains is open (`WantedVideoLanguages`): the Wanted list shows it under "Cutoff unmet" with the reason "Language" when none of the first languages is there; when only some are (a Multi release
+could still replace the file) it is only a feed target. It is replaced **only through the feed decision**: `TakeFromFeed` judges the feed's new releases with the same selection, whose upgrade rule puts the
+language before the quality (`UpgradePolicy.IsUpgrade`: a release that covers more first languages or stands in an earlier step replaces the file whatever its quality; one that serves the chain worse never
+does) and the import's `ReplacementLogic.IsBetter` does the same, so the file in the first language is not lost to a better quality in the original language. There is no periodic search for it, and
+it needs a profile that allows upgrades. An approved request is an event: a target waiting for the feed (`NextSearchAt` infinity) is due again, and the search takes what lacks a file, a quality or a
+language (`AutoApprovalTests`, also the approval of every type of title).
+
 **Language add-ons.** Per language, global for every media type (Profiles page, "Language add-ons"; `LanguageReleaseRules`, `GET/PUT /api/v1/admin/acquisition/language-rules`): preferred release groups
 (+50 points each, "Preferred group for this language"), blocked groups (the release is rejected in an automatic search and only marked in a manual search, like a blocked release group), preferred words
 (+25 points each, a whole word of the release name; several words are a phrase) and blocked words. They apply only to a release that is in that language (its audio, or the language of a book).
@@ -156,7 +168,7 @@ UI locale) or the original title in the original language. One language counts (
 
 ## Tests
 
-`SeriesTitleIdentityTests` (confusable series and anime titles, aliases, years, import), `BookLanguageSelectionTests` (multi-language result sets), `ReleaseSelectionTests`.
+`VideoLanguageUpgradeTests`, `AutoApprovalTests`, `SeriesTitleIdentityTests` (confusable series and anime titles, aliases, years, import), `BookLanguageSelectionTests` (multi-language result sets), `ReleaseSelectionTests`.
 `BookReleaseCorpusTests` reads the golden corpus
 [book-releases.tsv](../tests/Jularr.Backend.Tests/Fixtures/ReleaseNames/book-releases.tsv): the eleven Nyaa answers for
 "Mushoku Tensei: Jobless Reincarnation" plus Sonarr, Radarr, Readarr and Lidarr style names, each with the expected parse, size

@@ -305,6 +305,16 @@ namespace Jularr.Backend.Logic.Library
             var earlier = UpgradePolicy.RankOf(profile, file.EarlierQualityKey);
             var replacing = UpgradePolicy.RankOf(profile, file.NewQualityKey);
             if (replacing == int.MaxValue || earlier == int.MaxValue) return false;
+
+            // A video's language comes before its quality, as in selection: the file that serves the chain better stays.
+            if (profile.IsVideo && file.EarlierEvidence is { } beforeJson && file.NewEvidence is { } afterJson
+                && StoredFileFormatLogic.AudioLanguages(JsonSerializer.Deserialize<StoredReleaseEvidence>(beforeJson)!) is { Count: > 0 } beforeLanguages
+                && StoredFileFormatLogic.AudioLanguages(JsonSerializer.Deserialize<StoredReleaseEvidence>(afterJson)!) is { Count: > 0 } afterLanguages)
+            {
+                if (UpgradePolicy.IsBetterLanguage(profile, afterLanguages, beforeLanguages)) return true;
+                if (UpgradePolicy.IsBetterLanguage(profile, beforeLanguages, afterLanguages)) return false;
+            }
+
             if (replacing != earlier) return replacing < earlier;
             if (file.EarlierEvidence is { } earlierJson && file.NewEvidence is { } newJson)
             {

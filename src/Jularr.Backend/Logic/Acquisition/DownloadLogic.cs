@@ -330,10 +330,16 @@ namespace Jularr.Backend.Logic.Acquisition
             sql.Statement =
                 """
                 WITH cutoff_state AS MATERIALIZED (
+                    -- Below the cutoff, or lacking a first language of the chains in the audio of a film or series (one of several first languages too: a Multi release may replace the file).
                     SELECT
                         below."WantedItemId"
                     FROM
                         "WantedBelowCutoff" AS below
+                    UNION
+                    SELECT
+                        language."WantedItemId"
+                    FROM
+                        "WantedVideoLanguages" AS language
                 ), book_language_state AS MATERIALIZED (
                     -- The books that lack a language, once: the view per target would be evaluated again for every one.
                     SELECT

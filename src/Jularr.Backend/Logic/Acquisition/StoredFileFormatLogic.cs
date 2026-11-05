@@ -68,7 +68,7 @@ namespace Jularr.Backend.Logic.Acquisition
                 SELECT evidence."StoredFileId", evidence."Evidence"::text AS "Evidence"
                 FROM "StoredFileFormatEvidence" AS evidence
                     JOIN "StoredFiles" AS file ON file."Id" = evidence."StoredFileId"
-                WHERE evidence."MediaTypeId" = 3
+                WHERE evidence."MediaTypeId" IN (1, 2, 3)
                     AND file."ReleaseLanguageEvidence" IS DISTINCT FROM evidence."Evidence"
                     AND EXISTS (SELECT 1 FROM "WantedItems" AS wanted WHERE wanted."WorkId" = evidence."WorkId")
                 ORDER BY evidence."StoredFileId"
@@ -79,7 +79,7 @@ namespace Jularr.Backend.Logic.Acquisition
             var rows = pending.Select(row =>
             {
                 var facts = JsonSerializer.Deserialize<StoredReleaseEvidence>(row.Evidence)!;
-                return new { row.StoredFileId, row.Evidence, Languages = ReleaseWords.ReadLanguages(facts.ReleaseName, "")
+                return new { row.StoredFileId, row.Evidence, Languages = (facts.MediaTypeId is MediaType.Movie or MediaType.Series ? AudioLanguages(facts) : ReleaseWords.ReadLanguages(facts.ReleaseName, ""))
                     .Select(language => language.ToLowerInvariant()).ToArray() };
             }).ToArray();
             sql = new SqlStatement();
@@ -94,6 +94,18 @@ namespace Jularr.Backend.Logic.Acquisition
             sql.Parameters.Add(new StoredFileEvidenceBatchData(JsonSerializer.Serialize(rows)));
             await ctx.ExecuteAsyncForAffectedRows(sql, ct);
             return pending.Count;
+        }
+
+        // The languages a stored file's release name states: the audio of a film or series (a name without one is the original language of the work, none when it has none),
+        // the languages of a book's name.
+        public static IReadOnlyList<string> AudioLanguages(StoredReleaseEvidence facts, ReleaseCandidate? candidate = null)
+        {
+            if (facts.MediaTypeId is MediaType.Movie or MediaType.Series)
+            {
+                return ReleaseParser.TryParse(facts.ReleaseName, out var parsed) ? VideoReleaseJudge.Languages(parsed, facts.OriginalLanguage).Languages : [];
+            }
+
+            return (candidate ?? Candidate(facts))?.Languages ?? [];
         }
 
         public static ReleaseCandidate? Candidate(StoredReleaseEvidence facts)

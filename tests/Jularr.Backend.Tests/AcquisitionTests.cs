@@ -3954,6 +3954,45 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"FeedReleases\" WHERE \"ReleaseKey\" = 'old'"));
         }
 
+        // The language of a file counts as a quality does: a film whose file is in the original language, while the requester's first language is another, is wanted below its cutoff
+        // for that reason, and only the feed offers the release that replaces it; a release in the original language again does not.
+        [TestMethod]
+        public async Task Feed_ReleaseInTheFirstLanguage_ReplacesAFileInTheOriginalLanguage_ShownInWantedAsALanguage()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            var usenet = new FakeUsenet();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, usenet);
+            var wantedId = await CreateWantedMovieAsync(host);
+            await host.Fixture.RunSqlAsync("""
+                UPDATE "Works" SET "OriginalLanguage" = 'ja';
+                UPDATE "WantedItems" SET "NextSearchAt" = 'infinity';
+                INSERT INTO "WorkEditions" ("Id", "WorkId") SELECT 900, "Id" FROM "Works";
+                INSERT INTO "WorkVersions" ("Id", "WorkId", "WorkEditionId") SELECT 900, "Id", 900 FROM "Works";
+                INSERT INTO "MediaAssets" ("Id", "WorkId", "WorkVersionId", "MediaAssetTypeId") SELECT 900, "Id", 900, 1 FROM "Works";
+                INSERT INTO "StoredFiles" ("Id", "LibraryRootId", "RelativePath", "SizeBytes", "ModifiedAt", "LastSeenAt", "MediaAssetId", "QualityKey", "ReleaseName", "ReleaseLanguages")
+                    SELECT 900, "Id", 'Example Movie (2020)/Example Movie (2020).mkv', 7, now(), now(), 900, 'WEBDL-1080p', 'Example.Movie.2020.1080p.WEB-DL.H264-OLD', '{ja}' FROM "LibraryRoots" WHERE "RelativePath" = 'Movies';
+                """);
+
+            // Its audio is Japanese and the requester asked in German: the film is below its cutoff for its language, and says so.
+            using var listed = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/wanted?pageSize=50&wantedViewTypeId=" + (int)WantedViewType.CutoffUnmet);
+            var item = (await listed.Content.ReadFromJsonAsync<PageResult<WantedDetailsV1>>())!.Items.Single();
+            Assert.IsTrue(item.IsLanguageOpen);
+
+            // The first read learns the feed; a release in the original language again changes nothing, one in German replaces the file.
+            usenet.Results = FeedOf(("Example.Movie.2020.720p.WEB-DL.H264-SEEN", "seen"));
+            await RunAsync<SyncFeedsV1>(host);
+            usenet.Results = FeedOf(("Example.Movie.2020.720p.WEB-DL.H264-SEEN", "seen"), ("Example.Movie.2020.1080p.WEB-DL.H264-AGAIN", "again"));
+            await RunAsync<SyncFeedsV1>(host);
+            Assert.AreEqual(0, usenet.Grabbed.Count);
+            usenet.Results = FeedOf(("Example.Movie.2020.720p.WEB-DL.H264-SEEN", "seen"), ("Example.Movie.2020.1080p.WEB-DL.H264-AGAIN", "again"), ("Example.Movie.2020.German.1080p.WEB-DL.H264-DUB", "dub"));
+            await RunAsync<SyncFeedsV1>(host);
+            using var dbg = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/wanted/" + wantedId + "/search", new SearchWantedDataV1());
+            Console.WriteLine("DBG " + string.Join(" | ", (await dbg.Content.ReadFromJsonAsync<BaseDataList<WantedReleaseCandidateV1>>())!.Select(c => c.Title + " " + c.ReleaseDecisionTypeId + " " + c.ReasonCode + " " + string.Join(",", c.Languages))));
+            Console.WriteLine("DBG grabbed " + usenet.Grabbed.Count);
+            CollectionAssert.AreEqual(new[] { "https://indexer.example.test/getnzb/dub" }, usenet.Grabbed);
+        }
+
         // A feed is read for every media type the indexer serves, by the indexer's own flag apart from its automatic searches; limits and backoff hold as for a search.
         [TestMethod]
         public async Task Feed_IsReadForEveryTypeAnIndexerServes_ByItsOwnFlag_FailureBacksOff_AndTheLimitHolds()

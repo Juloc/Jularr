@@ -72,6 +72,13 @@ namespace Jularr.Backend.Logic.Acquisition
                 return false;
             }
 
+            // A video's language comes before its quality: a release that serves the chain better replaces the file, one that serves it worse never does (both audios must be known).
+            if (profile.IsVideo && installedLanguages is { Count: > 0 } && candidateLanguages is { Count: > 0 })
+            {
+                if (IsBetterLanguage(profile, candidateLanguages, installedLanguages)) return true;
+                if (IsBetterLanguage(profile, installedLanguages, candidateLanguages)) return false;
+            }
+
             var formatUpgrade = installedFormatScore is { } before && candidateFormatScore is { } after
                 && before < profile.CutoffFormatScore && after >= before + Math.Max(1, profile.MinimumUpgradeFormatScore);
             if (candidate < installed)
@@ -92,6 +99,34 @@ namespace Jularr.Backend.Logic.Acquisition
             var best = languages.Select(language => Array.FindIndex(profile.LanguageOrder, wanted => Same(wanted, language)))
                 .Where(index => index >= 0).DefaultIfEmpty(-1).Min();
             return best >= 0 ? best : languages.Count == 0 ? profile.LanguageOrder.Length : profile.LanguageOrder.Length + 1;
+        }
+
+        // The first languages of the chains (every open chain of the target) the audio covers.
+        public static string[] FirstLanguages(QualityProfile profile) =>
+            [.. profile.LanguageOrder.Take(Math.Min(profile.FirstLanguages ?? profile.LanguageOrder.Length, profile.LanguageOrder.Length))];
+
+        public static int FirstsCovered(QualityProfile profile, IReadOnlyList<string> languages) =>
+            FirstLanguages(profile).Count(first => languages.Any(language => Same(first, language)));
+
+        // A video file whose audio is known but lacks a first language of the chains (one of several first languages too): a release that has it may replace the file.
+        public static bool FirstLanguageOpen(QualityProfile profile, IReadOnlyList<string> languages) =>
+            profile.IsVideo && languages.Count > 0 && FirstLanguages(profile) is { Length: > 0 } firsts && FirstsCovered(profile, languages) < firsts.Length;
+
+        // How well a video's audio serves the chain: the first languages it covers (more is better: a Multi release has all of them), then the step it stands in
+        // (first, second, original, another language, unknown).
+        public static (int Covered, int Step) LanguageValue(QualityProfile profile, IReadOnlyList<string> languages)
+        {
+            var firsts = Math.Min(profile.FirstLanguages ?? profile.LanguageOrder.Length, profile.LanguageOrder.Length);
+            var best = languages.Select(language => Array.FindIndex(profile.LanguageOrder, wanted => Same(wanted, language))).Where(index => index >= 0).DefaultIfEmpty(-1).Min();
+            var step = best >= 0 ? best < firsts ? 0 : 1 : IsOriginal(profile, languages) ? 2 : languages.Count > 0 ? 3 : 4;
+            return (FirstsCovered(profile, languages), step);
+        }
+
+        public static bool IsBetterLanguage(QualityProfile profile, IReadOnlyList<string> languages, IReadOnlyList<string> than)
+        {
+            var (covered, step) = LanguageValue(profile, languages);
+            var (otherCovered, otherStep) = LanguageValue(profile, than);
+            return covered > otherCovered || covered == otherCovered && step < otherStep;
         }
 
         // The file carries one of the languages a request asks for.

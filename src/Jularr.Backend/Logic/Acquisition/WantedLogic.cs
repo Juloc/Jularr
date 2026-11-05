@@ -29,7 +29,9 @@ namespace Jularr.Backend.Logic.Acquisition
                     WHERE
                         request."Id" = @Id
                     ON CONFLICT ("WorkId", "GamePlatformId") DO UPDATE SET
-                        "WorkId" = EXCLUDED."WorkId"
+                        "WorkId" = EXCLUDED."WorkId",
+                        -- An approved request is an event: a target that waits for the feed is due again (the search takes only what lacks a file, quality or language).
+                        "NextSearchAt" = CASE WHEN "WantedItems"."NextSearchAt" = 'infinity' THEN NULL ELSE "WantedItems"."NextSearchAt" END
                     RETURNING
                         "Id"
                 )

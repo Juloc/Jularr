@@ -461,7 +461,8 @@ namespace Jularr.Backend.Logic.Acquisition
             {
                 Modifier = DetectModifier(rawTitle, source),
                 Edition = EditionTag().Match(rawTitle[TitleEnd(rawTitle, numberingMatch)..]) is { Success: true } edition ? edition.Value.Replace('.', ' ').Replace('_', ' ') : null,
-                Languages = ReleaseLanguages.Read(rawTitle[TitleEnd(rawTitle, numberingMatch)..], audioLanguages)
+                Languages = ReleaseLanguages.Read(rawTitle[TitleEnd(rawTitle, numberingMatch)..], audioLanguages),
+                NamedLanguages = ReleaseLanguages.Named(rawTitle[TitleEnd(rawTitle, numberingMatch)..], audioLanguages)
             };
         }
 

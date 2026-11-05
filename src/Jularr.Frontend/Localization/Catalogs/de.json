@@ -5491,6 +5491,10 @@
    "Below cutoff",
    "Unter Qualitätsziel"
   ],
+  "wanted.belowLanguage": [
+   "Language",
+   "Sprache"
+  ],
   "wanted.monitorsNewUnits": [
    "New episodes and volumes",
    "Neue Folgen und Bände"

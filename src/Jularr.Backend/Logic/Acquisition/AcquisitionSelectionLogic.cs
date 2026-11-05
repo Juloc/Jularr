@@ -85,10 +85,10 @@ namespace Jularr.Backend.Logic.Acquisition
         private static (string Quality, int FormatScore, IReadOnlyList<string> Languages, bool NeedsReplacement)? Installed(QualityProfile profile, IEnumerable<InstalledFile> files)
         {
             var best = files
-                .Select(file => (file.Quality, file.RuntimeMinutes, Candidate: StoredFileFormatLogic.Candidate(file.Facts)))
-                .Select(file => (file.Quality, Score: file.Candidate is { } release ? ReleaseScorer.Score(profile,
+                .Select(file => (file.Quality, file.RuntimeMinutes, file.Facts, Candidate: StoredFileFormatLogic.Candidate(file.Facts)))
+                .Select(file => (file.Quality, file.Facts, Score: file.Candidate is { } release ? ReleaseScorer.Score(profile,
                     new ReleaseCandidate(release.Release, release.SizeBytes) { IndexerFlags = release.IndexerFlags, Languages = release.Languages, RuntimeMinutes = file.RuntimeMinutes is > 0 ? file.RuntimeMinutes : null }) : null,
-                    Languages: file.Candidate?.Languages ?? []))
+                    Languages: StoredFileFormatLogic.AudioLanguages(file.Facts, file.Candidate)))
                 .Select(file => (file.Quality, Score: file.Score?.FormatScore ?? 0, file.Languages,
                     NeedsReplacement: profile.UpgradeAllowed && file.Score is { Accepted: false, QualityKey: not null and not "Unknown" }))
                 .OrderBy(file => file.NeedsReplacement).ThenBy(file => UpgradePolicy.RankOf(profile, file.Quality)).ThenByDescending(file => file.Score)
@@ -113,7 +113,8 @@ namespace Jularr.Backend.Logic.Acquisition
 
         public static bool NeedsUpgrade(QualityProfile profile, (string Quality, int FormatScore, IReadOnlyList<string> Languages, bool NeedsReplacement) installed) =>
             profile.UpgradeAllowed && (installed.NeedsReplacement || UpgradePolicy.RankOf(profile, installed.Quality) != int.MaxValue
-                && (!UpgradePolicy.IsCutoffMet(profile, installed.Quality) || installed.FormatScore < profile.CutoffFormatScore));
+                && (!UpgradePolicy.IsCutoffMet(profile, installed.Quality) || installed.FormatScore < profile.CutoffFormatScore)
+                || UpgradePolicy.FirstLanguageOpen(profile, installed.Languages));
 
         // The quality a release is stored with.
         public static string? QualityKey(AcquisitionKind kind, string title, int? igdbPlatform = null) => kind switch

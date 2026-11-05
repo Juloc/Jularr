@@ -105,7 +105,7 @@ namespace Jularr.Frontend.Pages.Admin.Wanted
                 : item.IsDownloading ? (UiTone.Info, "download")
                 : item.OutcomeKey is not null ? (UiTone.Warning, "alert")
                 : (UiTone.Accent, "clock");
-            IUiComponent label = View == WantedViewType.CutoffUnmet && item.HasMedia && !item.IsPaused ? new Text("wanted.belowCutoff") : WantedStatus.Short(item);
+            IUiComponent label = View == WantedViewType.CutoffUnmet && item.HasMedia && !item.IsPaused ? new Text(item.IsLanguageOpen ? "wanted.belowLanguage" : "wanted.belowCutoff") : WantedStatus.Short(item);
             var chip = new StateChip(label, tone, Glyph(icon, 14));
             return WantedStatus.ReasonKey(item) is { } reason ? new Div(chip, new Span(new Text(reason)).Class("wanted-status__reason")).Class("wanted-status") : chip;
         }
