@@ -38,8 +38,8 @@ namespace Jularr.Frontend.Pages.Admin.Backup
 
             page.Content.Add(backups.Items.Count > 0
                 ? new Table<BackupV1>(backups.Items)
-                    .Content("admin.backup.createdAt", item => new LocalTime(item.CreatedAt))
-                    .Content("admin.backup.kind", item => item.Kind == BackupKindType.Manual ? new Tag(new Text("admin.backup.kind.Manual")).Accent() : new Tag(new Text("admin.backup.kind." + item.Kind)))
+                    .Content("admin.backup.createdAt", item => new Div(new LocalTime(item.CreatedAt),
+                        new Tag(new Text("admin.backup.kind." + item.Kind)).Class(item.Kind == BackupKindType.Manual ? "tag tag--accent backup__kind" : "tag backup__kind")).Class("backup__made"))
                     .Content("table.size", item => new ValueText(ByteSize.Format(item.SizeBytes)))
                     .Content("admin.backup.compatible", item => new Text(item.IsCompatible ? "common.yes" : "admin.backup.otherVersion"))
                     .Content("common.actions", item => new Div([.. Actions(item, backups.CanRestore, csrf)]).Class("backup__actions"))

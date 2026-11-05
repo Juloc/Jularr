@@ -6267,10 +6267,6 @@
    "Delete",
    "Löschen"
   ],
-  "admin.backup.kind": [
-   "Kind",
-   "Art"
-  ],
   "admin.backup.kind.Automatic": [
    "Automatic",
    "Automatisch"

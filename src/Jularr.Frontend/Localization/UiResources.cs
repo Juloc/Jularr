@@ -2476,7 +2476,6 @@ namespace Jularr.Frontend.Localization
             new("admin.backup.restore", "Restore"),
             new("admin.backup.passphrase", "Backup passphrase"),
             new("admin.backup.delete", "Delete"),
-            new("admin.backup.kind", "Kind"),
             new("admin.backup.kind.Automatic", "Automatic"),
             new("admin.backup.kind.Update", "Update"),
             new("admin.backup.kind.Manual", "Manual"),

@@ -3,3 +3,17 @@
     flex-wrap: wrap;
     gap: 8px;
 }
+
+// The time and the kind of a backup side by side, the kind below when there is no room.
+.backup__made {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 10px;
+}
+
+// A kind is one short word; it never breaks inside.
+.backup__kind {
+    white-space: nowrap;
+    overflow-wrap: normal;
+}
