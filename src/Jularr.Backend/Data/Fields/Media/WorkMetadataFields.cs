@@ -25,6 +25,7 @@ namespace Jularr.Backend.Data.Fields.Media
         public static readonly StringField Editions = new() { AllowBlank = false };
         public static readonly StringArrayField EditionTitles = new() { ItemMaximumLength = 500 };
         public static readonly StringArrayField WantedLanguages = new() { ItemMaximumLength = 2 };
+        public static readonly StringArrayField LanguageChains = new() { ItemMaximumLength = 16 };
         public static readonly StringArrayField MissingLanguages = new() { ItemMaximumLength = 2 };
         public static readonly StringArrayField LanguageTitles = new() { ItemMaximumLength = 520 };
         public static readonly StringArrayField Isbns = new() { ItemMaximumLength = 64 };

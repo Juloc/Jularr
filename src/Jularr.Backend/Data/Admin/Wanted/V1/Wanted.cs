@@ -151,8 +151,9 @@ namespace Jularr.Backend.Data.Admin.Wanted.V1
     public sealed class WantedDetailsV1 : BaseResponse
     {
         public WantedDetailsV1(long id, long workId, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string canonicalTitle, string? platformName, bool isPaused, WantedPriorityType wantedPriorityTypeId, long version, string[] requestedLanguages, bool hasMedia,
-            bool isDownloading, int? progressPercent, DateTime? lastSearchedAt, string? outcomeKey, long? acquisitionProfileId, long? libraryRootId, bool monitorsNewUnits, bool hasUnits, long[]? tagIds = null)
+            bool isDownloading, int? progressPercent, DateTime? lastSearchedAt, string? outcomeKey, long? acquisitionProfileId, long? libraryRootId, bool monitorsNewUnits, bool hasUnits, long[]? tagIds = null, string[]? missingLanguages = null)
         {
+            MissingLanguages = missingLanguages ?? [];
             TagIds = tagIds ?? [];
             HasUnits = hasUnits;
             MonitorsNewUnits = monitorsNewUnits;
@@ -206,6 +207,10 @@ namespace Jularr.Backend.Data.Admin.Wanted.V1
 
         [DataField(typeof(WantedItemFields), nameof(WantedItemFields.RequestedLanguages))]
         public string[] RequestedLanguages { get; }
+
+        // The languages of a book no present file covers yet (two-letter codes, in order); empty for other media.
+        [DataField(typeof(Fields.Acquisition.LanguageChainFields), nameof(Fields.Acquisition.LanguageChainFields.Languages))]
+        public string[] MissingLanguages { get; }
 
         [DataField(typeof(WantedItemFields), nameof(WantedItemFields.HasMedia))]
         public bool HasMedia { get; }

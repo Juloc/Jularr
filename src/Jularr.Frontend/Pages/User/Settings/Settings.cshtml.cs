@@ -80,7 +80,7 @@ namespace Jularr.Frontend.Pages.User.Settings
                     var data = _input ?? new UpdateProfileDataV1
                     {
                         DisplayName = _profile.DisplayName, UiLocaleId = _profile.UiLocaleId,
-                        FirstContentLanguage = _profile.FirstContentLanguage, SecondContentLanguage = _profile.SecondContentLanguage
+                        FirstContentLanguage = _profile.FirstContentLanguage, SecondContentLanguage = _profile.SecondContentLanguage, LanguageUsesOriginal = _profile.LanguageUsesOriginal
                     };
                     content.Add(new Form<UpdateProfileDataV1>(form =>
                     {
@@ -90,6 +90,7 @@ namespace Jularr.Frontend.Pages.User.Settings
                             .. Languages.Concat(chosen is null || Languages.Contains(chosen) ? [] : [chosen]).Select(code => new SelectOption(code, LanguageLabel.Name(code) ?? code))];
                         form.Select(x => x.FirstContentLanguage, "profile.field.firstContentLanguage", ContentLanguages(data.FirstContentLanguage));
                         form.Select(x => x.SecondContentLanguage, "profile.field.secondContentLanguage", ContentLanguages(data.SecondContentLanguage));
+                        form.Toggle(x => x.LanguageUsesOriginal, "profile.field.languageUsesOriginal");
                         form.Save();
                     }, Url.Page("/User/Settings/Settings"), antiforgery.GetAndStoreTokens(HttpContext).RequestToken, data, _savingMedia || _savingPin || _savingPassword || _savingAniList || _speechInput is not null || _playbackInput is not null ? null : FormError));
 
@@ -262,12 +263,12 @@ namespace Jularr.Frontend.Pages.User.Settings
             return Page();
         }
 
-        public async Task<IActionResult> OnPostAsync(string? displayName, long uiLocaleId, string? firstContentLanguage, string? secondContentLanguage)
+        public async Task<IActionResult> OnPostAsync(string? displayName, long uiLocaleId, string? firstContentLanguage, string? secondContentLanguage, bool languageUsesOriginal)
         {
             // Read verified scope only.
             _authentication = await authentication.ExecuteAsync<AuthenticationResultV1>(cancellationToken: HttpContext.RequestAborted);
             var profileId = _authentication!.ProfileId ?? throw new UnauthorizedAccessException("An active profile is required.");
-            _input = new UpdateProfileDataV1 { DisplayName = displayName ?? "", UiLocaleId = uiLocaleId, FirstContentLanguage = firstContentLanguage, SecondContentLanguage = secondContentLanguage };
+            _input = new UpdateProfileDataV1 { DisplayName = displayName ?? "", UiLocaleId = uiLocaleId, FirstContentLanguage = firstContentLanguage, SecondContentLanguage = secondContentLanguage, LanguageUsesOriginal = languageUsesOriginal };
 
             // Save through the canonical writer.
             await updateProfile.ExecuteAsync<UpdateResult>(new UpdateProfileParametersV1(profileId), _input, HttpContext.RequestAborted);

@@ -17,6 +17,10 @@ namespace Jularr.Backend.Tests
             new(1, 1, MediaType.Book, null, "Pride and Prejudice", 1813, [], 1, "Books", "{}", [], false, true, false, 0, [], [], "Jane Austen", null, null, GermanFile, originalLanguage: "en",
                 wantedLanguages: wanted, missingLanguages: missing);
 
+        private static WantedTargetData Chained(string[] chains, string[] wanted, string[] missing) =>
+            new(1, 1, MediaType.Book, null, "Pride and Prejudice", 1813, [], 1, "Books", """{"AllowedQualities":["EPUB","PDF"],"QualityOrder":["EPUB","PDF"],"UpgradeAllowed":false}""", [], false, true, false, 0, [],
+                [], "Jane Austen", null, null, GermanFile, originalLanguage: "en", wantedLanguages: wanted, missingLanguages: missing, languageChains: chains);
+
         private static QualityProfile Profile(string[] order, string[] wanted) =>
             new("1", "Books", ["EPUB", "PDF"], ["EPUB", "PDF"], false, null, null, null)
             {
@@ -80,6 +84,39 @@ namespace Jularr.Backend.Tests
             // An English file nobody wants is replaced by a wanted one; a wanted one is not replaced by an English one.
             Assert.IsTrue(ReplacementLogic.IsBetter(profile, File("Pride and Prejudice (EN) (epub)", "Pride and Prejudice (ID) (epub)")));
             Assert.IsFalse(ReplacementLogic.IsBetter(profile, File("Pride and Prejudice (ID) (epub)", "Pride and Prejudice (EN) (epub)")));
+        }
+
+        [TestMethod]
+        public void ProfileLanguages_AreTheChainsOfTheMissingLanguages_FirstThenSecond_OriginalOnlyWhereAChainAllowsIt()
+        {
+            string[] chains = ["de|en|1", "id||0"];
+
+            // Both languages are missing: both chains, firsts then seconds; one chain allows the original.
+            var both = AcquisitionSelectionLogic.ReadProfile(Chained(chains, ["de", "id"], ["de", "id"]));
+            CollectionAssert.AreEqual(new[] { "de", "id", "en" }, both.LanguageOrder);
+            Assert.AreEqual(LanguageFallbackType.Original, both.LanguageFallback);
+
+            // Only Indonesian is missing: its chain alone (no second language, no original).
+            var indonesian = AcquisitionSelectionLogic.ReadProfile(Chained(chains, ["de", "id"], ["id"]));
+            CollectionAssert.AreEqual(new[] { "id" }, indonesian.LanguageOrder);
+            Assert.AreEqual(LanguageFallbackType.None, indonesian.LanguageFallback);
+
+            // Everything covered: all chains again (a manual search offers every language).
+            CollectionAssert.AreEqual(new[] { "de", "id", "en" }, AcquisitionSelectionLogic.ReadProfile(Chained(chains, ["de", "id"], [])).LanguageOrder);
+        }
+
+        [TestMethod]
+        public void GrabTargetLanguage_ASecondLanguageOrTheOriginalStandsInForTheFirstLanguageOfItsChain()
+        {
+            var target = Chained(["de|en|1", "id||0"], ["de", "id"], ["de", "id"]);
+
+            // English is the second language of the German chain: it covers German until a German release comes; the original (en) too; Indonesian has neither.
+            Assert.AreEqual("de", AcquisitionSelectionLogic.TargetLanguage(target, ["EN"]));
+            Assert.AreEqual("id", AcquisitionSelectionLogic.TargetLanguage(target, ["ID"]));
+            Assert.IsNull(AcquisitionSelectionLogic.TargetLanguage(target, ["PL"]));
+
+            // Indonesian alone is missing and its chain has no second language and no original: an English release is for no target.
+            Assert.IsNull(AcquisitionSelectionLogic.TargetLanguage(Chained(["de|en|1", "id||0"], ["de", "id"], ["id"]), ["EN"]));
         }
     }
 }

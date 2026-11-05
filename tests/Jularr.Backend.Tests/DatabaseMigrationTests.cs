@@ -382,7 +382,7 @@ namespace Jularr.Backend.Tests
                 FROM "WantedItems" AS wanted JOIN "Works" AS work ON work."Id" = wanted."WorkId"
                 """;
             var before = (string)(await ScalarAsync(cs, Before))!;
-            await new DatabaseBaseline(cs, options, tools).StartAsync(CancellationToken.None);
+            await new DatabaseBaseline(cs, options, tools, migrations: DatabaseBaseline.Migrations.Where(migration => migration.Version <= 42).ToArray()).StartAsync(CancellationToken.None);
 
             // Acquisition chooses the same profile, or the one it was merged into, for every target (the film on a series profile had none and now follows the film default).
             Assert.AreEqual("201:1,202:10,203:2,204:8,205:8,206:9,207:4,208:7,209:3,210:8,211:-,212:12,213:13", before);
@@ -488,6 +488,60 @@ namespace Jularr.Backend.Tests
 
             // Every target that lacks a language is below its cutoff, so the automatic search takes it; the complete one is not.
             Assert.AreEqual("701 703 704 705 706", (string)(await ScalarAsync(cs, """SELECT string_agg("WantedItemId"::text, ' ' ORDER BY "WantedItemId") FROM "WantedBelowCutoff" WHERE "WantedItemId" < 707"""))!);
+        }
+
+        [TestMethod]
+        public async Task LanguageChains_UpgradeKeepsWhatEveryBookTargetFollowed_StripsLanguagesFromProfiles_AndMergesProfilesThatOnlyHadLanguages()
+        {
+            using var folder = new LibraryTests.TemporaryDirectory();
+            var cs = TestPostgres.ResolveConnectionString(nameof(LanguageChains_UpgradeKeepsWhatEveryBookTargetFollowed_StripsLanguagesFromProfiles_AndMergesProfilesThatOnlyHadLanguages));
+            var options = Backup(folder.Path, out _);
+            var tools = Tools(cs, FakeDump(folder.Path, true), null);
+            await new DatabaseBaseline(cs, migrations: DatabaseBaseline.Migrations.Where(migration => migration.Version < 45).ToArray()).StartAsync(CancellationToken.None);
+
+            // The book default, a profile that only had a language ("Deutsch": German, original as fallback), one that also differs in quality ("Englisch": English, no fallback, upgrades),
+            // and targets: 801 on Deutsch, 802 on Englisch, 803 requested in Indonesian on the default, 804 nobody asked for, 805 on Deutsch with a request in Indonesian.
+            await ExecuteAsync(cs,
+                """
+                INSERT INTO "UiLocales" ("Id", "Locale", "Name") VALUES (91, 'de-DE', 'Deutsch'), (92, 'id', 'Indonesia') ON CONFLICT ("Locale") DO NOTHING;
+                INSERT INTO "Accounts" ("Id", "Username", "Email", "DisplayName", "AccountRoleTypeId") VALUES (41, 'chain_owner', 'chain@example.test', 'Owner', 1);
+                INSERT INTO "Profiles" ("Id", "OwnerAccountId", "DisplayName", "UiLocaleId") VALUES
+                    (301, 41, 'Deutsch', (SELECT "Id" FROM "UiLocales" WHERE "Locale" = 'de-DE')), (302, 41, 'Indonesia', (SELECT "Id" FROM "UiLocales" WHERE "Locale" = 'id'));
+                INSERT INTO "AccountProfiles" ("AccountId", "ProfileId") VALUES (41, 301), (41, 302);
+                INSERT INTO "AcquisitionProfiles" ("Id", "Name", "Definition")
+                SELECT 20, 'Deutsch', "Definition" || '{"LanguageOrder":["de"],"LanguageFallback":"Original"}'::jsonb FROM "AcquisitionProfiles" WHERE "Id" = (SELECT "AcquisitionProfileId" FROM "AcquisitionProfileDefaults" WHERE "AcquisitionMediaKindId" = 4)
+                UNION ALL
+                SELECT 21, 'Englisch', "Definition" || '{"LanguageOrder":["en"],"LanguageFallback":"None","UpgradeAllowed":true}'::jsonb FROM "AcquisitionProfiles" WHERE "Id" = (SELECT "AcquisitionProfileId" FROM "AcquisitionProfileDefaults" WHERE "AcquisitionMediaKindId" = 4);
+                INSERT INTO "AcquisitionProfileMediaKinds" ("AcquisitionProfileId", "AcquisitionMediaKindId") VALUES (20, 4), (21, 4);
+                INSERT INTO "RequestRules" ("Name", "PeriodDays", "IsAutomaticApproval", "AcquisitionProfileIds") VALUES ('Languages', 30, TRUE, '{20,21}');
+                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle") VALUES (701, 3, 'On Deutsch'), (702, 3, 'On Englisch'), (703, 3, 'Requested'), (704, 3, 'Monitored'), (705, 3, 'Deutsch and requested');
+                INSERT INTO "WantedItems" ("Id", "WorkId", "AcquisitionProfileId") VALUES (801, 701, 20), (802, 702, 21), (803, 703, NULL), (804, 704, NULL), (805, 705, 20);
+                INSERT INTO "AcquisitionRequests" ("Id", "WorkId", "RequestedByProfileId", "RequestedByAccountId", "UiLocaleId", "AcquisitionRequestStatusTypeId", "DecidedByAccountId", "DecidedAt", "AcquisitionProfileId") VALUES
+                    (901, 703, 302, 41, (SELECT "Id" FROM "UiLocales" WHERE "Locale" = 'id'), 2, 41, now(), NULL),
+                    (902, 705, 302, 41, (SELECT "Id" FROM "UiLocales" WHERE "Locale" = 'id'), 2, 41, now(), 20);
+                INSERT INTO "RequestTargets" ("AcquisitionRequestId", "WantedItemId") VALUES (901, 803), (902, 805);
+                """);
+            await new DatabaseBaseline(cs, options, tools).StartAsync(CancellationToken.None);
+
+            // The profile that only had languages is gone and its targets, requests and rule follow the default; the other keeps its quality (upgrades) without languages.
+            Assert.AreEqual(0L, await ScalarAsync(cs, """SELECT count(*) FROM "AcquisitionProfiles" WHERE "Id" = 20"""));
+            Assert.AreEqual(1L, await ScalarAsync(cs, """SELECT count(*) FROM "AcquisitionProfiles" WHERE "Id" = 21 AND "Definition" ->> 'UpgradeAllowed' = 'true' AND NOT ("Definition" ? 'LanguageOrder') AND NOT ("Definition" ? 'LanguageFallback')"""));
+            Assert.AreEqual("801:- 802:21 805:-", (string)(await ScalarAsync(cs, """SELECT string_agg("Id" || ':' || coalesce("AcquisitionProfileId"::text, '-'), ' ' ORDER BY "Id") FROM "WantedItems" WHERE "Id" IN (801, 802, 805)"""))!);
+            Assert.AreEqual("{21}", (string)(await ScalarAsync(cs, """SELECT "AcquisitionProfileIds"::text FROM "RequestRules" WHERE "Name" = 'Languages'"""))!);
+            Assert.AreEqual(0L, await ScalarAsync(cs, """SELECT count(*) FROM "AcquisitionRequests" WHERE "AcquisitionProfileId" IS NOT NULL"""));
+
+            // What each target followed is written onto it: German with the original (801), English without the original (802); 805 keeps German and original too although a request asks for Indonesian.
+            Assert.AreEqual("801:de::t 802:en::f 805:de::t", (string)(await ScalarAsync(cs,
+                """SELECT string_agg("WantedItemId" || ':' || "FirstLanguage" || ':' || coalesce("SecondLanguage", '') || ':' || CASE WHEN "UsesOriginal" THEN 't' ELSE 'f' END, ' ' ORDER BY "WantedItemId") FROM "WantedItemLanguageChains" """))!);
+
+            // The chains of a target: its own, else its requests' (the requester's chain), else every profile's first language (the default setting).
+            Assert.AreEqual("801:de 802:en 803:id 804:de,id 805:de", (string)(await ScalarAsync(cs,
+                """SELECT string_agg("WantedItemId" || ':' || languages, ' ' ORDER BY "WantedItemId") FROM (SELECT "WantedItemId", string_agg("FirstLanguage", ',' ORDER BY "Position") AS languages FROM "WantedItemChains" GROUP BY "WantedItemId") AS chains"""))!);
+
+            // A fixed chain for titles nobody requested, and a chain of the requester that changed.
+            await ExecuteAsync(cs, """UPDATE "InstanceSettings" SET "MonitoredLanguageModeId" = 2, "MonitoredFirstLanguage" = 'de', "MonitoredSecondLanguage" = 'en'; UPDATE "Profiles" SET "FirstContentLanguage" = 'id', "SecondContentLanguage" = 'en', "LanguageUsesOriginal" = FALSE WHERE "Id" = 302;""");
+            Assert.AreEqual("de:en:t", (string)(await ScalarAsync(cs, """SELECT "FirstLanguage" || ':' || "SecondLanguage" || ':' || CASE WHEN "UsesOriginal" THEN 't' ELSE 'f' END FROM "WantedItemChains" WHERE "WantedItemId" = 804"""))!);
+            Assert.AreEqual("id:en:f", (string)(await ScalarAsync(cs, """SELECT "FirstLanguage" || ':' || "SecondLanguage" || ':' || CASE WHEN "UsesOriginal" THEN 't' ELSE 'f' END FROM "WantedItemChains" WHERE "WantedItemId" = 803"""))!);
         }
 
         [TestMethod]

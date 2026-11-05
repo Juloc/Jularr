@@ -122,9 +122,18 @@ namespace Jularr.Frontend.Pages.Admin.Wanted
                 select: manage ? ListIdentity.Select("wantedItemIds", item.Id.ToString(CultureInfo.InvariantCulture), BulkForm, "wanted.select") : null);
             var languages = string.Join(", ", item.RequestedLanguages);
             var searched = item.LastSearchedAt;
-            var row = new ListRow([identity, State(item), Priority(item), languages.Length > 0 ? new Span(new Truncated(languages)).Class("list-value list-value--fill") : Dim(),
+
+            // A book is wanted once per language: the languages still missing are named beside the requested ones.
+            IUiComponent languageCell = languages.Length > 0 ? new Span(new Truncated(languages)).Class("list-value list-value--fill") : Dim();
+            if (item.MissingLanguages.Length > 0)
+            {
+                languageCell = new Div(languageCell, new Tag(new Text("wanted.languages.missing"), new ValueText(": " + string.Join(", ", item.MissingLanguages.Select(Pages.Admin.Work.WorkLanguages.Name)))).Accent());
+            }
+
+            var row = new ListRow([identity, State(item), Priority(item), languageCell,
                 searched is { } searchedAt ? new Span(new LocalTime(searchedAt)).Class("list-value") : Dim(), Actions(item, acquire, manage, pageNumber, csrf)],
-                [.. item.WantedPriorityTypeId == WantedPriorityType.High ? new[] { ListPanel.Fact("wanted.priority", Priority(item)) } : Array.Empty<IUiComponent>(), ListPanel.Fact("wanted.lastSearch", searched is { } lastSearchedAt ? new LocalTime(lastSearchedAt) : new ValueText("–"), Glyph("clock", 14))]);
+                [.. item.WantedPriorityTypeId == WantedPriorityType.High ? new[] { ListPanel.Fact("wanted.priority", Priority(item)) } : Array.Empty<IUiComponent>(), ListPanel.Fact("wanted.lastSearch", searched is { } lastSearchedAt ? new LocalTime(lastSearchedAt) : new ValueText("–"), Glyph("clock", 14)),
+                    .. item.MissingLanguages.Length > 0 ? new[] { ListPanel.Fact("wanted.languages.missing", new ValueText(string.Join(", ", item.MissingLanguages.Select(Pages.Admin.Work.WorkLanguages.Name)))) } : Array.Empty<IUiComponent>()]);
             if (item.IsPaused) row.Tinted(UiTone.Warning);
             return row;
         }

@@ -182,7 +182,18 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                             target."WantedItemId" = wanted_page."Id"
                         ORDER BY
                             locale."Name"
-                    ) AS "RequestedLanguages"
+                    ) AS "RequestedLanguages",
+                    ARRAY(
+                        SELECT
+                            language."Language"
+                        FROM
+                            "WantedBookLanguages" AS language
+                        WHERE
+                            language."WantedItemId" = wanted_page."Id"
+                            AND NOT language."IsCovered"
+                        ORDER BY
+                            language."Position"
+                    ) AS "MissingLanguages"
                 FROM
                     wanted_page
                     LEFT JOIN LATERAL (
@@ -342,7 +353,18 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                             target."WantedItemId" = wanted_page."Id"
                         ORDER BY
                             locale."Name"
-                    ) AS "RequestedLanguages"
+                    ) AS "RequestedLanguages",
+                    ARRAY(
+                        SELECT
+                            language."Language"
+                        FROM
+                            "WantedBookLanguages" AS language
+                        WHERE
+                            language."WantedItemId" = wanted_page."Id"
+                            AND NOT language."IsCovered"
+                        ORDER BY
+                            language."Position"
+                    ) AS "MissingLanguages"
                 FROM
                     wanted_page
                     LEFT JOIN LATERAL (

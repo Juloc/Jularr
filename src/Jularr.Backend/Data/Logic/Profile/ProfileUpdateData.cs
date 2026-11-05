@@ -9,8 +9,9 @@ namespace Jularr.Backend.Data.Logic.Profile
         {
         }
 
-        public ProfileUpdateData(long id, string displayName, long uiLocaleId, string? firstContentLanguage, string? secondContentLanguage)
+        public ProfileUpdateData(long id, string displayName, long uiLocaleId, string? firstContentLanguage, string? secondContentLanguage, bool languageUsesOriginal = true)
         {
+            LanguageUsesOriginal = languageUsesOriginal;
             FirstContentLanguage = firstContentLanguage;
             SecondContentLanguage = secondContentLanguage;
             Id = id;
@@ -32,5 +33,8 @@ namespace Jularr.Backend.Data.Logic.Profile
 
         [DataField(typeof(ProfileFields), nameof(ProfileFields.SecondContentLanguage))]
         public string? SecondContentLanguage { get; internal set; }
+
+        [DataField(typeof(ProfileFields), nameof(ProfileFields.LanguageUsesOriginal))]
+        public bool LanguageUsesOriginal { get; internal set; }
     }
 }

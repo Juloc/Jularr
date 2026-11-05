@@ -33,6 +33,7 @@ namespace Jularr.Backend.Data.User.Profile.V1
         private long? _uiLocaleId;
         private string? _firstContentLanguage;
         private string? _secondContentLanguage;
+        private bool _languageUsesOriginal = true;
 
         public UpdateProfileDataV1() : base(trackChanges: true)
         {
@@ -70,6 +71,14 @@ namespace Jularr.Backend.Data.User.Profile.V1
             get => _secondContentLanguage;
             init => SetField(ref _secondContentLanguage, value);
         }
+
+        // Whether the original language of a work is the last step of the language chain.
+        [DataField(typeof(ProfileFields), nameof(ProfileFields.LanguageUsesOriginal), false)]
+        public bool LanguageUsesOriginal
+        {
+            get => _languageUsesOriginal;
+            init => SetField(ref _languageUsesOriginal, value);
+        }
     }
 
     public sealed class UpdateProfilePinDataV1 : BaseData
@@ -85,8 +94,9 @@ namespace Jularr.Backend.Data.User.Profile.V1
 
     public sealed class ReadProfileResultV1 : BaseResponse
     {
-        public ReadProfileResultV1(long id, string displayName, long uiLocaleId, bool hasPin, bool autoplayPreviews = true, string accentHex = "#8040f7", string? firstContentLanguage = null, string? secondContentLanguage = null, bool keepScreenOn = true)
+        public ReadProfileResultV1(long id, string displayName, long uiLocaleId, bool hasPin, bool autoplayPreviews = true, string accentHex = "#8040f7", string? firstContentLanguage = null, string? secondContentLanguage = null, bool keepScreenOn = true, bool languageUsesOriginal = true)
         {
+            LanguageUsesOriginal = languageUsesOriginal;
             KeepScreenOn = keepScreenOn;
             FirstContentLanguage = firstContentLanguage;
             SecondContentLanguage = secondContentLanguage;
@@ -109,6 +119,9 @@ namespace Jularr.Backend.Data.User.Profile.V1
 
         [DataField(typeof(ProfileFields), nameof(ProfileFields.FirstContentLanguage))]
         public string? FirstContentLanguage { get; }
+
+        [DataField(typeof(ProfileFields), nameof(ProfileFields.LanguageUsesOriginal))]
+        public bool LanguageUsesOriginal { get; }
 
         [DataField(typeof(ProfileFields), nameof(ProfileFields.SecondContentLanguage))]
         public string? SecondContentLanguage { get; }
