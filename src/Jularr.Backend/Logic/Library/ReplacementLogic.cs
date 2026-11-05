@@ -314,6 +314,14 @@ namespace Jularr.Backend.Logic.Library
                 {
                     var beforeScore = ReleaseScorer.Score(profile, before).FormatScore;
                     var afterScore = ReleaseScorer.Score(profile, after).FormatScore;
+
+                    // A book is wanted once per language: a file in one wanted language never replaces a file in another; only a file in a language nobody wants goes.
+                    if (profile.IsBook && profile.WantedLanguages.Length > 0 && before.Languages is { Count: > 0 } earlierLanguages && after.Languages is { Count: > 0 } newLanguages
+                        && !earlierLanguages.Intersect(newLanguages, StringComparer.OrdinalIgnoreCase).Any())
+                    {
+                        return UpgradePolicy.IsWantedLanguage(profile, newLanguages) && !UpgradePolicy.IsWantedLanguage(profile, earlierLanguages);
+                    }
+
                     if (beforeScore != afterScore) return afterScore > beforeScore;
                     if (profile.IsBook && UpgradePolicy.LanguageRank(profile, before.Languages ?? []) != UpgradePolicy.LanguageRank(profile, after.Languages ?? []))
                     {

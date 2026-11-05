@@ -5,6 +5,7 @@ using System.Runtime.CompilerServices;
 using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Logic.Acquisition;
+using Jularr.Backend.Logic.Media;
 using Jularr.Integrations.Data.Newznab;
 
 namespace Jularr.Backend.Logic.Acquisition
@@ -35,7 +36,10 @@ namespace Jularr.Backend.Logic.Acquisition
             var profile = new QualityProfile(target.AcquisitionProfileId!.Value.ToString(CultureInfo.InvariantCulture), target.ProfileName!, definition.AllowedQualities,
                 definition.QualityOrder, definition.UpgradeAllowed, definition.UpgradeCutoffQuality, definition.MinimumSizeBytes, definition.MaximumSizeBytes)
             {
-                LanguageOrder = definition.LanguageOrder.Length > 0 ? definition.LanguageOrder : target.RequestedLocales,
+                // A book is wanted once per language: only the languages no file covers yet are asked for (all of them once every one is covered).
+                LanguageOrder = target.MissingLanguages.Length > 0 ? target.MissingLanguages : target.WantedLanguages.Length > 0 ? target.WantedLanguages
+                    : definition.LanguageOrder.Length > 0 ? definition.LanguageOrder : target.RequestedLocales,
+                WantedLanguages = target.WantedLanguages,
                 LanguageFallback = definition.LanguageFallback,
                 IsMovie = target.MediaTypeId == MediaType.Movie,
                 IsBook = target.MediaTypeId == MediaType.Book && target.MediaSubtypeId != MediaSubtype.Manga,
@@ -172,7 +176,8 @@ namespace Jularr.Backend.Logic.Acquisition
         public static SelectionResult Select(QualityProfile profile, WantedTargetData target, AcquisitionKind kind, UnitScope? scope, IEnumerable<ReleaseOffer> offers, string? focusLanguage = null,
             bool automatic = true)
         {
-            var installed = scope is null || scope.UnitNumber is not null ? Installed(profile, target, scope?.Unit.Id) : null;
+            // A language no file covers is not an upgrade of the files in the others.
+            var installed = target.MissingLanguages.Length == 0 && (scope is null || scope.UnitNumber is not null) ? Installed(profile, target, scope?.Unit.Id) : null;
             // Failed and blocked releases stay visible but are never taken.
             var blocked = target.ReleaseIdentities.ToHashSet(StringComparer.Ordinal);
             return ReleaseSelectionEngine.Select(profile, [.. offers.Select(offer => kind switch
@@ -211,6 +216,19 @@ namespace Jularr.Backend.Logic.Acquisition
                     InstalledLanguages = installed?.Languages
                 };
             }
+        }
+
+        // The language a grab of a book is for: the first missing language the release carries, else the first missing one when the release names none; no language for other media
+        // and for a release in a language nobody is missing.
+        public static string? TargetLanguage(WantedTargetData target, IReadOnlyList<string> languages)
+        {
+            if (target.MissingLanguages.Length == 0)
+            {
+                return null;
+            }
+
+            var named = languages.Select(language => LanguageCodes.ToTwoLetter(language) ?? language.ToLowerInvariant()).ToArray();
+            return target.MissingLanguages.FirstOrDefault(missing => named.Contains(missing, StringComparer.OrdinalIgnoreCase)) ?? (named.Length == 0 ? target.MissingLanguages[0] : null);
         }
 
         // "language|title" pairs of the target as pairs.

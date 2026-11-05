@@ -165,6 +165,27 @@ namespace Jularr.Backend.Logic.Acquisition
                     ) AS "EditionTitles",
                     ARRAY(
                         SELECT
+                            language."Language"
+                        FROM
+                            "WantedBookLanguages" AS language
+                        WHERE
+                            language."WantedItemId" = wanted."Id"
+                        ORDER BY
+                            language."Position"
+                    ) AS "WantedLanguages",
+                    ARRAY(
+                        SELECT
+                            language."Language"
+                        FROM
+                            "WantedBookLanguages" AS language
+                        WHERE
+                            language."WantedItemId" = wanted."Id"
+                            AND NOT language."IsCovered"
+                        ORDER BY
+                            language."Position"
+                    ) AS "MissingLanguages",
+                    ARRAY(
+                        SELECT
                             lower(edition."LanguageCode") || '|' || edition."Title"
                         FROM
                             "WorkEditions" AS edition
@@ -521,15 +542,16 @@ namespace Jularr.Backend.Logic.Acquisition
                 WITH release AS (
                     INSERT INTO
                         "AcquisitionReleases" ("WantedItemId", "AcquisitionConnectionId", "ReleaseIdentity", "Title", "SourceUrl", "QualityKey", "ParentUnitNumber", "UnitStart", "UnitEnd",
-                            "AcquisitionReleaseStatusTypeId", "IndexerFlags")
+                            "AcquisitionReleaseStatusTypeId", "IndexerFlags", "TargetLanguage")
                     VALUES
-                        (@WantedItemId, @IndexerConnectionId, @ReleaseIdentity, @Title, @SourceUrl, @QualityKey, @ParentUnitNumber, @UnitStart, @UnitEnd, 1, @IndexerFlags)
+                        (@WantedItemId, @IndexerConnectionId, @ReleaseIdentity, @Title, @SourceUrl, @QualityKey, @ParentUnitNumber, @UnitStart, @UnitEnd, 1, @IndexerFlags, @TargetLanguage)
                     ON CONFLICT ("WantedItemId", "ReleaseIdentity") DO UPDATE
                     SET
                         "SourceUrl" = EXCLUDED."SourceUrl",
                         "AcquisitionConnectionId" = EXCLUDED."AcquisitionConnectionId",
                         "Title" = EXCLUDED."Title",
                         "IndexerFlags" = EXCLUDED."IndexerFlags",
+                        "TargetLanguage" = EXCLUDED."TargetLanguage",
                         "QualityKey" = EXCLUDED."QualityKey",
                         "ParentUnitNumber" = EXCLUDED."ParentUnitNumber",
                         "UnitStart" = EXCLUDED."UnitStart",

@@ -54,6 +54,9 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         public string[] LanguageOrder { get; init; } = [];
         public bool IsMovie { get; init; }
         public bool IsBook { get; init; }
+
+        // The languages a book is wanted in, covered or not; a file in another known language never replaces one of them.
+        public string[] WantedLanguages { get; init; } = [];
         public IReadOnlyList<(CustomFormat Format, int Score)> Formats { get; init; } = [];
         public int MinimumFormatScore { get; init; }
         public int CutoffFormatScore { get; init; }

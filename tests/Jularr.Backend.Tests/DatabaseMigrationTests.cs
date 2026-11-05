@@ -431,6 +431,66 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task BookLanguages_UpgradeKeepsEveryTarget_AndEachWantedLanguageIsCoveredByItsOwnFile()
+        {
+            using var folder = new LibraryTests.TemporaryDirectory();
+            var cs = TestPostgres.ResolveConnectionString(nameof(BookLanguages_UpgradeKeepsEveryTarget_AndEachWantedLanguageIsCoveredByItsOwnFile));
+            var options = Backup(folder.Path, out _);
+            var tools = Tools(cs, FakeDump(folder.Path, true), null);
+            await new DatabaseBaseline(cs, migrations: DatabaseBaseline.Migrations.Where(migration => migration.Version < 44).ToArray()).StartAsync(CancellationToken.None);
+
+            // Two profiles whose first languages are German and Indonesian, and books: 601 German only, 602 both, 603 requested in Indonesian with an English file, 604 without a file,
+            // 605 with a file that names no language, 606 with a file that names none, taken for Indonesian, 607 a manga.
+            await ExecuteAsync(cs,
+                """
+                INSERT INTO "UiLocales" ("Id", "Locale", "Name") VALUES (91, 'de-DE', 'Deutsch'), (92, 'id', 'Indonesia') ON CONFLICT ("Locale") DO NOTHING;
+                INSERT INTO "Accounts" ("Id", "Username", "Email", "DisplayName", "AccountRoleTypeId") VALUES (41, 'language_owner', 'language@example.test', 'Owner', 1);
+                INSERT INTO "Profiles" ("Id", "OwnerAccountId", "DisplayName", "UiLocaleId") VALUES
+                    (301, 41, 'Deutsch', (SELECT "Id" FROM "UiLocales" WHERE "Locale" = 'de-DE')), (302, 41, 'Indonesia', (SELECT "Id" FROM "UiLocales" WHERE "Locale" = 'id'));
+                INSERT INTO "AccountProfiles" ("AccountId", "ProfileId") VALUES (41, 301), (41, 302);
+                INSERT INTO "Works" ("Id", "MediaTypeId", "MediaSubtypeId", "CanonicalTitle") VALUES
+                    (601, 3, NULL, 'German only'), (602, 3, NULL, 'Both'), (603, 3, NULL, 'Requested'), (604, 3, NULL, 'None'), (605, 3, NULL, 'Unnamed'), (606, 3, NULL, 'Taken for'), (607, 3, 2, 'Manga');
+                INSERT INTO "WantedItems" ("Id", "WorkId") SELECT 700 + "Id" - 600, "Id" FROM "Works" WHERE "Id" BETWEEN 601 AND 607;
+                INSERT INTO "AcquisitionRequests" ("Id", "WorkId", "RequestedByProfileId", "RequestedByAccountId", "UiLocaleId", "AcquisitionRequestStatusTypeId", "DecidedByAccountId", "DecidedAt")
+                VALUES (801, 603, 302, 41, (SELECT "Id" FROM "UiLocales" WHERE "Locale" = 'id'), 2, 41, now());
+                INSERT INTO "RequestTargets" ("AcquisitionRequestId", "WantedItemId") VALUES (801, 703);
+                INSERT INTO "StorageMounts" ("Id", "Name", "StorageProtocolTypeId", "SharePath", "IsReadOnly") OVERRIDING SYSTEM VALUE VALUES (1, 'Books', 3, '/books', FALSE);
+                INSERT INTO "LibraryRoots" ("Id", "Name", "MediaTypeId", "StorageMountId", "RelativePath") VALUES (1, 'Books', 3, 1, 'books');
+                INSERT INTO "WorkEditions" ("Id", "WorkId") SELECT "Id", "Id" FROM "Works" WHERE "Id" BETWEEN 601 AND 607;
+                INSERT INTO "WorkVersions" ("Id", "WorkId", "WorkEditionId") SELECT "Id", "Id", "Id" FROM "Works" WHERE "Id" BETWEEN 601 AND 607;
+                INSERT INTO "MediaAssets" ("Id", "WorkId", "WorkVersionId", "MediaAssetTypeId") VALUES (1, 601, 601, 3), (2, 602, 602, 3), (3, 603, 603, 3), (4, 605, 605, 3), (5, 606, 606, 3), (6, 607, 607, 3);
+                INSERT INTO "WorkVersions" ("Id", "WorkId", "WorkEditionId") VALUES (902, 602, 602);
+                INSERT INTO "MediaAssets" ("Id", "WorkId", "WorkVersionId", "MediaAssetTypeId") VALUES (7, 602, 902, 3);
+                INSERT INTO "StoredFiles" ("LibraryRootId", "RelativePath", "SizeBytes", "ModifiedAt", "MediaAssetId", "LastSeenAt", "ReleaseLanguages", "ReleaseName") VALUES
+                    (1, 'a.epub', 1, now(), 1, now(), '{de}', 'German only (DE) (epub)'),
+                    (1, 'b1.epub', 1, now(), 2, now(), '{de}', 'Both (DE) (epub)'),
+                    (1, 'b2.epub', 1, now(), 7, now(), '{id}', 'Both (ID) (epub)'),
+                    (1, 'c.epub', 1, now(), 3, now(), '{en}', 'Requested (EN) (epub)'),
+                    (1, 'e.epub', 1, now(), 4, now(), NULL, 'Unnamed (epub)'),
+                    (1, 'f.epub', 1, now(), 5, now(), NULL, 'Taken for (epub)'),
+                    (1, 'g.cbz', 1, now(), 6, now(), '{en}', 'Manga (EN)');
+                INSERT INTO "AcquisitionReleases" ("WantedItemId", "ReleaseIdentity", "Title", "AcquisitionReleaseStatusTypeId") VALUES (706, 'taken', 'Taken for (epub)', 2);
+                """);
+            await new DatabaseBaseline(cs, options, tools).StartAsync(CancellationToken.None);
+
+            // The data is kept; the new column is empty until a grab names its language (the one of the book whose file names none).
+            Assert.AreEqual(7L, await ScalarAsync(cs, """SELECT count(*) FROM "WantedItems" WHERE "WorkId" BETWEEN 601 AND 607"""));
+            await ExecuteAsync(cs, """UPDATE "AcquisitionReleases" SET "TargetLanguage" = 'id' WHERE "ReleaseIdentity" = 'taken'""");
+            const string Languages =
+                """
+                SELECT string_agg(language."WantedItemId" - 700 + 600 || ':' || language."Language" || CASE WHEN language."IsCovered" THEN '+' ELSE '-' END, ' ' ORDER BY language."WantedItemId", language."Position")
+                FROM "WantedBookLanguages" AS language
+                """;
+
+            // 601 has German; 602 both; 603 is asked for in Indonesian only, an English file covers nothing; 604 has nothing; 605's file without a language covers the first language still open
+            // (German, the first profile); 606's file was taken for Indonesian, so German is open; the manga has no languages.
+            Assert.AreEqual("601:de+ 601:id- 602:de+ 602:id+ 603:id- 604:de- 604:id- 605:de+ 605:id- 606:de- 606:id+", (string)(await ScalarAsync(cs, Languages))!);
+
+            // Every target that lacks a language is below its cutoff, so the automatic search takes it; the complete one is not.
+            Assert.AreEqual("701 703 704 705 706", (string)(await ScalarAsync(cs, """SELECT string_agg("WantedItemId"::text, ' ' ORDER BY "WantedItemId") FROM "WantedBelowCutoff" WHERE "WantedItemId" < 707"""))!);
+        }
+
+        [TestMethod]
         public async Task LibraryTieIndexes_UpgradeKeepsTiesAndIndexesTheirMarkedRows()
         {
             using var folder = new LibraryTests.TemporaryDirectory();

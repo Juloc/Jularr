@@ -118,6 +118,14 @@ that appears later is an upgrade of it. A person can still take everything else 
 profile's order, original, other known, unknown. Direct sources state their languages (Anna's Archive names every language of a file, `de, en` counts for both);
 a source that states none gives an unknown language.
 
+**One edition per language.** A book is wanted once per language (`WantedBookLanguages`, migration `0044`): the languages of its active requests, and for a Work nobody
+requested (monitored or imported by an administrator) the first language of every profile (today the language of the profile's interface; the language chain replaces this
+source). A language is covered by a present file that names it, or whose release was taken for it (`AcquisitionReleases.TargetLanguage`, set by the grab: the missing language the release
+carries, else the first missing one); a file that names none covers the first language still open, one language per file, so a library without language evidence is not searched
+again. The search asks for the missing languages only (a German file is no "upgrade" to compare an Indonesian release with), one grab per run, the next language after the download
+(a Work downloads once at a time). A book with a missing language is below its cutoff (`WantedUnitsBelowCutoff`), so the due search and the Wanted page find it. An import never
+replaces a file in one wanted language by a file in another; only a file in a language nobody wants goes. Manga is not covered yet.
+
 **Language from the title.** A book or light-novel release that names no language is in the language its title is known in: after removing the author, the title
 (cleaned as in the series matcher) must equal a title of the Work that carries a language: an edition's title (`WorkEditions`), a localized title (`WorkTitles` by
 UI locale) or the original title in the original language. One language counts (the manual search shows it as "German (from title)"); a title several languages share
