@@ -3046,12 +3046,12 @@
    "Stunden zwischen automatischen Backups; 0 schaltet sie aus."
   ],
   "hint.InstanceSettingsFields.BackupKeep.placeholder": [
-   "7",
-   "7"
+   "3",
+   "3"
   ],
   "hint.InstanceSettingsFields.BackupKeep.info": [
-   "The newest backups stay, older ones are removed.",
-   "Die neuesten Backups bleiben, ältere werden entfernt."
+   "Counts automatic and update backups: the newest stay, older ones are removed. Manual backups are kept.",
+   "Zählt automatische und Update-Backups: Die neuesten bleiben, ältere werden entfernt. Manuelle Backups bleiben erhalten."
   ],
   "hint.InstanceSettingsFields.ProviderSyncIntervalMinutes.placeholder": [
    "30",
@@ -6266,6 +6266,18 @@
   "admin.backup.delete": [
    "Delete",
    "Löschen"
+  ],
+  "admin.backup.kind.Automatic": [
+   "Automatic",
+   "Automatisch"
+  ],
+  "admin.backup.kind.Update": [
+   "Update",
+   "Update"
+  ],
+  "admin.backup.kind.Manual": [
+   "Manual",
+   "Manuell"
   ],
   "storage.synology.title": [
    "Synology",

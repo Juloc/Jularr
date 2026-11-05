@@ -496,7 +496,9 @@ Ein Release ist ein Git-Tag `vX.Y.Z`; der Workflow baut das Image und veröffent
 
 Backups (`/Admin/Backup`) sichern die Datenbank mit `pg_dump` samt
 Schlüsselbund in `DataPath/backups` (abweichend `Backup:Path`); automatisch im
-Intervall der Instanz-Einstellungen (Standard 24 Stunden, 0 aus); die neuesten Backups bleiben (Standard 7, mindestens 1).
+Intervall der Instanz-Einstellungen (Standard 24 Stunden, 0 aus). Jedes Backup trägt seine Art (Automatisch, Update vor einer
+Migration, Manuell über „Jetzt sichern“); von automatischen und Update-Backups bleiben die neuesten (Standard 3, mindestens 1),
+aufgeräumt wird nach jedem davon. Manuelle Backups zählen nicht mit und werden nur von Hand gelöscht.
 Ein Backup derselben Jularr-Version stellt `pg_restore` nur in der
 Einrichtung wieder her (`/Setup/Backup`); danach Jularr neu starten. Mit `Backup:Passphrase` liegt der
 Schlüsselbund nur verschlüsselt im Backup (AES-GCM, Schlüssel per PBKDF2) und die Wiederherstellung fragt
