@@ -66,7 +66,24 @@ namespace Jularr.E2E.Tests
                 await Assertions.Expect(row).ToContainTextAsync("EN");
                 await Assertions.Expect(row).ToContainTextAsync("Fits");
                 await Assertions.Expect(row.Locator("input[type=checkbox]")).ToBeCheckedAsync();
+
+                // The files take the dialog's whole width, though only its content was swapped.
+                var box = await importDialog.BoundingBoxAsync();
+                Assert.IsTrue(box is { Width: > 700 }, "The dialog stayed as small as the folder step: " + box?.Width);
                 await Evidence.SaveAsync(page, "manual-import-files");
+
+                // A tablet and a phone show the same dialog within their screen, the file as a card and Import at the bottom.
+                var desktop = page.ViewportSize!;
+                foreach (var (width, height, name) in new[] { (768, 1024, "tablet"), (375, 812, "phone") })
+                {
+                    await page.SetViewportSizeAsync(width, height);
+                    var fits = await importDialog.BoundingBoxAsync();
+                    Assert.IsTrue(fits is { X: >= 0 } && fits.X + fits.Width <= width + 1, name + ": the dialog leaves the screen.");
+                    await Assertions.Expect(page.GetByRole(AriaRole.Button, new() { Name = "Import", Exact = true })).ToBeInViewportAsync();
+                    await Evidence.SaveAsync(page, "manual-import-files-" + name);
+                }
+
+                await page.SetViewportSizeAsync(desktop.Width, desktop.Height);
 
                 // The match dialog gives it another quality; the name the library would give follows.
                 await Steps.FollowAsync(page, row.GetByRole(AriaRole.Button, new() { Name = "Change", Exact = true }));

@@ -125,9 +125,8 @@ namespace Jularr.Frontend.Pages.Admin.Queue
             else if (_folderRead && _lines.Count == 0) body.Add(new Div(new IconTile(Glyph("search", 22), UiTone.Neutral), new P(new Text("manualImport.noFiles"))).Class("list-empty").Attribute("role", "status"));
             else if (_folderRead) FilesList(body, csrf);
 
-            // Choosing the folder is a small dialog; the files take the whole width.
-            page.Content.Add(new Modal(assets, ImportDialogId, "admin.manualImport.title", [new Region(ImportRegionId, [.. body])], open: true, returnTo: Address(),
-                wide: _folderRead || _result is not null));
+            // The files take the whole width; choosing the folder is a small dialog (its stylesheet), also when an action swaps only the dialog's content.
+            page.Content.Add(new Modal(assets, ImportDialogId, "admin.manualImport.title", [new Region(ImportRegionId, [.. body])], open: true, returnTo: Address(), wide: true));
         }
 
         // Closing the dialog leaves the queue as it is.

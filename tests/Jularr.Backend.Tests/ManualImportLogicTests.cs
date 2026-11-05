@@ -207,6 +207,7 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual((1, 12), ManualImportLogic.FolderEpisode("Staffel 1/Episode 12.mkv"));
             Assert.IsNull(ManualImportLogic.FolderEpisode("Example Show/03.mkv"));
             Assert.AreEqual(MediaType.Book, ManualImportLogic.KindOf("Some Book.epub"));
+            Assert.AreEqual("JLR", ManualImportLogic.ReleaseGroupOf("Release/Big.Buck.Bunny.2008.1080p.WEB-DL.H264-JLR.webm", MediaType.Movie));
             CollectionAssert.Contains(ManualImportLogic.SearchWords([("Green.Lantern.2011.Extended.Cut.1080p.BluRay.x264-SECTOR7", false)]).ToArray(), "lantern");
         }
 

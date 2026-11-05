@@ -74,3 +74,14 @@
         box-shadow: none;
     }
 }
+
+// Choosing the folder needs no list's room: without files the dialog is as small as any other.
+#manual-import-dialog.modal--wide:not(:has(.manual-import, .manual-import__scroll, .list-empty)) {
+    width: min(560px, calc(100vw - 32px - env(safe-area-inset-left) - env(safe-area-inset-right)));
+    height: auto;
+
+    @media (max-width: 640px) {
+        width: 100vw;
+        height: 100dvh;
+    }
+}

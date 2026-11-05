@@ -185,7 +185,7 @@ namespace Jularr.Backend.Logic.Acquisition
         // The release group a name states: a video's from its release facts, a book's from its tags.
         public static string? ReleaseGroupOf(string path, MediaType? mediaType) => IsDocument(path)
             ? BookReleaseJudge.ReadName(Path.GetFileNameWithoutExtension(path)).Group
-            : ReleaseFacts.OfPath(path, mediaType == MediaType.Movie)?.ReleaseGroup;
+            : ReleaseFacts.OfPath(Path.ChangeExtension(path, null), mediaType == MediaType.Movie)?.ReleaseGroup;
 
         // The files a person can import: the videos of a film or series (no samples or extras), the ebooks and comics of a book, in the order of their names.
         public static StorageFile[] Importable(MediaType mediaType, IEnumerable<StorageFile> files) => [.. files.Where(file => mediaType == MediaType.Book
