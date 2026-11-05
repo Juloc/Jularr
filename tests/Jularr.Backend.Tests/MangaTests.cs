@@ -188,6 +188,9 @@ namespace Jularr.Backend.Tests
             Assert.IsTrue(Plan("Novel v01.epub", "Novel v01.pdf").All(placement => placement.UnitNumber is null));
             Assert.HasCount(0, Unplaced(MediaSubtype.LightNovel, "Novel", volumes, [], Files("Novel v01.epub")));
 
+            // What a move left of a pack (a volume the Work lacks beside an extra) places nothing as the whole book.
+            Assert.HasCount(0, Plan("Novel - Group Volume 09.epub", "Novel - Extras.epub"));
+
             // A pack: a group name between title and volume is no obstacle; a present volume, a range and a number the Work lacks are not placed, each with why.
             string[] pack = ["Novel - Group Volume 01.epub", "Novel - Group Volume 02.epub", "Novel - Group Volume 03.epub", "Novel - Group Volume 01-02.epub", "Novel - Group Volume 09.epub", "Novel - Extras.epub"];
             CollectionAssert.AreEqual(new decimal?[] { 1, 2 }, Plan(pack).Select(placement => placement.UnitNumber).ToArray());
@@ -357,23 +360,24 @@ namespace Jularr.Backend.Tests
                 Assert.IsTrue(waiting.CanImportManually);
             }
 
-            // Read again, the pack brings no second copy of a volume and still names the same files.
+            // The import moved the volumes; read again, the two files it left place nothing, not even the extra as the whole book.
+            Assert.AreEqual(2, Directory.EnumerateFiles(folder).Count(), "The download keeps the files nobody placed.");
             using var retried = await host.SendAsync(HttpMethod.Post, $"/api/v1/admin/activity/{operationId}/retry-import");
             Assert.AreEqual(HttpStatusCode.OK, retried.StatusCode, await retried.Content.ReadAsStringAsync());
             await RunAsync<MonitorDownloadsV1>(host);
             Assert.AreEqual(25, Directory.EnumerateFiles(novels, "*.epub", SearchOption.AllDirectories).Count());
             Assert.AreEqual(25L, await host.ScalarAsync(Volumes));
-            Assert.AreEqual("import_unmatched_files", await host.ScalarAsync("SELECT \"AttentionKey\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"));
-            Assert.AreEqual(27, Directory.EnumerateFiles(folder).Count(), "The download keeps every file.");
+            Assert.AreEqual("import_nothing_placeable", await host.ScalarAsync("SELECT \"AttentionKey\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"));
+            Assert.AreEqual(2, Directory.EnumerateFiles(folder).Count());
             Assert.AreEqual(1, sources.Grabbed.Count);
 
-            // By hand: the volumes the import placed show as imported, the two others wait unnamed with the format as their quality.
+            // By hand: the two files wait as the series' files, unnamed, with the format as their quality and why the import left them out.
             string extra;
             using (var read = await host.SendAsync(HttpMethod.Post, $"/api/v1/admin/activity/{operationId}/manual-import/files"))
             {
                 Assert.AreEqual(HttpStatusCode.OK, read.StatusCode, await read.Content.ReadAsStringAsync());
                 var files = (await read.Content.ReadFromJsonAsync<ManualImportDownloadV1>())!.Files;
-                Assert.AreEqual(27, files.Count);
+                Assert.AreEqual(2, files.Count);
                 var open = files.Where(file => !file.IsHandled).ToArray();
                 CollectionAssert.AreEqual(new[] { "Mushoku Tensei - Baka-Tsuki Side Stories.epub", "Mushoku Tensei - Baka-Tsuki Volume 27.epub" }, open.Select(file => Path.GetFileName(file.Path)).Order(StringComparer.Ordinal).ToArray());
                 Assert.IsTrue(open.All(file => file.TargetName is null && file.Season is null && file.QualityKey == "EPUB"));
@@ -382,7 +386,7 @@ namespace Jularr.Backend.Tests
 
             // The file beyond the edition is its last volume, in English; the download keeps waiting for the side stories.
             using (var assigned = await host.SendAsync(HttpMethod.Post, $"/api/v1/admin/activity/{operationId}/manual-import",
-                new RunManualImportDownloadDataV1(ImportTransferMode.Link, new BaseDataList<ManualImportChoiceV1>([new ManualImportChoiceV1(extra, true, 26, null, audioLanguages: ["eng"])]))))
+                new RunManualImportDownloadDataV1(new BaseDataList<ManualImportChoiceV1>([new ManualImportChoiceV1(extra, true, 26, null, audioLanguages: ["eng"])]))))
             {
                 Assert.AreEqual(HttpStatusCode.OK, assigned.StatusCode, await assigned.Content.ReadAsStringAsync());
                 var result = (await assigned.Content.ReadFromJsonAsync<ManualImportResultV1>())!;
@@ -395,11 +399,11 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(("EPUB", "eng"), ((string)(await host.ScalarAsync($"SELECT \"QualityKey\" FROM \"StoredFiles\" WHERE \"RelativePath\" = '{last}'"))!,
                 (string)(await host.ScalarAsync($"SELECT array_to_string(\"ChosenAudioLanguages\", ',') FROM \"StoredFiles\" WHERE \"RelativePath\" = '{last}'"))!));
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"ActivityEvents\" WHERE \"ActivityEventTypeId\" = 7 AND \"AccountId\" IS NOT NULL"));
-            Assert.AreEqual("import_unmatched_files", await host.ScalarAsync("SELECT \"AttentionKey\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"));
+            Assert.AreEqual("import_nothing_placeable", await host.ScalarAsync("SELECT \"AttentionKey\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"));
 
             // Finished without the side stories, the download leaves the queue; SABnzbd keeps the job, since not every file was placed.
             using (var finished = await host.SendAsync(HttpMethod.Post, $"/api/v1/admin/activity/{operationId}/manual-import",
-                new RunManualImportDownloadDataV1(ImportTransferMode.Link, new BaseDataList<ManualImportChoiceV1>([]), true)))
+                new RunManualImportDownloadDataV1(new BaseDataList<ManualImportChoiceV1>([]), true)))
             {
                 Assert.AreEqual(HttpStatusCode.OK, finished.StatusCode, await finished.Content.ReadAsStringAsync());
                 Assert.IsTrue((await finished.Content.ReadFromJsonAsync<ManualImportResultV1>())!.FinishedDownload);
@@ -407,7 +411,7 @@ namespace Jularr.Backend.Tests
 
             Assert.AreEqual((short)3, await host.ScalarAsync($"SELECT \"OperationStatusTypeId\" FROM \"Operations\" WHERE \"Id\" = {operationId}"));
             Assert.AreEqual(0, sources.Commands.Count);
-            Assert.AreEqual(27, Directory.EnumerateFiles(folder).Count(), "A hardlinked import leaves the download as it was.");
+            Assert.AreEqual(1, Directory.EnumerateFiles(folder).Count(), "The side stories nobody imported stay in the download.");
         }
 
         // A light novel download in the new formats: each valid format is placed once under the book's name (a zipped FB2 keeps both extensions), a broken file and
@@ -527,11 +531,9 @@ namespace Jularr.Backend.Tests
             Assert.AreNotEqual(sources.Grabbed[0], sources.Grabbed[1]);
         }
 
-        // A book from any folder is imported by hand: its file is proposed with its format and language, placed under the import's own name, linked or moved; only an administrator may do it.
+        // A book of any folder is recognised by its file's name: proposed with its format, language and name, moved under the import's own name; only an administrator may do it.
         [TestMethod]
-        [DataRow(ImportTransferMode.Link)]
-        [DataRow(ImportTransferMode.Move)]
-        public async Task Book_FromAnyFolder_IsImportedByHandLinkedOrMoved(ImportTransferMode mode)
+        public async Task Book_FromAnyFolder_IsRecognisedAndMovedByHand()
         {
             using var storage = new TemporaryDirectory();
             using var downloads = new TemporaryDirectory();
@@ -545,23 +547,20 @@ namespace Jularr.Backend.Tests
             File.WriteAllBytes(Path.Combine(folder, "Example Manga German.epub"), ReadingTests.BuildEpub("Example Manga"));
             File.WriteAllBytes(Path.Combine(folder, "cover.jpg"), new byte[16]);
 
-            // The book is found among the works and its folder read: the cover is no book, the epub is proposed with its format, its language and its name.
-            using var found = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/activity/manual-import/works?query=Example");
-            Assert.AreEqual(HttpStatusCode.OK, found.StatusCode, await found.Content.ReadAsStringAsync());
-            Assert.AreEqual((800L, MediaType.Book), (await found.Content.ReadFromJsonAsync<BaseDataList<ManualImportWorkV1>>())!.Select(item => (item.WantedItemId, item.MediaTypeId)).Single());
-            using var read = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/manual-import/800/files", new ReadManualImportDataV1(1, "Incoming/Release"));
+            // The folder is read without a title: the cover is no book, the epub is the book with its format, its language and its name.
+            using var read = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/manual-import/files", new ReadManualImportDataV1(1, "Incoming/Release"));
             Assert.AreEqual(HttpStatusCode.OK, read.StatusCode, await read.Content.ReadAsStringAsync());
             var file = (await read.Content.ReadFromJsonAsync<ManualImportFolderV1>())!.Files.Single();
-            Assert.AreEqual(("Example Manga German.epub", "EPUB", "DE"), (file.Path, file.QualityKey, file.Languages));
+            Assert.AreEqual(("Example Manga German.epub", "EPUB", "DE", 800L, MediaType.Book, (string?)null), (file.Path, file.QualityKey, file.Languages, file.WantedItemId, file.MediaTypeId, file.ProblemKey));
             StringAssert.StartsWith(file.TargetName!, "Mika Example/Example Manga (2019)");
 
-            // Placed as the person chose, in German; only a move takes the source.
-            using var placed = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/manual-import/800/import",
-                new RunManualImportDataV1(1, "Incoming/Release", mode, new BaseDataList<ManualImportChoiceV1>([new ManualImportChoiceV1(file.Path, true, null, null, audioLanguages: ["ger"])])));
+            // Moved as the person chose, in German; what no import takes stays.
+            using var placed = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/manual-import/import",
+                new RunManualImportDataV1(1, "Incoming/Release", new BaseDataList<ManualImportChoiceV1>([new ManualImportChoiceV1(file.Path, true, null, null, 800, audioLanguages: ["ger"])])));
             Assert.AreEqual(HttpStatusCode.OK, placed.StatusCode, await placed.Content.ReadAsStringAsync());
             Assert.AreEqual(1, (await placed.Content.ReadFromJsonAsync<ManualImportResultV1>())!.Imported);
             Assert.IsTrue(File.Exists(Path.Combine(storage.Path, "1", "Books", file.TargetName!)), file.TargetName);
-            Assert.AreEqual(mode != ImportTransferMode.Move, File.Exists(Path.Combine(folder, file.Path)));
+            Assert.IsFalse(File.Exists(Path.Combine(folder, file.Path)));
             Assert.IsTrue(File.Exists(Path.Combine(folder, "cover.jpg")));
             Assert.AreEqual(1L, await host.ScalarAsync($"SELECT count(*) FROM \"MediaAssets\" WHERE \"WorkId\" = {work.Id}"));
             Assert.AreEqual(("EPUB", "ger"), ((string)(await host.ScalarAsync("SELECT \"QualityKey\" FROM \"StoredFiles\" WHERE \"MediaAssetId\" IS NOT NULL"))!,
@@ -570,7 +569,7 @@ namespace Jularr.Backend.Tests
 
             // A person without the right to manage downloads may neither read nor import.
             await host.Fixture.RunSqlAsync("UPDATE \"Accounts\" SET \"AccountRoleTypeId\" = 3 WHERE \"Id\" = 41");
-            using var denied = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/manual-import/800/files", new ReadManualImportDataV1(1, "Incoming/Release"));
+            using var denied = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/manual-import/files", new ReadManualImportDataV1(1, "Incoming/Release"));
             Assert.AreEqual(HttpStatusCode.Forbidden, denied.StatusCode);
         }
 

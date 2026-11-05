@@ -161,5 +161,73 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual("DE+EN", proposals.Single(file => file.Path.StartsWith("Example.Movie.2020.GERMAN.DL", StringComparison.Ordinal)).Languages);
             Assert.AreEqual("EN", proposals.Single(file => file.Path == "plain.mkv").Languages);
         }
+
+        private static readonly ManualImportCandidate[] Library =
+        [
+            new(1, MediaType.Movie, null, 2020, ["Example Movie"]),
+            new(2, MediaType.Series, null, 2019, ["Example Show"]),
+            new(3, MediaType.Series, MediaSubtype.Anime, 2023, ["Hello, I am a Witch", "Majo to Watashi"]),
+            new(4, MediaType.Book, MediaSubtype.Manga, 2019, ["Example Manga"]),
+            new(5, MediaType.Book, MediaSubtype.LightNovel, 2015, ["Sky Novel"]),
+            new(6, MediaType.Movie, null, 1984, ["Dune"]),
+            new(7, MediaType.Movie, null, 2021, ["Dune"]),
+            new(8, MediaType.Movie, null, 2011, ["Green Lantern"])
+        ];
+
+        private static (long? WantedItemId, string? Problem) Recognise(string path, string folder = "Incoming")
+        {
+            var recognised = ManualImportLogic.Recognise(path, ManualImportLogic.Names(path, folder), Library);
+            return (recognised.Candidate?.WantedItemId, recognised.ProblemKey);
+        }
+
+        // Each kind is found by what its name says: a film, an episode, an anime episode by its other title, a manga volume and a light novel; a name that fits nothing or two titles says so.
+        [TestMethod]
+        [DataRow("Example.Movie.2020.1080p.WEB-DL.H264-GRP.mkv", 1L, null)]
+        [DataRow("Example.Show.S01E02.1080p.WEB-DL.H264-GRP.mkv", 2L, null)]
+        [DataRow("[SubGroup] Majo to Watashi - 02 [1080p].mkv", 3L, null)]
+        [DataRow("Example Manga v03 (2020) (Digital).cbz", 4L, null)]
+        [DataRow("Sky Novel Volume 2.epub", 5L, null)]
+        [DataRow("Jane Writer - Sky Novel (2019) (retail) (epub).epub", 5L, null)]
+        [DataRow("Dune.2021.2160p.WEB-DL-GRP.mkv", 7L, null)]
+        [DataRow("Green.Lantern.2011.Extended.Cut.1080p.BluRay.x264-SECTOR7.mkv", 8L, null)]
+        [DataRow("Dune.mkv", null, "work_ambiguous")]
+        [DataRow("Holiday.at.the.lake.mkv", null, "work_unknown")]
+        [DataRow("Example.Show.Spinoff.S01E01.1080p.mkv", null, "work_unknown")]
+        public void Folder_FilesAreRecognisedByTheirNames(string path, long? wantedItemId, string? problem) =>
+            Assert.AreEqual((wantedItemId, problem), Recognise(path));
+
+        // A file whose name says nothing takes the title its folders name, the nearest first.
+        [TestMethod]
+        public void Folder_AnUnnamedFileTakesItsFoldersTitle()
+        {
+            Assert.AreEqual(((long?)2, (string?)null), Recognise("Example.Show.S01.1080p.WEB-DL-GRP/01.mkv"));
+            Assert.AreEqual(((long?)1, (string?)null), Recognise("feature.mkv", "Example.Movie.2020.1080p.BluRay-GRP"));
+            Assert.AreEqual(MediaType.Series, ManualImportLogic.KindOf("Show.S01E01.mkv"));
+            Assert.AreEqual((2, 3), ManualImportLogic.FolderEpisode("Example Show/Season 2/03.mkv"));
+            Assert.AreEqual((1, 12), ManualImportLogic.FolderEpisode("Staffel 1/Episode 12.mkv"));
+            Assert.IsNull(ManualImportLogic.FolderEpisode("Example Show/03.mkv"));
+            Assert.AreEqual(MediaType.Book, ManualImportLogic.KindOf("Some Book.epub"));
+            CollectionAssert.Contains(ManualImportLogic.SearchWords([("Green.Lantern.2011.Extended.Cut.1080p.BluRay.x264-SECTOR7", false)]).ToArray(), "lantern");
+        }
+
+        // What a person must check of a recognised file: an episode without numbers, a book file the import would not place, a unit the library holds.
+        [TestMethod]
+        public void Problems_NameWhatAPersonMustCheck()
+        {
+            var units = new[] { new TargetUnit(1, 1, 1, true), new TargetUnit(2, 1, 2, false) };
+            Assert.AreEqual("episode_unknown", ManualImportLogic.ProblemOf(MediaType.Series, null, new ManualImportProposal("a.mkv", 1, null, null, null, null, null), units, []));
+            Assert.AreEqual("already_in_library", ManualImportLogic.ProblemOf(MediaType.Series, null, new ManualImportProposal("a.mkv", 1, 1, 1, null, "x", null), units, []));
+            Assert.IsNull(ManualImportLogic.ProblemOf(MediaType.Series, null, new ManualImportProposal("a.mkv", 1, 1, 2, null, "x", null), units, []));
+            Assert.AreEqual("volume_unknown", ManualImportLogic.ProblemOf(MediaType.Book, MediaSubtype.Manga, new ManualImportProposal("a.cbz", 1, null, null, null, null, null), [], []));
+            Assert.IsNull(ManualImportLogic.ProblemOf(MediaType.Movie, null, new ManualImportProposal("a.mkv", 1, null, null, null, null, null), [], []));
+            Assert.AreEqual("already_in_library", ManualImportLogic.ProblemOf(MediaType.Movie, null, new ManualImportProposal("a.mkv", 1, null, null, null, "x", null), [], [], workHasMedia: true));
+            Assert.IsNull(ManualImportLogic.Seconds(MediaType.Series, [new("a.mkv", 9, 1, 3, null, "x", null), new("b.mkv", 4, 1, 3, null, "y", null)]).SingleOrDefault(path => path == "a.mkv"));
+            Assert.AreEqual("b.mkv", ManualImportLogic.Seconds(MediaType.Series, [new("a.mkv", 9, 1, 3, null, "x", null), new("b.mkv", 4, 1, 3, null, "y", null)]).Single());
+        }
+
+        // A job folder still holds media until only notes, pictures, samples and subtitles are left.
+        [TestMethod]
+        public void Leftovers_HoldNoMedia() =>
+            Assert.AreEqual((true, false), (ManualImportLogic.HoldsMedia(Files("a.nfo", "b.mkv")), ManualImportLogic.HoldsMedia(Files("a.nfo", "cover.jpg", "Sample/sample.mkv", "a.en.srt"))));
     }
 }

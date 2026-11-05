@@ -31,7 +31,7 @@ using OperationKind = Jularr.Backend.Data.Enums.Operation.OperationType;
 
 namespace Jularr.Backend.Service.System.Acquisition.V1
 {
-    // Shared by every downloader: plan, check, link or copy and assign; waits and failures are recorded the same way.
+    // Shared by every downloader: plan, check, move and assign; waits and failures are recorded the same way.
     internal sealed class DownloadImport(PlexServer plex, LibraryReplacements replacements, StorageAccess storage, TimeProvider time, SabnzbdClient sabnzbd, QbittorrentClient qbittorrent, DownloadStorage downloads,
         IDataProtectionProvider protection, WorkSignals signals)
     {
@@ -186,10 +186,11 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
 
             var commit = await CommitAsync(context, new ImportCommitRequest(root, download.WorkId, download.GamePlatformId, placements, source, sourceDirectory, files,
                 path => download.MediaTypeId == MediaType.Game ? new ReleaseFact(TextLimit.Cut(Path.GetFileName(path), 500)!, facts.ReleaseGroup, facts.QualityKey, facts.Edition, facts.Revision) : facts,
-                ImportTransferMode.Link, download.OperationId, null, download.MediaTypeId, acquisitionProfile, FinishesDownload: !unmatched), ct);
+                download.OperationId, null, download.MediaTypeId, acquisitionProfile, FinishesDownload: !unmatched), ct);
+            // A storage that comes back heals by itself on the next pass; a name conflict or a refused assignment waits for a person, who can import the files by hand from the queue.
             if (commit.FailureKey is { } failure)
             {
-                await AttentionAsync(context, download.OperationId, failure, null, ct);
+                await AttentionAsync(context, download.OperationId, failure, null, ct, failure is "import_target_conflict" or "import_assignment_failed" ? ImportProposal.Write(sourceRef, []) : null);
                 return;
             }
 
@@ -200,27 +201,24 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                 return;
             }
 
-            // Client-owned files are cleaned only after a complete inventory was supplied.
-            // A missing inventory (for example a single reported path) cannot prove there are no sidecars.
-            if (allSourceFiles is not null
-                && ImportPlacementLogic.AllSourceFilesSelected(allSourceFiles.Select(file => file.RelativePath), placements.Select(placement => placement.SourcePath)))
-            {
-                await RemoveFromClientAsync(context, download.AcquisitionConnectionId, download.ExternalId,
-                    DownloadSourceInventory.Fingerprint(allSourceFiles), ct);
-            }
+            // The client lets go of the job once the move left nothing an import would take.
+            await RemoveFromClientAsync(context, download.AcquisitionConnectionId, download.ExternalId, source, sourceDirectory, allSourceFiles is not null, ct);
         }
 
-        // Links, copies or moves the planned files into the library and assigns them to their work; the failure key names what a person must settle, and nothing is left half done.
+        // Moves the planned files into the library and assigns them to their work; the failure key names what a person must settle, and nothing is left half done.
+        // A file is first linked into place on the same filesystem (else copied and checked), and its source goes only once the library holds it: a failure leaves the source as it was.
         public async Task<ImportCommit> CommitAsync(LogicContext context, ImportCommitRequest request, CancellationToken ct)
         {
-            // Link, copy or move outside transactions; an existing library file is never taken over.
+            // Place outside transactions; an existing library file is never taken over.
             // An offline library keeps the download waiting instead of writing elsewhere.
             var (root, placements, source, sourceDirectory, files) = (request.Root, request.Placements, request.Source, request.SourceDirectory, request.Files);
             var directory = root.RelativePath;
             StorageFiles library;
+            string libraryName;
             try
             {
                 var mount = await context.ExecuteBatchAsync((ctx, token) => ctx.ReadStorageMountAsync(root.StorageMountId, token), ct);
+                libraryName = mount.Name;
                 library = storage.Open(mount);
                 if (await library.GetAsync(directory, ct) is not { IsDirectory: true })
                 {
@@ -237,6 +235,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
             var assigned = await context.ExecuteBatchAsync((ctx, token) => ctx.ReadAssignedStoredPathsAsync(new StoredFolderData(root.Id, folders), token), ct);
 
             var imported = new List<ImportedFile>();
+            var targets = new Dictionary<string, string>(StringComparer.Ordinal);
             var media = new List<(string RelativePath, ImportPlacementData Placement)>();
             try
             {
@@ -246,7 +245,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                 {
                     var targetDirectory = local.ResolveDirectory(directory);
                     freeBytes = StorageFileSystem.AvailableFreeSpace(targetDirectory);
-                    if (source is LocalStorageFiles localSource && request.Mode != ImportTransferMode.Copy)
+                    if (source is LocalStorageFiles localSource)
                     {
                         var volume = StorageFileSystem.DownloadFilesystemIdentity(localSource.ResolveDirectory(sourceDirectory), includeDirectory: false, includeMountPoint: true);
                         canLink = volume is not null && volume == StorageFileSystem.DownloadFilesystemIdentity(targetDirectory, includeDirectory: false, includeMountPoint: true);
@@ -277,9 +276,9 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                     foreach (var placement in group)
                     {
                         var relativePath = stem + placement.Extension;
-                        var placed = await StorageFileTransfer.PlaceAsync(source, StoragePath.Combine(sourceDirectory, placement.SourcePath), library, StoragePath.Combine(directory, relativePath), ct,
-                            allowLink: request.Mode != ImportTransferMode.Copy);
+                        var placed = await StorageFileTransfer.PlaceAsync(source, StoragePath.Combine(sourceDirectory, placement.SourcePath), library, StoragePath.Combine(directory, relativePath), ct);
                         imported.Add(new ImportedFile(relativePath, placed.Length, StoredFileLogic.StoredTime(placed.ModifiedAt), request.FactsFor(placement.SourcePath), request.Languages?.GetValueOrDefault(placement.SourcePath)));
+                        targets[placement.SourcePath] = libraryName + " /" + StoragePath.Combine(directory, relativePath);
                         if (placement.IsMedia)
                         {
                             media.Add((relativePath, placement));
@@ -349,11 +348,8 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                 throw;
             }
 
-            // A move leaves nothing behind, but only once the library holds the files.
-            if (request.Mode == ImportTransferMode.Move)
-            {
-                await RemoveSourcesAsync(request, ct);
-            }
+            // The move ends: the sources go, but only once the library holds the files.
+            var kept = await RemoveSourcesAsync(request, ct);
 
             await replacements.ReplaceAsync(context, assets, request.Profile, ct);
 
@@ -362,7 +358,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
 
             // A connected Plex shows the title right away.
             await plex.RefreshAsync(context, request.MediaTypeId, ct);
-            return new ImportCommit(null, assets);
+            return new ImportCommit(null, assets, targets, kept);
         }
 
         // The files this import itself placed, which did not exist before it chose their names, and the folders that leaves empty. A source is never touched.
@@ -385,34 +381,66 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
             }
         }
 
-        // What a move took from its folder goes, and so do the folders it emptied; a source that cannot be changed keeps its files.
-        private static async Task RemoveSourcesAsync(ImportCommitRequest request, CancellationToken ct)
+        // What the move took from its folder goes, and so do the folders it emptied; the sources that could not be deleted (a read-only connection) stay and are named.
+        private static async Task<IReadOnlyList<string>> RemoveSourcesAsync(ImportCommitRequest request, CancellationToken ct)
         {
+            var kept = new List<string>();
+            foreach (var placement in request.Placements)
+            {
+                try
+                {
+                    await request.Source.DeleteFileAsync(StoragePath.Combine(request.SourceDirectory, placement.SourcePath), CancellationToken.None);
+                }
+                catch (Exception exception) when (exception is NasMountException or IOException or UnauthorizedAccessException)
+                {
+                    kept.Add(placement.SourcePath);
+                }
+            }
+
             try
             {
-                foreach (var placement in request.Placements)
-                {
-                    await request.Source.DeleteFileAsync(StoragePath.Combine(request.SourceDirectory, placement.SourcePath), ct);
-                }
-
                 foreach (var folder in request.Placements.Select(placement => StoragePath.Parent(placement.SourcePath)).Distinct(StringComparer.Ordinal))
                 {
                     await request.Source.DeleteEmptyFoldersAsync(StoragePath.Combine(request.SourceDirectory, folder), request.SourceDirectory, ct);
                 }
             }
-            catch (Exception exception) when (exception is NasMountException or IOException or UnauthorizedAccessException)
+            catch (Exception exception) when (exception is NasMountException or IOException or UnauthorizedAccessException or OperationCanceledException)
             {
             }
+
+            return kept;
         }
 
-        // A completed import first records a durable cleanup request. The worker owns remote deletion and retry.
-        public async Task RemoveFromClientAsync(LogicContext context, long acquisitionConnectionId, string? externalId, string sourceFingerprint, CancellationToken ct)
+        // A completed import records a durable cleanup request once the move left nothing of the job that an import would take (only release notes, samples, extras or subtitles
+        // nobody chose): SABnzbd removes the job and its verified leftovers, qBittorrent the torrent, which could not seed its moved files anyway. The worker owns remote deletion and retry.
+        // A single file has no folder of its own to check; its client lets go of it once it is moved.
+        public async Task RemoveFromClientAsync(LogicContext context, long acquisitionConnectionId, string? externalId, StorageFiles source, string directory, bool isFolder, CancellationToken ct)
         {
-            if (externalId is null || string.IsNullOrWhiteSpace(sourceFingerprint)) return;
+            if (externalId is null) return;
+            var fingerprint = DownloadSourceInventory.Empty;
+            if (isFolder)
+            {
+                var left = new List<StorageFile>();
+                var state = new StorageScanState();
+                try
+                {
+                    if (await source.GetAsync(directory, ct) is { IsDirectory: true })
+                    {
+                        await foreach (var file in source.EnumerateFilesAsync(directory, null, state, ct)) left.Add(file);
+                    }
+                }
+                catch (Exception exception) when (exception is NasMountException or IOException or UnauthorizedAccessException)
+                {
+                    return;
+                }
+
+                if (!state.IsComplete || ManualImportLogic.HoldsMedia(left)) return;
+                fingerprint = DownloadSourceInventory.Fingerprint(left);
+            }
+
             await context.ExecuteBatchAsync(async (ctx, token) =>
             {
-                await ctx.QueueImportedCleanupAsync(new DownloadCleanupKeyData(acquisitionConnectionId, externalId,
-                    sourceFingerprint: sourceFingerprint), token);
+                await ctx.QueueImportedCleanupAsync(new DownloadCleanupKeyData(acquisitionConnectionId, externalId, sourceFingerprint: fingerprint), token);
                 return true;
             }, ct);
             signals.Downloads.Notify();
@@ -441,9 +469,10 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                     var connection = await context.ExecuteBatchAsync((ctx, token) => ctx.ReadAcquisitionConnectionAsync(task.AcquisitionConnectionId, token), ct);
 
                     // A failed release elsewhere goes with its files too: qBittorrent deletes the torrent and its data, Jularr's own Usenet and torrent downloaders clear the job's folders.
+                    // An imported torrent goes from qBittorrent with what the move left of it.
                     if (connection.AcquisitionConnectionTypeId is AcquisitionConnectionType.Qbittorrent or AcquisitionConnectionType.Usenet or AcquisitionConnectionType.Torrent)
                     {
-                        if (task.Reason != "failed")
+                        if (task.Reason != "failed" && !(task.Reason == "imported" && connection.AcquisitionConnectionTypeId == AcquisitionConnectionType.Qbittorrent))
                         {
                             await RescheduleAsync(task.Id, "cleanup_status_mismatch");
                             continue;
@@ -664,9 +693,10 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
     // What an import places and where it takes it from; a download names its operation, a manual import the person who made it. Languages, by source path, are the ones a person chose for a file.
     // An import by hand of a download leaves it waiting (FinishesDownload false) until its last group of files is placed or the person finishes it.
     internal sealed record ImportCommitRequest(LibraryRootLocationData Root, long WorkId, long? GamePlatformId, IReadOnlyList<ImportPlacementData> Placements, StorageFiles Source,
-        string SourceDirectory, IReadOnlyList<StorageFile> Files, Func<string, ReleaseFact?> FactsFor, ImportTransferMode Mode, long? OperationId, long? AccountId, MediaType MediaTypeId,
+        string SourceDirectory, IReadOnlyList<StorageFile> Files, Func<string, ReleaseFact?> FactsFor, long? OperationId, long? AccountId, MediaType MediaTypeId,
         QualityProfile? Profile, IReadOnlyDictionary<string, ChosenLanguages>? Languages = null, bool FinishesDownload = true);
 
-    // The reason a person must settle, or null once the library holds the files.
-    internal sealed record ImportCommit(string? FailureKey, IReadOnlyList<long> Assets);
+    // The reason a person must settle, or null once the library holds the files; then where each source went (by its path, the path inside the library's storage) and the sources
+    // that could not be deleted after the library took them.
+    internal sealed record ImportCommit(string? FailureKey, IReadOnlyList<long> Assets, IReadOnlyDictionary<string, string>? Targets = null, IReadOnlyList<string>? KeptSources = null);
 }

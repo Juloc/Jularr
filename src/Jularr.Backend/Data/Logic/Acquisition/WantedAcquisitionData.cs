@@ -707,6 +707,50 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
     // The download an action is about, whatever its client.
     // A download that waits for a person and knows where its files are.
+    // The words a title of the library must contain to be a candidate of a folder's files, as ILIKE patterns.
+    internal sealed class ManualImportTitleSearchData : BaseData
+    {
+        public ManualImportTitleSearchData(string[] patterns)
+        {
+            Patterns = patterns;
+        }
+
+        [DataField(typeof(ManualImportFields), nameof(ManualImportFields.SearchPatterns))]
+        public string[] Patterns { get; }
+    }
+
+    // A film, series or book of the library with every title it is known by.
+    internal sealed class ManualImportCandidateData : BaseData
+    {
+        public ManualImportCandidateData(long wantedItemId, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string canonicalTitle, int? releaseYear, string[] titles)
+        {
+            WantedItemId = wantedItemId;
+            MediaTypeId = mediaTypeId;
+            MediaSubtypeId = mediaSubtypeId;
+            CanonicalTitle = canonicalTitle;
+            ReleaseYear = releaseYear;
+            Titles = titles;
+        }
+
+        [DataField(typeof(WantedItemFields), nameof(WantedItemFields.Id))]
+        public long WantedItemId { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId))]
+        public MediaType MediaTypeId { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaSubtypeId))]
+        public MediaSubtype? MediaSubtypeId { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.CanonicalTitle))]
+        public string CanonicalTitle { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.ReleaseYear))]
+        public int? ReleaseYear { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.Titles))]
+        public string[] Titles { get; }
+    }
+
     internal sealed class ManualImportDownloadData : BaseData
     {
         public ManualImportDownloadData(long operationId, long wantedItemId, long acquisitionConnectionId, string? externalId, string attentionProposal)

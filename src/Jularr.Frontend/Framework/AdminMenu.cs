@@ -64,7 +64,6 @@ namespace Jularr.Frontend.Framework
                 [
                     new("admin.works.title", "/Admin/Works", Media, ["Library"]),
                     new("admin.matches.title", "/Admin/Works/Matches", Media, ["Library"]),
-                    new("admin.manualImport.title", "/Admin/ManualImport", Media, ["Library"]),
                     new("admin.import.title", "/Admin/Import", Media, ["Library", "Requests"])
                 ], UserMenu: true),
                 new("library", "nav.group.library", "folder",
