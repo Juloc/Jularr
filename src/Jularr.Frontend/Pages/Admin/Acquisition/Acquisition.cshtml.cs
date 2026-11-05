@@ -424,14 +424,16 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
         public async Task<IActionResult> OnPostAsync([BindRequired] AcquisitionConnectionType acquisitionConnectionTypeId, string? name, string? baseUrl, string? apiKey,
             bool? isEnabled, [BindRequired] int priority, string? categories, string? downloadCategory, string? remotePath, string? localPath, string? username,
             int? maxConnections, string? password, int[]? mediaTypeIds, bool? searchesAutomatically, int? queryLimit, int? grabLimit, string? host, int? port, bool? useSsl,
-            long? downloadStorageMountId, bool? removesCompleted, string? incompleteRemotePath, string? incompleteLocalPath, bool? removesFailed)
+            long? downloadStorageMountId, bool? removesCompleted, string? incompleteRemotePath, string? incompleteLocalPath, bool? removesFailed, bool? readsFeed,
+            bool? searchesInteractively, int? searchIntervalHours)
         {
             // A card's inputs leave out the switch, which is its own action: the stored state stays.
             var ct = HttpContext.RequestAborted;
             var enabled = isEnabled ?? (AcquisitionConnectionId is { } stored ? (await connection.ExecuteAsync<AcquisitionConnectionDetailsV1>(new AcquisitionConnectionParametersV1(stored), ct)).IsEnabled : true);
             _input = new SaveAcquisitionConnectionDataV1(name ?? "", acquisitionConnectionTypeId, baseUrl, apiKey, enabled, priority, Categories(categories),
                 downloadCategory, remotePath, localPath, username, maxConnections, password, mediaTypeIds, searchesAutomatically ?? true, queryLimit, grabLimit, host, port, useSsl,
-                downloadStorageMountId, removesCompleted ?? true, incompleteRemotePath, incompleteLocalPath, removesFailed ?? true);
+                downloadStorageMountId, removesCompleted ?? true, incompleteRemotePath, incompleteLocalPath, removesFailed ?? true, readsFeed ?? true, searchesInteractively ?? true,
+                searchIntervalHours ?? 168);
             if (AcquisitionConnectionId is { } existing)
             {
                 await update.ExecuteAsync<UpdateResult>(new AcquisitionConnectionParametersV1(existing), _input, ct);
@@ -601,7 +603,14 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
         private static SaveAcquisitionConnectionDataV1 InputOf(AcquisitionConnectionDetailsV1 selected, bool? isEnabled = null) =>
             new(selected.Name, selected.AcquisitionConnectionTypeId, selected.BaseUrl, null, isEnabled ?? selected.IsEnabled, selected.Priority, selected.Categories,
                 selected.DownloadCategory, selected.RemotePath, selected.LocalPath, selected.Username, selected.MaxConnections, null, selected.MediaTypeIds,
-                selected.SearchesAutomatically, selected.QueryLimit, selected.GrabLimit, selected.Host, selected.Port, selected.UseSsl, selected.DownloadStorageMountId, selected.RemovesCompleted, selected.IncompleteRemotePath, selected.IncompleteLocalPath, selected.RemovesFailed);
+                selected.SearchesAutomatically, selected.QueryLimit, selected.GrabLimit, selected.Host, selected.Port, selected.UseSsl, selected.DownloadStorageMountId, selected.RemovesCompleted, selected.IncompleteRemotePath, selected.IncompleteLocalPath, selected.RemovesFailed,
+                selected.ReadsFeed, selected.SearchesInteractively, selected.SearchIntervalHours);
+
+        // The rhythms a source without a feed can search on, with the stored one when it is none of them.
+        private IEnumerable<SelectOption> SearchIntervals(int stored) =>
+            new[] { 24, 72, 168, 336, 720 }.Union([stored]).Order().Select(hours => new SelectOption(hours.ToString(CultureInfo.InvariantCulture),
+                hours % 24 == 0 ? string.Format(CultureInfo.CurrentCulture, texts[hours == 24 ? "acquisition.connection.interval.day" : "acquisition.connection.interval.days"], hours / 24)
+                    : string.Format(CultureInfo.CurrentCulture, texts["acquisition.connection.interval.hours"], hours)));
 
         // The inputs of a connection: a card's own (saved by the pill), an existing one's in its edit dialog or, without one, the new connection's in its dialog.
         private Form<SaveAcquisitionConnectionDataV1> ConnectionForm(AcquisitionConnectionType type, string? csrf, AcquisitionConnectionDetailsV1? existing, bool inDialog = false)
@@ -680,15 +689,25 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                         .Select(media => new SelectOption(((int)media).ToString(CultureInfo.InvariantCulture), texts[MediaTypeLabel.Key(media, null)])));
                 }
 
-                // Indexer categories (empty uses the media type defaults), automatic searches and daily limits.
-                if (type is AcquisitionConnectionType.Newznab or AcquisitionConnectionType.Nyaa)
+                // As Sonarr's indexer flags: the feed (Newznab), automatic and interactive searches; a source without a feed searches the wanted titles on its rhythm.
+                // Indexer categories (empty uses the media type defaults) and daily limits are Newznab's.
+                if (type is AcquisitionConnectionType.Newznab or AcquisitionConnectionType.Nyaa or AcquisitionConnectionType.Gutenberg or AcquisitionConnectionType.Opds
+                    or AcquisitionConnectionType.AnnasArchive or AcquisitionConnectionType.Narou)
                 {
                     if (type == AcquisitionConnectionType.Newznab)
+                    {
                         form.Text(item => item.Categories, "acquisition.connection.categories");
-                    form.Select(item => item.SearchesAutomatically, "acquisition.connection.searches",
-                        [new SelectOption("True", texts["acquisition.connection.automatic"]), new SelectOption("False", texts["acquisition.connection.manualOnly"])]);
-                    form.Number(item => item.QueryLimit, "acquisition.connection.queryLimit");
-                    form.Number(item => item.GrabLimit, "acquisition.connection.grabLimit");
+                        form.Toggle(item => item.ReadsFeed, "acquisition.connection.readsFeed");
+                    }
+
+                    form.Toggle(item => item.SearchesAutomatically, "acquisition.connection.searchesAutomatically");
+                    form.Toggle(item => item.SearchesInteractively, "acquisition.connection.searchesInteractively");
+                    form.Select(item => item.SearchIntervalHours, "acquisition.connection.searchInterval", SearchIntervals(input.SearchIntervalHours));
+                    if (type == AcquisitionConnectionType.Newznab)
+                    {
+                        form.Number(item => item.QueryLimit, "acquisition.connection.queryLimit");
+                        form.Number(item => item.GrabLimit, "acquisition.connection.grabLimit");
+                    }
                 }
 
                 // News servers allow a limited number of sessions.

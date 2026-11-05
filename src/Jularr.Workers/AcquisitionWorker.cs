@@ -8,7 +8,8 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Jularr.Workers
 {
-    // Looks for the wanted titles that are due on the Owner's interval, or as soon as a request or the indexers' feeds make one due.
+    // Searches the wanted titles an event made due (a request, a resumed monitor, a button, a failed download) and the rhythm of the sources without a feed;
+    // the indexers' feeds bring new releases and upgrades.
     internal sealed class AcquisitionWorker(TimeProvider time, WorkerJobs jobs, WorkerJobRunner runner, AcquisitionSearchSignal signal) : PeriodicWorker(time, jobs, runner, WorkerGroupType.Acquisition)
     {
         protected override async Task RunOnceAsync(CancellationToken ct)
@@ -22,7 +23,7 @@ namespace Jularr.Workers
             // Custom formats of the files, metadata of wanted titles and the searches in small passes.
             await Runner.RunAsync("wantedSearch", (services, token) => RunAllAsync(token, Step<RefreshStoredFileFormatsV1>(services), Step<RefreshWantedMetadataV1>(services), Step<SearchDueWantedV1>(services)), ct);
 
-            // The newest releases of the indexers every 15 minutes; a release about a wanted title makes it due, and the signal it raises wakes the search.
+            // The newest releases of the indexers every 15 minutes, judged and grabbed as they come.
             await Runner.RunAsync("feedSync", (services, token) => Step<SyncFeedsV1>(services)(token), ct);
         }
 

@@ -80,7 +80,8 @@ namespace Jularr.Backend.Logic.Instance
                         connection."AcquisitionConnectionTypeId" AS "ConnectionTypeId",
                         connection."Version",
                         connection."CheckedAt",
-                        connection."LastErrorKey"
+                        connection."LastErrorKey",
+                        connection."RetryAt"
                     FROM
                         "AcquisitionConnections" AS connection
                     WHERE
@@ -123,17 +124,21 @@ namespace Jularr.Backend.Logic.Instance
             return new HealthServiceV1(HealthServiceType.Provider, "provider:" + provider.ProviderKey, ProviderNames[provider.ProviderKey], state, state == HealthStateType.Unavailable ? "provider_unavailable" : null, last?.At);
         }
 
-        // A client is asked on every check; an indexer or news server keeps its last test for a while.
+        // A client is asked on every check; an indexer or news server keeps its last test for a while. A paused one is not asked: the request would cost it and end its pause.
         public static bool NeedsTest(HealthConnectionData connection, DateTime now) =>
-            connection.ConnectionTypeId == AcquisitionConnectionType.Sabnzbd || connection.CheckedAt is not { } at || now - at >= StoredTestLasts;
+            !IsPaused(connection, now) && (connection.ConnectionTypeId == AcquisitionConnectionType.Sabnzbd || connection.CheckedAt is not { } at || now - at >= StoredTestLasts);
+
+        private static bool IsPaused(HealthConnectionData connection, DateTime now) => connection.RetryAt is { } until && until > now;
 
         // An indexer is an indexer; the download client and the news server it downloads from are download clients.
         public static HealthServiceType ServiceType(HealthConnectionData connection) =>
             connection.ConnectionTypeId == AcquisitionConnectionType.Newznab ? HealthServiceType.Indexer : HealthServiceType.DownloadClient;
 
-        // A stored test says nothing until the connection was tested once.
-        public static HealthServiceV1 StoredConnection(HealthConnectionData connection) => new(ServiceType(connection), "connection:" + connection.Id, connection.ConnectionName,
-            connection.CheckedAt is null ? HealthStateType.Unknown : connection.LastErrorKey is null ? HealthStateType.Available : HealthStateType.Unavailable, connection.LastErrorKey, connection.CheckedAt);
+        // A stored test says nothing until the connection was tested once; a connection in its backoff is paused until it ends, whatever its last test said.
+        public static HealthServiceV1 StoredConnection(HealthConnectionData connection, DateTime now) => IsPaused(connection, now)
+            ? new(ServiceType(connection), "connection:" + connection.Id, connection.ConnectionName, HealthStateType.Paused, connection.LastErrorKey, connection.CheckedAt, connection.RetryAt)
+            : new(ServiceType(connection), "connection:" + connection.Id, connection.ConnectionName,
+                connection.CheckedAt is null ? HealthStateType.Unknown : connection.LastErrorKey is null ? HealthStateType.Available : HealthStateType.Unavailable, connection.LastErrorKey, connection.CheckedAt);
 
         // Stable unless one service did not answer; a service nobody asked yet is no failure.
         public static HealthV1 Summarize(IEnumerable<HealthServiceV1> services, DateTime? checkedAt)

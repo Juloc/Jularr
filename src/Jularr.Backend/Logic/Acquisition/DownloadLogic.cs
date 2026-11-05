@@ -322,10 +322,10 @@ namespace Jularr.Backend.Logic.Acquisition
             return ctx.ReadSql.ReadRequiredAsync<WantedTargetData>(sql, ct);
         }
 
-        public static Task<IReadOnlyList<WantedItemParameters>> ReadDueWantedItemsAsync(this LogicContext ctx, WantedDueData data, CancellationToken ct)
+        public static Task<IReadOnlyList<WantedDueItemData>> ReadDueWantedItemsAsync(this LogicContext ctx, WantedDueData data, CancellationToken ct)
         {
-            // Whole Works without media, or below their cutoff, without a running download, and Works with unclaimed missing episodes or volumes, oldest schedule first.
-            // Only enabled types with a library of their own are searched.
+            // Whole Works without media, or below their cutoff, without a running download, and Works with unclaimed missing episodes or volumes; what an event or a retry made due
+            // first, then the rhythm of the sources without a feed, oldest first. Only enabled types with a library of their own are searched.
             var sql = new SqlStatement();
             sql.Statement =
                 """
@@ -344,7 +344,9 @@ namespace Jularr.Backend.Logic.Acquisition
                         NOT language."IsCovered"
                 )
                 SELECT
-                    wanted."Id" AS "WantedItemId"
+                    wanted."Id" AS "WantedItemId",
+                    wanted."NextSearchAt" IS NULL OR wanted."NextSearchAt" <= @Now AS "SearchesAll",
+                    wanted."LastSearchedAt"
                 FROM
                     "WantedItems" AS wanted
                     JOIN "Works" AS work ON work."Id" = wanted."WorkId"
@@ -361,7 +363,7 @@ namespace Jularr.Backend.Logic.Acquisition
                             root."Id" = wanted."LibraryRootId"
                             OR root."MediaTypeId" = class."MediaTypeId" AND root."MediaSubtypeId" IS NOT DISTINCT FROM class."MediaSubtypeId"
                     )
-                    AND (wanted."NextSearchAt" IS NULL OR wanted."NextSearchAt" <= @Now)
+                    AND (@AnyTime OR wanted."NextSearchAt" IS NULL OR wanted."NextSearchAt" <= @Now OR wanted."PeriodicSearchAt" <= @Now)
                     AND (
                         work."MediaTypeId" IN (1, 3, 6, 7)
                         AND NOT EXISTS (
@@ -430,10 +432,8 @@ namespace Jularr.Backend.Logic.Acquisition
                                 release."WantedItemId" = wanted."Id"
                                 AND operation."OperationStatusTypeId" IN (1, 2)
                         )
+                        -- A book that lacks a language of its target.
                         OR work."MediaTypeId" = 3 AND work."MediaSubtypeId" IS DISTINCT FROM 2
-                        -- A book that lacks a language of its target is searched once a day, in an hour of the day its number picks, so languages that become wanted all at once
-                        -- (a new profile, a setting, the first run after an update) are spread over the day and the books' daily rhythm; the batch of a cycle bounds it further.
-                        AND (date_part('hour', @Now)::integer * 60 + date_part('minute', @Now)::integer - wanted."Id" % 1440 + 1440) % 1440 < 60
                         AND wanted."Id" IN (
                             SELECT
                                 book_language_state."WantedItemId"
@@ -498,15 +498,16 @@ namespace Jularr.Backend.Logic.Acquisition
                         )
                     )
                 ORDER BY
-                    -- High priority first, then the oldest schedule; priority never delays anything.
+                    -- High priority first, then what an event made due, then the oldest schedule; priority never delays anything.
                     wanted."WantedPriorityTypeId" DESC,
-                    wanted."NextSearchAt" NULLS FIRST,
+                    wanted."NextSearchAt" IS NULL OR wanted."NextSearchAt" <= @Now DESC,
+                    least(wanted."NextSearchAt", wanted."PeriodicSearchAt") NULLS FIRST,
                     wanted."Id"
                 LIMIT @Limit;
                 """;
             sql.Parameters.Add(data);
             sql.DisableJit = true;
-            return ctx.ReadSql.ReadListAsync<WantedItemParameters>(sql, ct);
+            return ctx.ReadSql.ReadListAsync<WantedDueItemData>(sql, ct);
         }
 
         // The languages a book was just searched for: every language still missing, or the one asked for.
@@ -536,24 +537,47 @@ namespace Jularr.Backend.Logic.Acquisition
 
         public static async Task RecordWantedSearchAsync(this LogicContext ctx, WantedSearchOutcomeData data, CancellationToken ct)
         {
-            // Search state is not an editorial change.
+            // Search state is not an editorial change; a search no source answered does not count as one, so the rhythm of the sources without a feed asks again.
             var sql = new SqlStatement();
             sql.Statement =
                 """
                 UPDATE
                     "WantedItems" AS wanted
                 SET
-                    "SearchCount" = wanted."SearchCount" + 1,
-                    "LastSearchedAt" = now(),
-                    "NextSearchAt" = @NextSearchAt,
+                    "SearchCount" = wanted."SearchCount" + CASE WHEN @IsAnswered THEN 1 ELSE 0 END,
+                    "LastSearchedAt" = CASE WHEN @IsAnswered THEN now() ELSE wanted."LastSearchedAt" END,
+                    "NextSearchAt" = CASE WHEN @SearchesAll THEN coalesce(@NextSearchAt, 'infinity') ELSE wanted."NextSearchAt" END,
+                    "PeriodicSearchAt" = @PeriodicSearchAt,
                     "LastOutcomeKey" = @OutcomeKey
                 WHERE
                     wanted."Id" = @WantedItemId;
                 """;
             sql.Parameters.Add(data);
             await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+            if (!data.IsAnswered)
+            {
+                return;
+            }
+
             await ctx.RecordBookLanguageSearchAsync(new BookLanguageSearchData(data.WantedItemId, null), ct);
             await ctx.AdvanceRequestsAsync(new RequestProgressData(data.WantedItemId, AcquisitionRequestStatusType.Searching), ct);
+        }
+
+        // The next moment of the rhythm of the sources without a feed, when nothing of it was due.
+        public static async Task ScheduleWantedRhythmAsync(this LogicContext ctx, WantedPeriodicData data, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                UPDATE
+                    "WantedItems" AS wanted
+                SET
+                    "PeriodicSearchAt" = @PeriodicSearchAt
+                WHERE
+                    wanted."Id" = @WantedItemId;
+                """;
+            sql.Parameters.Add(data);
+            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
         }
 
         public static async Task<long> ReserveDownloadAsync(this LogicContext ctx, AcquisitionGrabData data, CancellationToken ct)
@@ -687,18 +711,28 @@ namespace Jularr.Backend.Logic.Acquisition
                         "Operations" AS operation
                     SET
                         "OperationStatusTypeId" = 2,
-                        "ExternalId" = @ExternalId
+                        "ExternalId" = @ExternalId,
+                        "DownloadWaitUntil" = NULL
                     WHERE
                         operation."Id" = @OperationId
                         AND operation."OperationTypeId" = 2
                         AND operation."OperationStatusTypeId" = 1
                     RETURNING
                         operation."AcquisitionReleaseId"
+                ), fetched AS (
+                    UPDATE
+                        "AcquisitionReleases" AS release
+                    SET
+                        "ProtectedDownloadUrl" = NULL
+                    FROM
+                        started
+                    WHERE
+                        release."Id" = started."AcquisitionReleaseId"
+                        AND release."ProtectedDownloadUrl" IS NOT NULL
                 )
                 UPDATE
                     "WantedItems" AS wanted
                 SET
-                    "NextSearchAt" = NULL,
                     "LastOutcomeKey" = 'grabbed'
                 FROM
                     started
@@ -900,6 +934,8 @@ namespace Jularr.Backend.Logic.Acquisition
                     operation."SourceLinkUrl",
                     operation."DownloadWaitUntil",
                     coalesce(operation."DownloadStateTypeId" = 3, FALSE) AS "IsPaused",
+                    release."AcquisitionConnectionId" AS "IndexerConnectionId",
+                    release."ProtectedDownloadUrl",
                     (
                         SELECT
                             count(*)::integer
@@ -987,8 +1023,8 @@ namespace Jularr.Backend.Logic.Acquisition
 
         public static async Task FailDownloadAsync(this LogicContext ctx, DownloadFailureData data, CancellationToken ct)
         {
-            // The target is searched again; only release faults exclude the release. As Sonarr's, a failed download leaves the queue at once (it needs no person) and stays in the history;
-            // a grab the indexer limited is no failure: it waits in the queue until the target's next search.
+            // The target is searched again; only release faults exclude the release. As Sonarr's, a failed download leaves the queue at once (it needs no person) and stays in the history.
+            // A grab the indexer limited is no failure and never comes here (WaitForIndexerAsync); rows of it from before are left out of the history's events.
             var sql = new SqlStatement();
             sql.Statement =
                 """
@@ -1018,6 +1054,7 @@ namespace Jularr.Backend.Logic.Acquisition
                     SET
                         "AcquisitionReleaseStatusTypeId" = 3,
                         "ReasonKey" = @ReasonKey,
+                        "ProtectedDownloadUrl" = NULL,
                         "UpdatedAt" = now()
                     FROM
                         failed
@@ -1500,6 +1537,39 @@ namespace Jularr.Backend.Logic.Acquisition
             }
         }
 
+        // A grab its indexer limited stays in the queue, waiting for the indexer's pause; its release keeps the protected link it is fetched from again, which marks the wait.
+        public static async Task WaitForIndexerAsync(this LogicContext ctx, DownloadIndexerWaitData data, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                WITH waiting AS (
+                    UPDATE
+                        "Operations" AS operation
+                    SET
+                        "DownloadWaitUntil" = @DownloadWaitUntil,
+                        "ExternalId" = NULL,
+                        "DownloadStateTypeId" = 1
+                    WHERE
+                        operation."Id" = @OperationId
+                        AND operation."OperationTypeId" = 2
+                        AND operation."OperationStatusTypeId" = 1
+                    RETURNING
+                        operation."AcquisitionReleaseId"
+                )
+                UPDATE
+                    "AcquisitionReleases" AS release
+                SET
+                    "ProtectedDownloadUrl" = @ProtectedDownloadUrl
+                FROM
+                    waiting
+                WHERE
+                    release."Id" = waiting."AcquisitionReleaseId";
+                """;
+            sql.Parameters.Add(data);
+            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+        }
+
         public static async Task SetDownloadWaitAsync(this LogicContext ctx, DownloadWaitData data, CancellationToken ct)
         {
             // A source countdown keeps the download active but not due; the monitor resumes it at the announced time.
@@ -1706,7 +1776,6 @@ namespace Jularr.Backend.Logic.Acquisition
                 UPDATE
                     "WantedItems" AS wanted
                 SET
-                    "NextSearchAt" = NULL,
                     "LastOutcomeKey" = 'imported'
                 FROM
                     imported

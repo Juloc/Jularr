@@ -64,7 +64,7 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
             int[] categories, string? downloadCategory, string? remotePath, string? localPath, DateTime? checkedAt, string? errorKey, long version, string? username = null,
             int? maxConnections = null, int[]? mediaTypeIds = null, bool searchesAutomatically = true, int? queryLimit = null, int? grabLimit = null, int queryCount = 0, int grabCount = 0,
             DateTime? retryAt = null, bool isBackedOff = false, AcquisitionConnectionRole acquisitionConnectionRoleId = AcquisitionConnectionRole.Search, string? host = null,
-            int? port = null, bool? useSsl = null, long? downloadStorageMountId = null, bool removesCompleted = true, string? incompleteRemotePath = null, string? incompleteLocalPath = null, bool removesFailed = true)
+            int? port = null, bool? useSsl = null, long? downloadStorageMountId = null, bool removesCompleted = true, string? incompleteRemotePath = null, string? incompleteLocalPath = null, bool removesFailed = true, bool readsFeed = true, bool searchesInteractively = true, int searchIntervalHours = 168)
         {
             DownloadStorageMountId = downloadStorageMountId;
             Host = host;
@@ -73,6 +73,9 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
             AcquisitionConnectionRoleId = acquisitionConnectionRoleId;
             IsBackedOff = isBackedOff;
             MediaTypeIds = mediaTypeIds ?? [];
+            ReadsFeed = readsFeed;
+            SearchesInteractively = searchesInteractively;
+            SearchIntervalHours = searchIntervalHours;
             SearchesAutomatically = searchesAutomatically;
             QueryLimit = queryLimit;
             GrabLimit = grabLimit;
@@ -187,6 +190,15 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
         [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.SearchesAutomatically))]
         public bool SearchesAutomatically { get; }
 
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.ReadsFeed))]
+        public bool ReadsFeed { get; }
+
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.SearchesInteractively))]
+        public bool SearchesInteractively { get; }
+
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.SearchIntervalHours))]
+        public int SearchIntervalHours { get; }
+
         [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.QueryLimit))]
         public int? QueryLimit { get; }
 
@@ -210,13 +222,16 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
     {
         public SaveAcquisitionConnectionDataV1(string name, AcquisitionConnectionType acquisitionConnectionTypeId, string? baseUrl, string? apiKey, bool isEnabled, int priority, int[]? categories,
             string? downloadCategory, string? remotePath, string? localPath, string? username = null, int? maxConnections = null, string? password = null, int[]? mediaTypeIds = null,
-            bool searchesAutomatically = true, int? queryLimit = null, int? grabLimit = null, string? host = null, int? port = null, bool? useSsl = null, long? downloadStorageMountId = null, bool removesCompleted = true, string? incompleteRemotePath = null, string? incompleteLocalPath = null, bool removesFailed = true)
+            bool searchesAutomatically = true, int? queryLimit = null, int? grabLimit = null, string? host = null, int? port = null, bool? useSsl = null, long? downloadStorageMountId = null, bool removesCompleted = true, string? incompleteRemotePath = null, string? incompleteLocalPath = null, bool removesFailed = true, bool readsFeed = true, bool searchesInteractively = true, int searchIntervalHours = 168)
         {
             DownloadStorageMountId = downloadStorageMountId;
             Host = host;
             Port = port;
             UseSsl = useSsl;
             MediaTypeIds = mediaTypeIds ?? [];
+            ReadsFeed = readsFeed;
+            SearchesInteractively = searchesInteractively;
+            SearchIntervalHours = searchIntervalHours;
             SearchesAutomatically = searchesAutomatically;
             QueryLimit = queryLimit;
             GrabLimit = grabLimit;
@@ -328,9 +343,10 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
                 throw new DataValidationException(nameof(MediaTypeIds), "invalid_transition");
             }
 
-            if (AcquisitionConnectionTypeId != AcquisitionConnectionType.Newznab && (!SearchesAutomatically || QueryLimit is not null || GrabLimit is not null))
+            // Daily limits belong to Newznab indexers; a feed only to them, the only sources that have one.
+            if (AcquisitionConnectionTypeId != AcquisitionConnectionType.Newznab && (QueryLimit is not null || GrabLimit is not null))
             {
-                throw new DataValidationException(nameof(SearchesAutomatically), "invalid_transition");
+                throw new DataValidationException(nameof(QueryLimit), "invalid_transition");
             }
 
             if (MediaTypeIds.Any(id => !Enum.IsDefined((MediaType)id)))
@@ -355,6 +371,15 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
 
         [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.SearchesAutomatically))]
         public bool SearchesAutomatically { get; }
+
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.ReadsFeed))]
+        public bool ReadsFeed { get; }
+
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.SearchesInteractively))]
+        public bool SearchesInteractively { get; }
+
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.SearchIntervalHours))]
+        public int SearchIntervalHours { get; }
 
         [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.QueryLimit))]
         public int? QueryLimit { get; }

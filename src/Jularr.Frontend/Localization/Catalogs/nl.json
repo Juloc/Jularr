@@ -2432,18 +2432,6 @@
    "Media types",
    "Mediatypen"
   ],
-  "acquisition.connection.searches": [
-   "Searches",
-   "Zoekopdrachten"
-  ],
-  "acquisition.connection.automatic": [
-   "Automatic and manual",
-   "Automatisch en handmatig"
-  ],
-  "acquisition.connection.manualOnly": [
-   "Manual only",
-   "Alleen handmatig"
-  ],
   "acquisition.connection.queryLimit": [
    "Queries per day",
    "Zoekopdrachten per dag"

@@ -71,8 +71,9 @@ namespace Jularr.Backend.Data.Logic.Instance
     // An indexer, download client or news server that is switched on, and what its last test said.
     internal sealed class HealthConnectionData : BaseData
     {
-        public HealthConnectionData(long id, string connectionName, AcquisitionConnectionType connectionTypeId, long version, DateTime? checkedAt, string? lastErrorKey)
+        public HealthConnectionData(long id, string connectionName, AcquisitionConnectionType connectionTypeId, long version, DateTime? checkedAt, string? lastErrorKey, DateTime? retryAt = null)
         {
+            RetryAt = retryAt;
             Id = id;
             ConnectionName = connectionName;
             ConnectionTypeId = connectionTypeId;
@@ -98,5 +99,9 @@ namespace Jularr.Backend.Data.Logic.Instance
 
         [DataField(typeof(HealthFields), nameof(HealthFields.ErrorKey))]
         public string? LastErrorKey { get; }
+
+        // The end of the connection's backoff.
+        [DataField(typeof(HealthFields), nameof(HealthFields.PausedUntil))]
+        public DateTime? RetryAt { get; }
     }
 }

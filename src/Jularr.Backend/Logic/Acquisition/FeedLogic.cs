@@ -4,7 +4,7 @@ using Jularr.Backend.Infrastructure.Sql;
 
 namespace Jularr.Backend.Logic.Acquisition
 {
-    // The seen releases of the indexers' recent feeds and the wanted targets a feed makes due.
+    // The seen releases of the indexers' recent feeds and the wanted titles a feed's releases are judged for.
     internal static class FeedLogic
     {
         public static Task<FeedSeenData> ReadSeenFeedReleasesAsync(this LogicContext ctx, FeedSeenQueryData data, CancellationToken ct)
@@ -97,7 +97,16 @@ namespace Jularr.Backend.Logic.Acquisition
                             "WorkExternalIdentities" AS identity
                         WHERE
                             identity."WorkId" = work."Id"
-                    ) AS "ExternalIdentities"
+                    ) AS "ExternalIdentities",
+                    -- Manga and light novel releases seldom name their author.
+                    CASE WHEN work."MediaSubtypeId" IS NULL THEN (
+                        SELECT
+                            creator."Creator"
+                        FROM
+                            "WorkCreators" AS creator
+                        WHERE
+                            creator."WorkId" = work."Id"
+                    ) END AS "Author"
                 FROM
                     "WantedItems" AS wanted
                     JOIN "Works" AS work ON work."Id" = wanted."WorkId"
@@ -108,104 +117,6 @@ namespace Jularr.Backend.Logic.Acquisition
                 """;
             sql.Parameters.Add(data);
             return ctx.ReadSql.ReadListAsync<FeedTargetData>(sql, ct);
-        }
-
-        // Targets that wait for their next search are searched now, but not sooner than the gap after their last search; one already due, or searched later, stays as it is.
-        // Returns the targets that changed.
-        public static async Task<IReadOnlyList<WantedItemParameters>> MakeWantedDueAsync(this LogicContext ctx, FeedDueData data, CancellationToken ct)
-        {
-            var waiting = new SqlStatement();
-            waiting.Statement =
-                """
-                SELECT
-                    wanted."Id" AS "WantedItemId"
-                FROM
-                    "WantedItems" AS wanted
-                WHERE
-                    wanted."Id" = ANY(@WantedItemIds)
-                    AND NOT wanted."IsPaused"
-                    AND wanted."NextSearchAt" > greatest(@Now, wanted."LastSearchedAt" + interval '1 minute' * @GapMinutes)
-                ORDER BY
-                    wanted."Id";
-                """;
-            waiting.Parameters.Add(data);
-            var changing = await ctx.ReadSql.ReadListAsync<WantedItemParameters>(waiting, ct);
-            if (changing.Count == 0)
-            {
-                return changing;
-            }
-
-            var sql = new SqlStatement();
-            sql.Statement =
-                """
-                UPDATE
-                    "WantedItems" AS wanted
-                SET
-                    "NextSearchAt" = greatest(@Now, wanted."LastSearchedAt" + interval '1 minute' * @GapMinutes),
-                    "LastOutcomeKey" = @OutcomeKey
-                WHERE
-                    wanted."Id" = ANY(@WantedItemIds);
-                """;
-            sql.Parameters.Add(new FeedDueData([.. changing.Select(item => item.WantedItemId)], data.OutcomeKey, data.Now, data.GapMinutes));
-            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
-            return changing;
-        }
-
-        // The first moment after now at which a missing episode or movie of the target has had its release day: the search of that day, when the feed found nothing.
-        // A release comes out during the day, so the search waits until the day is over (the day's end in UTC and six hours more).
-        public static async Task<DateTime?> ReadNextReleaseDayAsync(this LogicContext ctx, WantedReleaseDayData data, CancellationToken ct)
-        {
-            var sql = new SqlStatement();
-            sql.Statement =
-                """
-                SELECT
-                    min(upcoming."SearchAt") AS "SearchAt"
-                FROM
-                    (
-                        SELECT
-                            (unit."ReleasedOn"::timestamp AT TIME ZONE 'UTC') + interval '30 hours' AS "SearchAt"
-                        FROM
-                            "WantedItems" AS wanted
-                            JOIN "WorkUnits" AS unit ON unit."WorkId" = wanted."WorkId"
-                        WHERE
-                            wanted."Id" = @WantedItemId
-                            AND unit."WorkUnitTypeId" = 2
-                            AND unit."IsMonitored"
-                            AND unit."ReleasedOn" IS NOT NULL
-                            AND NOT EXISTS (
-                                SELECT
-                                    1
-                                FROM
-                                    "MediaAssets" AS asset
-                                    JOIN "StoredFiles" AS available ON available."MediaAssetId" = asset."Id" AND available."MissingSince" IS NULL
-                                WHERE
-                                    asset."WorkUnitId" = unit."Id"
-                            )
-                        UNION ALL
-                        SELECT
-                            (work."ReleasedOn"::timestamp AT TIME ZONE 'UTC') + interval '30 hours'
-                        FROM
-                            "WantedItems" AS wanted
-                            JOIN "Works" AS work ON work."Id" = wanted."WorkId"
-                        WHERE
-                            wanted."Id" = @WantedItemId
-                            AND work."MediaTypeId" = 1
-                            AND work."ReleasedOn" IS NOT NULL
-                            AND NOT EXISTS (
-                                SELECT
-                                    1
-                                FROM
-                                    "MediaAssets" AS asset
-                                    JOIN "StoredFiles" AS available ON available."MediaAssetId" = asset."Id" AND available."MissingSince" IS NULL
-                                WHERE
-                                    asset."WorkId" = work."Id"
-                            )
-                    ) AS upcoming
-                WHERE
-                    upcoming."SearchAt" > @Now;
-                """;
-            sql.Parameters.Add(data);
-            return await ctx.ReadSql.ExecuteScalarAsync(sql, ct) is DateTime at ? DateTime.SpecifyKind(at, DateTimeKind.Utc) : null;
         }
     }
 }

@@ -47,6 +47,9 @@ namespace Jularr.Backend.Logic.Acquisition
                     connection."ProtectedPassword",
                     connection."MediaTypeIds",
                     connection."SearchesAutomatically",
+                    connection."ReadsFeed",
+                    connection."SearchesInteractively",
+                    connection."SearchIntervalHours",
                     connection."QueryLimit",
                     connection."GrabLimit",
                     CASE WHEN connection."CountedOn" = current_date THEN connection."QueryCount" ELSE 0 END AS "QueryCount",
@@ -94,6 +97,9 @@ namespace Jularr.Backend.Logic.Acquisition
                     connection."ProtectedPassword",
                     connection."MediaTypeIds",
                     connection."SearchesAutomatically",
+                    connection."ReadsFeed",
+                    connection."SearchesInteractively",
+                    connection."SearchIntervalHours",
                     connection."QueryLimit",
                     connection."GrabLimit",
                     CASE WHEN connection."CountedOn" = current_date THEN connection."QueryCount" ELSE 0 END AS "QueryCount",
@@ -113,13 +119,35 @@ namespace Jularr.Backend.Logic.Acquisition
             return ctx.ReadSql.ReadListAsync<AcquisitionConnectionData>(sql, ct);
         }
 
-        // An indexer serves its media types, and automatic searches only when it is not manual-only.
+        // A source serves its media types; as Sonarr's indexer flags, an automatic search asks only the sources that search automatically, a person's search only the interactive ones.
         public static bool Serves(AcquisitionConnectionData indexer, MediaType mediaType, bool automatic) =>
-            (indexer.MediaTypeIds.Length == 0 || indexer.MediaTypeIds.Contains((int)mediaType)) && (!automatic || indexer.SearchesAutomatically);
+            (indexer.MediaTypeIds.Length == 0 || indexer.MediaTypeIds.Contains((int)mediaType)) && (automatic ? indexer.SearchesAutomatically : indexer.SearchesInteractively);
 
-        // A Newznab indexer has a recent feed for the video it serves; the feed is read for movies and series (anime among them) and never for manual-only indexers.
+        // The media types an indexer's recent feed (RSS) is read and judged for.
+        public static readonly MediaType[] FeedMediaTypes = [MediaType.Movie, MediaType.Series, MediaType.Book, MediaType.Music];
+
+        // A Newznab indexer with its feed on covers what it serves of those types: its new releases are judged and grabbed as they come, so it is never searched on a rhythm.
         public static bool HasFeed(AcquisitionConnectionData indexer, MediaType mediaType) =>
-            indexer.AcquisitionConnectionTypeId == AcquisitionConnectionType.Newznab && mediaType is MediaType.Movie or MediaType.Series && Serves(indexer, mediaType, true);
+            indexer.AcquisitionConnectionTypeId == AcquisitionConnectionType.Newznab && indexer.ReadsFeed && FeedMediaTypes.Contains(mediaType)
+            && (indexer.MediaTypeIds.Length == 0 || indexer.MediaTypeIds.Contains((int)mediaType));
+
+        // A feed is read within the indexer's daily limits and outside its backoff.
+        public static bool CanReadFeed(AcquisitionConnectionData indexer, DateTime now) =>
+            HasQueries(indexer, 0) && (indexer.RetryAt is null || indexer.RetryAt <= now) && (indexer.GrabLimit is null || indexer.GrabCount < indexer.GrabLimit);
+
+        // A source without a feed searches a wanted title on its own rhythm: once in every period of its interval, at a moment the title's number places within the period,
+        // so the titles spread over it. Returns whether such a moment lies after the last search and not after now.
+        public static bool IsPeriodicDue(AcquisitionConnectionData source, long wantedItemId, DateTime? lastSearchedAt, DateTime now) =>
+            lastSearchedAt is not { } last || NextPeriodicSearch(source, wantedItemId, last) <= now;
+
+        // The first moment of the source's rhythm for this title after the given time.
+        public static DateTime NextPeriodicSearch(AcquisitionConnectionData source, long wantedItemId, DateTime after)
+        {
+            var period = TimeSpan.FromHours(source.SearchIntervalHours).Ticks;
+            var offset = (wantedItemId * 7919 % (source.SearchIntervalHours * 60L) + source.SearchIntervalHours * 60L) % (source.SearchIntervalHours * 60L) * TimeSpan.TicksPerMinute;
+            var ticks = after.Ticks - offset;
+            return new DateTime((ticks / period + 1) * period + offset, DateTimeKind.Utc);
+        }
 
         // Queries left today after the ones a search already used; only a limit the Owner set applies.
         public static bool HasQueries(AcquisitionConnectionData indexer, int used) => indexer.QueryLimit is not { } limit || indexer.QueryCount + used < limit;
@@ -296,10 +324,10 @@ namespace Jularr.Backend.Logic.Acquisition
                 """
                 INSERT INTO
                     "AcquisitionConnections" ("Name", "AcquisitionConnectionTypeId", "BaseUrl", "Host", "Port", "UseSsl", "ProtectedApiKey", "IsEnabled", "Priority", "Categories",
-                        "DownloadCategory", "RemovesCompleted", "RemovesFailed", "RemotePath", "LocalPath", "IncompleteRemotePath", "IncompleteLocalPath", "DownloadStorageMountId", "Username", "MaxConnections", "ProtectedPassword", "MediaTypeIds", "SearchesAutomatically", "QueryLimit", "GrabLimit")
+                        "DownloadCategory", "RemovesCompleted", "RemovesFailed", "RemotePath", "LocalPath", "IncompleteRemotePath", "IncompleteLocalPath", "DownloadStorageMountId", "Username", "MaxConnections", "ProtectedPassword", "MediaTypeIds", "SearchesAutomatically", "QueryLimit", "GrabLimit", "ReadsFeed", "SearchesInteractively", "SearchIntervalHours")
                 VALUES
                     (@Name, @AcquisitionConnectionTypeId, @BaseUrl, @Host, @Port, @UseSsl, @ProtectedApiKey, @IsEnabled, @Priority, @Categories, @DownloadCategory, @RemovesCompleted, @RemovesFailed, @RemotePath,
-                        @LocalPath, @IncompleteRemotePath, @IncompleteLocalPath, @DownloadStorageMountId, @Username, @MaxConnections, @ProtectedPassword, @MediaTypeIds, @SearchesAutomatically, @QueryLimit, @GrabLimit)
+                        @LocalPath, @IncompleteRemotePath, @IncompleteLocalPath, @DownloadStorageMountId, @Username, @MaxConnections, @ProtectedPassword, @MediaTypeIds, @SearchesAutomatically, @QueryLimit, @GrabLimit, @ReadsFeed, @SearchesInteractively, @SearchIntervalHours)
                 RETURNING
                     "Id";
                 """;
@@ -352,6 +380,9 @@ namespace Jularr.Backend.Logic.Acquisition
                     "MaxConnections" = @MaxConnections,
                     "MediaTypeIds" = @MediaTypeIds,
                     "SearchesAutomatically" = @SearchesAutomatically,
+                    "ReadsFeed" = @ReadsFeed,
+                    "SearchesInteractively" = @SearchesInteractively,
+                    "SearchIntervalHours" = @SearchIntervalHours,
                     "QueryLimit" = @QueryLimit,
                     "GrabLimit" = @GrabLimit,
                     "FailureCount" = 0,

@@ -12,45 +12,45 @@ using Microsoft.Extensions.Logging;
 
 namespace Jularr.Backend.Service.Admin.Wanted.V1
 {
-    // The recent feed (RSS) of the Newznab indexers: one request per indexer asks for the newest movie and series releases. The feed only triggers: a release
-    // that is new and about a wanted target makes that target due, and the targeted search and its selection decide, as for any search.
+    // The recent feed (RSS) of the Newznab indexers, as Sonarr's RSS sync: one request per indexer asks for the newest releases of every media type it serves with a feed.
+    // A new release about a wanted title is judged by that title's selection, as a search's release would be, and the best one is grabbed at once; no search follows.
     internal sealed class FeedSync
     {
         private const int PageLimit = 100;
         private const int MaximumPages = 3;
         private const int TargetBatch = 500;
 
-        // A feed shows the same title often (every release of an episode); a target is searched at most this often because of it.
-        internal const int SearchGapMinutes = 60;
-        internal const string OutcomeKey = "feed_release";
         internal static readonly TimeSpan Retention = TimeSpan.FromDays(14);
         private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(60);
 
         private readonly NewznabClient _newznab;
+        private readonly WantedAcquisition _acquisition;
         private readonly IDataProtector _protector;
         private readonly TimeProvider _time;
         private readonly ILogger<FeedSync> _logger;
 
-        public FeedSync(NewznabClient newznab, IDataProtectionProvider protection, TimeProvider time, ILogger<FeedSync> logger)
+        public FeedSync(NewznabClient newznab, WantedAcquisition acquisition, IDataProtectionProvider protection, TimeProvider time, ILogger<FeedSync> logger)
         {
             _newznab = newznab;
+            _acquisition = acquisition;
             _protector = protection.CreateProtector(AcquisitionConnectionInput.ProtectorPurpose);
             _time = time;
             _logger = logger;
         }
 
-        // Returns how many wanted targets became due.
+        // Returns how many releases were grabbed.
         public async Task<int> RunAsync(LogicContext context, CancellationToken ct)
         {
             var now = _time.GetUtcNow().UtcDateTime;
-            var connections = await context.ExecuteBatchAsync((ctx, token) => ctx.ReadEnabledConnectionsAsync(AcquisitionConnectionRole.Search, token), ct);
-            var due = new Dictionary<long, (string Indexer, string Release)>();
+            var (connections, clients) = await context.ExecuteBatchAsync(async (ctx, token) =>
+                (await ctx.ReadEnabledConnectionsAsync(AcquisitionConnectionRole.Search, token), await ctx.ReadEnabledConnectionsAsync(AcquisitionConnectionRole.Download, token)), ct);
+            var found = new Dictionary<long, List<ReleaseOffer>>();
             IReadOnlyList<FeedTargetData>? targets = null;
             foreach (var indexer in connections)
             {
-                // Limits and the backoff count as for a search; manual-only indexers are left out.
-                var types = new[] { MediaType.Movie, MediaType.Series }.Where(type => AcquisitionConnectionLogic.HasFeed(indexer, type) && AcquisitionConnectionLogic.CanSearch(indexer, type, true, now)).ToArray();
-                if (types.Length == 0 || ReadCategories(indexer, types) is not { Length: > 0 } categories)
+                // The daily limits and the backoff count as for a search; the feed is the indexer's own flag, apart from its automatic searches.
+                var types = AcquisitionConnectionLogic.FeedMediaTypes.Where(type => AcquisitionConnectionLogic.HasFeed(indexer, type)).ToArray();
+                if (types.Length == 0 || !AcquisitionConnectionLogic.CanReadFeed(indexer, now) || ReadCategories(indexer, types) is not { Length: > 0 } categories)
                 {
                     continue;
                 }
@@ -62,26 +62,43 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                 }
 
                 targets ??= await ReadTargetsAsync(context, now, ct);
-                foreach (var item in read.Fresh)
+                foreach (var item in read.Fresh.Where(item => item.DownloadUri is not null))
                 {
                     var entry = new FeedEntry(item.Title, item.Category, item.TvdbId, item.TmdbId, item.ImdbId);
-                    foreach (var target in FeedMatcher.Match(entry, targets).Where(target => types.Contains(target.MediaTypeId)))
+                    foreach (var (target, viaId) in FeedMatcher.Match(entry, targets).Where(match => types.Contains(match.Target.MediaTypeId)))
                     {
-                        due.TryAdd(target.WantedItemId, (indexer.Name, item.Title));
+                        if (!found.TryGetValue(target.WantedItemId, out var offers))
+                        {
+                            found[target.WantedItemId] = offers = [];
+                        }
+
+                        offers.Add(new ReleaseOffer(item.Title, indexer.Id, indexer.Name, indexer.Priority, item.Guid, item.DownloadUri, item.InfoUrl, item.SizeBytes, item.PublishedAt,
+                            viaId ? ["feed", "id"] : ["feed"]) { IndexerFlags = item.IndexerFlags });
                     }
                 }
             }
 
-            var changed = 0;
-            foreach (var batch in due.Keys.Order().Chunk(TargetBatch))
+            // Every indexer's releases of a title are judged together, so the best of them is taken; a title that fails does not cost the others their releases (they are seen already).
+            var grabbed = 0;
+            foreach (var (wantedItemId, offers) in found.OrderBy(pair => pair.Key))
             {
-                var made = await context.ExecuteBatchAsync((ctx, token) => ctx.MakeWantedDueAsync(new FeedDueData(batch, OutcomeKey, now, SearchGapMinutes), token), ct);
-                foreach (var target in made)
+                IReadOnlyList<string> taken;
+                try
                 {
-                    var (indexer, release) = due[target.WantedItemId];
-                    _logger.LogInformation("The feed of {Indexer} showed \"{Release}\"; wanted target {WantedItemId} is searched now.", indexer, release.Length <= 200 ? release : release[..200], target.WantedItemId);
-                    changed++;
+                    taken = await _acquisition.TakeFromFeedAsync(context, wantedItemId, offers, clients, ct);
                 }
+                catch (Exception exception) when (!ct.IsCancellationRequested)
+                {
+                    _logger.LogWarning(exception, "The feed releases of wanted target {WantedItemId} could not be judged.", wantedItemId);
+                    continue;
+                }
+
+                foreach (var title in taken)
+                {
+                    _logger.LogInformation("The feed showed \"{Release}\"; wanted target {WantedItemId} grabbed it.", title.Length <= 200 ? title : title[..200], wantedItemId);
+                }
+
+                grabbed += taken.Count;
             }
 
             await context.ExecuteBatchAsync(async (ctx, token) =>
@@ -89,20 +106,26 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                 await ctx.DeleteOldFeedReleasesAsync(new FeedRetentionData(now - Retention), token);
                 return true;
             }, ct);
-            return changed;
+            return grabbed;
         }
 
-        // The categories of the video the indexer serves, within what it offers.
+        // The categories of the media types the indexer serves with its feed, within what it offers.
         private static int[] ReadCategories(AcquisitionConnectionData indexer, IEnumerable<MediaType> types)
         {
             var capabilities = WantedAcquisition.ReadCapabilities(indexer);
-            return [.. types.SelectMany(type => AcquisitionSelectionLogic.ReadCategories(type == MediaType.Movie ? AcquisitionKind.Movie : AcquisitionKind.Tv, indexer.Categories, capabilities)).Distinct()];
+            return [.. types.Select(type => type switch
+            {
+                MediaType.Movie => AcquisitionKind.Movie,
+                MediaType.Series => AcquisitionKind.Tv,
+                MediaType.Music => AcquisitionKind.Music,
+                _ => AcquisitionKind.Book
+            }).SelectMany(kind => AcquisitionSelectionLogic.ReadCategories(kind, indexer.Categories, capabilities)).Distinct()];
         }
 
-        // Every target that is wanted at some time: the ones due now and the ones waiting for their search.
+        // Every wanted title, whatever its next search: missing, below its cutoff or lacking a language.
         private static async Task<IReadOnlyList<FeedTargetData>> ReadTargetsAsync(LogicContext context, DateTime now, CancellationToken ct)
         {
-            var ids = await context.ExecuteBatchAsync((ctx, token) => ctx.ReadDueWantedItemsAsync(new WantedDueData(now.AddYears(100), int.MaxValue), token), ct);
+            var ids = await context.ExecuteBatchAsync((ctx, token) => ctx.ReadDueWantedItemsAsync(new WantedDueData(now, int.MaxValue, anyTime: true), token), ct);
             var targets = new List<FeedTargetData>();
             foreach (var batch in ids.Select(item => item.WantedItemId).Chunk(TargetBatch))
             {

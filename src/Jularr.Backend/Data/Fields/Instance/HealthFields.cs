@@ -15,6 +15,7 @@ namespace Jularr.Backend.Data.Fields.Instance
         public static readonly StringField Name = new() { MaximumLength = 200, Required = false };
         public static readonly StringField ErrorKey = new(NpgsqlDbType.Varchar) { MaximumLength = 64, Required = false };
         public static readonly DateTimeField CheckedAt = new() { Required = false };
+        public static readonly DateTimeField PausedUntil = new() { Required = false };
         public static readonly BoolField IsStable = new();
 
         // What the check reads of the configuration.

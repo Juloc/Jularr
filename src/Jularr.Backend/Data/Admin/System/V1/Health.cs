@@ -35,8 +35,9 @@ namespace Jularr.Backend.Data.Admin.System.V1
     // One checked service. A name tells several of a kind apart; the error key names why it did not answer.
     public sealed class HealthServiceV1 : BaseResponse
     {
-        public HealthServiceV1(HealthServiceType healthServiceTypeId, string key, string? name, HealthStateType healthStateTypeId, string? errorKey, DateTime? checkedAt)
+        public HealthServiceV1(HealthServiceType healthServiceTypeId, string key, string? name, HealthStateType healthStateTypeId, string? errorKey, DateTime? checkedAt, DateTime? pausedUntil = null)
         {
+            PausedUntil = pausedUntil;
             HealthServiceTypeId = healthServiceTypeId;
             Key = key;
             Name = name;
@@ -62,5 +63,9 @@ namespace Jularr.Backend.Data.Admin.System.V1
 
         [DataField(typeof(HealthFields), nameof(HealthFields.CheckedAt))]
         public DateTime? CheckedAt { get; }
+
+        // Until when a paused indexer rests.
+        [DataField(typeof(HealthFields), nameof(HealthFields.PausedUntil))]
+        public DateTime? PausedUntil { get; }
     }
 }
