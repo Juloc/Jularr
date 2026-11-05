@@ -35,7 +35,7 @@ namespace Jularr.Integrations.Data.Browser
     // What the browser is and what it did last.
     internal sealed class SourceBrowserStatus
     {
-        public SourceBrowserStatus(string? path, string? remoteAddress, string profilePath, bool isRunning, string? version, string? lastUrl, string? lastOutcome, string? lastError, DateTime? lastAttemptAt, int eventCount)
+        public SourceBrowserStatus(string? path, string? remoteAddress, string profilePath, bool isRunning, string? version, string? lastUrl, string? lastOutcome, string? lastError, DateTime? lastAttemptAt, int eventCount, string? display = null)
         {
             Path = path;
             RemoteAddress = remoteAddress;
@@ -47,6 +47,7 @@ namespace Jularr.Integrations.Data.Browser
             LastError = lastError;
             LastAttemptAt = lastAttemptAt;
             EventCount = eventCount;
+            Display = display;
         }
 
         public string? Path { get; }
@@ -59,6 +60,9 @@ namespace Jularr.Integrations.Data.Browser
         public string? LastError { get; }
         public DateTime? LastAttemptAt { get; }
         public int EventCount { get; }
+
+        // How the running browser draws its pages: "virtual" on Xvfb, "headless" without a display, null on a display of the host's own.
+        public string? Display { get; }
     }
 
     // One thing the browser did.

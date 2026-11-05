@@ -31,7 +31,7 @@ namespace Jularr.Backend.Data.Admin.Browser.V1
     {
         public BrowserStatusV1(string? path, string? remoteAddress, string profilePath, bool isAvailable, bool isRunning, string? version, string? lastUrl, string? lastOutcome, string? lastError,
             DateTime? lastAttemptAt, PageResult<BrowserEventV1> events, string installationState = "disabled", string? installationError = null,
-            long downloadedBytes = 0, long totalBytes = 0, string? installedVersion = null, long managedSizeBytes = 0, BrowserViewV1? manualView = null)
+            long downloadedBytes = 0, long totalBytes = 0, string? installedVersion = null, long managedSizeBytes = 0, BrowserViewV1? manualView = null, string? display = null)
         {
             Path = path;
             RemoteAddress = remoteAddress;
@@ -51,6 +51,7 @@ namespace Jularr.Backend.Data.Admin.Browser.V1
             InstalledVersion = installedVersion;
             ManagedSizeBytes = managedSizeBytes;
             ManualView = manualView;
+            Display = display;
         }
 
         [DataField(typeof(BrowserFields), nameof(BrowserFields.InstallationState))]
@@ -88,6 +89,9 @@ namespace Jularr.Backend.Data.Admin.Browser.V1
 
         [DataField(typeof(BrowserFields), nameof(BrowserFields.Version), false)]
         public string? Version { get; }
+
+        [DataField(typeof(BrowserFields), nameof(BrowserFields.Display), false)]
+        public string? Display { get; }
 
         [DataField(typeof(BrowserFields), nameof(BrowserFields.LastUrl), false)]
         public string? LastUrl { get; }
