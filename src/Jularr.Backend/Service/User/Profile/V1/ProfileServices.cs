@@ -42,6 +42,7 @@ namespace Jularr.Backend.Service.User.Profile.V1
                     profile."UiLocaleId",
                     profile."FirstContentLanguage",
                     profile."SecondContentLanguage",
+                    profile."LanguageUsesOriginal",
                     profile."AccentHex",
                     (profile."PinHash" IS NOT NULL) AS "HasPin",
                     coalesce(preference."AutoplayPreviews", TRUE) AS "AutoplayPreviews",

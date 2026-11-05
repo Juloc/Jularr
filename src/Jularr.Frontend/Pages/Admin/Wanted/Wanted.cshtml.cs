@@ -126,7 +126,10 @@ namespace Jularr.Frontend.Pages.Admin.Wanted
                 select: manage ? ListIdentity.Select("wantedItemIds", item.Id.ToString(CultureInfo.InvariantCulture), BulkForm, "wanted.select") : null);
             var languages = string.Join(", ", item.RequestedLanguages);
             var searched = item.LastSearchedAt;
-            var row = new ListRow([identity, State(item), Priority(item), languages.Length > 0 ? new Span(new Truncated(languages)).Class("list-value list-value--fill") : Dim(),
+
+            IUiComponent languageCell = languages.Length > 0 ? new Span(new Truncated(languages)).Class("list-value list-value--fill") : Dim();
+
+            var row = new ListRow([identity, State(item), Priority(item), languageCell,
                 searched is { } searchedAt ? new Span(new LocalTime(searchedAt)).Class("list-value") : Dim(), Actions(item, acquire, manage, pageNumber, csrf)],
                 [.. item.WantedPriorityTypeId == WantedPriorityType.High ? new[] { ListPanel.Fact("wanted.priority", Priority(item)) } : Array.Empty<IUiComponent>(), ListPanel.Fact("wanted.lastSearch", searched is { } lastSearchedAt ? new LocalTime(lastSearchedAt) : new ValueText("–"), Glyph("clock", 14))]);
             if (item.IsPaused) row.Tinted(UiTone.Warning);

@@ -31,7 +31,7 @@ namespace Jularr.Frontend.Pages.Admin.Work
 
     // One page per title: films and series are managed here, with their seasons, files, searches and history; other types still show their metadata.
     public sealed partial class WorkModel(ReadWorkV1 read, UpdateWorkV1 update, UpdateWorkFranchiseV1 updateFranchise, RefreshWorkMetadataV1 refresh, ReadWorkUnitGroupsV1 readGroups, CreateWorkUnitGroupV1 createGroup,
-        DeleteWorkUnitGroupV1 deleteGroup, SearchMetadataV1 search, RematchWorkV1 rematch, ReadWorkManagementV1 readManagement, ReadWantedItemV1 readWanted, UpdateWantedV1 updateWanted, StartWorkMonitoringV1 startMonitoring, UpdateWantedUnitV1 updateUnit,
+        DeleteWorkUnitGroupV1 deleteGroup, SearchMetadataV1 search, RematchWorkV1 rematch, ReadWorkManagementV1 readManagement, ReadWantedItemV1 readWanted, UpdateWantedV1 updateWanted, ReadWantedLanguagesV1 readLanguages, SaveWantedLanguagesV1 saveLanguages, StartWorkMonitoringV1 startMonitoring, UpdateWantedUnitV1 updateUnit,
         SearchWantedAutomaticallyV1 automatic, QueueWorksSearchV1 queueSearch, ReadWantedReleasesV1 readReleases, MarkWantedReleaseV1 markRelease, ReadActivityEventsV1 readEvents, ReadAcquisitionProfilesV1 profiles, ReadWantedLibrariesV1 libraries,
         ReadAcquisitionTagsV1 tags, ReadAcquisitionTagV1 tag, DeleteLibraryFilesV1 deleteFiles, DeleteDocumentTranslationV1 deleteTranslation, DeleteWorkV1 deleteWork, UpdateWorkEditionV1 updateEdition, UpdateLibraryFileFactsV1 updateFacts, ReadLibraryRenamesV1 readRenames, ApplyLibraryRenamesV1 applyRenames, FrontendAssets assets,
         IAntiforgery antiforgery, UiText texts) : JularrPage
@@ -45,6 +45,8 @@ namespace Jularr.Frontend.Pages.Admin.Work
         private CreateWorkUnitGroupDataV1? _groupInput;
         private WorkManagementV1? _management;
         private WantedDetailsV1? _wanted;
+        private WantedLanguagesV1? _languages;
+        private SaveWantedLanguagesDataV1? _languagesInput;
         private PageResult<ActivityEventV1>? _events;
         private IReadOnlyList<WantedReleaseV1> _releases = [];
         private IReadOnlyList<AcquisitionProfileDetailsV1> _profiles = [];
@@ -185,6 +187,14 @@ namespace Jularr.Frontend.Pages.Admin.Work
             return LocalRedirect(Address(Tab));
         }
 
+        // The title's own languages: no first language gives the title back to its requests and the setting for monitored titles.
+        public async Task<IActionResult> OnPostLanguagesAsync(string? firstLanguage, string? secondLanguage, bool usesOriginal)
+        {
+            _languagesInput = new SaveWantedLanguagesDataV1(string.IsNullOrWhiteSpace(firstLanguage) ? null : firstLanguage, string.IsNullOrWhiteSpace(secondLanguage) ? null : secondLanguage, usesOriginal);
+            await saveLanguages.ExecuteAsync<UpdateResult>(new WantedItemParametersV1(await WantedItemIdAsync()), _languagesInput, HttpContext.RequestAborted);
+            return LocalRedirect(Address(Tab));
+        }
+
         public async Task<IActionResult> OnPostAutomaticAsync(int? parentUnitNumber, int? unitNumber, long? wantedItemId, string? language)
         {
             // Searching a whole title can take minutes (sources, browser): it runs as a search run with progress, like Search all, and the click returns at once.
@@ -308,6 +318,7 @@ namespace Jularr.Frontend.Pages.Admin.Work
             if (texts.CanManageWanted() && _management.WantedItemId is { } wantedItemId)
             {
                 _wanted = await readWanted.ExecuteAsync<WantedDetailsV1>(new WantedItemParametersV1(wantedItemId), ct);
+                if (_work is { MediaTypeId: MediaType.Book, MediaSubtypeId: not MediaSubtype.Manga }) _languages = await readLanguages.ExecuteAsync<WantedLanguagesV1>(new WantedItemParametersV1(wantedItemId), ct);
                 if (Tab == WorkTab.History) _releases = await readReleases.ExecuteAsync<BaseDataList<WantedReleaseV1>>(new WantedItemParametersV1(wantedItemId), ct);
                 if (CanAcquire)
                 {

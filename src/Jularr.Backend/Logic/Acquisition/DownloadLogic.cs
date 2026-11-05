@@ -186,6 +186,16 @@ namespace Jularr.Backend.Logic.Acquisition
                     ) AS "MissingLanguages",
                     ARRAY(
                         SELECT
+                            chain."FirstLanguage" || '|' || coalesce(chain."SecondLanguage", '') || '|' || CASE WHEN chain."UsesOriginal" THEN '1' ELSE '0' END
+                        FROM
+                            "WantedItemChains" AS chain
+                        WHERE
+                            chain."WantedItemId" = wanted."Id"
+                        ORDER BY
+                            chain."Position"
+                    ) AS "LanguageChains",
+                    ARRAY(
+                        SELECT
                             lower(edition."LanguageCode") || '|' || edition."Title"
                         FROM
                             "WorkEditions" AS edition

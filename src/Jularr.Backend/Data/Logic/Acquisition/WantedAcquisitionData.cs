@@ -45,8 +45,9 @@ namespace Jularr.Backend.Data.Logic.Acquisition
             string[] requestedLocales, string? author, string? platformAbbreviation, int? platformIgdbId, string? installedFiles = null,
             string[]? editionTitles = null, string[]? isbns = null, string? originalLanguage = null, string? formats = null, string? qualitySizes = null,
             int? runtimeMinutes = null, string? releaseProfiles = null, string[]? monitoredEditionLanguages = null, string[]? unmonitoredEditionLanguages = null,
-            string? releaseGroupRatings = null, string[]? languageTitles = null, string[]? wantedLanguages = null, string[]? missingLanguages = null)
+            string? releaseGroupRatings = null, string[]? languageTitles = null, string[]? wantedLanguages = null, string[]? missingLanguages = null, string[]? languageChains = null)
         {
+            LanguageChains = languageChains ?? [];
             WantedLanguages = wantedLanguages ?? [];
             MissingLanguages = missingLanguages ?? [];
             LanguageTitles = languageTitles ?? [];
@@ -163,6 +164,10 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
         [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.MissingLanguages))]
         public string[] MissingLanguages { get; }
+
+        // The language chains of the target, "first|second|1" (the second may be empty; 1 when the original language is allowed), in the order of their first languages.
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.LanguageChains))]
+        public string[] LanguageChains { get; }
 
         // The titles the Work is known by in a language, "language|title": its editions, its localized titles and its original title in the original language.
         [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.LanguageTitles))]

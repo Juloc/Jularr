@@ -106,10 +106,8 @@ namespace Jularr.Frontend.Pages.Admin.Profile
                 }
                 fields.Section("profile.section.languages", section =>
                 {
-                    section.Text(item => item.LanguageOrder, "profile.languageOrder");
-                    section.Select(item => item.LanguageFallback, "profile.languageFallback",
-                        Enum.GetValues<LanguageFallbackType>().Select(fallback => new SelectOption(((byte)fallback).ToString(CultureInfo.InvariantCulture),
-                            texts["profile.languageFallback." + fallback])));
+                    // A profile holds qualities only: the languages are the people's (Settings) and, for titles nobody requested, the setting of the profiles page.
+                    section.Content(new P(new Text("profile.languages.moved")));
                 });
                 fields.Section("arr.releaseGroups", section =>
                 {

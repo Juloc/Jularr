@@ -183,7 +183,8 @@ namespace Jularr.Backend.Logic.Profile
                     profile."DisplayName",
                     profile."UiLocaleId",
                     profile."FirstContentLanguage",
-                    profile."SecondContentLanguage"
+                    profile."SecondContentLanguage",
+                    profile."LanguageUsesOriginal"
                 FROM
                     "Profiles" AS profile
                 WHERE
@@ -235,6 +236,7 @@ namespace Jularr.Backend.Logic.Profile
                     "UiLocaleId" = @UiLocaleId,
                     "FirstContentLanguage" = @FirstContentLanguage,
                     "SecondContentLanguage" = @SecondContentLanguage,
+                    "LanguageUsesOriginal" = @LanguageUsesOriginal,
                     "UpdatedAt" = now()
                 WHERE
                     profile."Id" = @Id;
