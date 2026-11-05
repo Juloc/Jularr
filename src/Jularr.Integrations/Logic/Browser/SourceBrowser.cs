@@ -48,6 +48,8 @@ namespace Jularr.Integrations.Logic.Browser
         private readonly List<SourceBrowserEvent> _events = [];
         private readonly Lock _eventsLock = new();
         private Process? _process;
+        private VirtualDisplay? _display;
+        private string? _displayMode;
         private DevToolsClient? _client;
         private bool _refused;
         private string? _version;
@@ -75,7 +77,7 @@ namespace Jularr.Integrations.Logic.Browser
 
         public bool IsAvailable => (_packages?.Enabled ?? true) && (BrowserPath is not null || !string.IsNullOrWhiteSpace(_options.RemoteAddress));
 
-        public SourceBrowserStatus Status => new(BrowserPath, _options.RemoteAddress, _profile, _client is not null, _version, _lastUrl, _lastOutcome, _lastError, _lastAttemptAt, Events.Count);
+        public SourceBrowserStatus Status => new(BrowserPath, _options.RemoteAddress, _profile, _client is not null, _version, _lastUrl, _lastOutcome, _lastError, _lastAttemptAt, Events.Count, _client is null ? null : _displayMode);
 
         public IReadOnlyList<SourceBrowserEvent> Events
         {
@@ -519,6 +521,9 @@ namespace Jularr.Integrations.Logic.Browser
                     // The browser is already gone.
                 }
             }
+
+            _display?.Dispose();
+            _display = null;
         }
 
         private async Task CloseAsync()
@@ -549,6 +554,10 @@ namespace Jularr.Integrations.Logic.Browser
             {
                 // The browser is already gone.
             }
+
+            // The display goes after the browser, which flushes its cookies while it still has one.
+            _display?.Dispose();
+            _display = null;
         }
 
         // The browser starts on the first use and keeps its profile, so the source's check is passed once.
@@ -603,20 +612,26 @@ namespace Jularr.Integrations.Logic.Browser
                 _egress.Start();
                 arguments += $" --proxy-server=http://127.0.0.1:{_egress.Port} --proxy-bypass-list=\"<-loopback>\" --disable-quic --force-webrtc-ip-handling-policy=disable_non_proxied_udp";
             }
-            if (_packages is not null && executable == _packages.ExecutablePath)
-            {
-                // The optional managed package uses Linux headless mode and does not need a display server.
-                arguments += " --headless=new --disable-gpu";
-            }
             if (_options.NoSandbox)
             {
                 arguments += " --no-sandbox";
             }
 
+            // A Linux host without a display gets a virtual one, so the source sees an ordinary browser.
+            // Without Xvfb the browser runs headless; test fixtures keep the browser they name.
+            var headless = _packages is not null && executable == _packages.ExecutablePath;
+            if (OperatingSystem.IsLinux() && !_options.AllowPrivateAddressesForTests && string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DISPLAY")))
+            {
+                _display ??= await VirtualDisplay.StartAsync(Executables.Resolve(null, "Xvfb"), "/tmp", Path.Combine(_profile, VirtualDisplay.RecordFile), ct);
+                headless = _display is null;
+                Note("display", _display is null ? "Xvfb is missing or did not start; the browser runs headless" : $"the browser draws on the virtual display {_display.Name}");
+            }
+            _displayMode = _display is not null ? "virtual" : headless ? "headless" : null;
+
             // A browser that does not open its port may have met the remains of an earlier one; it is tried again.
             for (var attempt = 1; attempt <= 3; attempt++)
             {
-                _process = Process.Start(new ProcessStartInfo(executable) { UseShellExecute = false, Arguments = arguments });
+                _process = Process.Start(LaunchInfo(executable, arguments, _display?.Name, headless));
 
                 // The browser needs a moment before its first page counts.
                 await Task.Delay(StartMilliseconds, ct);
@@ -643,7 +658,23 @@ namespace Jularr.Integrations.Logic.Browser
 
             _egress?.Dispose();
             _egress = null;
+            _display?.Dispose();
+            _display = null;
             throw new SourceBrowserException("The browser did not open its debugging port.");
+        }
+
+        // The browser draws on the virtual display when there is one, else headless when asked.
+        // A virtual display has no graphics card; SwiftShader renders WebGL in software as an ordinary browser offers it.
+        internal static ProcessStartInfo LaunchInfo(string executable, string arguments, string? display, bool headless)
+        {
+            var start = new ProcessStartInfo(executable) { UseShellExecute = false, Arguments = headless ? arguments + " --headless=new --disable-gpu" : arguments };
+            if (display is not null)
+            {
+                start.Arguments += " --enable-unsafe-swiftshader";
+                start.Environment["DISPLAY"] = display;
+            }
+
+            return start;
         }
 
         // The browser that still runs with this profile answers on the port it was started with.

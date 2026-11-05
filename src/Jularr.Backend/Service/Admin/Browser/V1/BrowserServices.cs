@@ -33,7 +33,7 @@ namespace Jularr.Backend.Service.Admin.Browser.V1
             var status = _browser.Status;
             return new BrowserStatusV1(status.Path, status.RemoteAddress, status.ProfilePath, _browser.IsAvailable, status.IsRunning, status.Version,
                 status.LastUrl, status.LastOutcome, status.LastError, status.LastAttemptAt, new PageResult<BrowserEventV1>(Events(), 1, 50), _packages.State, _packages.Error, _packages.DownloadedBytes, _packages.TotalBytes,
-                _packages.InstalledVersion, _packages.ManagedSizeBytes, Auth.SessionPublicId is { } owner ? await _assistance.ReadOwnAsync(owner, CancellationToken) : null);
+                _packages.InstalledVersion, _packages.ManagedSizeBytes, Auth.SessionPublicId is { } owner ? await _assistance.ReadOwnAsync(owner, CancellationToken) : null, status.Display);
         }
 
         private BrowserEventV1[] Events() => [.. _browser.Events.Select(item => new BrowserEventV1(item.At, item.Kind, item.Message))];
@@ -66,13 +66,13 @@ namespace Jularr.Backend.Service.Admin.Browser.V1
             {
                 var status = _browser.Status;
                 return new BrowserStatusV1(status.Path, status.RemoteAddress, status.ProfilePath, _browser.IsAvailable, status.IsRunning, status.Version,
-                    status.LastUrl, status.LastOutcome, status.LastError, status.LastAttemptAt, new PageResult<BrowserEventV1>(Events(), 1, 50), _packages.State, _packages.Error, _packages.DownloadedBytes, _packages.TotalBytes, _packages.InstalledVersion, _packages.ManagedSizeBytes);
+                    status.LastUrl, status.LastOutcome, status.LastError, status.LastAttemptAt, new PageResult<BrowserEventV1>(Events(), 1, 50), _packages.State, _packages.Error, _packages.DownloadedBytes, _packages.TotalBytes, _packages.InstalledVersion, _packages.ManagedSizeBytes, display: status.Display);
             }
 
             await action;
             var state = _browser.Status;
             return new BrowserStatusV1(state.Path, state.RemoteAddress, state.ProfilePath, _browser.IsAvailable, state.IsRunning, state.Version,
-                state.LastUrl, state.LastOutcome, state.LastError, state.LastAttemptAt, new PageResult<BrowserEventV1>(Events(), 1, 50), _packages.State, _packages.Error, _packages.DownloadedBytes, _packages.TotalBytes, _packages.InstalledVersion, _packages.ManagedSizeBytes);
+                state.LastUrl, state.LastOutcome, state.LastError, state.LastAttemptAt, new PageResult<BrowserEventV1>(Events(), 1, 50), _packages.State, _packages.Error, _packages.DownloadedBytes, _packages.TotalBytes, _packages.InstalledVersion, _packages.ManagedSizeBytes, display: state.Display);
         }
 
         private async Task ActionAsync()

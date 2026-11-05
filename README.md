@@ -98,8 +98,16 @@ Der Installationsfortschritt und Fehler erscheinen unter `/Admin/Browser`; die
 Modulverwaltung prüft den Zustand ungefähr alle 30 Sekunden.
 
 Das Image enthält die benötigten Chrome-Laufzeitbibliotheken, einschließlich der
-`t64`-Paketnamen neuerer Ubuntu-Versionen. Die Image-CI prüft den verwalteten
+`t64`-Paketnamen neuerer Ubuntu-Versionen, und den virtuellen Bildschirm Xvfb. Die Image-CI prüft den verwalteten
 Chrome-Versionsstand als unprivilegierter Anwendungsbenutzer.
+
+Ohne eigenen Bildschirm (`DISPLAY`) startet Jularr unter Linux einen eigenen Xvfb
+(1280×900, 24 Bit) und darauf Chrome als normales Fenster, nicht headless, mit WebGL über
+SwiftShader statt Grafikkarte; Xvfb endet
+mit dem Browser, Reste nach einem Absturz räumt der nächste Start weg. Fehlt Xvfb oder
+startet er nicht, läuft Chrome wie bisher headless und das Ereignisprotokoll nennt den
+Grund. `/Admin/Browser` zeigt, ob der Browser „mit virtuellem Bildschirm“ oder
+„unsichtbar (headless)“ läuft.
 
 Beim Ausschalten wird die Browserbenutzung unterbunden und der eigene Prozess gestoppt.
 Jularr entfernt nur seine verwalteten Browserdateien, temporären Dateien, Cookies und

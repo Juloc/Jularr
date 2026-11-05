@@ -11285,6 +11285,18 @@
    "Installed version",
    "Installierte Version"
   ],
+  "admin.browser.display": [
+   "Display",
+   "Anzeige"
+  ],
+  "admin.browser.display.virtual": [
+   "with a virtual display",
+   "mit virtuellem Bildschirm"
+  ],
+  "admin.browser.display.headless": [
+   "invisible (headless)",
+   "unsichtbar (headless)"
+  ],
   "admin.browser.diskUsage": [
    "Managed storage",
    "Belegter Speicher"

@@ -49,6 +49,8 @@ namespace Jularr.Frontend.Pages.Admin.Browser
                     page.Content.Add(new P(new ValueText(browser.DownloadedBytes.ToString(CultureInfo.InvariantCulture)),
                         new ValueText(" / " + browser.TotalBytes.ToString(CultureInfo.InvariantCulture) + " bytes")));
                 }
+                if (browser.IsRunning && browser.Display is { } display)
+                    page.Content.Add(new P(new Text("admin.browser.display"), new ValueText(": "), new Text("admin.browser.display." + display)));
                 if (browser.InstalledVersion is { } packageVersion)
                     page.Content.Add(new P(new Text("admin.browser.version"), new ValueText(": " + packageVersion)));
                 if (browser.ManagedSizeBytes > 0)
