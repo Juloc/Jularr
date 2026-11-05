@@ -106,7 +106,7 @@ WITH sources AS (
     FROM "WantedItemLanguageChains" AS own
     UNION ALL
     SELECT target."WantedItemId", lower(split_part(locale."Locale", '-', 1))::varchar(2),
-        CASE WHEN requester."FirstContentLanguage" = lower(split_part(locale."Locale", '-', 1)) THEN requester."SecondContentLanguage" END,
+        (CASE WHEN requester."FirstContentLanguage" = lower(split_part(locale."Locale", '-', 1)) THEN requester."SecondContentLanguage" END)::varchar(2),
         coalesce(requester."LanguageUsesOriginal", TRUE), request."Id"
     FROM "RequestTargets" AS target
         JOIN "AcquisitionRequests" AS request ON request."Id" = target."AcquisitionRequestId" AND request."AcquisitionRequestStatusTypeId" BETWEEN 2 AND 6
