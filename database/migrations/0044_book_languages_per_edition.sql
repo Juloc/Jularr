@@ -3,6 +3,14 @@
 ALTER TABLE "AcquisitionReleases"
     ADD COLUMN IF NOT EXISTS "TargetLanguage" varchar(2) NULL CHECK ("TargetLanguage" ~ '^[a-z]{2}$');
 
+-- When each language of a book was last searched (a search asks every missing language at once, a search of one language only that one).
+CREATE TABLE "WantedBookLanguageSearches" (
+    "WantedItemId" bigint NOT NULL REFERENCES "WantedItems" ("Id") ON DELETE CASCADE,
+    "Language" varchar(2) NOT NULL CHECK ("Language" ~ '^[a-z]{2}$'),
+    "LastSearchedAt" timestamptz NOT NULL,
+    PRIMARY KEY ("WantedItemId", "Language")
+);
+
 -- The languages of a book target, in the order of the first request (requests) or of the profile (profiles), and whether a present file covers each.
 -- A file covers the languages it names (or its release was taken for); a file that names none covers the first language still uncovered, one language per file,
 -- so a library of books without language evidence is not searched again.

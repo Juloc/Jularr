@@ -487,6 +487,31 @@ namespace Jularr.Backend.Logic.Acquisition
             return ctx.ReadSql.ReadListAsync<WantedItemParameters>(sql, ct);
         }
 
+        // The languages a book was just searched for: every language still missing, or the one asked for.
+        public static async Task RecordBookLanguageSearchAsync(this LogicContext ctx, BookLanguageSearchData data, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                INSERT INTO "WantedBookLanguageSearches" ("WantedItemId", "Language", "LastSearchedAt")
+                SELECT
+                    language."WantedItemId",
+                    language."Language",
+                    now()
+                FROM
+                    "WantedBookLanguages" AS language
+                WHERE
+                    language."WantedItemId" = @WantedItemId
+                    AND NOT language."IsCovered"
+                    AND (@Language::text IS NULL OR language."Language" = @Language)
+                ON CONFLICT ("WantedItemId", "Language") DO UPDATE
+                SET
+                    "LastSearchedAt" = EXCLUDED."LastSearchedAt";
+                """;
+            sql.Parameters.Add(data);
+            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+        }
+
         public static async Task RecordWantedSearchAsync(this LogicContext ctx, WantedSearchOutcomeData data, CancellationToken ct)
         {
             // Search state is not an editorial change.
@@ -505,6 +530,7 @@ namespace Jularr.Backend.Logic.Acquisition
                 """;
             sql.Parameters.Add(data);
             await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+            await ctx.RecordBookLanguageSearchAsync(new BookLanguageSearchData(data.WantedItemId, null), ct);
             await ctx.AdvanceRequestsAsync(new RequestProgressData(data.WantedItemId, AcquisitionRequestStatusType.Searching), ct);
         }
 

@@ -124,7 +124,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                         base."IsPaused",
                         base."WantedPriorityTypeId",
                         base."MonitorsNewUnits",
-                        base."LastSearchedAt",
+                        CASE WHEN language."Language" IS NULL THEN base."LastSearchedAt" ELSE searched."LastSearchedAt" END AS "LastSearchedAt",
                         base."LastOutcomeKey",
                         base."AcquisitionProfileId",
                         base."LibraryRootId",
@@ -136,6 +136,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                     FROM
                         wanted_base AS base
                         LEFT JOIN "WantedBookLanguages" AS language ON language."WantedItemId" = base."Id"
+                        LEFT JOIN "WantedBookLanguageSearches" AS searched ON searched."WantedItemId" = language."WantedItemId" AND searched."Language" = language."Language"
             """;
 
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<PageResult<WantedDetailsV1>>()];
