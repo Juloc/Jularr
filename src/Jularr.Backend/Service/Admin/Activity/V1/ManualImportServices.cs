@@ -4,7 +4,6 @@ using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Enums.Service;
-using Jularr.Backend.Data.Enums.Storage;
 using Jularr.Backend.Data.Logic.Acquisition;
 using Jularr.Backend.Data.Logic.Library;
 using Jularr.Backend.Infrastructure.Sql;
@@ -13,6 +12,7 @@ using Jularr.Backend.Logic.Library;
 using Jularr.Backend.Logic.Storage;
 using Jularr.Backend.Service.Core;
 using Jularr.Backend.Service.System.Acquisition.V1;
+using System.Globalization;
 using Jularr.Integrations.Data.Nas;
 using Jularr.Integrations.Data.Storage;
 using Jularr.Integrations.Logic.Storage;
@@ -48,16 +48,23 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
             };
         }
 
-        // Every file of the chosen folder that an import of the target's type can use.
-        public static async Task<(StorageFiles Source, IReadOnlyList<StorageFile> Files, bool IsReadOnly)> ReadFolderAsync(LogicContext context, StorageAccess storage, WantedTargetData target,
-            long storageMountId, string relativePath, CancellationToken ct)
+        // Every file of any kind an import takes (videos with their subtitles, ebooks and comics), so one folder can hold films, episodes and books.
+        private static readonly IReadOnlySet<string> AllImportExtensions = new HashSet<string>(new[]
+            {
+                LibraryFileTypes.GetImportExtensions(MediaType.Movie, null), LibraryFileTypes.GetImportExtensions(MediaType.Series, null), LibraryFileTypes.GetImportExtensions(MediaType.Book, null),
+                LibraryFileTypes.GetImportExtensions(MediaType.Book, MediaSubtype.Manga), LibraryFileTypes.GetImportExtensions(MediaType.Book, MediaSubtype.LightNovel)
+            }.SelectMany(extensions => extensions ?? new HashSet<string>()), StringComparer.OrdinalIgnoreCase);
+
+        // The chosen folder of a storage connection with every file an import can use, and whether files may be moved out of it.
+        public static async Task<(StorageFiles Source, IReadOnlyList<StorageFile> Files, bool IsReadOnly)> ReadFolderAsync(LogicContext context, StorageAccess storage, long storageMountId, string relativePath,
+            CancellationToken ct)
         {
             var mount = await context.ExecuteBatchAsync((ctx, token) => ctx.ReadStorageMountAsync(storageMountId, token), ct);
             var source = storage.Open(mount);
-            return (source, await ListFolderAsync(source, target, relativePath, ct), mount.IsReadOnly);
+            return (source, await ListFolderAsync(source, relativePath, ct), mount.IsReadOnly);
         }
 
-        public static async Task<IReadOnlyList<StorageFile>> ListFolderAsync(StorageFiles source, WantedTargetData target, string relativePath, CancellationToken ct)
+        public static async Task<IReadOnlyList<StorageFile>> ListFolderAsync(StorageFiles source, string relativePath, CancellationToken ct)
         {
             if (await source.GetAsync(relativePath, ct) is not { IsDirectory: true })
             {
@@ -65,7 +72,7 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
             }
 
             var found = new List<StorageFile>();
-            await foreach (var file in source.EnumerateFilesAsync(relativePath, LibraryFileTypes.GetImportExtensions(target.MediaTypeId, target.MediaSubtypeId), new StorageScanState(), ct))
+            await foreach (var file in source.EnumerateFilesAsync(relativePath, AllImportExtensions, new StorageScanState(), ct))
             {
                 found.Add(file);
             }
@@ -73,9 +80,9 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
             return found;
         }
 
-        // The waiting download and the folder its finished files lie in, on a storage connection or on the server itself.
-        public static async Task<(ManualImportDownloadData Download, ImportSourceRef Reference, StorageFiles Source, bool IsReadOnly)> OpenDownloadAsync(LogicContext context, StorageAccess storage,
-            long operationId, CancellationToken ct)
+        // The waiting download, the folder its finished files lie in (on a storage connection or on the server itself) and how that folder is shown.
+        public static async Task<(ManualImportDownloadData Download, ImportSourceRef Reference, StorageFiles Source, bool IsReadOnly, string Folder)> OpenDownloadAsync(LogicContext context,
+            StorageAccess storage, long operationId, CancellationToken ct)
         {
             var download = await context.ExecuteBatchAsync((ctx, token) => ctx.ReadManualImportDownloadAsync(operationId, token), ct)
                 ?? throw new KeyNotFoundException("The download does not wait for a person.");
@@ -83,23 +90,158 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
             if (reference.StorageMountId is { } mountId)
             {
                 var mount = await context.ExecuteBatchAsync((ctx, token) => ctx.ReadStorageMountAsync(mountId, token), ct);
-                return (download, reference, storage.Open(mount), mount.IsReadOnly);
+                return (download, reference, storage.Open(mount), mount.IsReadOnly, mount.Name + " /" + reference.Directory);
             }
 
-            return (download, reference, new LocalStorageFiles(reference.LocalRoot ?? throw new KeyNotFoundException("The download did not keep where its files are.")), false);
+            var root = reference.LocalRoot ?? throw new KeyNotFoundException("The download did not keep where its files are.");
+            return (download, reference, new LocalStorageFiles(root), false, reference.Directory.Length == 0 ? root : root.TrimEnd('/') + "/" + reference.Directory);
+        }
+
+        // What each video, ebook and comic of a folder is: the film, series or book of the library its names fit (a waiting download's own title for all of them), the episode, volume or
+        // chapter, quality, languages and release group, the name the library would give it, and what a person must check. Handled files of a download and why its import left a file out
+        // come along.
+        public static async Task<IReadOnlyList<ManualImportFileV1>> DetectAsync(LogicContext context, IReadOnlyList<StorageFile> files, string folderName, long? wantedItemId,
+            IReadOnlySet<string> handled, IReadOnlyDictionary<string, string> reasons, CancellationToken ct)
+        {
+            var media = ManualImportLogic.Importable(files);
+            var recognised = new Dictionary<string, ManualImportRecognition>(StringComparer.Ordinal);
+            if (wantedItemId is null && media.Length > 0)
+            {
+                var names = media.ToDictionary(file => file.RelativePath, file => ManualImportLogic.Names(file.RelativePath, folderName), StringComparer.Ordinal);
+                var words = ManualImportLogic.SearchWords(media.SelectMany(file => names[file.RelativePath].Select(name => (name, ManualImportLogic.IsDocument(file.RelativePath)))));
+                var candidates = words.Count == 0 ? [] : await ReadCandidatesAsync(context, words, ct);
+                foreach (var file in media)
+                {
+                    recognised[file.RelativePath] = ManualImportLogic.Recognise(file.RelativePath, names[file.RelativePath], candidates);
+                }
+            }
+
+            // Each title's files are proposed together, the way the import names them.
+            var detected = new Dictionary<string, ManualImportFileV1>(StringComparer.Ordinal);
+            foreach (var group in media.GroupBy(file => wantedItemId ?? recognised[file.RelativePath].Candidate?.WantedItemId))
+            {
+                if (group.Key is not { } id)
+                {
+                    foreach (var file in group)
+                    {
+                        var guess = ManualImportLogic.KindOf(file.RelativePath);
+                        detected[file.RelativePath] = new ManualImportFileV1(file.RelativePath, file.SizeBytes, null, null, ManualImportLogic.QualityOf(guess, null, file.RelativePath), null,
+                            guess == MediaType.Book ? BookLanguages(file.RelativePath) : ManualImportLogic.Languages(file.RelativePath), handled.Contains(file.RelativePath),
+                            reasons.GetValueOrDefault(file.RelativePath), mediaTypeId: guess, releaseGroup: ManualImportLogic.ReleaseGroupOf(file.RelativePath, guess),
+                            problemKey: recognised[file.RelativePath].ProblemKey);
+                    }
+
+                    continue;
+                }
+
+                var loaded = await ReadTargetAsync(context, id, ct);
+                var target = loaded.Target;
+                var title = target.CanonicalTitle + (target.ReleaseYear is { } year ? " (" + year.ToString(CultureInfo.InvariantCulture) + ")" : "");
+
+                // The film, an episode or a volume is its largest file of the folder; another file of the same is only a second one.
+                var proposals = ManualImportLogic.Propose(target.MediaTypeId, target.MediaSubtypeId, target.CanonicalTitle, target.ReleaseYear, [.. group], loaded.Patterns, loaded.Units,
+                    ImportPlacementLogic.KnownValues(target), loaded.Chapters);
+                var seconds = ManualImportLogic.Seconds(target.MediaTypeId, proposals);
+                foreach (var proposal in proposals)
+                {
+                    detected[proposal.Path] = new ManualImportFileV1(proposal.Path, proposal.SizeBytes, proposal.Season, proposal.Episode, proposal.QualityKey, proposal.TargetName, proposal.Languages,
+                        handled.Contains(proposal.Path), reasons.GetValueOrDefault(proposal.Path), id, target.MediaTypeId, target.MediaSubtypeId, title,
+                        ManualImportLogic.ReleaseGroupOf(proposal.Path, target.MediaTypeId),
+                        ManualImportLogic.ProblemOf(target.MediaTypeId, target.MediaSubtypeId, proposal, loaded.Units, loaded.Chapters, target.HasMedia) ?? (seconds.Contains(proposal.Path) ? ManualImportLogic.LargerFileChosen : null));
+                }
+
+                // A file the title's own kind does not take (a video of a book) is not that title's.
+                foreach (var file in group.Where(file => !detected.ContainsKey(file.RelativePath)))
+                {
+                    detected[file.RelativePath] = new ManualImportFileV1(file.RelativePath, file.SizeBytes, null, null, null, null, null, handled.Contains(file.RelativePath),
+                        reasons.GetValueOrDefault(file.RelativePath), mediaTypeId: ManualImportLogic.KindOf(file.RelativePath), problemKey: ManualImportLogic.WorkUnknown);
+                }
+            }
+
+            return [.. media.Select(file => detected[file.RelativePath])];
+        }
+
+        // A chosen folder the move emptied goes; one that still holds something stays, and so does one that cannot be changed.
+        public static async Task RemoveIfEmptyAsync(StorageFiles source, string directory, CancellationToken ct)
+        {
+            try
+            {
+                await source.DeleteDirectoryAsync(directory, ct);
+            }
+            catch (Exception exception) when (exception is NasMountException or IOException or UnauthorizedAccessException)
+            {
+            }
+        }
+
+        private static string? BookLanguages(string path) => ReleaseWords.ReadLanguages(Path.GetFileNameWithoutExtension(path), "") is { Length: > 0 } languages ? string.Join('+', languages) : null;
+
+        // The films, series and books of the library one of whose titles contains a searched word; Recognise decides which of them a file is.
+        private static async Task<IReadOnlyList<ManualImportCandidate>> ReadCandidatesAsync(LogicContext context, IReadOnlyList<string> words, CancellationToken ct)
+        {
+            var patterns = words.Take(400).Select(word => "%" + word.Replace("\\", "\\\\").Replace("%", "\\%").Replace("_", "\\_") + "%").ToArray();
+            var rows = await context.ExecuteBatchAsync((ctx, token) =>
+            {
+                var sql = new SqlStatement();
+                sql.Statement =
+                    """
+                    SELECT
+                        wanted."Id" AS "WantedItemId",
+                        work."MediaTypeId",
+                        work."MediaSubtypeId",
+                        work."CanonicalTitle",
+                        work."ReleaseYear"::integer AS "ReleaseYear",
+                        ARRAY(
+                            SELECT
+                                title."Title"
+                            FROM
+                                "WorkTitles" AS title
+                            WHERE
+                                title."WorkId" = work."Id"
+                        ) AS "Titles"
+                    FROM
+                        "WantedItems" AS wanted
+                        JOIN "Works" AS work ON work."Id" = wanted."WorkId"
+                    WHERE
+                        work."MediaTypeId" IN (1, 2, 3)
+                        AND (
+                            work."CanonicalTitle" ILIKE ANY(@Patterns)
+                            OR EXISTS (
+                                SELECT
+                                    1
+                                FROM
+                                    "WorkTitles" AS title
+                                WHERE
+                                    title."WorkId" = work."Id"
+                                    AND title."Title" ILIKE ANY(@Patterns)
+                            )
+                        )
+                    ORDER BY
+                        wanted."Id"
+                    LIMIT 1000;
+                    """;
+                sql.Parameters.Add(new ManualImportTitleSearchData(patterns));
+                return ctx.ReadSql.ReadListAsync<ManualImportCandidateData>(sql, token);
+            }, ct);
+            return [.. rows.Select(row => new ManualImportCandidate(row.WantedItemId, row.MediaTypeId, row.MediaSubtypeId, row.ReleaseYear,
+                [row.CanonicalTitle, .. row.Titles.Where(title => !string.Equals(title, row.CanonicalTitle, StringComparison.Ordinal))]))];
         }
 
         // The film, series or book of every choice: the one the import is for and the others a person gave a file.
-        public static async Task<Dictionary<long, ManualImportTarget>> ReadTargetsAsync(LogicContext context, long defaultWantedItemId, IEnumerable<ManualImportChoiceV1> choices, CancellationToken ct)
+        public static async Task<Dictionary<long, ManualImportTarget>> ReadTargetsAsync(LogicContext context, long? defaultWantedItemId, IEnumerable<ManualImportChoiceV1> choices, CancellationToken ct)
         {
             var targets = new Dictionary<long, ManualImportTarget>();
-            foreach (var id in choices.Select(choice => choice.WantedItemId ?? defaultWantedItemId).Append(defaultWantedItemId).Distinct())
+            var ids = choices.Select(choice => TargetOf(choice, defaultWantedItemId));
+            foreach (var id in (defaultWantedItemId is { } own ? ids.Append(own) : ids).Distinct())
             {
                 targets[id] = await ReadTargetAsync(context, id, ct);
             }
 
             return targets;
         }
+
+        // The film, series or book a file goes to: its own, else the download's; a file of a folder must name one.
+        public static long TargetOf(ManualImportChoiceV1 choice, long? defaultWantedItemId) =>
+            choice.WantedItemId ?? defaultWantedItemId ?? throw new DataValidationException(nameof(ManualImportChoiceV1.WantedItemId), "required");
 
         // The qualities a person gave, each one a quality its film, series or book can have; a book's file without one takes its format.
         public static Dictionary<string, string> ReadQualities(IEnumerable<ManualImportChoiceV1> choices, WantedTargetData target)
@@ -145,8 +287,8 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
         // Places the chosen files, each as the film, episode, volume or chapter its owner says, grouped by the title they go to; the files of one waiting download may go to several. What a person must settle
         // comes back as an unavailable service when nothing was placed, a mistake in the choice as invalid data; when some files were placed, each file's outcome says what became of it. A waiting download
         // leaves the queue once every file of it is imported or the person finishes it; until then it keeps the files already imported.
-        public static async Task<ManualImportResultV1> RunAsync(LogicContext context, DownloadImport import, long wantedItemId, StorageFiles source, string directory,
-            IReadOnlyList<StorageFile> files, bool isReadOnly, ImportTransferMode mode, BaseDataList<ManualImportChoiceV1> choices, long? accountId, ManualImportDownload? download, CancellationToken ct)
+        public static async Task<ManualImportResultV1> RunAsync(LogicContext context, DownloadImport import, long? wantedItemId, StorageFiles source, string directory,
+            IReadOnlyList<StorageFile> files, bool isReadOnly, BaseDataList<ManualImportChoiceV1> choices, long? accountId, ManualImportDownload? download, CancellationToken ct)
         {
             var chosen = choices.Where(choice => choice.Imports).ToArray();
 
@@ -157,17 +299,17 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
                 throw new DataValidationException(nameof(RunManualImportDataV1.Files), "unknown_reference");
             }
 
-            // A move deletes from the source, which a read-only connection does not allow.
-            if (mode == ImportTransferMode.Move && isReadOnly && !finishOnly)
+            // An import moves its files, which a read-only connection does not allow.
+            if (isReadOnly && !finishOnly)
             {
-                throw new DataValidationException(nameof(RunManualImportDataV1.ImportTransferModeId), "invalid_transition");
+                throw new DataValidationException(nameof(RunManualImportDataV1.RelativePath), "import_source_read_only");
             }
 
             // Plan every group before anything is placed.
             var targets = await ReadTargetsAsync(context, wantedItemId, chosen, ct);
             var plans = new List<(ManualImportTarget Loaded, ManualImportChoiceV1[] Choices, IReadOnlyList<ImportPlacementData> Placements, Dictionary<string, string> Qualities,
                 Dictionary<string, ChosenLanguages> Languages)>();
-            foreach (var group in chosen.GroupBy(choice => choice.WantedItemId ?? wantedItemId))
+            foreach (var group in chosen.GroupBy(choice => TargetOf(choice, wantedItemId)))
             {
                 var loaded = targets[group.Key];
                 var target = loaded.Target;
@@ -188,7 +330,8 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
             var imported = 0;
             var finished = false;
             string? firstFailure = null;
-            var finishes = download is not null && ManualImportLogic.CompletesDownload(targets[wantedItemId].Target.MediaTypeId, files, handled.Concat(chosen.Select(choice => choice.Path)), download.Finishes);
+            var finishes = download is not null && wantedItemId is { } own && ManualImportLogic.CompletesDownload(targets[own].Target.MediaTypeId, files, handled.Concat(chosen.Select(choice => choice.Path)),
+                download.Finishes);
             for (var index = 0; index < plans.Count; index++)
             {
                 var (loaded, members, placements, qualities, languages) = plans[index];
@@ -202,7 +345,7 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
                 // Only the last group finishes the download, and only when nothing before it went wrong.
                 var finishesHere = finishes && index == plans.Count - 1 && firstFailure is null;
                 var commit = loaded.Root is { } root
-                    ? await import.CommitAsync(context, new ImportCommitRequest(root, target.WorkId, null, placements, source, directory, files, FactsOf, mode, download?.OperationId, accountId, target.MediaTypeId,
+                    ? await import.CommitAsync(context, new ImportCommitRequest(root, target.WorkId, null, placements, source, directory, files, FactsOf, download?.OperationId, accountId, target.MediaTypeId,
                         target.Definition is null ? null : AcquisitionSelectionLogic.ReadProfile(target), languages, finishesHere), ct)
                     : new ImportCommit("import_no_library", []);
                 firstFailure ??= commit.FailureKey;
@@ -214,7 +357,7 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
                 }
 
                 outcomes.AddRange(members.Select(member => new ManualImportOutcomeV1(member.Path, target.CanonicalTitle, commit.FailureKey, languages.GetValueOrDefault(member.Path)?.Audio,
-                    languages.GetValueOrDefault(member.Path)?.Subtitles)));
+                    languages.GetValueOrDefault(member.Path)?.Subtitles, commit.Targets?.GetValueOrDefault(member.Path), commit.KeptSources?.Contains(member.Path) == true)));
             }
 
             if (imported == 0 && firstFailure is not null)
@@ -319,9 +462,9 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
         }
     }
 
-    // The videos of a folder with what their names say and the names they would get.
-    [ServiceEndpoint("POST", "/api/v1/admin/activity/manual-import/{wantedItemId:long}/files")]
-    public sealed class ReadManualImportFilesV1 : AdminService<ManualImportParametersV1, ReadManualImportDataV1>
+    // Every video, ebook and comic of a folder with the film, series or book of the library it was recognised as, what its name says, the name it would get and what a person must check.
+    [ServiceEndpoint("POST", "/api/v1/admin/activity/manual-import/files")]
+    public sealed class ReadManualImportFilesV1 : AdminService<ManualImportFolderParametersV1, ReadManualImportDataV1>
     {
         private readonly StorageAccess _storage;
 
@@ -332,33 +475,33 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<ManualImportFolderV1>()];
-        protected override ModuleRequirement GetInstanceModules(ManualImportParametersV1 parameters) => ModuleRequirement.All("Acquisition");
-        protected override ServicePermission GetPermission(ManualImportParametersV1 parameters, Type resultType) => new("acquisition.manage");
+        protected override ModuleRequirement GetInstanceModules(ManualImportFolderParametersV1 parameters) => ModuleRequirement.All("Acquisition");
+        protected override ServicePermission GetPermission(ManualImportFolderParametersV1 parameters, Type resultType) => new("acquisition.manage");
 
         protected override async Task<IServiceOutput> OnExecute()
         {
-            var loaded = await ManualImport.ReadTargetAsync(Context, Parameters.WantedItemId, CancellationToken);
-            var target = loaded.Target;
-            var (_, files, _) = await ManualImport.ReadFolderAsync(Context, _storage, target, Data.StorageMountId, Data.RelativePath, CancellationToken);
-            return new ManualImportFolderV1(new BaseDataList<ManualImportFileV1>(ManualImportLogic.Propose(target.MediaTypeId, target.MediaSubtypeId, target.CanonicalTitle, target.ReleaseYear, files,
-                loaded.Patterns, loaded.Units, ImportPlacementLogic.KnownValues(target), loaded.Chapters).Select(proposal => new ManualImportFileV1(proposal.Path, proposal.SizeBytes, proposal.Season, proposal.Episode, proposal.QualityKey, proposal.TargetName, proposal.Languages))));
+            var (_, files, isReadOnly) = await ManualImport.ReadFolderAsync(Context, _storage, Data.StorageMountId, Data.RelativePath, CancellationToken);
+            var detected = await ManualImport.DetectAsync(Context, files, StoragePath.Name(Data.RelativePath), null, new HashSet<string>(), new Dictionary<string, string>(), CancellationToken);
+            return new ManualImportFolderV1(new BaseDataList<ManualImportFileV1>(detected), isReadOnly);
         }
     }
 
-    // The names the library would give the chosen files as their owners decided, and the film or series each one goes to.
-    [ServiceEndpoint("POST", "/api/v1/admin/activity/manual-import/{wantedItemId:long}/names")]
-    public sealed class PreviewManualImportV1 : AdminService<ManualImportParametersV1, PreviewManualImportDataV1>
+    // The names the library would give the chosen files as their owners decided, and the film, series or book each one goes to.
+    [ServiceEndpoint("POST", "/api/v1/admin/activity/manual-import/names")]
+    public sealed class PreviewManualImportV1 : AdminService<ManualImportFolderParametersV1, PreviewManualImportDataV1>
     {
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<BaseDataList<ManualImportNameV1>>()];
-        protected override ModuleRequirement GetInstanceModules(ManualImportParametersV1 parameters) => ModuleRequirement.All("Acquisition");
-        protected override ServicePermission GetPermission(ManualImportParametersV1 parameters, Type resultType) => new("acquisition.manage");
+        protected override ModuleRequirement GetInstanceModules(ManualImportFolderParametersV1 parameters) => ModuleRequirement.All("Acquisition");
+        protected override ServicePermission GetPermission(ManualImportFolderParametersV1 parameters, Type resultType) => new("acquisition.manage");
 
         protected override async Task<IServiceOutput> OnExecute()
         {
-            var targets = await ManualImport.ReadTargetsAsync(Context, Parameters.WantedItemId, Data.Files, CancellationToken);
+            // A file without its title has no name yet.
+            var chosen = Data.Files.Where(choice => choice.WantedItemId is not null).ToArray();
+            var targets = await ManualImport.ReadTargetsAsync(Context, null, chosen, CancellationToken);
             var names = new List<ManualImportNameV1>();
-            foreach (var group in Data.Files.GroupBy(choice => choice.WantedItemId ?? Parameters.WantedItemId))
+            foreach (var group in chosen.GroupBy(choice => choice.WantedItemId!.Value))
             {
                 var loaded = targets[group.Key];
                 var target = loaded.Target;
@@ -373,9 +516,9 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
         }
     }
 
-    // Puts the chosen files of a folder into the library as the film or the episodes their owner says they are.
-    [ServiceEndpoint("POST", "/api/v1/admin/activity/manual-import/{wantedItemId:long}/import")]
-    public sealed class RunManualImportV1 : AdminService<ManualImportParametersV1, RunManualImportDataV1>
+    // Moves the chosen files of a folder into the library, each as the film, episode, volume or chapter its owner says.
+    [ServiceEndpoint("POST", "/api/v1/admin/activity/manual-import/import")]
+    public sealed class RunManualImportV1 : AdminService<ManualImportFolderParametersV1, RunManualImportDataV1>
     {
         private readonly StorageAccess _storage;
         private readonly DownloadImport _import;
@@ -388,17 +531,25 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<ManualImportResultV1>()];
-        protected override ModuleRequirement GetInstanceModules(ManualImportParametersV1 parameters) => ModuleRequirement.All("Acquisition");
-        protected override ServicePermission GetPermission(ManualImportParametersV1 parameters, Type resultType) => new("acquisition.manage");
+        protected override ModuleRequirement GetInstanceModules(ManualImportFolderParametersV1 parameters) => ModuleRequirement.All("Acquisition");
+        protected override ServicePermission GetPermission(ManualImportFolderParametersV1 parameters, Type resultType) => new("acquisition.manage");
 
         protected override async Task<IServiceOutput> OnExecute()
         {
-            var loaded = await ManualImport.ReadTargetAsync(Context, Parameters.WantedItemId, CancellationToken);
-            var (source, files, isReadOnly) = await ManualImport.ReadFolderAsync(Context, _storage, loaded.Target, Data.StorageMountId, Data.RelativePath, CancellationToken);
-            return await ManualImport.RunAsync(Context, _import, Parameters.WantedItemId, source, Data.RelativePath, files, isReadOnly, Data.ImportTransferModeId, Data.Files, Auth.AccountId, null, CancellationToken);
+            var (source, files, isReadOnly) = await ManualImport.ReadFolderAsync(Context, _storage, Data.StorageMountId, Data.RelativePath, CancellationToken);
+            var result = await ManualImport.RunAsync(Context, _import, null, source, Data.RelativePath, files, isReadOnly, Data.Files, Auth.AccountId, null, CancellationToken);
+
+            // The chosen folder goes too once the move emptied it, unless it is the connection's own top.
+            if (Data.RelativePath.Length > 0 && result.Imported > 0)
+            {
+                await ManualImport.RemoveIfEmptyAsync(source, Data.RelativePath, CancellationToken);
+            }
+
+            return result;
         }
     }
-    // The finished files of a download that waits for a person.
+
+    // The finished files of a download that waits for a person, recognised as its own title.
     [ServiceEndpoint("POST", "/api/v1/admin/activity/{operationId:long}/manual-import/files")]
     public sealed class ReadManualImportDownloadV1 : AdminService<ActivityOperationParametersV1, NoData>
     {
@@ -416,19 +567,16 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
 
         protected override async Task<IServiceOutput> OnExecute()
         {
-            var (download, reference, source, _) = await ManualImport.OpenDownloadAsync(Context, _storage, Parameters.OperationId, CancellationToken);
-            var loaded = await ManualImport.ReadTargetAsync(Context, download.WantedItemId, CancellationToken);
-            var target = loaded.Target;
-            var files = await ManualImport.ListFolderAsync(source, target, reference.Directory, CancellationToken);
+            var (download, reference, source, isReadOnly, folder) = await ManualImport.OpenDownloadAsync(Context, _storage, Parameters.OperationId, CancellationToken);
+            var files = await ManualImport.ListFolderAsync(source, reference.Directory, CancellationToken);
             var handled = ImportProposal.ReadHandled(download.AttentionProposal).ToHashSet(StringComparer.Ordinal);
-            var reasons = ImportProposal.ReadReasons(download.AttentionProposal);
-            return new ManualImportDownloadV1(download.WantedItemId, new BaseDataList<ManualImportFileV1>(ManualImportLogic.Propose(target.MediaTypeId, target.MediaSubtypeId, target.CanonicalTitle,
-                target.ReleaseYear, files, loaded.Patterns, loaded.Units, ImportPlacementLogic.KnownValues(target), loaded.Chapters).Select(proposal => new ManualImportFileV1(proposal.Path, proposal.SizeBytes, proposal.Season, proposal.Episode,
-                    proposal.QualityKey, proposal.TargetName, proposal.Languages, handled.Contains(proposal.Path), reasons.GetValueOrDefault(proposal.Path)))));
+            var detected = await ManualImport.DetectAsync(Context, files, StoragePath.Name(reference.Directory), download.WantedItemId, handled, ImportProposal.ReadReasons(download.AttentionProposal),
+                CancellationToken);
+            return new ManualImportDownloadV1(download.WantedItemId, new BaseDataList<ManualImportFileV1>(detected), folder, isReadOnly);
         }
     }
 
-    // Finishing a manual download does not mean every source file was selected.
+    // Moves the chosen files of a waiting download; it leaves the queue once every file of it is imported or the person finishes it, and its client then lets go of the job.
     [ServiceEndpoint("POST", "/api/v1/admin/activity/{operationId:long}/manual-import")]
     public sealed class RunManualImportDownloadV1 : AdminService<ActivityOperationParametersV1, RunManualImportDownloadDataV1>
     {
@@ -448,37 +596,18 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
 
         protected override async Task<IServiceOutput> OnExecute()
         {
-            var (download, reference, source, isReadOnly) = await ManualImport.OpenDownloadAsync(Context, _storage, Parameters.OperationId, CancellationToken);
-            var loaded = await ManualImport.ReadTargetAsync(Context, download.WantedItemId, CancellationToken);
-            var files = await ManualImport.ListFolderAsync(source, loaded.Target, reference.Directory, CancellationToken);
+            var (download, reference, source, isReadOnly, _) = await ManualImport.OpenDownloadAsync(Context, _storage, Parameters.OperationId, CancellationToken);
+            var files = await ManualImport.ListFolderAsync(source, reference.Directory, CancellationToken);
             var handled = ImportProposal.ReadHandled(download.AttentionProposal);
-            // Include non-media files when deciding whether completed source folders can be removed.
-            // A failed or incomplete scan must not make the import itself fail.
-            var allFiles = new List<StorageFile>();
-            var sourceScanComplete = false;
-            try
-            {
-                var scan = new StorageScanState();
-                await foreach (var file in source.EnumerateFilesAsync(reference.Directory, null, scan, CancellationToken))
-                    allFiles.Add(file);
-                sourceScanComplete = scan.IsComplete;
-            }
-            catch (Exception exception) when (exception is NasMountException or IOException or UnauthorizedAccessException)
-            {
-                // Leave the source untouched: there is no proof the folder was fully imported.
-            }
-
-            var result = await ManualImport.RunAsync(Context, _import, download.WantedItemId, source, reference.Directory, files, isReadOnly, Data.ImportTransferModeId, Data.Files, Auth.AccountId,
+            var result = await ManualImport.RunAsync(Context, _import, download.WantedItemId, source, reference.Directory, files, isReadOnly, Data.Files, Auth.AccountId,
                 new ManualImportDownload(download.OperationId, handled, Data.FinishesDownload, download.AttentionProposal), CancellationToken);
-            if (result.FinishedDownload && sourceScanComplete
-                && ImportPlacementLogic.AllSourceFilesSelected(allFiles.Select(file => file.RelativePath),
-                    handled.Concat(result.Files.Where(file => file.FailureKey is null).Select(file => file.Path))))
+
+            // A finished download's client lets go of the job once the move left nothing an import would take; files nobody imported keep it.
+            if (result.FinishedDownload)
             {
-                await _import.RemoveFromClientAsync(Context, download.AcquisitionConnectionId, download.ExternalId,
-                    DownloadSourceInventory.Fingerprint(allFiles), CancellationToken);
+                await _import.RemoveFromClientAsync(Context, download.AcquisitionConnectionId, download.ExternalId, source, reference.Directory, reference.Directory.Length > 0, CancellationToken);
             }
 
-            // A finished manual import with omitted files remains in the client for explicit cleanup.
             return result;
         }
     }

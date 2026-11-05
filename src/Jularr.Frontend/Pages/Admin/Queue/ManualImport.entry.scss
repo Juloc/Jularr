@@ -1,0 +1,87 @@
+// The manual import's part of the list kit: the grid of its lists, the box beside a file's name, the reason under it and the outcome of a run.
+
+.manual-import-files {
+    --list-columns: minmax(240px, 2.6fr) minmax(140px, 1.4fr) minmax(80px, .7fr) minmax(110px, .9fr) minmax(64px, .5fr) minmax(70px, .5fr) minmax(130px, 1fr) minmax(48px, auto);
+    --list-columns-medium: minmax(200px, 2.4fr) minmax(130px, 1.3fr) minmax(80px, .7fr) minmax(100px, .9fr) minmax(64px, .5fr) minmax(130px, 1fr) minmax(48px, auto);
+    --list-columns-narrow: minmax(180px, 2.2fr) minmax(120px, 1.2fr) minmax(76px, .7fr) minmax(96px, .9fr) minmax(124px, 1fr) minmax(48px, auto);
+
+    // A row the run moved takes the success wash.
+    .list-row--success { background: color-mix(in srgb, var(--success-soft) 35%, var(--surface)); }
+
+    // Why an amber row wants a look reads in its tone, a red one's in the danger colour.
+    .list-row--warning .list-identity__note { color: var(--warning); }
+}
+
+.manual-import-report {
+    --list-columns: minmax(0, 2.6fr) minmax(130px, 1.2fr) minmax(110px, .9fr) minmax(125px, 1fr);
+    --list-columns-medium: minmax(0, 2.4fr) minmax(130px, 1.2fr) minmax(125px, 1fr);
+    --list-columns-narrow: minmax(0, 2.4fr) minmax(125px, 1fr);
+}
+
+.manual-import {
+    display: grid;
+    align-content: start;
+    gap: 14px;
+    min-width: 0;
+
+    // The count of what was found and how much wants a look on the left, the switch for every file on the right.
+    &__tools {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+    }
+
+    &__count { margin: 0; color: var(--muted); }
+    &__all { display: flex; align-items: center; }
+    &__summary[hidden] { display: none; }
+
+    // The box that chooses a file sits before its icon.
+    &__main { display: flex; align-items: center; gap: 12px; min-width: 0; }
+    &__select { display: flex; flex: none; align-items: center; }
+    &__group { display: block; font-size: var(--text-control); }
+
+    // A run's answer: the chip, and where the file went or why it did not.
+    &__outcome { display: block; max-width: 100%; min-width: 0; margin-top: 4px; font-size: var(--text-control); color: var(--muted); }
+    [data-manual-status], [data-manual-outcome] { display: grid; justify-items: start; gap: 2px; min-width: 0; max-width: 100%; }
+    [data-manual-outcome] > div { display: grid; justify-items: start; min-width: 0; max-width: 100%; }
+    [data-manual-chip] { display: none; }
+
+    &__file { min-width: 0; font-size: var(--text-control); }
+    &__failure { color: var(--danger); }
+}
+
+.manual-import__folder {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    overflow-wrap: anywhere;
+}
+
+// In the dialog the folder stays on top, only the files scroll, and the dock is the dialog's foot: nothing lies over a row.
+.modal--wide {
+    .modal__body { display: flex; flex: 1; flex-direction: column; overflow: hidden; padding-bottom: 0; }
+
+    #manual-import-region { display: flex; flex: 1; flex-direction: column; gap: 14px; min-height: 0; }
+    #manual-import-region > * { flex: none; }
+    #manual-import-region > .manual-import, #manual-import-region > .manual-import__scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+
+    .action-dock {
+        position: static;
+        margin: 0 auto 16px;
+        box-shadow: none;
+    }
+}
+
+// Choosing the folder needs no list's room: without files the dialog is as small as any other.
+#manual-import-dialog.modal--wide:not(:has(.manual-import, .manual-import__scroll, .list-empty)) {
+    width: min(560px, calc(100vw - 32px - env(safe-area-inset-left) - env(safe-area-inset-right)));
+    height: auto;
+
+    @media (max-width: 640px) {
+        width: 100vw;
+        height: 100dvh;
+    }
+}

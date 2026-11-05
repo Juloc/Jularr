@@ -144,13 +144,14 @@ namespace Jularr.Backend.Tests
             Assert.IsFalse(manager.Contains("data-live-text=\"jobs\"", StringComparison.Ordinal));
         }
 
-        // The queue, its history and its blocked releases moved to the Queue entry: the old addresses (notifications, bookmarks) lead there with their choices.
+        // The queue, its history, its blocked releases and the manual import moved to the Queue entry: the old addresses (notifications, bookmarks) lead there with their choices.
         [TestMethod]
         public async Task OldActivityAddresses_LeadToTheQueue()
         {
             await using var host = await CreateAsync();
             foreach (var (old, now) in new[] { ("/Admin/Activity?operation=5&type=movies", "/Admin/Queue?operation=5&type=movies"), ("/Admin/Activity?Filter=Waiting", "/Admin/Queue?Filter=Waiting"),
-                ("/Admin/History?WorkId=10", "/Admin/Queue/History?WorkId=10"), ("/Admin/Activity/Blocked?type=books", "/Admin/Queue/Blocked?type=books") })
+                ("/Admin/History?WorkId=10", "/Admin/Queue/History?WorkId=10"), ("/Admin/Activity/Blocked?type=books", "/Admin/Queue/Blocked?type=books"),
+                ("/Admin/ManualImport?operationId=7", "/Admin/Queue?import=true&importOperation=7"), ("/Admin/ManualImport", "/Admin/Queue?import=true") })
             {
                 using var response = await host.SendAsync(HttpMethod.Get, old);
                 Assert.AreEqual(HttpStatusCode.MovedPermanently, response.StatusCode, old);
