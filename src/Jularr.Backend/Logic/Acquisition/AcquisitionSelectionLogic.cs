@@ -33,14 +33,17 @@ namespace Jularr.Backend.Logic.Acquisition
         {
             var definition = JsonSerializer.Deserialize<AcquisitionProfileDefinition>(target.Definition!, DefinitionOptions)
                 ?? throw new InvalidOperationException("The acquisition profile is invalid.");
-            var chain = target.MediaTypeId == MediaType.Book && target.MediaSubtypeId != MediaSubtype.Manga ? Chain(target) : ([], true);
+            var chain = target.MediaTypeId is MediaType.Book or MediaType.Movie or MediaType.Series ? Chain(target) : ([], 0, true);
             var profile = new QualityProfile(target.AcquisitionProfileId!.Value.ToString(CultureInfo.InvariantCulture), target.ProfileName!, definition.AllowedQualities,
                 definition.QualityOrder, definition.UpgradeAllowed, definition.UpgradeCutoffQuality, definition.MinimumSizeBytes, definition.MaximumSizeBytes)
             {
                 // A book is wanted once per language, each with its chain (first, second, the original): only the chains of the languages no file covers yet are asked for.
                 LanguageOrder = chain.Order.Length > 0 ? chain.Order : definition.LanguageOrder.Length > 0 ? definition.LanguageOrder : target.RequestedLocales,
                 LanguageFallback = chain.Order.Length > 0 ? chain.UsesOriginal ? LanguageFallbackType.Original : LanguageFallbackType.None : definition.LanguageFallback,
+                FirstLanguages = chain.Order.Length > 0 ? chain.Firsts : null,
                 WantedLanguages = target.WantedLanguages,
+                IsVideo = target.MediaTypeId is MediaType.Movie or MediaType.Series,
+                IsManga = target.MediaTypeId == MediaType.Book && target.MediaSubtypeId == MediaSubtype.Manga,
                 IsMovie = target.MediaTypeId == MediaType.Movie,
                 IsBook = target.MediaTypeId == MediaType.Book && target.MediaSubtypeId != MediaSubtype.Manga,
                 Formats = Formats(target.Formats, definition.FormatScores),
@@ -178,6 +181,8 @@ namespace Jularr.Backend.Logic.Acquisition
         {
             // A language no file covers is not an upgrade of the files in the others.
             var installed = target.MissingLanguages.Length == 0 && (scope is null || scope.UnitNumber is not null) ? Installed(profile, target, scope?.Unit.Id) : null;
+            var languageRules = JsonSerializer.Deserialize<LanguageRule[]>(target.LanguageRules) ?? [];
+
             // Failed and blocked releases stay visible but are never taken.
             var blocked = target.ReleaseIdentities.ToHashSet(StringComparer.Ordinal);
             return ReleaseSelectionEngine.Select(profile, [.. offers.Select(offer => kind switch
@@ -187,7 +192,7 @@ namespace Jularr.Backend.Logic.Acquisition
                 AcquisitionKind.Manga => Candidate(offer, MangaReleaseJudge.Judge([target.CanonicalTitle, .. target.Titles], scope, offer, automatic)),
                 AcquisitionKind.Music => Candidate(offer, MusicReleaseJudge.Judge([target.CanonicalTitle, .. target.Titles], target.Author, offer)),
                 AcquisitionKind.Game => Candidate(offer, GameReleaseJudge.Judge([target.CanonicalTitle, .. target.Titles], target.PlatformIgdbId, target.PlatformAbbreviation, offer)),
-                _ => Candidate(offer, VideoReleaseJudge.Judge(kind, [target.CanonicalTitle, .. target.Titles], target.ReleaseYear, scope, offer, automatic))
+                _ => Candidate(offer, VideoReleaseJudge.Judge(kind, [target.CanonicalTitle, .. target.Titles], target.ReleaseYear, scope, offer, automatic, target.OriginalLanguage))
             })]);
 
             SelectionCandidate Candidate<TMatch>(ReleaseOffer offer, ReleaseJudgement<TMatch> judgement)
@@ -195,6 +200,7 @@ namespace Jularr.Backend.Logic.Acquisition
                 // A release of a blocked group is never taken automatically; a manual search only marks it.
                 var blockedGroup = judgement.Parsed is { } parsed && ReleaseScorer.GroupRatings(profile, parsed).Any(rated => rated.Rating == ReleaseGroupRating.Blocked)
                     ? new SelectionReason(SelectionReasonKind.Profile, "GroupBlocked") : null;
+                var ruled = LanguageRuleLogic.Apply(languageRules, judgement.Languages ?? judgement.Parsed?.AudioLanguages ?? [], judgement.Parsed, offer.Title);
                 return new(offer.Identity, judgement.Parsed, offer.SizeBytes, offer.ConnectionName, offer.ConnectionPriority, offer.PublishedAt, judgement.Evidence, judgement.Coverage)
                 {
                     IndexerId = offer.ConnectionId,
@@ -202,12 +208,15 @@ namespace Jularr.Backend.Logic.Acquisition
                     IsPart = offer.IsPart,
                     SafetyRejection = blocked.Contains(offer.Identity) ? "Blocked" : judgement.SafetyRejection
                         ?? (EditionLanguageFilter.Rejects(judgement.Languages ?? judgement.Parsed?.AudioLanguages ?? [], target.MonitoredEditionLanguages, target.UnmonitoredEditionLanguages, focusLanguage) ? "EditionNotMonitored" : null),
-                    ContextPoints = judgement.Points,
-                    Rejection = judgement.Rejection ?? (automatic ? blockedGroup : null),
-                    Flag = automatic ? judgement.Flag : blockedGroup ?? judgement.Flag,
+                    ContextPoints = [.. judgement.Points, .. ruled.Points],
+                    Rejection = judgement.Rejection ?? (automatic ? blockedGroup ?? ruled.Blocked : null),
+                    Flag = automatic ? judgement.Flag : blockedGroup ?? ruled.Blocked ?? judgement.Flag,
                     SizeMark = judgement.SizeMark,
                     Languages = judgement.Languages ?? judgement.Parsed?.AudioLanguages ?? [],
                     LanguagesFromTitle = judgement.LanguagesFromTitle,
+                    LanguagesAssumedOriginal = judgement.LanguagesAssumedOriginal,
+                    SubtitleLanguages = judgement.SubtitleLanguages,
+                    SubtitlesInChain = judgement.SubtitleLanguages.Any(language => language == "*" || profile.LanguageOrder.Contains(language, StringComparer.OrdinalIgnoreCase)),
                     InstalledQuality = installed?.Quality,
                     InstalledNeedsReplacement = installed?.NeedsReplacement ?? false,
                     RuntimeMinutes = judgement.Parsed?.IsSeasonPack == true && scope is { Units.All.Count: > 0 } && profile.RuntimeMinutes is { } minutes
@@ -225,11 +234,13 @@ namespace Jularr.Backend.Logic.Acquisition
 
         // The languages a search asks for in order, and whether the original is allowed: the first and the second language of every chain whose first language is still missing
         // (every chain once a file covers them all); empty for a target without chains.
-        public static (string[] Order, bool UsesOriginal) Chain(WantedTargetData target)
+        public static (string[] Order, int Firsts, bool UsesOriginal) Chain(WantedTargetData target)
         {
             var chains = Chains(target);
             var open = target.MissingLanguages.Length == 0 ? chains : [.. chains.Where(item => target.MissingLanguages.Contains(item.First, StringComparer.OrdinalIgnoreCase))];
-            return ([.. open.Select(item => item.First).Concat(open.Select(item => item.Second).OfType<string>()).Distinct(StringComparer.OrdinalIgnoreCase)], open.Any(item => item.UsesOriginal));
+            var firsts = open.Select(item => item.First).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+            var seconds = open.Select(item => item.Second).OfType<string>().Distinct(StringComparer.OrdinalIgnoreCase).Where(second => !firsts.Contains(second, StringComparer.OrdinalIgnoreCase));
+            return ([.. firsts, .. seconds], firsts.Length, open.Any(item => item.UsesOriginal));
         }
 
         // The language a grab of a book is for: the first missing language the release carries, else the first missing one when the release names none; no language for other media

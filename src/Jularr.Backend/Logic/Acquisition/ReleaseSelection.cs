@@ -15,7 +15,7 @@ namespace Jularr.Backend.Logic.Acquisition
 
             // Last resort of a book request: when no release in the language chain can be taken at all, one whose language is unknown (the name and its title say none) is taken
             // rather than nothing. A strict profile never does, and a release in a known other language is only ever taken by hand.
-            if (profile.IsBook && profile.LanguageOrder.Length > 0 && profile.LanguageFallback != LanguageFallbackType.None
+            if (profile.AppliesLanguages && profile.LanguageOrder.Length > 0 && profile.LanguageFallback != LanguageFallbackType.None
                 && !evaluations.Any(evaluation => evaluation.IsSelectable && evaluation.Candidate.Languages.Count > 0))
             {
                 evaluations = [.. evaluations.Select(evaluation => evaluation.Reasons[^1].Code == "LanguageUnknown" ? Evaluate(profile, evaluation.Candidate, true) : evaluation)];
@@ -25,9 +25,9 @@ namespace Jularr.Backend.Logic.Acquisition
             // source priority; other media retain source priority. Profile rules still decide eligibility.
             var ranked = evaluations
                 .OrderBy(evaluation => profile.IsBook && evaluation.Candidate.IsPart ? 1 : 0)
-                .ThenBy(evaluation => profile.IsBook ? LanguageTier(profile, evaluation.Candidate.Languages) : 0)
+                .ThenBy(evaluation => profile.AppliesLanguages ? LanguageTier(profile, evaluation.Candidate) : 0)
                 .ThenBy(evaluation => profile.IsBook && profile.LanguageFallback == LanguageFallbackType.Any
-                    && LanguageTier(profile, evaluation.Candidate.Languages) >= 2 ? evaluation.QualityRank : 0)
+                    && LanguageTier(profile, evaluation.Candidate) >= OtherKnownStep(profile) ? evaluation.QualityRank : 0)
                 .ThenBy(evaluation => evaluation.Candidate.IndexerPriority)
                 .ThenBy(evaluation => evaluation.Candidate.IsPart ? 1 : 0)
                 .ThenBy(evaluation => evaluation.Decision switch { SelectionDecision.Eligible => 0, SelectionDecision.ManualReview => 1, _ => 2 })
@@ -48,18 +48,31 @@ namespace Jularr.Backend.Logic.Acquisition
             return new SelectionResult(ranked, winner, winner is null ? null : WinnerReason(profile, winner, runnerUp), OutcomeOf(ranked));
         }
 
-        // Prefer requested, original, other known languages and finally unknown; source priority breaks ties.
-        private static int LanguageTier(QualityProfile profile, IReadOnlyList<string> languages)
+        // The step of the language chain a release is in: the first languages, the second ones, then the original language (with subtitles in the chain's languages first, for a
+        // video), then another known language and finally an unknown one; the profile's fallback decides what is allowed. A lower step always wins, before source priority and quality.
+        private static int LanguageTier(QualityProfile profile, SelectionCandidate candidate)
         {
-            if (UpgradePolicy.IsRequested(profile, languages)) return 0;
-            if (profile.LanguageFallback == LanguageFallbackType.Any)
+            var languages = candidate.Languages;
+            var firsts = Math.Min(profile.FirstLanguages ?? profile.LanguageOrder.Length, profile.LanguageOrder.Length);
+            var steps = profile.LanguageOrder.Length > firsts ? 2 : 1;
+            if (UpgradePolicy.IsRequested(profile, languages))
             {
-                if (UpgradePolicy.IsOriginal(profile, languages)) return 1;
-                return languages.Count > 0 ? 2 : 3;
+                return UpgradePolicy.LanguageRank(profile, languages) < firsts ? 0 : 1;
             }
 
-            return UpgradePolicy.IsFallback(profile, languages) ? 1 : 4;
+            var original = steps + (profile.IsVideo && !candidate.SubtitlesInChain ? 1 : 0);
+            if (profile.LanguageFallback == LanguageFallbackType.Any)
+            {
+                if (UpgradePolicy.IsOriginal(profile, languages)) return original;
+                return languages.Count > 0 ? steps + 2 : steps + 3;
+            }
+
+            return UpgradePolicy.IsFallback(profile, languages) ? original : steps + 4;
         }
+
+        // The first step whose releases are of another language than the chain's: quality ranks there before source priority (books with a flexible fallback).
+        private static int OtherKnownStep(QualityProfile profile) =>
+            (profile.LanguageOrder.Length > Math.Min(profile.FirstLanguages ?? profile.LanguageOrder.Length, profile.LanguageOrder.Length) ? 2 : 1) + 2;
 
         // Closer to the preferred size wins a tie, as in Sonarr.
         private static decimal PreferredDistance(QualityProfile profile, CandidateEvaluation evaluation) =>
@@ -119,7 +132,7 @@ namespace Jularr.Backend.Logic.Acquisition
 
             // An unrequested language, or one the release does not state, needs a deliberate manual choice; no fallback is an unrestricted download.
             var lastResort = languageLastResort && candidate.Languages.Count == 0;
-            if (!lastResort && profile.IsBook && (profile.LanguageOrder.Length > 0 || profile.LanguageFallback == LanguageFallbackType.None)
+            if (!lastResort && profile.AppliesLanguages && (profile.LanguageOrder.Length > 0 || profile.LanguageFallback == LanguageFallbackType.None)
                 && (candidate.Identity.Confidence != IdentityConfidence.Ambiguous || profile.AllowAmbiguousIdentity)
                 && !UpgradePolicy.IsRequested(profile, candidate.Languages) && !UpgradePolicy.IsFallback(profile, candidate.Languages))
             {
@@ -190,13 +203,13 @@ namespace Jularr.Backend.Logic.Acquisition
                 return new ReleaseReason("OnlyCandidate");
             }
 
-            if (profile.IsBook && LanguageTier(profile, winner.Candidate.Languages) != LanguageTier(profile, runnerUp.Candidate.Languages))
+            if (profile.AppliesLanguages && LanguageTier(profile, winner.Candidate) != LanguageTier(profile, runnerUp.Candidate))
             {
                 return new ReleaseReason("PreferredLanguage");
             }
 
             if (profile.IsBook && profile.LanguageFallback == LanguageFallbackType.Any
-                && LanguageTier(profile, winner.Candidate.Languages) >= 2 && LanguageTier(profile, runnerUp.Candidate.Languages) >= 2
+                && LanguageTier(profile, winner.Candidate) >= OtherKnownStep(profile) && LanguageTier(profile, runnerUp.Candidate) >= OtherKnownStep(profile)
                 && winner.QualityRank != runnerUp.QualityRank)
             {
                 return new ReleaseReason("HigherQuality", winner.Score!.QualityKey);

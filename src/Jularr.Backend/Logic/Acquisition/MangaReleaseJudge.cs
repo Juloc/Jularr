@@ -42,7 +42,8 @@ namespace Jularr.Backend.Logic.Acquisition
             // The series name before the volume marker must be one of the Work's titles; more words may be another series.
             var parsed = Parse(offer.Title);
             var name = ReleaseWords.Words(parsed.SeriesTitle, Noise);
-            var languages = ReleaseWords.ReadLanguages(offer.Title);
+            // A name that states no language says nothing about it (the chain decides what to do with such a release).
+            var languages = ReleaseWords.ReadLanguages(offer.Title, "");
             var viaId = offer.Stages.Contains("id");
             var wanted = titles.Select(title => ReleaseWords.Words(title, Noise)).Where(words => words.Count > 0).ToArray();
             if (!wanted.Any(words => words.All(name.Contains)))

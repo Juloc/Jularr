@@ -4193,6 +4193,7 @@ namespace Jularr.Backend.Tests
             var work = (await created.Content.ReadFromJsonAsync<WorkDetailsV1>())!;
             Assert.AreEqual(year, work.ReleaseYear);
             await host.Fixture.RunSqlAsync($"""
+                UPDATE "Works" SET "OriginalLanguage" = 'en' WHERE "Id" = {work.Id};
                 INSERT INTO "AcquisitionRequests" ("Id", "WorkId", "RequestedByProfileId", "RequestedByAccountId", "UiLocaleId", "AcquisitionRequestStatusTypeId", "DecidedByAccountId", "DecidedAt")
                 VALUES ({requestId}, {work.Id}, 202, 42, 1, 2, 41, now());
                 INSERT INTO "WantedItems" ("Id", "WorkId") VALUES ({wantedId}, {work.Id});

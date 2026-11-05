@@ -52,8 +52,20 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         public int UpgradeMinimumQualitySteps { get; init; } = 1;
         public bool AllowAmbiguousIdentity { get; init; }
         public string[] LanguageOrder { get; init; } = [];
+
+        // How many of the first entries of `LanguageOrder` are first languages (of one chain or of several); the rest are second languages. All of them are first languages when unset.
+        public int? FirstLanguages { get; init; }
         public bool IsMovie { get; init; }
         public bool IsBook { get; init; }
+
+        // A film, a series or an anime: its language is the audio of the release.
+        public bool IsVideo { get; init; }
+
+        // A manga: its volumes are searched by their missing units; the chain decides which language a release may be in.
+        public bool IsManga { get; init; }
+
+        // The language chain decides what an automatic search may take: books and videos.
+        public bool AppliesLanguages => IsBook || IsVideo || IsManga;
 
         // The languages a book is wanted in, covered or not; a file in another known language never replaces one of them.
         public string[] WantedLanguages { get; init; } = [];

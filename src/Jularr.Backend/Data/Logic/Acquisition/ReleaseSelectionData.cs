@@ -111,6 +111,11 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         // The languages the release carries (audio languages, the language of a book or chapter).
         public IReadOnlyList<string> Languages { get; init; } = [];
         public bool LanguagesFromTitle { get; init; }
+        public bool LanguagesAssumedOriginal { get; init; }
+
+        // A video release with subtitles in a language of the chain (or in several that are not named): preferred at the step of the original language.
+        public bool SubtitlesInChain { get; init; }
+        public IReadOnlyList<string> SubtitleLanguages { get; init; } = [];
 
         // The quality already present; only an upgrade of it can be taken.
         public string? InstalledQuality { get; init; }

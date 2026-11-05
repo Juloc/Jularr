@@ -18,7 +18,7 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
     // default of), the custom formats once for every type with the release profiles, release groups and tags as sections under them, and the quality sizes as sliders.
     // A profile has its own page; adding is a dialog the address opens, settings of a card are inputs saved by the page's pill.
     public sealed partial class ProfilesModel(
-        ReadAcquisitionProfilesV1 profiles, ReadMonitoredLanguagesV1 readMonitored, SaveMonitoredLanguagesV1 saveMonitored,
+        ReadAcquisitionProfilesV1 profiles, ReadMonitoredLanguagesV1 readMonitored, SaveMonitoredLanguagesV1 saveMonitored, ReadLanguageRulesV1 readRules, SaveLanguageRuleV1 saveRule,
         ReadCustomFormatsV1 formats, ReadCustomFormatV1 format, SaveCustomFormatV1 saveFormat, DeleteCustomFormatV1 deleteFormat, ImportCustomFormatsV1 importFormats,
         ReadQualityDefinitionsV1 sizes, SaveQualityDefinitionsV1 saveSizes,
         ReadReleaseProfilesV1 releases, ReadReleaseProfileV1 release, SaveReleaseProfileV1 saveRelease, DeleteReleaseProfileV1 deleteRelease,
@@ -61,6 +61,11 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
         private PageResult<AcquisitionConnectionDetailsV1>? _indexerPage;
         private IReadOnlyList<AcquisitionProfileDetailsV1> _profiles = [];
         private MonitoredLanguagesV1? _monitored;
+        private IReadOnlyList<LanguageRuleV1> _rules = [];
+        private SaveLanguageRuleDataV1? _ruleInput;
+
+        // The language whose add-ons the form holds; an unknown value shows an empty form.
+        [BindProperty(SupportsGet = true, Name = "rule")] public string? RuleLanguage { get; set; }
         private SaveMonitoredLanguagesDataV1? _monitoredInput;
         private IReadOnlyList<AcquisitionMediaKind> _kinds = [];
         private PageResult<CustomFormatDetailsV1>? _formats;
@@ -127,6 +132,7 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
             }).ToList();
             page.Content.Add(new ListPanel("admin.profiles.title", columns, rows, empty).Modifier("profiles-list"));
             if (_monitored is not null && !SetupWizard.IsActive(Request)) page.Content.Add(MonitoredLanguages(_monitored));
+            if (!SetupWizard.IsActive(Request)) page.Content.Add(LanguageRules());
 
             // A new profile starts with the media type it is for; the type decides its list of qualities.
             if (NewItem == ProfileItem)
@@ -223,6 +229,7 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
                 case DownloadPages.Profiles:
                     _profiles = await profiles.ExecuteAsync<BaseDataList<AcquisitionProfileDetailsV1>>(new ReadAcquisitionProfilesParametersV1(), cancellation);
                     _monitored = await readMonitored.ExecuteAsync<MonitoredLanguagesV1>(new MonitoredLanguagesParametersV1(), cancellation);
+                    _rules = await readRules.ExecuteAsync<BaseDataList<LanguageRuleV1>>(new LanguageRulesParametersV1(), cancellation);
                     if (NewItem == ProfileItem)
                     {
                         // The types the instance offers: a type that is switched off has no new profiles.
