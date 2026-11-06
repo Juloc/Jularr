@@ -1,4 +1,5 @@
 import { readerLifetime } from "../Lifetime";
+import { codexBar, showCodexBar } from "./CodexBar";
 
 // Reader translation: a section's blocks in another language from the server's TranslateGemma; Mozilla in the browser steps in only as an emergency, and its results stay in this browser.
 // A language is its code as Mozilla's models name it, such as "de" or "ja".
@@ -323,7 +324,7 @@ export function translator(reader: HTMLElement, content: HTMLElement, createWork
     // A block from another model than the chapter's own carries its model, shown as a quiet line beside it; the language panel names it.
     function label() {
         if (!shown) return;
-        const own = reader.dataset.localModel;
+        const own = reader.dataset.localModel || reader.dataset.codexModel;
         shown.models.forEach((model, index) => {
             const block = blocks[index];
             if (model && model !== own) {
@@ -355,11 +356,17 @@ export function translator(reader: HTMLElement, content: HTMLElement, createWork
     // Local TranslateGemma uses the same section/block identities. Only validated completed
     // blocks enter the provider-specific cache; a failed block cannot complete the section.
     async function translateLocal(target: Language, generation: number) {
-        const model = reader.dataset.localModel;
+        // Without a local model Codex's model stands in for reading what it translated; it translates only when its button is pressed.
+        const model = reader.dataset.localModel || reader.dataset.codexModel;
         const prefix = reader.dataset.localTranslationUrl;
-        if (!model || !prefix || !source) throw new Error("Local translation is unavailable.");
         const run = ++runs;
         const alive = () => current === target && revision === generation && runs === run;
+        // Codex that cannot translate now (not connected, its limit reached): the bar says why, nothing is asked.
+        if (!model && prefix && source && reader.parentElement?.querySelector("[data-role=codex][data-problem]:not([data-problem=''])")) {
+            codexBar(reader, { model: "", source, target, list: [], translated: () => false, put: () => undefined, top: () => 0, alive });
+            return;
+        }
+        if (!model || !prefix || !source) throw new Error("Local translation is unavailable.");
         const url = prefix + encodeURIComponent(target) + "/" + encodeURIComponent(model);
         const set = blockSet(prefix, target, texts());
         const { list, result, bridge } = set;
@@ -391,23 +398,24 @@ export function translator(reader: HTMLElement, content: HTMLElement, createWork
             show(result);
         }
 
-        // A model that translates whole passages (Codex) is asked once for the section's missing blocks, not once per block.
-        if (reader.dataset.localPassages === "true") {
-            if (list.some((text, i) => text.trim().length > 0 && (!result[i].trim() || bridge[i]))) {
-                say(reader.dataset.translatingLabel);
-                const response = await fetch(url + "/passages", {
-                    method: "POST", credentials: "same-origin",
-                    headers: { "Content-Type": "application/json", RequestVerificationToken: reader.dataset.antiforgery! },
-                    body: JSON.stringify({ sourceLanguage: source })
-                });
-                if (!response.ok) throw new Error("The model could not translate the section.");
-                if (!alive()) return;
-                await load();
-                if (!alive()) return;
-                show(result);
-                label();
-            }
-            if (alive()) say(undefined);
+        // Codex never starts by itself: the bar under the Reader offers its button for this chapter and the next one.
+        if (!reader.dataset.localModel) {
+            codexBar(reader, {
+                model, source, target, list,
+                translated: index => result[index].trim().length > 0 && !bridge[index],
+                put: blocks => {
+                    for (const { index, text } of blocks) {
+                        if (chosen.has(index)) continue;
+                        result[index] = text;
+                        models[index] = model;
+                        bridge[index] = false;
+                    }
+                    show(result);
+                    label();
+                },
+                top: () => windowed()[0] ?? 0,
+                alive
+            });
             return;
         }
 
@@ -474,6 +482,7 @@ export function translator(reader: HTMLElement, content: HTMLElement, createWork
         restore();
         say(undefined);
         reader.dataset.translationState = 'ready';
+        showCodexBar(reader, target !== "" && !!source && source !== target);
         if (target === "" || !source || source === target) return;
         reader.dataset.translationState = 'loading';
         try {

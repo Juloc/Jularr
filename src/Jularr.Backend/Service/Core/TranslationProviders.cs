@@ -91,20 +91,27 @@ namespace Jularr.Backend.Service.Core
             return null;
         }
 
-        // What translates a book for this caller by default: the machine above, else for a holder of the admin-only right the first model an admin-only
-        // provider offers now (Codex while no local model answers); Away when nothing translates because a provider set up with machines has none answering.
-        public async Task<(TranslationMachine? Machine, bool Away)> ChooseForAsync(TranslationSetupV1 setup, ServiceCaller caller, CancellationToken ct)
+        // What translates a book for every reader by default: the machine above, never an admin-only provider's model (Codex translates only on a button press,
+        // never by itself); Away when nothing translates because a provider set up with machines has none answering.
+        public async Task<(TranslationMachine? Machine, bool Away)> ChooseForAsync(TranslationSetupV1 setup, CancellationToken ct)
         {
-            if (await ChooseAsync(setup, ct) is { } machine) return (machine, false);
-            if (MayUseAdminOnly(caller))
+            if (await ChooseAsync(setup, ct) is { Provider.IsAdminOnly: false } machine) return (machine, false);
+            return (null, _providers.Any(provider => provider.IsAway(setup)));
+        }
+
+        // The model a holder of the admin-only right translates a chapter with when pressing the button, with what keeps it from doing so now (a limit reached);
+        // null for anyone else, where no provider translates in several requests, and while the provider is not connected (nothing is set up to offer).
+        public async Task<(string Id, string? Problem)?> OfferAsync(TranslationSetupV1 setup, ServiceCaller caller, CancellationToken ct)
+        {
+            if (!MayUseAdminOnly(caller)) return null;
+            foreach (var provider in _providers.OfType<IBatchTranslationProvider>().Where(provider => provider.IsAdminOnly))
             {
-                foreach (var provider in _providers.Where(provider => provider.IsAdminOnly))
-                {
-                    if ((await provider.AvailableAsync(setup, ct)).FirstOrDefault() is { } model && await provider.ChooseAsync(setup, model, ct) is { } admin) return (admin, false);
-                }
+                var (model, problem) = await provider.OfferAsync(setup, ct);
+                if (problem == "not_connected") continue;
+                if (model is not null || problem is not null) return (model is null ? "" : Id(provider.Key, model), problem);
             }
 
-            return (null, _providers.Any(provider => provider.IsAway(setup)));
+            return null;
         }
 
         // The right that admits an admin-only provider's models, the one the Owner's re-translation by whole passages needs too.

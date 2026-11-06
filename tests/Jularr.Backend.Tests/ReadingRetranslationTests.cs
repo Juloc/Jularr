@@ -8,6 +8,7 @@ using Jularr.Backend.Data.System.Reading.V1;
 using Jularr.Backend.Data.User.Translation.V1;
 using Jularr.Backend.Service.Core;
 using Jularr.Backend.Service.System.Reading.V1;
+using Jularr.Backend.Service.User.Translation.V1;
 using Jularr.Integrations.Logic.Translation;
 using Microsoft.Extensions.DependencyInjection;
 using Host = Jularr.Backend.Tests.AuthenticationTests.Host;
@@ -163,7 +164,7 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
-        public async Task Codex_WithoutAnAnsweringOllama_TranslatesTheOwnersChapterInPassages_AndOthersAreToldTheMachineIsAway()
+        public async Task Codex_WithoutAnAnsweringOllama_IsOnlyOfferedToTheOwner_AndNeverChosenOrAskedByItself()
         {
             using var storage = new TemporaryDirectory();
             using var codex = new CodexTranslationTests.Folder();
@@ -177,46 +178,216 @@ namespace Jularr.Backend.Tests
             await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'Translation'");
             await host.Fixture.RunSqlAsync("UPDATE \"InstanceSettings\" SET \"TranslationModel\" = '" + Small + "', \"CodexModel\" = 'gpt-ok', \"CodexEffort\" = 'low' WHERE \"Id\" = 1");
 
-            // Ollama does not answer: the Owner's Reader translates with the Codex model of the AI page, in whole passages.
+            // Ollama does not answer: no model translates for anyone, and the Owner is offered Codex's model for a button press, not chosen as the default.
             var owner = await AvailabilityAsync(host);
-            Assert.AreEqual("codex:gpt-ok", owner.Model);
-            Assert.IsTrue(owner.Passages);
-            Assert.IsFalse(owner.Away);
+            Assert.IsNull(owner.Model);
+            Assert.IsTrue(owner.Away);
+            Assert.AreEqual("codex:gpt-ok", owner.Codex);
+            Assert.IsNull(owner.CodexProblem);
 
-            // The chapter's blocks in passage requests, kept as Codex's default text without a choice for other readers; asked again, nothing is missing.
-            var passages = Url(document, 0, "codex:gpt-ok") + "/passages";
-            using (var translated = await host.SendAsync(HttpMethod.Post, passages, new LocalReadingBlockDataV1("en")))
-            {
-                Assert.AreEqual(HttpStatusCode.OK, translated.StatusCode, await translated.Content.ReadAsStringAsync());
-                Assert.IsTrue((await translated.Content.ReadFromJsonAsync<LocalReadingRetranslationV1>(JsonSerializerOptions.Web))!.Translated > 0);
-            }
-            var asked = File.ReadAllLines(Path.Combine(codex.Home, "asked")).Length;
-            Assert.IsTrue(asked < Convert.ToInt64(await host.ScalarAsync("SELECT (\"Structure\" -> 'Sections' -> 0 ->> 'Blocks')::bigint FROM \"ReadingDocuments\" WHERE \"Id\" = " + document),
-                System.Globalization.CultureInfo.InvariantCulture), "fewer requests than blocks");
+            // Reading what is stored costs Codex nothing; no request was made by the availability or the reads.
             using (var read = await host.SendAsync(HttpMethod.Get, Url(document, 0, "codex:gpt-ok") + "?sourceLanguage=en"))
-            {
-                var section = (await read.Content.ReadFromJsonAsync<LocalReadingTranslationV1>(JsonSerializerOptions.Web))!;
-                Assert.IsTrue(Texts(section).Where(text => !string.IsNullOrEmpty(text)).All(text => text!.StartsWith("Translated by gpt-ok: ", StringComparison.Ordinal)), section.Blocks);
-            }
-            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"ReadingTranslationChoices\""));
-            using (var again = await host.SendAsync(HttpMethod.Post, passages, new LocalReadingBlockDataV1("en")))
-                Assert.AreEqual(0, (await again.Content.ReadFromJsonAsync<LocalReadingRetranslationV1>(JsonSerializerOptions.Web))!.Translated);
-            Assert.AreEqual(asked, File.ReadAllLines(Path.Combine(codex.Home, "asked")).Length);
+                Assert.AreEqual(HttpStatusCode.OK, read.StatusCode, await read.Content.ReadAsStringAsync());
+            Assert.IsFalse(File.Exists(Path.Combine(codex.Home, "asked")), "Codex must not be asked until a button is pressed.");
 
-            // The AI page adds the chapter's requests up, with model and effort.
-            using (var activity = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/ai/codex/activity"))
-            {
-                var chapter = (await activity.Content.ReadFromJsonAsync<CodexActivityV1>(JsonSerializerOptions.Web))!.Chapters.Single();
-                Assert.AreEqual((1, "gpt-ok", "low", (byte)1, asked, 150L * asked), (chapter.Chapter, chapter.Model, chapter.Effort, chapter.State, chapter.Requests, chapter.Tokens));
-            }
-
-            // A Media Manager may not use Codex: nothing translates, and the Reader says the machine is away instead of hiding why.
+            // A Media Manager lacks the right: no Codex offer at all.
             await host.Fixture.RunSqlAsync("UPDATE \"Accounts\" SET \"AccountRoleTypeId\" = 3 WHERE \"Id\" = 41");
             var manager = await AvailabilityAsync(host);
-            Assert.IsNull(manager.Model);
-            Assert.IsTrue(manager.Away);
-            using (var refused = await host.SendAsync(HttpMethod.Post, passages, new LocalReadingBlockDataV1("en")))
+            Assert.IsNull(manager.Codex);
+            Assert.IsNull(manager.CodexProblem);
+            using (var refused = await host.SendAsync(HttpMethod.Post, Url(document, 0, "codex:gpt-ok") + "/passages", new LocalReadingChunkDataV1("en", 0, [])))
                 Assert.AreEqual(HttpStatusCode.Forbidden, refused.StatusCode);
+            Assert.IsFalse(File.Exists(Path.Combine(codex.Home, "asked")));
+        }
+
+        [TestMethod]
+        public async Task Codex_WithAnAnsweringOllama_IsOnlyOfferedBesideIt()
+        {
+            using var storage = new TemporaryDirectory();
+            using var codex = new CodexTranslationTests.Folder();
+            codex.SignIn();
+            await using var host = await LibraryTests.CreateHostAsync(storage.Path, razor: true,
+                settings: new Dictionary<string, string> { ["LocalTranslation:Endpoint"] = "http://ollama:11434", ["Ai:CodexPath"] = codex.Executable, ["Ai:CodexHome"] = codex.Home },
+                services: services => services.AddHttpClient<OllamaLocalModels>().ConfigurePrimaryHttpMessageHandler(() => new FakeOllama()));
+            await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'Translation'");
+
+            // Ollama translates for everyone as before; Codex is offered beside it and never replaces it.
+            var local = await AvailabilityAsync(host);
+            Assert.AreEqual(Large, local.Model);
+            Assert.IsFalse(local.Away);
+            Assert.IsNotNull(local.Codex);
+            Assert.IsNull(local.CodexProblem);
+
+            // An explicit default model of the admin-only provider never translates by itself either.
+            await host.Fixture.RunSqlAsync("UPDATE \"InstanceSettings\" SET \"TranslationModel\" = '" + local.Codex + "' WHERE \"Id\" = 1");
+            Assert.IsNull((await AvailabilityAsync(host)).Model);
+        }
+
+        [TestMethod]
+        public async Task Codex_NotConnected_IsNotOffered_SoTheReaderStaysAsWithoutCodex()
+        {
+            using var storage = new TemporaryDirectory();
+            using var codex = new CodexTranslationTests.Folder();
+            await using var host = await LibraryTests.CreateHostAsync(storage.Path, razor: true,
+                settings: new Dictionary<string, string> { ["LocalTranslation:Endpoint"] = "http://ollama:11434", ["Ai:CodexPath"] = codex.Executable, ["Ai:CodexHome"] = codex.Home },
+                services: services => services.AddHttpClient<OllamaLocalModels>().ConfigurePrimaryHttpMessageHandler(() => new AwayOllama()));
+            await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'Translation'");
+
+            var owner = await AvailabilityAsync(host);
+            Assert.IsNull(owner.Model);
+            Assert.IsNull(owner.Codex);
+            Assert.IsNull(owner.CodexProblem);
+            Assert.IsTrue(owner.Away);
+        }
+
+        [TestMethod]
+        public async Task Chunks_TranslateTheChapterInSeveralRequests_FromTheBlockInView_HoldTheLanePerRequest_AndKeepWhatIsDone()
+        {
+            using var storage = new TemporaryDirectory();
+            var chunky = new ChunkProvider();
+            await using var host = await CreateHostAsync(storage.Path, new FakeOllama(), services => services.AddSingleton<ITranslationProvider>(chunky));
+            var (first, _) = await ReadingTests.CreateBooksAsync(host, storage.Path, "First Book", "Second Book");
+            var document = (await ReadingTests.OpenAsync(host, first)).DocumentId;
+            await host.Fixture.RunSqlAsync("UPDATE \"ReadingDocuments\" SET \"Language\" = 'en'");
+            await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'Translation'");
+            var gate = host.Services.GetRequiredService<LocalTranslationGate>();
+            chunky.Gate = gate;
+            var url = Url(document, 0, ChunkProvider.Id) + "/passages";
+
+            // The first request takes the blocks from the one in view onward; the lane is held for it and free after it.
+            var chapter = new List<int>();
+            var chunks = new List<LocalReadingChunkV1>();
+            var from = 1;
+            while (true)
+            {
+                var chunk = await PostChunkAsync(host, url, from, []);
+                Assert.AreEqual(1, gate.HeavyWork.CurrentCount, "The lane is free between requests.");
+                if (chunk.Blocks.Length == 0) break;
+                chunks.Add(chunk);
+                chapter.AddRange(chunk.Blocks.Select(block => block.Index));
+                from = chunk.Blocks.Max(block => block.Index) + 1;
+                Assert.IsTrue(chunk.Blocks.Length <= 2);
+                Assert.IsTrue(chunk.Blocks.All(block => block.Text.StartsWith("Chunky: ", StringComparison.Ordinal)));
+                if (chunk.Remaining == 0) break;
+            }
+            Assert.IsTrue(chunks.Count > 1, "The chapter needs several requests.");
+            Assert.IsTrue(chapter[0] >= 1, "It starts at the block in view.");
+            Assert.AreEqual(0, chapter[^1], "The start of the chapter follows last.");
+            Assert.AreEqual(chapter.Count, chapter.Distinct().Count());
+            Assert.AreEqual(chunky.Gates.Count, chunks.Count);
+            Assert.IsTrue(chunky.Gates.All(held => held == 0), "The lane was held during every request.");
+            Assert.AreEqual(0, chunks[^1].Remaining);
+            Assert.IsTrue(chunks.All(chunk => chunk.Seconds >= 0 && chunk.Characters > 0));
+
+            // Everything is stored: the section reads back with the chapter's texts, and asking again costs nothing.
+            using (var read = await host.SendAsync(HttpMethod.Get, Url(document, 0, ChunkProvider.Id) + "?sourceLanguage=en"))
+                Assert.AreEqual(chapter.Count, Texts((await read.Content.ReadFromJsonAsync<LocalReadingTranslationV1>(JsonSerializerOptions.Web))!).Count(text => !string.IsNullOrEmpty(text)));
+            var calls = chunky.Calls;
+            var again = await PostChunkAsync(host, url, 0, []);
+            Assert.AreEqual(0, again.Blocks.Length);
+            Assert.AreEqual(0, again.Remaining);
+            Assert.AreEqual(calls, chunky.Calls);
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"ReadingTranslationChoices\""));
+        }
+
+        [TestMethod]
+        public async Task Chunks_AFailedRequest_NamesTheCause_KeepsTheFinishedOnes_AndTheRetryAsksOnlyForTheRest()
+        {
+            using var storage = new TemporaryDirectory();
+            var chunky = new ChunkProvider();
+            await using var host = await CreateHostAsync(storage.Path, new FakeOllama(), services => services.AddSingleton<ITranslationProvider>(chunky));
+            var (first, _) = await ReadingTests.CreateBooksAsync(host, storage.Path, "First Book", "Second Book");
+            var document = (await ReadingTests.OpenAsync(host, first)).DocumentId;
+            await host.Fixture.RunSqlAsync("UPDATE \"ReadingDocuments\" SET \"Language\" = 'en'");
+            await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'Translation'");
+            var gate = host.Services.GetRequiredService<LocalTranslationGate>();
+            chunky.Gate = gate;
+            var url = Url(document, 0, ChunkProvider.Id) + "/passages";
+
+            // A request breaks after its first block: that block is stored, the cause is the error code, and the lane is free.
+            chunky.FailNext = "limit";
+            using (var failed = await host.SendAsync(HttpMethod.Post, url, new LocalReadingChunkDataV1("en", 0, [])))
+            {
+                Assert.AreEqual(HttpStatusCode.ServiceUnavailable, failed.StatusCode);
+                StringAssert.Contains(await failed.Content.ReadAsStringAsync(), "translation_limit_reached");
+            }
+            Assert.AreEqual(1, gate.HeavyWork.CurrentCount);
+            int[] stored;
+            using (var read = await host.SendAsync(HttpMethod.Get, Url(document, 0, ChunkProvider.Id) + "?sourceLanguage=en"))
+                stored = [.. Texts((await read.Content.ReadFromJsonAsync<LocalReadingTranslationV1>(JsonSerializerOptions.Web))!).Select((text, index) => (text, index)).Where(item => !string.IsNullOrEmpty(item.text)).Select(item => item.index)];
+            Assert.AreEqual(1, stored.Length, "What came before the break is kept.");
+
+            // Other causes are named too (the request failing before any block).
+            chunky.FailAt = 0;
+            foreach (var (problem, code) in new[] { ("not_connected", "translation_not_connected"), ("", "translation_request_failed") })
+            {
+                chunky.FailNext = problem;
+                using var failed = await host.SendAsync(HttpMethod.Post, url, new LocalReadingChunkDataV1("en", 0, []));
+                StringAssert.Contains(await failed.Content.ReadAsStringAsync(), code);
+            }
+            chunky.FailAt = 1;
+
+            // The retry from the start translates only what is missing.
+            var asked = chunky.Asked.Count;
+            var rest = new List<int>();
+            while (await PostChunkAsync(host, url, 0, []) is { Blocks.Length: > 0 } chunk) rest.AddRange(chunk.Blocks.Select(block => block.Index));
+            Assert.AreEqual(asked + rest.Count, chunky.Asked.Count);
+            Assert.IsFalse(rest.Intersect(stored).Any(), "A finished block is never asked again.");
+
+            // A block whose answer fails the checks even alone is reported and, passed as skipped, left out of the next request.
+            chunky.RefuseBlock = true;
+            await host.Fixture.RunSqlAsync("DELETE FROM \"ReadingResources\" WHERE \"Path\" LIKE ':localtranslation/v4/chunky%'");
+            var refused = await PostChunkAsync(host, url, 0, []);
+            Assert.AreEqual(2, refused.Failed.Length);
+            Assert.AreEqual(0, refused.Blocks.Length);
+            var next = await PostChunkAsync(host, url, 0, refused.Failed);
+            Assert.IsFalse(next.Failed.Intersect(refused.Failed).Any());
+        }
+
+        [TestMethod]
+        public async Task Chunks_WhenTheLaneIsTakenTooLong_AnswerBusy_WithoutAskingTheModel()
+        {
+            using var storage = new TemporaryDirectory();
+            var chunky = new ChunkProvider();
+            await using var host = await CreateHostAsync(storage.Path, new FakeOllama(), services => services.AddSingleton<ITranslationProvider>(chunky));
+            var (first, _) = await ReadingTests.CreateBooksAsync(host, storage.Path, "First Book", "Second Book");
+            var document = (await ReadingTests.OpenAsync(host, first)).DocumentId;
+            await host.Fixture.RunSqlAsync("UPDATE \"ReadingDocuments\" SET \"Language\" = 'en'");
+            await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'Translation'");
+            var gate = host.Services.GetRequiredService<LocalTranslationGate>();
+            gate.ChunkWait = TimeSpan.FromMilliseconds(200);
+
+            await gate.HeavyWork.WaitAsync();
+            try
+            {
+                using var busy = await host.SendAsync(HttpMethod.Post, Url(document, 0, ChunkProvider.Id) + "/passages", new LocalReadingChunkDataV1("en", 0, []));
+                Assert.AreEqual(HttpStatusCode.ServiceUnavailable, busy.StatusCode);
+                StringAssert.Contains(await busy.Content.ReadAsStringAsync(), "translation_local_busy");
+            }
+            finally { gate.HeavyWork.Release(); }
+            Assert.AreEqual(0, chunky.Calls);
+        }
+
+        [TestMethod]
+        public void Chunk_StartsAtTheBlockInView_WrapsToTheStart_AndRespectsBothLimits()
+        {
+            var batch = new ChunkProvider { PerRequest = 5 };
+            List<(int Index, string Text)> pending = [.. Enumerable.Range(0, 10).Select(index => (index, new string('x', 100)))];
+            CollectionAssert.AreEqual(new[] { 7, 8, 9, 0, 1 }, PassageTranslation.Chunk(pending, 7, batch).Select(item => item.Index).ToArray());
+            CollectionAssert.AreEqual(new[] { 0, 1, 2, 3, 4 }, PassageTranslation.Chunk(pending, 0, batch).Select(item => item.Index).ToArray());
+            CollectionAssert.AreEqual(new[] { 9 }, PassageTranslation.Chunk([(9, "y")], 20, batch).Select(item => item.Index).ToArray());
+
+            // The characters limit ends a request early, but one block always goes through, however long.
+            batch.Characters = 250;
+            CollectionAssert.AreEqual(new[] { 3, 4 }, PassageTranslation.Chunk(pending, 3, batch).Select(item => item.Index).ToArray());
+            CollectionAssert.AreEqual(new[] { 0 }, PassageTranslation.Chunk([(0, new string('x', 900))], 0, batch).Select(item => item.Index).ToArray());
+        }
+
+        private static async Task<LocalReadingChunkV1> PostChunkAsync(Host host, string url, int from, int[] skip)
+        {
+            using var response = await host.SendAsync(HttpMethod.Post, url, new LocalReadingChunkDataV1("en", from, skip));
+            Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, await response.Content.ReadAsStringAsync());
+            return (await response.Content.ReadFromJsonAsync<LocalReadingChunkV1>(JsonSerializerOptions.Web))!;
         }
 
         private static async Task<LocalTranslationAvailabilityV1> AvailabilityAsync(Host host)
@@ -318,6 +489,86 @@ namespace Jularr.Backend.Tests
                 }
                 else throw new InvalidOperationException("Unexpected Ollama API: " + request.RequestUri.AbsolutePath);
                 return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(body) };
+            }
+        }
+
+        // An admin-only provider that translates in several requests of two blocks each, for the chunked button translation; it can fail on demand.
+        private sealed class ChunkProvider : IBatchTranslationProvider
+        {
+            public const string Id = "chunky:model";
+            public int PerRequest { get; init; } = 2;
+            private int _calls;
+            private string? _problem;
+
+            public LocalTranslationGate? Gate { get; set; }
+            public List<int> Gates { get; } = [];
+            public List<string> Asked { get; } = [];
+            public string? FailNext { get; set; }
+            public int FailAt { get; set; } = 1;
+            public bool RefuseBlock { get; set; }
+            public int Characters { get; set; } = 6000;
+            public int Calls => _calls;
+
+            public string Key => "chunky";
+            public IReadOnlyList<string> Models => ["model"];
+            public bool IsAdminOnly => true;
+            public int BatchCharacters => Characters;
+            public int BatchBlocks => PerRequest;
+
+            public Task<(string? Model, string? Problem)> OfferAsync(TranslationSetupV1 setup, CancellationToken ct) => Task.FromResult<(string?, string?)>(("model", _problem));
+
+            public Task<IReadOnlyList<string>> AvailableAsync(TranslationSetupV1 setup, CancellationToken ct) => Task.FromResult(Models);
+
+            public Task<TranslationMachine?> ChooseAsync(TranslationSetupV1 setup, string? model, CancellationToken ct) =>
+                Task.FromResult(model == "model" ? new TranslationMachine(this, model, new Uri("chunky://local/")) : null);
+
+            public Task<string> DigestAsync(TranslationMachine machine, CancellationToken ct) => Task.FromResult("chunky-1");
+
+            public Task<string?[]> TranslateBlocksAsync(TranslationMachine machine, string source, string target, IReadOnlyList<string> blocks, string? context, CancellationToken ct) =>
+                TranslateBlocksStreamAsync(machine, source, target, blocks, context, (_, _) => { }, ct);
+
+            // A block comes out as soon as it is answered; with FailNext set the request fails at block FailAt of the request (after the first one: a stream that breaks).
+            public Task<string?[]> TranslateBlocksStreamAsync(TranslationMachine machine, string source, string target, IReadOnlyList<string> blocks, string? context, Action<int, string> onBlock,
+                CancellationToken ct)
+            {
+                _calls++;
+                Gates.Add(Gate?.HeavyWork.CurrentCount ?? -1);
+                var answers = new string?[blocks.Count];
+                for (var index = 0; index < blocks.Count; index++)
+                {
+                    if (FailNext is { } problem && index == FailAt)
+                    {
+                        FailNext = null;
+                        _problem = problem.Length == 0 ? null : problem;
+                        throw new InvalidDataException("The model failed.");
+                    }
+
+                    if (RefuseBlock) continue;
+                    answers[index] = "Chunky: " + blocks[index];
+                    Asked.Add(blocks[index]);
+                    onBlock(index, answers[index]!);
+                }
+
+                _problem = null;
+                return Task.FromResult(answers);
+            }
+
+            public Task<string?> TranslateBlockAsync(TranslationMachine machine, string source, string target, string text, string? context, CancellationToken ct) =>
+                Task.FromResult<string?>(RefuseBlock ? null : "Chunky: " + text);
+
+            public IDisposable BeginChapter(TranslationMachine machine, int chapter, string? title) => new Scope();
+
+            public Task<string> TranslateAsync(TranslationMachine machine, string source, string target, string text, CancellationToken ct) => Task.FromResult(text);
+
+            public void Fail(TranslationMachine machine)
+            {
+            }
+
+            private sealed class Scope : IDisposable
+            {
+                public void Dispose()
+                {
+                }
             }
         }
 

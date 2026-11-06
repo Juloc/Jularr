@@ -196,7 +196,7 @@ function initializeText(reader: HTMLElement, address: URL): void {
     translation = reader.dataset.localTranslationUrl ? translator(reader, content, createTranslationWorker, () => paging!.ahead()) : undefined;
     const translate = translation?.choose;
     if (translation) initializeRetranslation(reader, translation, () => paging!.current());
-    const localModel = reader.dataset.localModel;
+    const localModel = reader.dataset.localModel || reader.dataset.codexModel;
     const provider = reader.querySelector<HTMLElement>('[data-translation-provider]');
     const showProvider = () => {
         if (!provider) return;

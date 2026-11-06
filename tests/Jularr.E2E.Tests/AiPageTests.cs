@@ -33,6 +33,17 @@ namespace Jularr.E2E.Tests
                     *'"method":"initialize"'*) printf '{"id":%s,"result":{"userAgent":"codex"}}\n' "$id" ;;
                     *'"method":"model/list"'*) printf '{"id":%s,"result":{"data":[{"model":"gpt-one","displayName":"GPT One","supportedReasoningEfforts":[{"reasoningEffort":"low"},{"reasoningEffort":"medium"},{"reasoningEffort":"high"}],"isDefault":true},{"model":"gpt-two","displayName":"GPT Two","supportedReasoningEfforts":[{"reasoningEffort":"low"},{"reasoningEffort":"high"}]}],"nextCursor":null}}\n' "$id" ;;
                     *'"method":"account/rateLimits/read"'*) printf '{"id":%s,"result":{"rateLimits":{"limitId":"codex","planType":"plus","primary":{"usedPercent":42,"windowDurationMins":300,"resetsAt":1900000000},"secondary":{"usedPercent":8,"windowDurationMins":10080,"resetsAt":1900300000}}}}\n' "$id" ;;
+                    *'"method":"thread/start"'*) printf '{"id":%s,"result":{"thread":{"id":"thread-1"}}}\n' "$id" ;;
+                    *'"method":"turn/start"'*)
+                      printf '{"id":%s,"result":{"turn":{"id":"turn-1"}}}\n' "$id"
+                      model=$(printf '%s' "$line" | sed -n 's/.*"model":"\([^"]*\)".*/\1/p')
+                      text=$(printf '%s' "$line" | sed -n 's/.*"text":"\(.*\)","text_elements".*/\1/p')
+                      prompt=$(printf '%b' "$text")
+                      printf '%s\n' "$prompt" | awk -v m="$model" '/^\[\[[0-9]+\]\]$/ { print; getline; print "Codex " m ": " $0; print "" }' | while IFS= read -r out; do
+                        printf '{"method":"item/agentMessage/delta","params":{"threadId":"thread-1","turnId":"turn-1","itemId":"item-1","delta":"%s\\n"}}\n' "$out"
+                      done
+                      printf '{"method":"thread/tokenUsage/updated","params":{"threadId":"thread-1","turnId":"turn-1","tokenUsage":{"last":{"inputTokens":100,"cachedInputTokens":0,"outputTokens":50,"reasoningOutputTokens":0,"totalTokens":150},"total":{"inputTokens":100,"cachedInputTokens":0,"outputTokens":50,"reasoningOutputTokens":0,"totalTokens":150}}}}\n'
+                      printf '{"method":"turn/completed","params":{"threadId":"thread-1","turn":{"id":"turn-1","status":"completed"}}}\n' ;;
                   esac
                 done ;;
               login)

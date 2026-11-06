@@ -10037,6 +10037,18 @@
    "The local translation model is busy.",
    "Das lokale Übersetzungsmodell ist ausgelastet."
   ],
+  "errors.translation_limit_reached": [
+   "The ChatGPT account's usage limit for Codex is reached.",
+   "Das Nutzungslimit des ChatGPT-Kontos für Codex ist erreicht."
+  ],
+  "errors.translation_not_connected": [
+   "Codex is not connected to a ChatGPT account.",
+   "Codex ist nicht mit einem ChatGPT-Konto verbunden."
+  ],
+  "errors.translation_request_failed": [
+   "Codex could not translate this part of the chapter.",
+   "Codex konnte diesen Teil des Kapitels nicht übersetzen."
+  ],
   "errors.translation_local_not_installed": [
    "Install the selected model on the private server first.",
    "Installiere das gewählte Modell zuerst auf dem privaten Server."
@@ -14507,6 +14519,90 @@
   "reader.codex.stop": [
    "Stop",
    "Anhalten"
+  ],
+  "reader.codex.start": [
+   "Translate with Codex",
+   "Mit Codex übersetzen"
+  ],
+  "reader.codex.next": [
+   "Translate next chapter with Codex",
+   "Nächstes Kapitel mit Codex übersetzen"
+  ],
+  "reader.codex.retry": [
+   "Try again",
+   "Nochmal versuchen"
+  ],
+  "reader.codex.idle": [
+   "This chapter is not translated yet. Codex translates it only when you ask.",
+   "Dieses Kapitel ist noch nicht übersetzt. Codex übersetzt es nur, wenn du es willst."
+  ],
+  "reader.codex.running": [
+   "Translating the chapter with Codex, about {0} left",
+   "Kapitel wird mit Codex übersetzt, noch etwa {0}"
+  ],
+  "reader.codex.runningStart": [
+   "Translating the chapter with Codex …",
+   "Kapitel wird mit Codex übersetzt …"
+  ],
+  "reader.codex.runningNext": [
+   "Translating the next chapter with Codex, about {0} left",
+   "Nächstes Kapitel wird mit Codex übersetzt, noch etwa {0}"
+  ],
+  "reader.codex.runningNextStart": [
+   "Translating the next chapter with Codex …",
+   "Nächstes Kapitel wird mit Codex übersetzt …"
+  ],
+  "reader.codex.chapterDone": [
+   "This chapter is translated.",
+   "Dieses Kapitel ist übersetzt."
+  ],
+  "reader.codex.nextDone": [
+   "The next chapter is translated.",
+   "Das nächste Kapitel ist übersetzt."
+  ],
+  "reader.codex.skipped": [
+   "{0} passages could not be translated and stay in the original language.",
+   "{0} Stellen konnten nicht übersetzt werden und bleiben im Original."
+  ],
+  "reader.codex.stopped": [
+   "Stopped. What is translated stays.",
+   "Angehalten. Was übersetzt ist, bleibt erhalten."
+  ],
+  "reader.codex.limit": [
+   "The usage limit of your ChatGPT account for Codex is reached. Try again later.",
+   "Das Codex-Limit deines ChatGPT-Kontos ist erreicht. Versuche es später noch einmal."
+  ],
+  "reader.codex.notConnected": [
+   "Codex is not connected to a ChatGPT account. Connect it on the AI page.",
+   "Codex ist nicht mit einem ChatGPT-Konto verbunden. Verbinde es auf der KI-Seite."
+  ],
+  "reader.codex.unavailable": [
+   "Codex is not available right now.",
+   "Codex ist gerade nicht erreichbar."
+  ],
+  "reader.codex.busy": [
+   "Jularr is translating something else right now. This chapter goes on in a moment.",
+   "Jularr übersetzt gerade etwas anderes. Dieses Kapitel geht gleich weiter."
+  ],
+  "reader.codex.error": [
+   "Codex could not translate a part of the chapter. What is translated stays.",
+   "Codex konnte einen Teil des Kapitels nicht übersetzen. Was übersetzt ist, bleibt erhalten."
+  ],
+  "reader.codex.runningShort": [
+   "Translating the chapter with Codex, less than a minute left",
+   "Kapitel wird mit Codex übersetzt, noch weniger als eine Minute"
+  ],
+  "reader.codex.runningNextShort": [
+   "Translating the next chapter with Codex, less than a minute left",
+   "Nächstes Kapitel wird mit Codex übersetzt, noch weniger als eine Minute"
+  ],
+  "reader.codex.time.minute": [
+   "1 minute",
+   "1 Minute"
+  ],
+  "reader.codex.time.minutes": [
+   "{0} minutes",
+   "{0} Minuten"
   ],
   "reader.codex.progress": [
    "Chapter {0} of {1} with Codex …",

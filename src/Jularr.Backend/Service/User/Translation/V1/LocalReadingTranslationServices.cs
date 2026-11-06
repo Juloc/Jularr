@@ -142,13 +142,15 @@ namespace Jularr.Backend.Service.User.Translation.V1
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<LocalTranslationAvailabilityV1>()];
         protected override ModuleRequirement GetInstanceModules(LocalTranslationAvailabilityParametersV1 parameters) => ModuleRequirement.All("Library", "Reading", "Translation");
         protected override ServicePermission GetPermission(LocalTranslationAvailabilityParametersV1 parameters, Type resultType) => new("profile.media.read");
-        // The model id that translates for the caller now (the Owner's default, else the largest installed TranslateGemma, else for the admin-only right
-        // Codex); asking each machine is metadata work and never delays opening the Reader for long.
+        // The model id that translates for everyone now (the Owner's default, else the largest installed TranslateGemma; Codex never translates by itself),
+        // and for the admin-only right the Codex model a button press translates a chapter with; asking each machine is metadata work and never delays opening
+        // the Reader for long.
         protected override async Task<IServiceOutput> OnRead()
         {
             var setup = await TranslationProviders.SetupAsync(Context, CancellationToken);
-            var (machine, away) = await _providers.ChooseForAsync(setup, Auth, CancellationToken);
-            return new LocalTranslationAvailabilityV1(machine?.ModelId, machine?.Provider is IBatchTranslationProvider, away);
+            var (machine, away) = await _providers.ChooseForAsync(setup, CancellationToken);
+            var offer = await _providers.OfferAsync(setup, Auth, CancellationToken);
+            return new LocalTranslationAvailabilityV1(machine?.ModelId, away, offer?.Id is { Length: > 0 } codex ? codex : null, offer?.Problem);
         }
     }
 
@@ -230,7 +232,10 @@ namespace Jularr.Backend.Service.User.Translation.V1
             if (_providers.Find(Parameters.Model) is null) throw new DataValidationException(nameof(Parameters.Model), "unknown_model");
             var section = await _sections.ExecuteAsync<ReadingSectionV1>(new ReadingSectionParametersV1(Parameters.DocumentId, Parameters.SectionIndex), CancellationToken);
             var setup = await TranslationProviders.SetupAsync(Context, CancellationToken);
-            var machine = await _providers.ChooseAsync(setup, CancellationToken, Parameters.Model) ?? throw new ServiceUnavailableException("translation_local_unavailable");
+            // What an admin-only provider (Codex) translated stays readable while it is away, limited or resting: reading costs it nothing.
+            var machine = await _providers.ChooseAsync(setup, CancellationToken, Parameters.Model)
+                ?? (_providers.Find(Parameters.Model) is ({ IsAdminOnly: true } provider, var model) ? new TranslationMachine(provider, model, new Uri(provider.Key + "://local/")) : null)
+                ?? throw new ServiceUnavailableException("translation_local_unavailable");
             string digest;
             try { digest = await machine.Provider.DigestAsync(machine, CancellationToken); }
             catch (Exception exception) when (exception is HttpRequestException or InvalidDataException or JsonException or TaskCanceledException)

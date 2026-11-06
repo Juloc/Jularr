@@ -287,3 +287,20 @@
         }
     }
 }
+
+// While no local model translates, Codex translates a chapter on a button press: its bar sits under the reader and says what is translated and what runs.
+.reader__codex {
+    display: flex;
+    flex: 0 0 auto;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 16px;
+    padding: 8px 16px;
+    border-top: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    font-size: 13px;
+    &[hidden] { display: none; }
+    &-text { flex: 1 1 240px; margin: 0; min-width: 0; overflow-wrap: anywhere; }
+    &-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-inline-start: auto; > [hidden] { display: none; } }
+}

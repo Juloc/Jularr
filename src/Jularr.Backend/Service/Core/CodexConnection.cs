@@ -17,6 +17,7 @@ namespace Jularr.Backend.Service.Core
         private static readonly TimeSpan CatalogAge = TimeSpan.FromMinutes(1);
         private static readonly TimeSpan CatalogRetry = TimeSpan.FromSeconds(30);
         private static readonly TimeSpan ConnectedAge = TimeSpan.FromSeconds(30);
+        private static readonly TimeSpan RunResume = TimeSpan.FromMinutes(15);
         // The chapter whose requests this flow makes, if any.
         private static readonly AsyncLocal<CodexRun?> CurrentRun = new();
         private readonly CodexCli _cli;
@@ -175,7 +176,14 @@ namespace Jularr.Backend.Service.Core
         }
 
         // One prompt to the chosen model; its tokens are counted against the limits whether or not the answer is used. `what` names the request on the AI page.
-        internal async Task<string> ExecAsync(string model, string? effort, string prompt, string what, CancellationToken ct)
+        internal Task<string> ExecAsync(string model, string? effort, string prompt, string what, CancellationToken ct) =>
+            AskAsync(model, effort, what, token => _cli.ExecAsync(model, effort, prompt, token), ct);
+
+        // The same in a bare thread of the app-server, the answer's text handed to `onText` as it arrives; the request costs a fraction of an exec request.
+        internal Task<string> StreamAsync(string model, string? effort, string prompt, string what, Action<string> onText, CancellationToken ct) =>
+            AskAsync(model, effort, what, token => _cli.StreamAsync(model, effort, prompt, onText, token), ct);
+
+        private async Task<string> AskAsync(string model, string? effort, string what, Func<CancellationToken, Task<CodexAnswer>> ask, CancellationToken ct)
         {
             if (!CodexSettings.IsModelName(model) || effort is not null && !CodexSettings.IsEffortName(effort)) throw new InvalidDataException("Codex model or effort is not valid.");
             var request = new CodexRequest(what, model, effort, DateTimeOffset.UtcNow);
@@ -188,7 +196,7 @@ namespace Jularr.Backend.Service.Core
 
             try
             {
-                var answer = await _cli.ExecAsync(model, effort, prompt, ct);
+                var answer = await ask(ct);
                 Record(answer.Tokens);
                 lock (_gate)
                 {
@@ -238,10 +246,13 @@ namespace Jularr.Backend.Service.Core
         // chapter cost with that model and effort. A chapter that asked Codex nothing is not listed.
         internal IDisposable BeginRun(int chapter, string? title, string model, string? effort)
         {
-            var run = new CodexRun(chapter, title, model, effort, DateTimeOffset.UtcNow);
+            CodexRun run;
             lock (_gate)
             {
-                _runs.Add(run);
+                // A chapter's next request, within a quarter of an hour of the last, goes on adding to the same row.
+                run = _runs.FirstOrDefault(item => item.Matches(chapter, title, model, effort) && !item.IsRunning && item.EndedWithin(RunResume)) ?? new CodexRun(chapter, title, model, effort, DateTimeOffset.UtcNow);
+                if (run.Requests == 0) _runs.Add(run);
+                run.Resume();
                 Trim(_runs, item => item.State != CodexRequestState.Running, item => item.Started);
             }
 
@@ -529,6 +540,23 @@ namespace Jularr.Backend.Service.Core
         private DateTimeOffset? _finished;
         private CodexRequestState _failure;
         private long _tokens;
+        private int _open;
+
+        public bool IsRunning => _open > 0;
+
+        public bool Matches(int otherChapter, string? otherTitle, string otherModel, string? otherEffort) =>
+            chapter == otherChapter && title == otherTitle && model == otherModel && effort == otherEffort;
+
+        public bool EndedWithin(TimeSpan span) => _finished is { } finished && DateTimeOffset.UtcNow - finished <= span;
+
+        // Another request of this chapter begins; the row is running again, with its earlier failure forgotten.
+        public void Resume()
+        {
+            _open++;
+            _finished = null;
+            _failure = CodexRequestState.Running;
+            State = CodexRequestState.Running;
+        }
 
         public DateTimeOffset Started { get; } = started;
         public CodexRequestState State { get; private set; }
@@ -548,6 +576,7 @@ namespace Jularr.Backend.Service.Core
 
         public void End()
         {
+            if (--_open > 0) return;
             State = _failure == CodexRequestState.Running ? CodexRequestState.Done : _failure;
             _finished = DateTimeOffset.UtcNow;
         }
