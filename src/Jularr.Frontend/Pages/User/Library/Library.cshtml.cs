@@ -101,8 +101,11 @@ namespace Jularr.Frontend.Pages.User.Library
             var searchKeep = new Dictionary<string, string>(keep);
             searchKeep.Remove("q");
             if (Sort != LibrarySortType.RecentlyAdded) searchKeep["sort"] = Sort.ToString();
+            // Games also list their files, including those without a game yet.
+            var settings = new List<IUiComponent> { new ChoiceSelect("/Library", "sort", "library.sort", sorts, keep), new LayoutToggle(assets) };
+            if (Scopes.Picked is ["games"] && texts.CanPlayGames()) settings.Insert(0, new A(new Text("library.gameFiles")).Class("button").Attribute("href", "/Games/Files"));
             page.Content.Add(new Div(new SearchBox("/Library", "library.search", Query, searchKeep, live: true),
-                new Div(new ChoiceSelect("/Library", "sort", "library.sort", sorts, keep), new LayoutToggle(assets)).Class("library-toolbar__settings")).Class("library-toolbar"));
+                new Div([.. settings]).Class("library-toolbar__settings")).Class("library-toolbar"));
 
             if (items.Items.Count == 0)
             {

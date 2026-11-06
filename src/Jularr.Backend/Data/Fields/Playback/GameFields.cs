@@ -14,5 +14,6 @@ namespace Jularr.Backend.Data.Fields.Playback
         public static readonly IntField PlayedSeconds = new() { Minimum = 1, Maximum = 300 };
         public static readonly IntArrayField EmulatedPlatforms = new() { Minimum = 1 };
         public static readonly BoolField IsEmulated = new();
+        public static readonly BoolField NeedsBios = new();
     }
 }

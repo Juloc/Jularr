@@ -216,7 +216,7 @@ namespace Jularr.E2E.Tests
 
             // The providers that need no key would otherwise be asked on the internet by the catalog worker and fill the Works with real titles
             // (colliding with the ids and counts a test seeds); a test points them at its fakes with its settings.
-            foreach (var provider in new[] { "AniList", "MusicBrainz", "OpenLibrary", "AnimeMappings" })
+            foreach (var provider in new[] { "AniList", "MusicBrainz", "OpenLibrary", "AnimeMappings", "Libretro" })
             {
                 start.Environment["Providers__" + provider] = "http://127.0.0.1:1/";
             }

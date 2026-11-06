@@ -4,17 +4,16 @@ using Jularr.Integrations.Data.Libretro;
 
 namespace Jularr.Integrations.Logic.Libretro
 {
-    // The No-Intro DATs of the libretro-database (CC BY-SA 4.0), read from its public repository.
+    // The No-Intro DATs of the libretro-database (CC BY-SA 4.0), read from its public repository or a mirror (the client's base address).
     internal sealed partial class LibretroClient(HttpClient http)
     {
-        private static readonly Uri Repository = new("https://raw.githubusercontent.com/libretro/libretro-database/master/metadat/no-intro/");
 
         public async Task<LibretroDat> ReadDatAsync(string system, CancellationToken ct)
         {
             string text;
             try
             {
-                using var response = await http.GetAsync(new Uri(Repository, Uri.EscapeDataString(system) + ".dat"), ct);
+                using var response = await http.GetAsync(Uri.EscapeDataString(system) + ".dat", ct);
                 if (response.StatusCode != HttpStatusCode.OK)
                 {
                     throw new LibretroException("The libretro database answered " + (int)response.StatusCode + ".");

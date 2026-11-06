@@ -1,6 +1,7 @@
 using System.Text.Json.Serialization;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Playback;
+using Jularr.Backend.Data.Fields.Library;
 using Jularr.Backend.Data.Fields.Media;
 using Jularr.Backend.Data.Fields.Playback;
 
@@ -31,6 +32,91 @@ namespace Jularr.Backend.Data.User.Game.V1
 
         [DataField(typeof(GameFields), nameof(GameFields.FileName))]
         public string FileName { get; }
+    }
+
+    public sealed class ReadGameFilesParametersV1 : BaseParameters
+    {
+        public ReadGameFilesParametersV1(int page = 1, int pageSize = 100)
+        {
+            Page = page;
+            PageSize = pageSize;
+        }
+
+        public int Page { get; }
+        public int PageSize { get; }
+    }
+
+    public sealed class GameStoredFileParametersV1 : BaseParameters
+    {
+        public GameStoredFileParametersV1(long storedFileId)
+        {
+            StoredFileId = storedFileId;
+        }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.Id))]
+        public long StoredFileId { get; }
+    }
+
+    // The file name ends the address because emulators recognize a game by its extension.
+    public sealed class GameStoredFileContentParametersV1 : BaseParameters
+    {
+        public GameStoredFileContentParametersV1(long storedFileId, string fileName)
+        {
+            StoredFileId = storedFileId;
+            FileName = fileName;
+        }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.Id))]
+        public long StoredFileId { get; }
+
+        [DataField(typeof(GameFields), nameof(GameFields.FileName))]
+        public string FileName { get; }
+    }
+
+    // A file of a games library: its game when it has one, the system by its platform or extension, and whether the browser plays it.
+    public sealed class GameLibraryFileV1 : BaseResponse
+    {
+        public GameLibraryFileV1(long storedFileId, string fileName, long sizeBytes, string? system, string? emulator, bool needsBios, long? mediaAssetId, long? workId, string? title)
+        {
+            StoredFileId = storedFileId;
+            FileName = fileName;
+            SizeBytes = sizeBytes;
+            System = system;
+            Emulator = emulator;
+            NeedsBios = needsBios;
+            MediaAssetId = mediaAssetId;
+            WorkId = workId;
+            Title = title;
+        }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.Id))]
+        public long StoredFileId { get; }
+
+        [DataField(typeof(GameFields), nameof(GameFields.FileName))]
+        public string FileName { get; }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.SizeBytes))]
+        public long SizeBytes { get; }
+
+        [DataField(typeof(GamePlatformFields), nameof(GamePlatformFields.Abbreviation))]
+        public string? System { get; }
+
+        // No emulator: the browser does not play the file.
+        [DataField(typeof(GameFields), nameof(GameFields.Emulator))]
+        public string? Emulator { get; }
+
+        // A disc image: its consoles need a BIOS the browser player lacks.
+        [DataField(typeof(GameFields), nameof(GameFields.NeedsBios))]
+        public bool NeedsBios { get; }
+
+        [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.Id), false)]
+        public long? MediaAssetId { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.Id), false)]
+        public long? WorkId { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.CanonicalTitle), false)]
+        public string? Title { get; }
     }
 
     public sealed class GameSaveParametersV1 : BaseParameters

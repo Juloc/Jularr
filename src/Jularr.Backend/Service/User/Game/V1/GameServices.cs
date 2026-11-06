@@ -1,3 +1,4 @@
+using Jularr.Backend.Data;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Service;
 using Jularr.Backend.Data.Logic.Playback;
@@ -115,6 +116,199 @@ namespace Jularr.Backend.Service.User.Game.V1
 
             var files = _storage.Open(await Context.ReadStorageMountAsync(stream.StorageMountId, CancellationToken));
             return new GameFileV1(await files.OpenReadAsync(StoragePath.Combine(stream.RootRelativePath, stream.RelativePath), CancellationToken));
+        }
+    }
+
+    [ServiceEndpoint("GET", "/api/v1/games/files")]
+    public sealed class ReadGameFilesV1 : UserService<ReadGameFilesParametersV1>
+    {
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<PageResult<GameLibraryFileV1>>()];
+        protected override ModuleRequirement GetInstanceModules(ReadGameFilesParametersV1 parameters) => ModuleRequirement.All("Library", "Emulation");
+        protected override ServicePermission GetPermission(ReadGameFilesParametersV1 parameters, Type resultType) => new("profile.playback");
+        protected override PageRequest GetPageRequest(ReadGameFilesParametersV1 parameters) => new(parameters.Page, parameters.PageSize);
+
+        protected override async Task<IServiceOutput> OnRead()
+        {
+            // Every file of the games libraries: one with a game the profile sees, one without where the profile may see games at all.
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    file."Id" AS "StoredFileId",
+                    file."RelativePath",
+                    file."SizeBytes",
+                    platform."IgdbId",
+                    asset."Id" AS "MediaAssetId",
+                    work."Id" AS "WorkId",
+                    work."CanonicalTitle" AS "Title"
+                FROM
+                    "StoredFiles" AS file
+                    JOIN "LibraryRoots" AS root ON root."Id" = file."LibraryRootId"
+                    LEFT JOIN "MediaAssets" AS asset ON asset."Id" = file."MediaAssetId"
+                    LEFT JOIN "Works" AS work ON work."Id" = asset."WorkId"
+                    LEFT JOIN "GameReleases" AS release ON release."WorkVersionId" = asset."WorkVersionId"
+                    LEFT JOIN LATERAL (
+                        SELECT
+                            catalog."GamePlatformId"
+                        FROM
+                            "GameRoms" AS rom
+                            JOIN "GameRomCatalogs" AS catalog ON catalog."Id" = rom."GameRomCatalogId"
+                        WHERE
+                            rom."Sha1" = file."Sha1"
+                        ORDER BY
+                            rom."GameRomCatalogId"
+                        LIMIT 1
+                    ) AS dump ON TRUE
+                    LEFT JOIN "GamePlatforms" AS platform ON platform."Id" = coalesce(release."GamePlatformId", dump."GamePlatformId")
+                WHERE
+                    root."MediaTypeId" = 7
+                    AND file."MissingSince" IS NULL
+                    AND NOT file."IsSubtitle"
+                    AND CASE
+                        WHEN asset."Id" IS NULL THEN EXISTS (
+                            SELECT 1 FROM "ProfileMediaCategories" AS category WHERE category."ProfileId" = @ProfileId AND category."MediaTypeId" = 7 AND category."MediaSubtypeId" IS NULL)
+                        ELSE EXISTS (SELECT 1 FROM "ProfileWorks" AS visible WHERE visible."WorkId" = asset."WorkId" AND visible."ProfileId" = @ProfileId)
+                    END
+                ORDER BY
+                    lower(file."RelativePath"),
+                    file."Id"
+                LIMIT @PageSize
+                OFFSET @Offset;
+                """;
+            sql.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));
+            sql.Page = Page;
+            var rows = await Context.ReadSql.ReadPageAsync<GameLibraryFileData>(sql, CancellationToken);
+            return new PageResult<GameLibraryFileV1>([.. rows.Items.Select(Describe)], Page);
+        }
+
+        internal static GameLibraryFileV1 Describe(GameLibraryFileData file)
+        {
+            var name = Path.GetFileName(file.RelativePath);
+            var system = GameRomMatching.Played(file.IgdbId, name);
+            return new GameLibraryFileV1(file.StoredFileId, name, file.SizeBytes, system?.Abbreviation, system?.Emulator, system is null && GameRomMatching.NeedsBios(name),
+                file.MediaAssetId, file.WorkId, file.Title);
+        }
+    }
+
+    [ServiceEndpoint("GET", "/api/v1/games/files/{storedFileId:long}")]
+    public sealed class ReadGameStoredFileV1 : UserService<GameStoredFileParametersV1>
+    {
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<GameLibraryFileV1>()];
+        protected override ModuleRequirement GetInstanceModules(GameStoredFileParametersV1 parameters) => ModuleRequirement.All("Library", "Emulation");
+        protected override ServicePermission GetPermission(GameStoredFileParametersV1 parameters, Type resultType) => new("profile.playback");
+
+        protected override async Task<IServiceOutput> OnRead()
+        {
+            // One file of a games library, as the list shows it.
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    file."Id" AS "StoredFileId",
+                    file."RelativePath",
+                    file."SizeBytes",
+                    platform."IgdbId",
+                    asset."Id" AS "MediaAssetId",
+                    work."Id" AS "WorkId",
+                    work."CanonicalTitle" AS "Title"
+                FROM
+                    "StoredFiles" AS file
+                    JOIN "LibraryRoots" AS root ON root."Id" = file."LibraryRootId"
+                    LEFT JOIN "MediaAssets" AS asset ON asset."Id" = file."MediaAssetId"
+                    LEFT JOIN "Works" AS work ON work."Id" = asset."WorkId"
+                    LEFT JOIN "GameReleases" AS release ON release."WorkVersionId" = asset."WorkVersionId"
+                    LEFT JOIN LATERAL (
+                        SELECT
+                            catalog."GamePlatformId"
+                        FROM
+                            "GameRoms" AS rom
+                            JOIN "GameRomCatalogs" AS catalog ON catalog."Id" = rom."GameRomCatalogId"
+                        WHERE
+                            rom."Sha1" = file."Sha1"
+                        ORDER BY
+                            rom."GameRomCatalogId"
+                        LIMIT 1
+                    ) AS dump ON TRUE
+                    LEFT JOIN "GamePlatforms" AS platform ON platform."Id" = coalesce(release."GamePlatformId", dump."GamePlatformId")
+                WHERE
+                    file."Id" = @StoredFileId
+                    AND root."MediaTypeId" = 7
+                    AND file."MissingSince" IS NULL
+                    AND NOT file."IsSubtitle"
+                    AND CASE
+                        WHEN asset."Id" IS NULL THEN EXISTS (
+                            SELECT 1 FROM "ProfileMediaCategories" AS category WHERE category."ProfileId" = @ProfileId AND category."MediaTypeId" = 7 AND category."MediaSubtypeId" IS NULL)
+                        ELSE EXISTS (SELECT 1 FROM "ProfileWorks" AS visible WHERE visible."WorkId" = asset."WorkId" AND visible."ProfileId" = @ProfileId)
+                    END;
+                """;
+            sql.Parameters.Add(new GameStoredFileLookupData(Auth.ProfileId!.Value, Parameters.StoredFileId));
+            return ReadGameFilesV1.Describe(await Context.ReadSql.ReadRequiredAsync<GameLibraryFileData>(sql, CancellationToken));
+        }
+    }
+
+    [ServiceEndpoint("GET", "/api/v1/games/files/{storedFileId:long}/content/{fileName}")]
+    public sealed class ReadGameStoredFileContentV1 : UserService<GameStoredFileContentParametersV1>
+    {
+        private readonly StorageAccess _storage;
+
+        internal ReadGameStoredFileContentV1(StorageAccess storage)
+        {
+            _storage = storage;
+        }
+
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<GameFileV1>()];
+        protected override ModuleRequirement GetInstanceModules(GameStoredFileContentParametersV1 parameters) => ModuleRequirement.All("Library", "Emulation");
+        protected override ServicePermission GetPermission(GameStoredFileContentParametersV1 parameters, Type resultType) => new("profile.playback");
+
+        protected override async Task<IServiceOutput> OnRead()
+        {
+            // A file of a games library the browser plays, under its own name.
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    file."RelativePath",
+                    root."RelativePath" AS "RootRelativePath",
+                    root."StorageMountId",
+                    platform."IgdbId"
+                FROM
+                    "StoredFiles" AS file
+                    JOIN "LibraryRoots" AS root ON root."Id" = file."LibraryRootId"
+                    LEFT JOIN "MediaAssets" AS asset ON asset."Id" = file."MediaAssetId"
+                    LEFT JOIN "GameReleases" AS release ON release."WorkVersionId" = asset."WorkVersionId"
+                    LEFT JOIN LATERAL (
+                        SELECT
+                            catalog."GamePlatformId"
+                        FROM
+                            "GameRoms" AS rom
+                            JOIN "GameRomCatalogs" AS catalog ON catalog."Id" = rom."GameRomCatalogId"
+                        WHERE
+                            rom."Sha1" = file."Sha1"
+                        ORDER BY
+                            rom."GameRomCatalogId"
+                        LIMIT 1
+                    ) AS dump ON TRUE
+                    LEFT JOIN "GamePlatforms" AS platform ON platform."Id" = coalesce(release."GamePlatformId", dump."GamePlatformId")
+                WHERE
+                    file."Id" = @StoredFileId
+                    AND root."MediaTypeId" = 7
+                    AND file."MissingSince" IS NULL
+                    AND CASE
+                        WHEN asset."Id" IS NULL THEN EXISTS (
+                            SELECT 1 FROM "ProfileMediaCategories" AS category WHERE category."ProfileId" = @ProfileId AND category."MediaTypeId" = 7 AND category."MediaSubtypeId" IS NULL)
+                        ELSE EXISTS (SELECT 1 FROM "ProfileWorks" AS visible WHERE visible."WorkId" = asset."WorkId" AND visible."ProfileId" = @ProfileId)
+                    END;
+                """;
+            sql.Parameters.Add(new GameStoredFileLookupData(Auth.ProfileId!.Value, Parameters.StoredFileId));
+            var file = await Context.ReadSql.ReadRequiredAsync<GameStoredFileSourceData>(sql, CancellationToken);
+            var name = Path.GetFileName(file.RelativePath);
+            if (!string.Equals(name, Parameters.FileName, StringComparison.Ordinal) || GameRomMatching.Played(file.IgdbId, name) is null)
+            {
+                throw new KeyNotFoundException("The game file was not found.");
+            }
+
+            var files = _storage.Open(await Context.ReadStorageMountAsync(file.StorageMountId, CancellationToken));
+            return new GameFileV1(await files.OpenReadAsync(StoragePath.Combine(file.RootRelativePath, file.RelativePath), CancellationToken));
         }
     }
 

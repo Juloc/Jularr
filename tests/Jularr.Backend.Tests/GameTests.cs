@@ -186,40 +186,63 @@ namespace Jularr.Backend.Tests
             File.WriteAllBytes(Path.Combine(retro, "eq-copier.smc"), [.. new byte[512], .. rom]);
             File.WriteAllText(Path.Combine(retro, "README.md"), "notes");
             File.WriteAllBytes(Path.Combine(retro, "ua.sfc"), unknown);
-            File.WriteAllBytes(Path.Combine(retro, "homebrew.sfc"), Encoding.ASCII.GetBytes("homebrew"));
+            File.WriteAllBytes(Path.Combine(retro, "homebrew (Europe).sfc"), Encoding.ASCII.GetBytes("homebrew"));
+            File.WriteAllBytes(Path.Combine(retro, "Homebrew [!].gba"), Encoding.ASCII.GetBytes("homebrew advance"));
+            File.WriteAllBytes(Path.Combine(retro, "Twin Game.sfc"), Encoding.ASCII.GetBytes("twin"));
+            File.WriteAllBytes(Path.Combine(retro, "disc.chd"), Encoding.ASCII.GetBytes("disc"));
             using (var archive = ZipFile.Open(Path.Combine(retro, "eq-copy.zip"), ZipArchiveMode.Create))
             {
                 await using var entry = archive.CreateEntry("eq.smc").Open();
                 await entry.WriteAsync(rom);
             }
 
+            using (var archive = ZipFile.Open(Path.Combine(retro, "unknown.zip"), ZipArchiveMode.Create))
+            {
+                await using var entry = archive.CreateEntry("readme.txt").Open();
+                await entry.WriteAsync(Encoding.ASCII.GetBytes("not a game"));
+            }
+
             var rootId = await LibraryTests.CreateRootAsync(host, mountId, "Games", MediaType.Game);
             await host.Fixture.RunSqlAsync("""
                 WITH work AS (INSERT INTO "Works" ("MediaTypeId", "CanonicalTitle") VALUES (7, 'The Example Quest') RETURNING "Id")
-                INSERT INTO "WorkTitles" ("WorkId", "Title", "IsManual") SELECT "Id", 'The Example Quest', TRUE FROM work
+                INSERT INTO "WorkTitles" ("WorkId", "Title", "IsManual") SELECT "Id", 'The Example Quest', TRUE FROM work;
+                WITH work AS (INSERT INTO "Works" ("MediaTypeId", "CanonicalTitle") VALUES (7, 'Twin Game'), (7, 'Twin Game') RETURNING "Id")
+                INSERT INTO "WorkTitles" ("WorkId", "Title", "IsManual") SELECT "Id", 'Twin Game', TRUE FROM work
                 """);
 
             // The platform's DAT names every copy, also behind a copier header or in an archive; their title finds the single game and the DAT its platform.
             await LibraryTests.ScanAsync(host, rootId);
-            Assert.AreEqual(1, libretro.Requests);
-            Assert.AreEqual(3L, await host.ScalarAsync("SELECT count(*) FROM \"StoredFiles\" WHERE \"MediaAssetId\" IS NOT NULL"));
+            Assert.AreEqual(2, libretro.Requests);
+            Assert.AreEqual(3L, await host.ScalarAsync("""
+                SELECT count(*) FROM "StoredFiles" AS file JOIN "MediaAssets" AS asset ON asset."Id" = file."MediaAssetId" JOIN "Works" AS work ON work."Id" = asset."WorkId"
+                WHERE work."CanonicalTitle" = 'The Example Quest'
+                """));
             Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"StoredFiles\" WHERE \"RelativePath\" LIKE '%.md'"));
             Assert.AreEqual(Convert.ToHexStringLower(SHA1.HashData(rom)), await host.ScalarAsync("SELECT \"Sha1\" FROM \"StoredFiles\" WHERE \"RelativePath\" LIKE '%eq-copy.zip'"));
-            Assert.AreEqual("SNES", await host.ScalarAsync("""
-                SELECT DISTINCT platform."Abbreviation" FROM "GameReleases" AS release JOIN "GamePlatforms" AS platform ON platform."Id" = release."GamePlatformId"
-                """));
-            Assert.AreEqual(19, await host.ScalarAsync("SELECT \"IgdbId\" FROM \"GamePlatforms\""));
 
-            // A dump without its game suggests the verified title; unknown files keep their path.
+            // Every other ROM becomes a game of its own, named by its verified dump or its cleaned file name, on the platform its dump or extension names.
+            var games = await host.ScalarAsync("""
+                SELECT string_agg(lower(work."CanonicalTitle") || ':' || platform."Abbreviation", ',' ORDER BY lower(work."CanonicalTitle"), platform."Abbreviation")
+                FROM "StoredFiles" AS file
+                    JOIN "MediaAssets" AS asset ON asset."Id" = file."MediaAssetId"
+                    JOIN "Works" AS work ON work."Id" = asset."WorkId"
+                    JOIN "GameReleases" AS release ON release."WorkVersionId" = asset."WorkVersionId"
+                    JOIN "GamePlatforms" AS platform ON platform."Id" = release."GamePlatformId"
+                WHERE work."CanonicalTitle" <> 'The Example Quest'
+                """);
+            Assert.AreEqual("homebrew:GBA,homebrew:SNES,unknown adventure:SNES", games);
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"Works\" WHERE lower(\"CanonicalTitle\") = 'homebrew'"));
+
+            // Two games of one title, an archive without a known ROM and a disc image keep their files for a person.
             using var unmatched = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/library/files?onlyUnmatched=true");
             var files = (await unmatched.Content.ReadFromJsonAsync<PageResult<LibraryFileDetailsV1>>())!.Items;
-            Assert.AreEqual("Unknown Adventure", files.Single(file => file.RelativePath.EndsWith("ua.sfc", StringComparison.Ordinal)).SuggestedTitle);
-            Assert.AreEqual("Retro", files.Single(file => file.RelativePath.EndsWith("homebrew.sfc", StringComparison.Ordinal)).SuggestedTitle);
+            CollectionAssert.AreEquivalent(new[] { "Twin Game.sfc", "disc.chd", "unknown.zip" }, files.Select(file => Path.GetFileName(file.RelativePath)).ToArray());
 
-            // A fresh DAT and unchanged files need no second pass.
+            // A fresh DAT and unchanged files need no second pass, and a game made from a file is not made again.
             await LibraryTests.ScanAsync(host, rootId);
-            Assert.AreEqual(1, libretro.Requests);
-            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"StoredFiles\" WHERE \"ProbedAt\" IS NULL"));
+            Assert.AreEqual(2, libretro.Requests);
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"Works\" WHERE lower(\"CanonicalTitle\") = 'homebrew'"));
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"StoredFiles\" WHERE \"ProbedAt\" IS NULL AND \"RelativePath\" ~* '\\.(sfc|smc|gba|zip)$'"));
         }
 
         [TestMethod]
@@ -316,6 +339,90 @@ namespace Jularr.Backend.Tests
             Assert.IsFalse((await detailsOff.Content.ReadAsStringAsync()).Contains("/Game/" + asset, StringComparison.Ordinal));
         }
 
+        [TestMethod]
+        public async Task Game_FilesOfTheGamesLibrary_PlayWithOrWithoutTheirGame()
+        {
+            using var storage = new LibraryTests.TemporaryDirectory();
+            var libretro = new FakeLibretro("""
+                clrmamepro (
+                	name "Nintendo"
+                )
+
+                game (
+                	name "Other Game (USA)"
+                	rom ( name "Other Game (USA).sfc" size 4 crc 00000000 md5 00 sha1 0000000000000000000000000000000000000000 )
+                )
+                """);
+            await using var host = await LibraryTests.CreateHostAsync(storage.Path, razor: true, services: services => services.AddHttpClient<LibretroClient>().ConfigurePrimaryHttpMessageHandler(() => libretro));
+            var mountId = await LibraryTests.CreateMountAsync(host);
+            var retro = Path.Combine(storage.Path, mountId.ToString(System.Globalization.CultureInfo.InvariantCulture), "Games", "Retro");
+            Directory.CreateDirectory(retro);
+            File.WriteAllBytes(Path.Combine(retro, "Twin Game.sfc"), Encoding.ASCII.GetBytes("twin rom"));
+            File.WriteAllBytes(Path.Combine(retro, "homebrew.gba"), Encoding.ASCII.GetBytes("homebrew"));
+            File.WriteAllBytes(Path.Combine(retro, "disc.chd"), Encoding.ASCII.GetBytes("disc"));
+            await host.Fixture.RunSqlAsync("""
+                WITH work AS (INSERT INTO "Works" ("MediaTypeId", "CanonicalTitle") VALUES (7, 'Twin Game'), (7, 'Twin Game') RETURNING "Id")
+                INSERT INTO "WorkTitles" ("WorkId", "Title", "IsManual") SELECT "Id", 'Twin Game', TRUE FROM work
+                """);
+            await LibraryTests.ScanAsync(host, await LibraryTests.CreateRootAsync(host, mountId, "Games", MediaType.Game));
+
+            // The list names every file with its system; one with its game plays as the game, one without by its extension, a disc image needs a BIOS.
+            var files = (await ReadAsync<PageResult<GameLibraryFileV1>>(host, "/api/v1/games/files")).Items;
+            CollectionAssert.AreEqual(new[] { "disc.chd", "homebrew.gba", "Twin Game.sfc" }, files.Select(file => file.FileName).ToArray());
+            var disc = files[0];
+            var homebrew = files[1];
+            var twin = files[2];
+            Assert.IsTrue(disc is { Emulator: null, System: null, NeedsBios: true, MediaAssetId: null });
+            Assert.IsTrue(homebrew is { Emulator: "mgba", System: "GBA", NeedsBios: false, Title: "homebrew", MediaAssetId: not null });
+            Assert.IsTrue(twin is { Emulator: "snes9x", System: "SNES", MediaAssetId: null, WorkId: null, SizeBytes: 8 });
+
+            // A file without its game streams under its own name, also in ranges; another name or a file the browser cannot play is not found.
+            var content = "/api/v1/games/files/" + twin.StoredFileId + "/content/";
+            using var whole = await host.SendAsync(HttpMethod.Get, content + "Twin%20Game.sfc");
+            Assert.AreEqual(HttpStatusCode.OK, whole.StatusCode);
+            Assert.AreEqual("twin rom", await whole.Content.ReadAsStringAsync());
+            using var range = new HttpRequestMessage(HttpMethod.Get, content + "Twin%20Game.sfc");
+            range.Headers.Range = new System.Net.Http.Headers.RangeHeaderValue(5, 7);
+            range.Headers.Add("Cookie", string.Join("; ", host.Cookies.Select(cookie => cookie.Key + "=" + cookie.Value)));
+            using var partial = await host.Client.SendAsync(range);
+            Assert.AreEqual(HttpStatusCode.PartialContent, partial.StatusCode);
+            Assert.AreEqual("rom", await partial.Content.ReadAsStringAsync());
+            using var otherName = await host.SendAsync(HttpMethod.Get, content + "other.sfc");
+            Assert.AreEqual(HttpStatusCode.NotFound, otherName.StatusCode);
+            using var discContent = await host.SendAsync(HttpMethod.Get, "/api/v1/games/files/" + disc.StoredFileId + "/content/disc.chd");
+            Assert.AreEqual(HttpStatusCode.NotFound, discContent.StatusCode);
+
+            // The page lists them with Play or the reason; a file without its game opens the player with browser saves, one with its game goes to the game.
+            using var list = await host.SendAsync(HttpMethod.Get, "/Games/Files");
+            var listHtml = await list.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, list.StatusCode, listHtml);
+            StringAssert.Contains(listHtml, "href=\"/Game/Files/" + twin.StoredFileId + "\"");
+            StringAssert.Contains(listHtml, "href=\"/Game/" + homebrew.MediaAssetId + "\"");
+            StringAssert.Contains(listHtml, "Needs a BIOS");
+            using var library = await host.SendAsync(HttpMethod.Get, "/Library?type=games");
+            StringAssert.Contains(await library.Content.ReadAsStringAsync(), "href=\"/Games/Files\"");
+            using var player = await host.SendAsync(HttpMethod.Get, "/Game/Files/" + twin.StoredFileId);
+            var playerHtml = await player.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, player.StatusCode, playerHtml);
+            StringAssert.Contains(playerHtml, "data-emulator=\"snes9x\"");
+            StringAssert.Contains(playerHtml, "data-file=\"" + content + "Twin%20Game.sfc\"");
+            Assert.IsFalse(playerHtml.Contains("data-api=", StringComparison.Ordinal));
+            using var toGame = await host.SendAsync(HttpMethod.Get, "/Game/Files/" + homebrew.StoredFileId);
+            Assert.AreEqual(HttpStatusCode.Redirect, toGame.StatusCode);
+            Assert.AreEqual("/Game/" + homebrew.MediaAssetId, toGame.Headers.Location!.OriginalString);
+
+            // A profile without games sees none of them, nor their files.
+            await host.Fixture.RunSqlAsync("INSERT INTO \"ProfileMediaRules\" (\"ProfileId\", \"MediaTypeId\", \"IsBlocked\") SELECT \"Id\", 7, TRUE FROM \"Profiles\"");
+            Assert.AreEqual(0, (await ReadAsync<PageResult<GameLibraryFileV1>>(host, "/api/v1/games/files")).Items.Count);
+            using var blocked = await host.SendAsync(HttpMethod.Get, content + "Twin%20Game.sfc");
+            Assert.AreEqual(HttpStatusCode.NotFound, blocked.StatusCode);
+
+            // Switched off, nothing plays.
+            await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = FALSE WHERE \"Key\" = 'Emulation'");
+            using var disabled = await host.SendAsync(HttpMethod.Get, "/api/v1/games/files");
+            Assert.AreEqual(HttpStatusCode.Forbidden, disabled.StatusCode);
+        }
+
         private static async Task<T> ReadAsync<T>(Host host, string path)
         {
             using var response = await host.SendAsync(HttpMethod.Get, path);
@@ -372,7 +479,7 @@ namespace Jularr.Backend.Tests
             protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
             {
                 Requests++;
-                Assert.AreEqual("/libretro/libretro-database/master/metadat/no-intro/Nintendo%20-%20Super%20Nintendo%20Entertainment%20System.dat", request.RequestUri!.AbsolutePath);
+                StringAssert.StartsWith(request.RequestUri!.AbsolutePath, "/libretro/libretro-database/master/metadat/no-intro/Nintendo%20-%20");
                 return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(dat) });
             }
         }

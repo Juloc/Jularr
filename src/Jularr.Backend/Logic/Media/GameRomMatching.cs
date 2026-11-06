@@ -55,6 +55,14 @@ namespace Jularr.Backend.Logic.Media
 
         public static RetroSystem? Emulated(int? igdbId) => Systems.FirstOrDefault(system => system.IgdbId == igdbId);
 
+        // A file's known platform decides; a file without one is played by its extension.
+        public static RetroSystem? Played(int? igdbId, string fileName) => igdbId is null ? System(fileName) : Emulated(igdbId);
+
+        // Disc images: their consoles need a BIOS, which the browser player does not have.
+        private static readonly FrozenSet<string> DiscExtensions = FrozenSet.Create(StringComparer.OrdinalIgnoreCase, ".bin", ".chd", ".cue", ".iso", ".pbp");
+
+        public static bool NeedsBios(string fileName) => DiscExtensions.Contains(Path.GetExtension(fileName));
+
         // Copier headers precede some dumps; the DATs hash the bare ROM.
         public static int HeaderBytes(RetroSystem system, long length) => system.CopierHeader > 0 && length % 1024 == system.CopierHeader ? system.CopierHeader : 0;
 

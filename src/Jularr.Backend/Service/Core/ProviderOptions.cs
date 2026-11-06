@@ -17,6 +17,9 @@ namespace Jularr.Backend.Service.Core
         // The AniBridge mappings release (AniList to TheTVDB) of the current schema version.
         public Uri AnimeMappings { get; set; } = new("https://github.com/anibridge/anibridge-mappings/releases/download/v3/");
 
+        // The libretro-database's No-Intro DATs, which name verified game dumps.
+        public Uri Libretro { get; set; } = new("https://raw.githubusercontent.com/libretro/libretro-database/master/metadat/no-intro/");
+
         // RapidOCR's model files; every one is checked against its pinned hash.
         public Uri OcrModels { get; set; } = new("https://www.modelscope.cn/models/RapidAI/RapidOCR/resolve/master/");
 
@@ -26,7 +29,7 @@ namespace Jularr.Backend.Service.Core
         // Keys travel along, so plain HTTP only stays on this machine.
         internal ProviderOptions Validated()
         {
-            Uri[] addresses = [Tmdb, Tvdb, MusicBrainz, AniList, AniListAccount, OpenLibrary, Hardcover, AcoustId, AnimeMappings, OcrModels, .. Images.Values];
+            Uri[] addresses = [Tmdb, Tvdb, MusicBrainz, AniList, AniListAccount, OpenLibrary, Hardcover, AcoustId, AnimeMappings, OcrModels, Libretro, .. Images.Values];
             return addresses.All(address => address.IsAbsoluteUri && (address.Scheme == "https" || address.Scheme == "http" && address.IsLoopback)
                 && address.AbsolutePath.EndsWith('/') && address.UserInfo.Length == 0 && address.Query.Length == 0)
                 ? this
