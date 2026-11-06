@@ -99,14 +99,15 @@ namespace Jularr.Backend.Service.Core
             return (null, _providers.Any(provider => provider.IsAway(setup)));
         }
 
-        // The model a holder of the admin-only right translates a chapter with when pressing the button, with what keeps it from doing so now; null for
-        // anyone else and where no provider translates in several requests.
+        // The model a holder of the admin-only right translates a chapter with when pressing the button, with what keeps it from doing so now (a limit reached);
+        // null for anyone else, where no provider translates in several requests, and while the provider is not connected (nothing is set up to offer).
         public async Task<(string Id, string? Problem)?> OfferAsync(TranslationSetupV1 setup, ServiceCaller caller, CancellationToken ct)
         {
             if (!MayUseAdminOnly(caller)) return null;
             foreach (var provider in _providers.OfType<IBatchTranslationProvider>().Where(provider => provider.IsAdminOnly))
             {
                 var (model, problem) = await provider.OfferAsync(setup, ct);
+                if (problem == "not_connected") continue;
                 if (model is not null || problem is not null) return (model is null ? "" : Id(provider.Key, model), problem);
             }
 

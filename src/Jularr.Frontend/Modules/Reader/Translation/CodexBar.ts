@@ -53,7 +53,7 @@ export function codexBar(reader: HTMLElement, view: CodexView): void {
     function rest(line?: string) {
         if (bar!.dataset.problem) {
             const problem = bar!.dataset.problem;
-            say(problem === "not_connected" ? "notConnected" : problem === "limit" ? "limit" : "unavailable");
+            say(problem === "limit" ? "limit" : "unavailable");
             show(retry);
             return;
         }

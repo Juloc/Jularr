@@ -11,7 +11,7 @@ namespace Jularr.Backend.Data.User.Translation.V1
 
     // The model id that translates for every reader now (a local machine's, never Codex's); Away when none translates because the machines set up for
     // translation do not answer. Codex is the model id a holder of the admin-only right translates a chapter with when pressing the button, CodexProblem
-    // what keeps it from doing so now ("not_connected", "limit" or "unavailable"); both are empty for everyone else.
+    // what keeps it from doing so now ("limit" or "unavailable"); both are empty for everyone else and while Codex is not connected.
     public sealed class LocalTranslationAvailabilityV1(string? model, bool away = false, string? codex = null, string? codexProblem = null) : BaseResponse
     {
         public string? Model { get; } = model;

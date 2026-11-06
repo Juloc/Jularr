@@ -201,7 +201,7 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
-        public async Task Codex_WithAnAnsweringOllama_IsOnlyOfferedBesideIt_AndNotConnectedIsNamed()
+        public async Task Codex_WithAnAnsweringOllama_IsOnlyOfferedBesideIt()
         {
             using var storage = new TemporaryDirectory();
             using var codex = new CodexTranslationTests.Folder();
@@ -224,7 +224,7 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
-        public async Task Codex_NotConnected_IsOfferedToTheOwnerWithItsProblem()
+        public async Task Codex_NotConnected_IsNotOffered_SoTheReaderStaysAsWithoutCodex()
         {
             using var storage = new TemporaryDirectory();
             using var codex = new CodexTranslationTests.Folder();
@@ -236,7 +236,8 @@ namespace Jularr.Backend.Tests
             var owner = await AvailabilityAsync(host);
             Assert.IsNull(owner.Model);
             Assert.IsNull(owner.Codex);
-            Assert.AreEqual("not_connected", owner.CodexProblem);
+            Assert.IsNull(owner.CodexProblem);
+            Assert.IsTrue(owner.Away);
         }
 
         [TestMethod]

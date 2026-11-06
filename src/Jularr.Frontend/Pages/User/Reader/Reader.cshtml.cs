@@ -409,7 +409,7 @@ namespace Jularr.Frontend.Pages.User.Reader
         {
             var language = Chosen(document);
             var source = (document.Language ?? document.OriginalLanguage ?? "").Split('-', '_')[0].ToLowerInvariant();
-            var key = _codexProblem switch { "not_connected" => "reader.codex.notConnected", "limit" => "reader.codex.limit", "unavailable" => "reader.codex.unavailable", _ => "reader.codex.idle" };
+            var key = _codexProblem switch { "limit" => "reader.codex.limit", "unavailable" => "reader.codex.unavailable", _ => "reader.codex.idle" };
             string[] keys =
             [
                 "reader.codex.idle", "reader.codex.running", "reader.codex.runningShort", "reader.codex.runningStart", "reader.codex.runningNext", "reader.codex.runningNextShort",
