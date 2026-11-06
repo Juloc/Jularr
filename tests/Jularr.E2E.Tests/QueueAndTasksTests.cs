@@ -122,5 +122,72 @@ namespace Jularr.E2E.Tests
                 throw;
             }
         }
+
+        // A download whose folder holds only archives has nothing to assign: it does not wait in the Queue for ever, the download monitor fails it and the History says why in plain words.
+        [TestMethod]
+        [Timeout(300_000)]
+        public async Task Queue_DownloadWithNothingToAssign_LeavesTheQueueAndTheHistoryTellsWhy()
+        {
+            await using var jularr = await JularrInstance.StartAsync();
+            await using var session = await BrowserSession.StartAsync(jularr);
+            var page = session.Page;
+            await Owner.SetUpAndSignInAsync(page);
+            await jularr.RunSqlAsync("""
+                UPDATE "InstanceModules" SET "IsEnabled" = TRUE WHERE "Key" IN ('Acquisition', 'Requests');
+                UPDATE "Providers" SET "IsEnabled" = FALSE WHERE "ProtectedSecret" IS NULL;
+                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle", "ReleaseYear") VALUES (9611, 2, 'Packed Book', 2020), (9612, 2, 'Odd Book', 2021);
+                INSERT INTO "WantedItems" ("Id", "WorkId") VALUES (9611, 9611), (9612, 9612);
+                INSERT INTO "AcquisitionReleases" ("Id", "WantedItemId", "ReleaseIdentity", "Title", "QualityKey", "AcquisitionReleaseStatusTypeId")
+                VALUES (9611, 9611, 'packed-book', 'Packed.Book.2020.RETAiL.EPUB.eBook-GRP', 'EPUB', 1), (9612, 9612, 'odd-book', 'Odd.Book.2021.RETAiL.EPUB.eBook-GRP', 'EPUB', 1);
+                INSERT INTO "Operations" ("OperationTypeId", "OperationStatusTypeId", "AcquisitionReleaseId", "AttentionKey", "AttentionProposal", "StartedAt")
+                VALUES (2, 2, 9611, 'import_nothing_placeable', '{"Source":{"Directory":"x"},"Files":[{"Path":"vakr1xo.rar","Reason":"extension"}]}'::jsonb, now()),
+                    (2, 2, 9612, 'import_nothing_placeable', '{"Source":{"Directory":"x"},"Files":[{"Path":"book.epub","Reason":null}]}'::jsonb, now());
+                """);
+
+            try
+            {
+                // Both wait for a person at first; the one with a file to assign keeps waiting, the one with only an archive fails with the next pass of the download monitor.
+                await page.GotoAsync("/Admin/Queue");
+                await Assertions.Expect(Steps.ListRow(page, "Packed Book")).ToHaveCountAsync(1);
+                var deadline = DateTime.UtcNow.AddMinutes(3);
+                while (await Steps.ListRow(page, "Packed Book").CountAsync() > 0 && DateTime.UtcNow < deadline)
+                {
+                    await page.WaitForTimeoutAsync(5000);
+                    await page.GotoAsync("/Admin/Queue");
+                }
+
+                await Assertions.Expect(Steps.ListRow(page, "Packed Book")).ToHaveCountAsync(0);
+                await Assertions.Expect(Steps.ListRow(page, "Odd Book")).ToHaveCountAsync(1);
+                await page.GotoAsync("/Admin/Queue/History");
+                var failed = Steps.ListRow(page, "Packed Book");
+                await Assertions.Expect(failed).ToHaveCountAsync(1);
+
+                // The event's details say why, in plain words.
+                await failed.Locator("[data-drawer-open]").ClickAsync();
+                await Assertions.Expect(page.Locator("[id^='event-']", new() { HasText = "The download holds no file the import takes, only archives or release files" }).First).ToBeVisibleAsync();
+
+                // Wanted follows the real state: the one that failed is no longer being downloaded, the one that still waits for a person is.
+                await page.GotoAsync("/Admin/Wanted");
+                await Assertions.Expect(Steps.ListRow(page, "Packed Book")).Not.ToContainTextAsync("Downloading");
+                await Assertions.Expect(Steps.ListRow(page, "Odd Book")).ToContainTextAsync("Downloading");
+
+                // The Queue, History and Wanted at desktop, tablet and phone width.
+                foreach (var (width, height, name) in new[] { (1440, 900, "desktop"), (768, 1024, "tablet"), (375, 812, "phone") })
+                {
+                    await page.SetViewportSizeAsync(width, height);
+                    foreach (var (address, view) in new[] { ("/Admin/Queue", "queue"), ("/Admin/Queue/History", "history"), ("/Admin/Wanted", "wanted") })
+                    {
+                        await page.GotoAsync(address);
+                        await Assertions.Expect(page.Locator("main .list-body .list-row").First).ToBeVisibleAsync();
+                        await Evidence.SaveAsync(page, "queue-nothing-to-assign-" + view + "-" + name);
+                    }
+                }
+            }
+            catch
+            {
+                await Evidence.SaveAsync(page, "queue-nothing-to-assign-failed");
+                throw;
+            }
+        }
     }
 }

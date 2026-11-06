@@ -593,6 +593,22 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         public bool IsUnrecorded { get; }
     }
 
+    // A download that waits for a person with nothing to assign (a folder without a file of a format the import takes), and whether its folder holds nothing at all.
+    internal sealed class UnassignableDownloadData : BaseData
+    {
+        public UnassignableDownloadData(long operationId, bool isEmpty)
+        {
+            OperationId = operationId;
+            IsEmpty = isEmpty;
+        }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.Id))]
+        public long OperationId { get; }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.IsEmpty))]
+        public bool IsEmpty { get; }
+    }
+
     internal sealed class DownloadOperationParameters : BaseData
     {
         public DownloadOperationParameters(long operationId)

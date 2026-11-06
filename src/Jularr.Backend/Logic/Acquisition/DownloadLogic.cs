@@ -1176,6 +1176,46 @@ namespace Jularr.Backend.Logic.Acquisition
             }
         }
 
+        // Downloads that wait with "nothing placeable" although every file the import kept for a person is one it cannot take (the proposal lists them with the reason "extension"),
+        // or no file at all, and nothing of them was placed: there is nothing to assign, so they are no use as a failed download is none.
+        public static Task<IReadOnlyList<UnassignableDownloadData>> ReadUnassignableDownloadsAsync(this LogicContext ctx, CancellationToken ct)
+        {
+            // A list the document does not hold (or holds as null) counts as empty.
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    operation."Id" AS "OperationId",
+                    proposal."FileCount" = 0 AS "IsEmpty"
+                FROM
+                    "Operations" AS operation
+                    CROSS JOIN LATERAL (
+                        SELECT
+                            CASE WHEN jsonb_typeof(operation."AttentionProposal" -> 'Files') = 'array' THEN operation."AttentionProposal" -> 'Files' ELSE '[]'::jsonb END AS "Files",
+                            CASE WHEN jsonb_typeof(operation."AttentionProposal" -> 'Handled') = 'array' THEN jsonb_array_length(operation."AttentionProposal" -> 'Handled') ELSE 0 END AS "HandledCount",
+                            CASE WHEN jsonb_typeof(operation."AttentionProposal" -> 'Files') = 'array' THEN jsonb_array_length(operation."AttentionProposal" -> 'Files') ELSE 0 END AS "FileCount"
+                        OFFSET 0
+                    ) AS proposal
+                WHERE
+                    operation."OperationTypeId" = 2
+                    AND operation."OperationStatusTypeId" IN (1, 2)
+                    AND operation."AttentionKey" = 'import_nothing_placeable'
+                    AND proposal."HandledCount" = 0
+                    AND NOT EXISTS (
+                        SELECT
+                            1
+                        FROM
+                            jsonb_array_elements(proposal."Files") AS proposed ("File")
+                        WHERE
+                            proposed."File" ->> 'Reason' IS DISTINCT FROM 'extension'
+                    )
+                ORDER BY
+                    operation."Id"
+                LIMIT 64;
+                """;
+            return ctx.ReadSql.ReadListAsync<UnassignableDownloadData>(sql, ct);
+        }
+
         // The open downloads of one client in the order it takes them: priority first, then the order a person gave, then the oldest.
         public static Task<IReadOnlyList<DownloadQueueEntryData>> ReadDownloadQueueAsync(this LogicContext ctx, DownloadQueueScopeData scope, CancellationToken ct)
         {

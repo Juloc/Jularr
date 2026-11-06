@@ -114,5 +114,19 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(ImportVerdictKind.Clear, ImportJudgement.Judge(MediaType.Music, null, ["Album"], 2020, "Album", null, null, null, Files("a.flac"), [], null).Kind);
             Assert.AreEqual(ImportVerdictKind.Clear, ImportJudgement.Judge(MediaType.Book, null, ["Book"], 2020, "Book", null, null, null, Files("b.epub"), [], null).Kind);
         }
+
+        [TestMethod]
+        public void OtherMediaTypes_WithNoFileOfATakenFormat_AreNoUse()
+        {
+            // Archives and release files hold nothing a person could assign; any file of a game is taken.
+            foreach (var (type, subtype, name) in new[] { (MediaType.Book, (MediaSubtype?)null, "vakr1xo.rar"), (MediaType.Book, MediaSubtype.Manga, "pack.zip"), (MediaType.Book, MediaSubtype.LightNovel, "book.r00"), (MediaType.Music, null, "album.rar") })
+            {
+                var verdict = ImportJudgement.Judge(type, subtype, ["Title"], 2020, "Title", null, null, null, Files(name), [], null);
+                Assert.AreEqual((ImportVerdictKind.Discard, ImportJudgement.NoFile), (verdict.Kind, verdict.ReasonKey), name);
+            }
+
+            Assert.AreEqual(ImportVerdictKind.Clear, ImportJudgement.Judge(MediaType.Book, null, ["Book"], 2020, "Book", null, null, null, Files("vakr1xo.rar", "b.epub"), [], null).Kind);
+            Assert.AreEqual(ImportVerdictKind.Clear, ImportJudgement.Judge(MediaType.Game, null, ["Game"], 2020, "Game", null, null, null, Files("game.iso"), [], null).Kind);
+        }
     }
 }
