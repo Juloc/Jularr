@@ -378,6 +378,35 @@ namespace Jularr.Backend.Data.User.Playback.V1
         public string ContentType => "application/vnd.apple.mpegurl";
     }
 
+    public sealed class CastSubtitleParametersV1 : BaseParameters
+    {
+        public CastSubtitleParametersV1(string castToken, string key)
+        {
+            CastToken = castToken;
+            Key = key;
+        }
+
+        [DataField(typeof(PlaybackFields), nameof(PlaybackFields.CastToken))]
+        public string CastToken { get; }
+
+        [DataField(typeof(PlaybackFields), nameof(PlaybackFields.TrackKey))]
+        public string Key { get; }
+    }
+
+    public sealed class CastSubtitleV1 : BaseResponse, ITextOutput, ICrossOriginOutput
+    {
+        public CastSubtitleV1(string text)
+        {
+            Text = text;
+        }
+
+        [JsonIgnore]
+        public string Text { get; }
+
+        [JsonIgnore]
+        public string ContentType => "text/vtt; charset=utf-8";
+    }
+
     public sealed class CastSegmentV1 : BaseResponse, IFileOutput, ICrossOriginOutput
     {
         public CastSegmentV1(Stream content)
@@ -513,8 +542,9 @@ namespace Jularr.Backend.Data.User.Playback.V1
 
     public sealed class UpdatePlaybackDataV1 : BaseData
     {
-        public UpdatePlaybackDataV1(long positionMs, long? durationMs, bool isEnded, bool isCompleted)
+        public UpdatePlaybackDataV1(long positionMs, long? durationMs, bool isEnded, bool isCompleted, bool isStarted = false)
         {
+            IsStarted = isStarted;
             PositionMs = positionMs;
             DurationMs = durationMs;
             IsEnded = isEnded;
@@ -532,6 +562,10 @@ namespace Jularr.Backend.Data.User.Playback.V1
 
         [DataField(typeof(PlaybackFields), nameof(PlaybackFields.IsCompleted))]
         public bool IsCompleted { get; }
+
+        // The item starts to play now: a session made ahead of time (a queued episode of a cast device) counts its time from here.
+        [DataField(typeof(PlaybackFields), nameof(PlaybackFields.IsStarted))]
+        public bool IsStarted { get; }
 
         public override void Validate()
         {

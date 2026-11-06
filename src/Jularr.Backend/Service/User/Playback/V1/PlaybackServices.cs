@@ -268,18 +268,7 @@ namespace Jularr.Backend.Service.User.Playback.V1
                 return File.Exists(translated) ? new PlaybackSubtitleV1(await File.ReadAllTextAsync(translated, CancellationToken)) : throw new KeyNotFoundException("The subtitle was not found.");
             }
 
-            var (source, streamIndex) = await PlaybackSubtitleSources.FindAsync(sql => Context.ReadSql.ReadOptionalAsync<PlaybackSubtitleSourceData>(sql, CancellationToken), Parameters.MediaAssetId, Auth.ProfileId!.Value, Parameters.Key);
-            // ASS comes as it is only from tracks that are ASS or SSA.
-            if (Parameters.Styled && !(streamIndex is not null ? PlaybackTracks.IsStyled(source.Codec) : PlaybackTracks.IsStyledFile(source.RelativePath)))
-            {
-                throw new KeyNotFoundException("The subtitle was not found.");
-            }
-
-            var files = _storage.Open(await Context.ReadStorageMountAsync(source.StorageMountId, CancellationToken));
-            var path = StoragePath.Combine(source.RootRelativePath, source.RelativePath);
-            var cacheKey = source.StoredFileId.ToString(CultureInfo.InvariantCulture) + "-" + (streamIndex is { } stream ? PlaybackTracks.StreamKey(stream) : "file") + "-"
-                + source.ModifiedAt.Ticks.ToString(CultureInfo.InvariantCulture);
-            return new PlaybackSubtitleV1(await _subtitles.ReadAsync(files, path, streamIndex, cacheKey, Parameters.Styled, CancellationToken), Parameters.Styled);
+            return new PlaybackSubtitleV1(await PlaybackSubtitleSources.ReadAsync(Context, _storage, _subtitles, Parameters.MediaAssetId, Auth.ProfileId!.Value, Parameters.Key, Parameters.Styled, CancellationToken), Parameters.Styled);
         }
     }
 
@@ -626,7 +615,7 @@ namespace Jularr.Backend.Service.User.Playback.V1
 
         protected override async Task<IServiceOutput> OnUpdate()
         {
-            var data = new PlaybackUpdateData(Parameters.PlaybackSessionId, Auth.ProfileId!.Value, Data.PositionMs, Data.DurationMs, Data.IsEnded, Data.IsCompleted);
+            var data = new PlaybackUpdateData(Parameters.PlaybackSessionId, Auth.ProfileId!.Value, Data.PositionMs, Data.DurationMs, Data.IsEnded, Data.IsCompleted, Data.IsStarted);
             await Context.UpdatePlaybackAsync(data, CancellationToken);
 
             return new UpdateResult(true);
