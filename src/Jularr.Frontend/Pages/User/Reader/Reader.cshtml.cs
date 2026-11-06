@@ -36,9 +36,11 @@ namespace Jularr.Frontend.Pages.User.Reader
         // The languages this book can be read in: its original first, then the profile's and the other allowed ones Mozilla's models reach.
         private string[] _languages = [];
         private string? _localTranslationModel;
-        // The model translates a chapter in whole-passage requests (Codex); Away: nothing translates because the translation machines do not answer.
-        private bool _localPassages;
+        // Away: nothing translates because the translation machines do not answer. Codex: the model a holder of the admin-only right translates a chapter with
+        // when pressing the button (never by itself), and what keeps it from doing so now.
         private bool _translationAway;
+        private string? _codexModel;
+        private string? _codexProblem;
 
         // A PDF without reading text, or whose reading text the profile did not ask for, opens as its original pages and says why, here, in a word.
         private string? _status;
@@ -284,7 +286,7 @@ namespace Jularr.Frontend.Pages.User.Reader
                 // A book in another language opens in the profile's, unless the profile chose another for it.
                 view.Attribute("data-translation-engine", "gemma")
                     .Attribute("data-local-model", _localTranslationModel ?? "")
-                    .Attribute("data-local-passages", _localPassages ? "true" : "false")
+                    .Attribute("data-codex-model", _codexModel ?? "")
                     .Attribute("data-language", document.Language ?? document.OriginalLanguage ?? "")
                     .Attribute("data-reading-language", Chosen(document))
                     .Attribute("data-language-url", "/api/v1/reading/assets/" + asset + "/language")
@@ -293,7 +295,7 @@ namespace Jularr.Frontend.Pages.User.Reader
                     .Attribute("data-language-saving-label", texts["reader.language.saving"])
                     .Attribute("data-translation-failed-label", texts["reader.translationFailed"])
                     .Attribute("data-provider-original-label", texts["reader.translation.provider.original"])
-                    .Attribute("data-provider-local-label", texts[_localPassages ? "reader.translation.provider.account" : "reader.translation.provider.local"]);
+                    .Attribute("data-provider-local-label", texts[_localTranslationModel is null ? "reader.translation.provider.account" : "reader.translation.provider.local"]);
                 // The Mozilla module is an emergency only: with it on, a page the server cannot translate (or translates too slowly) falls back to the browser, which keeps its results in this browser.
                 if (texts.CanTranslateInBrowser())
                 {
@@ -304,6 +306,10 @@ namespace Jularr.Frontend.Pages.User.Reader
             }
 
             page.Content.Add(view);
+            if (_localTranslationModel is null && (_codexModel is not null || _codexProblem is not null) && texts.CanTranslate())
+            {
+                page.Content.Add(CodexBar(document, index));
+            }
             if (!document.IsCached)
             {
                 page.Content.Add(new P(new Text("reader.notCached")).Class("reader__note").Attribute("role", "status"));
@@ -395,6 +401,36 @@ namespace Jularr.Frontend.Pages.User.Reader
             }
 
             return frame;
+        }
+
+        // Without a local model, the Owner translates a chapter with Codex by a button: the bar under the reader says what is translated and what runs, with the
+        // button (script shows only what fits: Translate, the next chapter's button, Stop, Try again). It shows while a language other than the original is read.
+        private HtmlElement CodexBar(ReadingDocumentV1 document, int index)
+        {
+            var language = Chosen(document);
+            var source = (document.Language ?? document.OriginalLanguage ?? "").Split('-', '_')[0].ToLowerInvariant();
+            var key = _codexProblem switch { "not_connected" => "reader.codex.notConnected", "limit" => "reader.codex.limit", "unavailable" => "reader.codex.unavailable", _ => "reader.codex.idle" };
+            string[] keys =
+            [
+                "reader.codex.idle", "reader.codex.running", "reader.codex.runningShort", "reader.codex.runningStart", "reader.codex.runningNext", "reader.codex.runningNextShort",
+                "reader.codex.runningNextStart", "reader.codex.chapterDone", "reader.codex.nextDone", "reader.codex.skipped", "reader.codex.stopped", "reader.codex.limit",
+                "reader.codex.notConnected", "reader.codex.unavailable", "reader.codex.busy", "reader.codex.error", "reader.codex.time.minute", "reader.codex.time.minutes"
+            ];
+            var hasNext = index + 1 < document.SectionCount;
+            var bar = new Div(
+                    new P(new Text(key)).Class("reader__codex-text").Attribute("data-role", "codex-text").Attribute("role", "status"),
+                    new Div(
+                        new Button(new Text("reader.codex.start")).Primary().Attribute("type", "button").Attribute("data-codex", "start"),
+                        hasNext ? new Button(new Text("reader.codex.next")).Attribute("type", "button").Attribute("data-codex", "next").Attribute("hidden", "hidden") : new Span(),
+                        new Button(new Text("reader.codex.stop")).Attribute("type", "button").Attribute("data-codex", "stop").Attribute("hidden", "hidden"),
+                        new Button(new Text("reader.codex.retry")).Attribute("type", "button").Attribute("data-codex", "retry").Attribute("hidden", "hidden")
+                    ).Class("reader__codex-actions"))
+                .Class("reader__codex").Attribute("data-role", "codex")
+                .Attribute("data-texts", JsonSerializer.Serialize(keys.ToDictionary(item => item, item => texts[item]), Json))
+                .Attribute("data-problem", _codexProblem ?? "")
+                .Attribute("data-has-next", hasNext ? "true" : "false");
+            if (language == "original" || language == source) bar.Attribute("hidden", "hidden");
+            return bar;
         }
 
         // The one re-translation of the Reader, for every reader of the book: the models a machine has now (the script asks for them once the panel
@@ -801,7 +837,7 @@ namespace Jularr.Frontend.Pages.User.Reader
         // Without a language: the machines set up for translation do not answer, or nothing translates at all.
         private string NoLanguageKey => _translationAway ? "reader.language.away" : "reader.language.none";
 
-        // The profile's languages, offered where a server model translates for this reader (TranslateGemma, else Codex for the Owner). The Reader asks
+        // The profile's languages, offered where a server model translates for this reader (TranslateGemma, and Codex by button for the Owner). The Reader asks
         // Mozilla for nothing (#1726).
         private async Task<string[]> LanguagesAsync(CancellationToken ct)
         {
@@ -812,14 +848,14 @@ namespace Jularr.Frontend.Pages.User.Reader
             try
             {
                 var availability = await readLocalAvailability.ExecuteAsync<LocalTranslationAvailabilityV1>(new LocalTranslationAvailabilityParametersV1(), ct);
-                (_localTranslationModel, _localPassages, _translationAway) = (availability.Model, availability.Passages, availability.Away);
+                (_localTranslationModel, _translationAway, _codexModel, _codexProblem) = (availability.Model, availability.Away, availability.Codex, availability.CodexProblem);
             }
             catch (ServiceUnavailableException)
             {
-                (_localTranslationModel, _localPassages, _translationAway) = (null, false, false);
+                (_localTranslationModel, _translationAway, _codexModel, _codexProblem) = (null, false, null, null);
             }
 
-            return _localTranslationModel is not null ? candidates : [];
+            return _localTranslationModel is not null || _codexModel is not null || _codexProblem is not null ? candidates : [];
         }
 
         protected override async Task LoadDataAsync()

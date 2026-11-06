@@ -7,7 +7,13 @@ import ts from './transpile.mjs';
 const source = readFileSync(new URL('../Modules/Reader/Translation/translation.ts', import.meta.url), 'utf8');
 const script = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS } }).outputText;
 const exports = {};
-const lifetime = { require: () => ({ readerLifetime: () => new AbortController().signal }) };
+// The Codex bar is stubbed: the translator hands it the chapter, nothing else of it runs here.
+const bars = [];
+const lifetime = {
+    require: name => name.includes('CodexBar')
+        ? { showCodexBar: () => undefined, codexBar: (_reader, view) => bars.push(view) }
+        : { readerLifetime: () => new AbortController().signal }
+};
 runInNewContext(script, { exports, ...lifetime });
 
 test('a book names its language, else its text tells it', () => {
@@ -438,4 +444,44 @@ test('re-translating a paragraph keeps the choice first, the earlier text until 
     await translation.choose('');
     assert.equal(blocks[1].dataset.translationModel, undefined);
     assert.equal(translation.showsServer(), false);
+});
+
+test('without a local model Codex is never asked by itself: its bar gets the chapter, stored texts show, and nothing is requested', async () => {
+    const requests = [];
+    const blocks = Array.from({ length: 3 }, (_, index) => {
+        let markup = 'original-' + index;
+        return { dataset: {}, get innerHTML() { return markup; }, set innerHTML(next) { markup = next; }, get innerText() { return markup; }, set textContent(next) { markup = next; }, querySelector: () => null };
+    });
+    const fetchStub = async (url, options) => {
+        requests.push((options?.method ?? 'GET') + ' ' + url);
+        if (url.startsWith('/local/de/codex%3Agpt-one?')) return { ok: true, json: async () => ({ blocks: JSON.stringify(['stored 0', '', '']), models: ['codex:gpt-one', null, null] }) };
+        throw new Error('Unexpected fetch: ' + url);
+    };
+    const localExports = {};
+    runInNewContext(script, { exports: localExports, fetch: fetchStub, ...lifetime });
+    const reader = {
+        dataset: { language: 'en', translationEngine: 'gemma', codexModel: 'codex:gpt-one', localTranslationUrl: '/local/', translatingLabel: 'Translating', antiforgery: 'token' },
+        querySelector: () => null
+    };
+    const content = { querySelectorAll: () => blocks, innerText: 'English original text' };
+    bars.length = 0;
+    const { choose } = localExports.translator(reader, content, () => { throw new Error('No worker is needed'); });
+    await choose('de');
+
+    assert.deepEqual(requests, ['GET /local/de/codex%3Agpt-one?sourceLanguage=en']);
+    assert.equal(bars.length, 1);
+    const view = bars[0];
+    assert.equal(view.model, 'codex:gpt-one');
+    assert.equal(view.target, 'de');
+    assert.equal(blocks[0].innerText, 'stored 0', 'What Codex translated earlier shows without a request.');
+    assert.equal(blocks[1].innerText, 'original-1');
+    assert.deepEqual([0, 1, 2].map(index => view.translated(index)), [true, false, false]);
+
+    // A chunk that arrives shows at once and counts as translated.
+    view.put([{ index: 1, text: 'chunk 1' }, { index: 2, text: 'chunk 2' }]);
+    assert.equal(blocks[1].innerText, 'chunk 1');
+    assert.equal(blocks[2].innerText, 'chunk 2');
+    assert.deepEqual([0, 1, 2].map(index => view.translated(index)), [true, true, true]);
+    assert.equal(reader.dataset.translationState, 'ready');
+    assert.equal(blocks[0].dataset.translationModel, undefined, "Codex's own text is not marked as another model's.");
 });

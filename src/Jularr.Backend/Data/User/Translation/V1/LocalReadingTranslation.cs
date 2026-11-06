@@ -9,13 +9,15 @@ namespace Jularr.Backend.Data.User.Translation.V1
     {
     }
 
-    // The model id that translates for the caller now; Passages when it translates a chapter in whole-passage requests (Codex); Away when none translates
-    // because the machines set up for translation do not answer.
-    public sealed class LocalTranslationAvailabilityV1(string? model, bool passages = false, bool away = false) : BaseResponse
+    // The model id that translates for every reader now (a local machine's, never Codex's); Away when none translates because the machines set up for
+    // translation do not answer. Codex is the model id a holder of the admin-only right translates a chapter with when pressing the button, CodexProblem
+    // what keeps it from doing so now ("not_connected", "limit" or "unavailable"); both are empty for everyone else.
+    public sealed class LocalTranslationAvailabilityV1(string? model, bool away = false, string? codex = null, string? codexProblem = null) : BaseResponse
     {
         public string? Model { get; } = model;
-        public bool Passages { get; } = passages;
         public bool Away { get; } = away;
+        public string? Codex { get; } = codex;
+        public string? CodexProblem { get; } = codexProblem;
     }
 
     public sealed class LocalReadingTranslationParametersV1(long documentId, int sectionIndex, string language, string model, string sourceLanguage) : BaseParameters
@@ -69,6 +71,39 @@ namespace Jularr.Backend.Data.User.Translation.V1
     {
         [DataField(typeof(TranslationFields), nameof(TranslationFields.Language))]
         public string SourceLanguage { get; } = sourceLanguage;
+    }
+
+    // The next stretch of a chapter for a model that translates in several requests: translate from this block onward and round again to the start, leaving
+    // out the blocks whose answers failed the checks earlier in this run.
+    public sealed class LocalReadingChunkDataV1(string sourceLanguage, int from, int[] skip) : BaseData
+    {
+        [DataField(typeof(TranslationFields), nameof(TranslationFields.Language))]
+        public string SourceLanguage { get; } = sourceLanguage;
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.BlockIndex))]
+        public int From { get; } = from;
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.BlockIndexes))]
+        public int[] Skip { get; } = skip;
+    }
+
+    // One request's blocks, each with its text; Failed the blocks whose answer failed the checks even asked alone; Characters the source characters the request
+    // carried and Seconds the time the model needed, with the blocks and source characters still missing in this version of the model (without Failed and the ones
+    // skipped), from which the Reader estimates the time left.
+    public sealed class LocalReadingChunkV1(LocalReadingChunkBlockV1[] blocks, int[] failed, int characters, double seconds, int remaining, int remainingCharacters) : BaseResponse
+    {
+        public LocalReadingChunkBlockV1[] Blocks { get; } = blocks;
+        public int[] Failed { get; } = failed;
+        public int Characters { get; } = characters;
+        public double Seconds { get; } = seconds;
+        public int Remaining { get; } = remaining;
+        public int RemainingCharacters { get; } = remainingCharacters;
+    }
+
+    public sealed class LocalReadingChunkBlockV1(int index, string text)
+    {
+        public int Index { get; } = index;
+        public string Text { get; } = text;
     }
 
     public sealed class LocalReadingBlockV1(string text) : BaseResponse

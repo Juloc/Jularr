@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Net.Http;
 using System.Security;
 using System.Text.Json;
@@ -74,10 +75,11 @@ namespace Jularr.Backend.Service.User.Translation.V1
         }
     }
 
-    // The default translation of a model that translates whole passages (Codex): the section's blocks its cache lacks in this version, in whole-passage requests
-    // instead of a request per block. Stored like any default translation, no choice for other readers; a block whose answer fails the checks stays missing.
+    // The default translation of a model that translates in several requests (Codex), one request per call: the next stretch of blocks this version of the model has not
+    // translated yet, from the block in view onward and round to the start. The Reader asks again until nothing remains and shows each answer as it arrives, so a reader
+    // never waits for the chapter and the single translation lane is held for one request only. Stored like any default translation, no choice for other readers.
     [ServiceEndpoint("POST", "/api/v1/reading/documents/{documentId:long}/sections/{sectionIndex:int}/local-translations/{language}/{model}/passages")]
-    public sealed class TranslateLocalReadingPassagesV1 : UserService<LocalReadingSectionModelParametersV1, LocalReadingBlockDataV1>
+    public sealed class TranslateLocalReadingPassagesV1 : UserService<LocalReadingSectionModelParametersV1, LocalReadingChunkDataV1>
     {
         private readonly ReadReadingSectionV1 _sections;
         private readonly TranslationProviders _providers;
@@ -91,14 +93,14 @@ namespace Jularr.Backend.Service.User.Translation.V1
         }
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
-        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<LocalReadingRetranslationV1>()];
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<LocalReadingChunkV1>()];
         protected override ModuleRequirement GetInstanceModules(LocalReadingSectionModelParametersV1 parameters) => ModuleRequirement.All("Library", "Reading", "Translation");
         protected override ServicePermission GetPermission(LocalReadingSectionModelParametersV1 parameters, Type resultType) => new("profile.media.read");
 
         protected override async Task<IServiceOutput> OnExecute()
         {
             if (_providers.Find(Parameters.Model) is not ({ } provider, _)) throw new DataValidationException(nameof(Parameters.Model), "unknown_model");
-            if (provider is not IBatchTranslationProvider) throw new DataValidationException(nameof(Parameters.Model), "unknown_model");
+            if (provider is not IBatchTranslationProvider batch) throw new DataValidationException(nameof(Parameters.Model), "unknown_model");
             var setup = await Context.ExecuteBatchAsync(TranslationProviders.SetupAsync, CancellationToken);
             if (!_providers.MayChoose(Parameters.Model, setup, Auth))
                 throw new SecurityException("Only the admin-only right may translate with this model.");
@@ -107,20 +109,42 @@ namespace Jularr.Backend.Service.User.Translation.V1
             if (nodes.Length != section.Blocks) throw new DataValidationException(nameof(Parameters.SectionIndex), "translation_mismatch");
 
             // Only what this version of the model has not translated yet.
-            var (machine, digest) = await PassageTranslation.ChooseAsync(_providers, setup, Parameters.Model, CancellationToken);
+            TranslationMachine machine;
+            string digest;
+            try { (machine, digest) = await PassageTranslation.ChooseAsync(_providers, setup, Parameters.Model, CancellationToken); }
+            catch (ServiceUnavailableException exception) { throw new ServiceUnavailableException(await PassageTranslation.ProblemAsync(batch, setup, CancellationToken), exception); }
             var path = LocalReadingPaths.Cache(Parameters.SectionIndex, Parameters.Language, Parameters.Model);
             var cached = await Context.ExecuteBatchAsync(async (ctx, ct) =>
             {
                 var row = await ctx.ReadOptionalAsync<ReadingTranslationCacheData>(LocalReadingPaths.Read(Parameters.DocumentId, path), ct);
                 return row is null ? null : LocalReadingPaths.Parse(row.Cache, section.Html, Data.SourceLanguage, digest, nodes.Length);
             }, CancellationToken);
-            var pending = PassageTranslation.Pending(nodes, index => string.IsNullOrWhiteSpace(cached?.Texts[index]));
-            if (pending.Count == 0) return new LocalReadingRetranslationV1(0, 0);
+            var pending = PassageTranslation.Pending(nodes, index => string.IsNullOrWhiteSpace(cached?.Texts[index]) && !Data.Skip.Contains(index));
+            if (pending.Count == 0) return new LocalReadingChunkV1([], [], 0, 0, 0, 0);
 
-            var done = await PassageTranslation.TranslateAsync(machine, section, nodes, pending, Data.SourceLanguage, Parameters.Language, _gate, CancellationToken);
-            if (done.Count == 0) throw new ServiceUnavailableException("translation_local_unavailable");
-            await Context.ExecuteBatchAsync((ctx, ct) => LocalReadingPaths.StoreAsync(ctx, Parameters.DocumentId, path, section.Html, Data.SourceLanguage, digest, nodes.Length, done, ct), CancellationToken);
-            return new LocalReadingRetranslationV1(done.Count, pending.Count - done.Count);
+            // One request, one hold of the lane.
+            var chunk = PassageTranslation.Chunk(pending, Data.From, batch);
+            if (!await _gate.HeavyWork.WaitAsync(_gate.ChunkWait, CancellationToken)) throw new ServiceUnavailableException("translation_local_busy");
+            Dictionary<int, string> done;
+            var started = Stopwatch.GetTimestamp();
+            try
+            {
+                using var run = batch.BeginChapter(machine, section.SectionIndex + 1, section.Title);
+                done = await PassageTranslation.TranslateChunkAsync(machine, nodes, chunk, Data.SourceLanguage, Parameters.Language, CancellationToken);
+            }
+            catch (Exception exception) when (exception is HttpRequestException or JsonException or InvalidDataException or TaskCanceledException && !CancellationToken.IsCancellationRequested)
+            {
+                throw new ServiceUnavailableException(await PassageTranslation.ProblemAsync(batch, setup, CancellationToken), exception);
+            }
+            finally { _gate.HeavyWork.Release(); }
+            var seconds = Math.Round(Stopwatch.GetElapsedTime(started).TotalSeconds, 1);
+
+            if (done.Count > 0)
+                await Context.ExecuteBatchAsync((ctx, ct) => LocalReadingPaths.StoreAsync(ctx, Parameters.DocumentId, path, section.Html, Data.SourceLanguage, digest, nodes.Length, done, ct), CancellationToken);
+            var failed = chunk.Where(item => !done.ContainsKey(item.Index)).Select(item => item.Index).ToArray();
+            var left = pending.Except(chunk).ToList();
+            return new LocalReadingChunkV1([.. done.OrderBy(item => item.Key).Select(item => new LocalReadingChunkBlockV1(item.Key, item.Value))], failed,
+                chunk.Sum(item => item.Text.Length), seconds, left.Count, left.Sum(item => item.Text.Length));
         }
     }
 
@@ -151,6 +175,58 @@ namespace Jularr.Backend.Service.User.Translation.V1
             { throw new ServiceUnavailableException("translation_local_unavailable", exception); }
         }
 
+        // The next request's blocks: the missing ones from `from` onward, then round to the start, as many as the provider takes in one request.
+        public static List<(int Index, string Text)> Chunk(List<(int Index, string Text)> pending, int from, IBatchTranslationProvider batch)
+        {
+            var chunk = new List<(int Index, string Text)>();
+            var characters = 0;
+            foreach (var item in pending.Where(item => item.Index >= from).Concat(pending.Where(item => item.Index < from)))
+            {
+                if (chunk.Count > 0 && (chunk.Count >= batch.BatchBlocks || characters + item.Text.Length > batch.BatchCharacters)) break;
+                chunk.Add(item);
+                characters += item.Text.Length;
+            }
+
+            return chunk;
+        }
+
+        // The chunk in one request with the passage before it; a block whose answer fails the checks is asked alone once. A failure of that second ask keeps what
+        // the first request answered, and the blocks left stay missing (the next request reports the failure).
+        public static async Task<Dictionary<int, string>> TranslateChunkAsync(TranslationMachine machine, IElement[] nodes, List<(int Index, string Text)> chunk, string source, string target,
+            CancellationToken ct)
+        {
+            var batch = (IBatchTranslationProvider)machine.Provider;
+            var answers = await batch.TranslateBlocksAsync(machine, source, target, [.. chunk.Select(item => item.Text)], ReadingHtml.TranslationContext(nodes, chunk[0].Index), ct);
+            var done = new Dictionary<int, string>();
+            for (var k = 0; k < chunk.Count; k++)
+            {
+                if (answers[k] is { } answer) done[chunk[k].Index] = answer;
+            }
+
+            if (chunk.Count == 1) return done;
+            try
+            {
+                foreach (var item in chunk.Where(item => !done.ContainsKey(item.Index)))
+                {
+                    if (await machine.Provider.TranslateBlockAsync(machine, source, target, item.Text, ReadingHtml.TranslationContext(nodes, item.Index), ct) is { } alone) done[item.Index] = alone;
+                }
+            }
+            catch (Exception exception) when (done.Count > 0 && exception is HttpRequestException or JsonException or InvalidDataException or TaskCanceledException && !ct.IsCancellationRequested)
+            {
+            }
+
+            return done;
+        }
+
+        // Why a request failed, as the error code the Reader names to the person: the provider's own state (limit, not signed in), else a failed request.
+        public static async Task<string> ProblemAsync(IBatchTranslationProvider provider, TranslationSetupV1 setup, CancellationToken ct) =>
+            (await provider.OfferAsync(setup, ct)).Problem switch
+            {
+                "limit" => "translation_limit_reached",
+                "not_connected" => "translation_not_connected",
+                _ => "translation_request_failed"
+            };
+
         // The translated blocks by index. One request takes as many blocks as the provider allows (a provider without batches is asked block by block); a block
         // whose batch answer fails the checks is asked alone. A failing machine rests and ends the run with what was translated so far.
         public static async Task<Dictionary<int, string>> TranslateAsync(TranslationMachine machine, ReadingSectionV1 section, IElement[] nodes, List<(int Index, string Text)> pending,
@@ -163,7 +239,8 @@ namespace Jularr.Backend.Service.User.Translation.V1
             {
                 var take = 1;
                 var characters = pending[start].Text.Length;
-                while (batch is not null && start + take < pending.Count && characters + pending[start + take].Text.Length <= batch.BatchCharacters) characters += pending[start + take++].Text.Length;
+                while (batch is not null && start + take < pending.Count && take < batch.BatchBlocks && characters + pending[start + take].Text.Length <= batch.BatchCharacters)
+                    characters += pending[start + take++].Text.Length;
                 var group = pending.GetRange(start, take);
                 start += take;
 

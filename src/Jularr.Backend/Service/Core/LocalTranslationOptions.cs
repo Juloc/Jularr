@@ -23,6 +23,9 @@ namespace Jularr.Backend.Service.Core
     internal sealed class LocalTranslationGate
     {
         public SemaphoreSlim HeavyWork { get; } = new(1, 1);
+
+        // How long a chunk of a chapter waits for the lane, held by another translation for one request at most, before the Reader is told it is busy.
+        public TimeSpan ChunkWait { get; set; } = TimeSpan.FromSeconds(30);
     }
 
     // The Ollama machines in the Owner's order (Admin, `InstanceSettings.TranslationMachines`), else the configured endpoint alone. The first

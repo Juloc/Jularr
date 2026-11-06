@@ -230,6 +230,24 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(300L, restarted.History().Single().Tokens);
         }
 
+        [TestMethod]
+        public async Task Runs_ARequestOfTheSameChapterSoonAfterwards_AddsToItsRow_AndAnotherModelGetsItsOwn()
+        {
+            using var folder = new Folder();
+            folder.SignIn();
+            using var connection = folder.Connection();
+            using (connection.BeginRun(3, "Chapter", "gpt-test", "low")) await connection.ExecAsync("gpt-test", "low", "one", "translate", default);
+            using (connection.BeginRun(3, "Chapter", "gpt-test", "low")) await connection.ExecAsync("gpt-test", "low", "two", "translate", default);
+            using (connection.BeginRun(3, "Chapter", "gpt-ok", "low")) await connection.ExecAsync("gpt-ok", "low", "three", "translate", default);
+
+            var runs = connection.Runs();
+            Assert.AreEqual(2, runs.Length);
+            Assert.AreEqual(2, runs.Single(run => run.Model == "gpt-test").Requests);
+            Assert.AreEqual(300L, runs.Single(run => run.Model == "gpt-test").Tokens);
+            Assert.AreEqual(1, runs.Single(run => run.Model == "gpt-ok").Requests);
+            Assert.IsTrue(runs.All(run => run.State == 1));
+        }
+
         internal sealed class Folder : IDisposable
         {
             private readonly string _root = Path.Combine(Path.GetTempPath(), "jularr-codex-tr-" + Guid.NewGuid().ToString("N"));

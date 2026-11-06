@@ -10,6 +10,9 @@ namespace Jularr.Backend.Service.Core.Localization
         [
             new("errors.invalid_data", "Please check the supplied values."),
             new("errors.translation_local_busy", "The local translation model is busy."),
+            new("errors.translation_limit_reached", "The ChatGPT account's usage limit for Codex is reached."),
+            new("errors.translation_not_connected", "Codex is not connected to a ChatGPT account."),
+            new("errors.translation_request_failed", "Codex could not translate this part of the chapter."),
             new("errors.validation.codex_model_invalid", "Enter a model name as Codex lists it, such as gpt-5.4."),
             new("errors.validation.codex_effort_invalid", "Choose one of the efforts the model offers."),
             new("errors.validation.codex_run_over_daily", "The limit per run cannot be higher than the daily limit."),

@@ -97,20 +97,42 @@ namespace Jularr.E2E.Tests
             }
         }
 
-        [TestMethod]
-        [Timeout(300_000)]
-        public async Task Owner_WithoutAnAnsweringOllama_ReadsWithCodex_ComparesAnotherModel_AndTheAiPageAddsUpEachChapter()
+        // The stand-in CLI of the AI page, slowed to one second a request, noting every request in `asked`, failing from the request after the number in `failafter` and hitting its usage limit while `limit` exists.
+        private static string SlowCli => AiPageTests.Cli.Replace("\r\n", "\n").Replace("  exec)\n    prompt=$(cat)\n", "  exec)\n    prompt=$(cat)\n" + Hook, StringComparison.Ordinal);
+
+        private const string Hook = """
+                echo asked >> "$CODEX_HOME/asked"
+                sleep 1
+                if [ -f "$CODEX_HOME/failafter" ] && [ "$(wc -l < "$CODEX_HOME/asked")" -gt "$(cat "$CODEX_HOME/failafter")" ]; then exit 1; fi
+                if [ -f "$CODEX_HOME/limit" ]; then
+                  printf '{"type":"error","message":"You hit your usage limit. Upgrade to Pro, or try again at %s."}\n{"type":"turn.failed","error":{"message":"You hit your usage limit."}}\n' "Nov 4th, 2099 7:41 AM"
+                  exit 1
+                fi
+
+            """ + "\n";
+
+        private static string Setup(string folder, out string home)
         {
-            if (OperatingSystem.IsWindows()) Assert.Inconclusive("The stand-in CLI is a shell script.");
-            using var folders = new Folders("Books");
-            Steps.WriteEpub(Path.Combine(folders.Library, "Books", "codex-alone.epub"), "Codex Alone", "Local fixture", paragraphsPerChapter: 8);
-            var codexFolder = Path.Combine(Path.GetTempPath(), "jularr-codex-alone-" + Guid.NewGuid().ToString("N"));
-            var home = Path.Combine(codexFolder, "home");
+            home = Path.Combine(folder, "home");
             Directory.CreateDirectory(home);
             File.WriteAllText(Path.Combine(home, "auth"), "");
-            var executable = Path.Combine(codexFolder, "codex");
-            File.WriteAllText(executable, AiPageTests.Cli.Replace("\r\n", "\n"));
+            var executable = Path.Combine(folder, "codex");
+            File.WriteAllText(executable, SlowCli);
             File.SetUnixFileMode(executable, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            return executable;
+        }
+
+        [TestMethod]
+        [Timeout(420_000)]
+        public async Task Owner_WithoutAnAnsweringOllama_TranslatesAChapterByButtonOnly_LiveInChunks_AndKeepsItWhenReopened()
+        {
+            if (OperatingSystem.IsWindows()) Assert.Inconclusive("The stand-in CLI is a shell script.");
+            Assert.IsTrue(SlowCli.Contains("sleep 1", StringComparison.Ordinal), "The stand-in CLI must be slowed.");
+            using var folders = new Folders("Books");
+            Steps.WriteEpub(Path.Combine(folders.Library, "Books", "codex-alone.epub"), "Codex Alone", "Local fixture", paragraphsPerChapter: 70);
+            var codexFolder = Path.Combine(Path.GetTempPath(), "jularr-codex-alone-" + Guid.NewGuid().ToString("N"));
+            var executable = Setup(codexFolder, out var home);
+            var asked = () => File.Exists(Path.Combine(home, "asked")) ? File.ReadAllLines(Path.Combine(home, "asked")).Length : 0;
             try
             {
                 // Ollama is set up but nothing answers on its address.
@@ -128,52 +150,126 @@ namespace Jularr.E2E.Tests
                 await jularr.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'Translation'");
                 await jularr.RunSqlAsync("UPDATE \"InstanceSettings\" SET \"CodexEffort\" = 'low' WHERE \"Id\" = 1");
 
-                // The Owner's language panel offers the profile's languages, and Codex translates the chapter in whole passages.
+                // Choosing German shows the original text and the button; Codex is asked for nothing.
                 await page.GotoAsync("/Read/1");
                 await page.Locator("[data-action=language]").ClickAsync();
                 await Assertions.Expect(page.Locator("[data-language-choice=de]")).ToBeVisibleAsync();
-                Assert.AreEqual("codex:gpt-one", await page.Locator(".reader").GetAttributeAsync("data-local-model"));
                 await page.Locator("[data-language-choice=de]").ClickAsync();
-                await Assertions.Expect(page.Locator("[data-role=content]")).ToContainTextAsync("Codex gpt-one:", new() { Timeout = 60_000 });
-                await page.WaitForFunctionAsync("() => document.querySelector('.reader')?.dataset.translationState === 'ready'", null, new() { Timeout = 120_000 });
-                Assert.AreEqual(0L, await jularr.ScalarAsync("SELECT count(*) FROM \"ReadingTranslationChoices\""));
+                var bar = page.Locator("[data-role=codex]");
+                await Assertions.Expect(bar.Locator("[data-codex=start]")).ToBeVisibleAsync(new() { Timeout = 30_000 });
+                await Assertions.Expect(bar.Locator("[data-role=codex-text]")).ToContainTextAsync("not translated yet");
+                await Assertions.Expect(page.Locator("[data-role=content]")).ToContainTextAsync("Paragraph 1 of a long chapter");
+                await page.WaitForTimeoutAsync(1500);
+                Assert.AreEqual(0, asked(), "Codex must not be asked until the button is pressed.");
+                Assert.IsFalse((await page.Locator("[data-role=content]").InnerTextAsync()).Contains("Codex gpt-one:", StringComparison.Ordinal), "The original text shows until the button is pressed.");
                 await Assertions.Expect(page.Locator("[data-translation-provider]")).ToHaveTextAsync("Engine: ChatGPT account · codex · gpt-one");
+                await Assertions.Expect(page.Locator("[data-role=translation-status]")).ToBeHiddenAsync();
+                await Evidence.SaveAsync(page, "reader-codex-button-desktop");
 
-                // The other model of the account re-translates the same chapter for comparison.
-                var area = page.Locator("[data-role=retranslate]");
-                await Assertions.Expect(area).ToBeVisibleAsync();
-                await Assertions.Expect(area.Locator("[data-retranslate-model]")).ToHaveCountAsync(2);
-                await area.Locator("[data-retranslate-model='codex:gpt-two']").ClickAsync();
-                await Evidence.SaveAsync(page, "reader-language-codex-alone-desktop");
-                await area.Locator("[data-retranslate=section]").ClickAsync();
-                await Assertions.Expect(area.Locator("[data-role=retranslate-status]")).ToContainTextAsync("Done:", new() { Timeout = 60_000 });
-                await Assertions.Expect(page.Locator("[data-role=content]")).ToContainTextAsync("Codex gpt-two:", new() { Timeout = 60_000 });
+                // The press translates the chapter in several requests; the first answer shows while the next ones run, with the time left.
+                await bar.Locator("[data-codex=start]").ClickAsync();
+                await Assertions.Expect(bar.Locator("[data-codex=stop]")).ToBeVisibleAsync();
+                await Assertions.Expect(page.Locator("[data-role=content]")).ToContainTextAsync("Codex gpt-one:", new() { Timeout = 60_000 });
+                await Assertions.Expect(bar.Locator("[data-role=codex-text]")).ToContainTextAsync("Translating the chapter with Codex");
+                Assert.IsTrue(asked() >= 1);
+                await Evidence.SaveAsync(page, "reader-codex-live-desktop");
+                await Assertions.Expect(bar.Locator("[data-role=codex-text]")).ToContainTextAsync("This chapter is translated.", new() { Timeout = 120_000 });
+                Assert.IsTrue(asked() >= 3, "Seventy blocks need several requests.");
+                await Assertions.Expect(bar.Locator("[data-codex=next]")).ToBeVisibleAsync();
+                await Assertions.Expect(bar.Locator("[data-codex=start]")).ToBeHiddenAsync();
+                var text = await page.Locator("[data-role=content]").InnerTextAsync();
+                Assert.IsFalse(System.Text.RegularExpressions.Regex.IsMatch(text, "(^|\n)Paragraph \\d+"), "Every paragraph is translated: " + text);
+                Assert.IsTrue(text.Contains("Codex gpt-one: Paragraph 70", StringComparison.Ordinal), text);
+                Assert.AreEqual(0L, await jularr.ScalarAsync("SELECT count(*) FROM \"ReadingTranslationChoices\""));
+                await Evidence.SaveAsync(page, "reader-codex-done-desktop");
 
-                // On a phone the same panel.
-                await page.SetViewportSizeAsync(390, 844);
-                await page.WaitForFunctionAsync("() => document.querySelector('.reader')?.dataset.translationState === 'ready'", null, new() { Timeout = 120_000 });
-                var tool = page.Locator(".reader__top [data-action=language]");
-                if (!await tool.IsVisibleAsync())
-                {
-                    await page.Locator("[data-action=more]").ClickAsync();
-                    tool = page.Locator("[data-panel=more] [data-overflow-for=language]");
-                }
-                await tool.ClickAsync();
-                await Assertions.Expect(area).ToBeVisibleAsync();
-                await Evidence.SaveAsync(page, "reader-language-codex-alone-phone");
-                await page.SetViewportSizeAsync(1280, 720);
-
-                // The AI page adds each chapter's requests up, with model and effort: one row per model on the same chapter.
-                await page.GotoAsync("/Admin/Ai");
-                var chapters = page.Locator("#codex-activity [data-codex-chapter]");
-                await Assertions.Expect(chapters).ToHaveCountAsync(2);
-                await Assertions.Expect(chapters.Nth(0)).ToContainTextAsync("gpt-two · Low");
-                await Assertions.Expect(chapters.Nth(1)).ToContainTextAsync("gpt-one · Low");
-                await Assertions.Expect(chapters.Nth(1)).ToContainTextAsync("Chapter 1");
-                await Evidence.SaveAsync(page, "ai-activity-chapters-desktop");
-                await page.SetViewportSizeAsync(390, 844);
+                // Reopened, the chapter is translated without a press and without a request.
+                var before = asked();
                 await page.ReloadAsync();
-                await Evidence.SaveAsync(page, "ai-activity-chapters-phone");
+                await Assertions.Expect(page.Locator("[data-role=content]")).ToContainTextAsync("Codex gpt-one: Paragraph 70", new() { Timeout = 60_000 });
+                await Assertions.Expect(bar.Locator("[data-role=codex-text]")).ToContainTextAsync("This chapter is translated.");
+                await page.WaitForTimeoutAsync(1500);
+                Assert.AreEqual(before, asked());
+
+                // The next chapter only on its own button.
+                await bar.Locator("[data-codex=next]").ClickAsync();
+                await Assertions.Expect(bar.Locator("[data-role=codex-text]")).ToContainTextAsync("next chapter", new() { Timeout = 30_000 });
+                await Assertions.Expect(bar.Locator("[data-role=codex-text]")).ToContainTextAsync("The next chapter is translated.", new() { Timeout = 120_000 });
+                Assert.IsTrue(asked() > before);
+                Assert.AreEqual(2L, await jularr.ScalarAsync("SELECT count(DISTINCT regexp_replace(\"Path\", '.*/', '')) FROM \"ReadingResources\" WHERE \"Path\" LIKE ':localtranslation/v4/codex:%'"));
+
+                // On a tablet and a phone the bar holds its text and buttons.
+                foreach (var (width, height, name) in new[] { (768, 1024, "tablet"), (375, 812, "phone") })
+                {
+                    await page.SetViewportSizeAsync(width, height);
+                    await page.WaitForTimeoutAsync(400);
+                    await Assertions.Expect(bar).ToBeVisibleAsync();
+                    await Evidence.SaveAsync(page, "reader-codex-done-" + name);
+                }
+            }
+            finally
+            {
+                Directory.Delete(codexFolder, true);
+            }
+        }
+
+        [TestMethod]
+        [Timeout(420_000)]
+        public async Task Owner_WhenCodexFailsOrIsLimited_IsToldWhy_AndTheRetryKeepsTheFinishedPart()
+        {
+            if (OperatingSystem.IsWindows()) Assert.Inconclusive("The stand-in CLI is a shell script.");
+            using var folders = new Folders("Books");
+            Steps.WriteEpub(Path.Combine(folders.Library, "Books", "codex-fails.epub"), "Codex Fails", "Local fixture", paragraphsPerChapter: 70);
+            var codexFolder = Path.Combine(Path.GetTempPath(), "jularr-codex-fails-" + Guid.NewGuid().ToString("N"));
+            var executable = Setup(codexFolder, out var home);
+            try
+            {
+                await using var jularr = await JularrInstance.StartAsync(new Dictionary<string, string>
+                {
+                    ["Storage:LocalPaths:0"] = folders.Library,
+                    ["LocalTranslation:Endpoint"] = "http://127.0.0.1:9/",
+                    ["Ai:CodexPath"] = executable,
+                    ["Ai:CodexHome"] = home,
+                    ["HTTPS_PROXY"] = "http://127.0.0.1:9"
+                });
+                await using var session = await BrowserSession.StartAsync(jularr);
+                var page = session.Page;
+                await ReadingPathTests.AddBookAsync(page, folders, "Codex Fails");
+                await jularr.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'Translation'");
+                await page.GotoAsync("/Read/1");
+                await page.Locator("[data-action=language]").ClickAsync();
+                await page.Locator("[data-language-choice=de]").ClickAsync();
+                var bar = page.Locator("[data-role=codex]");
+                var line = bar.Locator("[data-role=codex-text]");
+                await Assertions.Expect(bar.Locator("[data-codex=start]")).ToBeVisibleAsync(new() { Timeout = 30_000 });
+
+                // The first request answers, then Codex fails: the finished part stays, the cause is named, and the text never says "unavailable".
+                File.WriteAllText(Path.Combine(home, "failafter"), "1");
+                await bar.Locator("[data-codex=start]").ClickAsync();
+                await Assertions.Expect(page.Locator("[data-role=content]")).ToContainTextAsync("Codex gpt-one:", new() { Timeout = 60_000 });
+                await Assertions.Expect(line).ToContainTextAsync("Codex could not translate a part of the chapter", new() { Timeout = 60_000 });
+                await Assertions.Expect(bar.Locator("[data-codex=retry]")).ToBeVisibleAsync();
+                await Assertions.Expect(line).Not.ToContainTextAsync("unavailable");
+                await Assertions.Expect(page.Locator("[data-role=content]")).ToContainTextAsync("Codex gpt-one:");
+                var finished = await page.Locator("[data-role=content]").InnerTextAsync();
+                await Evidence.SaveAsync(page, "reader-codex-error-desktop");
+
+                // The retry after the cause is gone asks only for the rest and finishes; the first part is not translated again.
+                File.Delete(Path.Combine(home, "failafter"));
+                var asked = File.ReadAllLines(Path.Combine(home, "asked")).Length;
+                await bar.Locator("[data-codex=retry]").ClickAsync();
+                await Assertions.Expect(line).ToContainTextAsync("This chapter is translated.", new() { Timeout = 180_000 });
+                Assert.IsTrue(File.ReadAllLines(Path.Combine(home, "asked")).Length - asked <= 2, "Only the missing part is asked for again.");
+                Assert.IsTrue((await page.Locator("[data-role=content]").InnerTextAsync()).Contains(finished[..40], StringComparison.Ordinal));
+
+                // The usage limit of the account is named as such, on the next chapter.
+                File.WriteAllText(Path.Combine(home, "limit"), "");
+                await bar.Locator("[data-codex=next]").ClickAsync();
+                await Assertions.Expect(line).ToContainTextAsync("usage limit", new() { Timeout = 60_000 });
+                await Assertions.Expect(bar.Locator("[data-codex=retry]")).ToBeVisibleAsync();
+                await Evidence.SaveAsync(page, "reader-codex-limit-desktop");
+                await page.SetViewportSizeAsync(375, 812);
+                await Evidence.SaveAsync(page, "reader-codex-limit-phone");
             }
             finally
             {

@@ -11,8 +11,15 @@ namespace Jularr.Backend.Service.Core
     // blocks; null where a block's answer is missing or fails the provider's checks (the caller asks for that block alone).
     internal interface IBatchTranslationProvider : ITranslationProvider
     {
-        // The most source characters one request should carry.
+        // The most source characters and the most blocks one request should carry: a chapter goes in several requests, each answered within a minute or so,
+        // so a reader sees text arrive and a failed request loses little.
         int BatchCharacters { get; }
+
+        int BatchBlocks { get; }
+
+        // The model this provider offers for a button press now (the Owner's choice first) and what keeps it from translating: null for a model or a problem
+        // that is not known; a problem is one of "not_connected", "limit", "unavailable".
+        Task<(string? Model, string? Problem)> OfferAsync(TranslationSetupV1 setup, CancellationToken ct);
 
         Task<string?[]> TranslateBlocksAsync(TranslationMachine machine, string source, string target, IReadOnlyList<string> blocks, string? context, CancellationToken ct);
 
@@ -31,8 +38,10 @@ namespace Jularr.Backend.Service.Core
 
         public string Key => ProviderKey;
 
-        // About three thousand tokens of source: a chapter in a few requests, each with the passage around its blocks.
-        public int BatchCharacters => 12_000;
+        // Short requests: a chapter in many of them, each with the passage around its blocks.
+        public int BatchCharacters => 6_000;
+
+        public int BatchBlocks => 30;
 
         // The models the account offered when last asked, never a guess; empty until the AI page or the first translation has asked.
         public IReadOnlyList<string> Models
@@ -54,6 +63,16 @@ namespace Jularr.Backend.Service.Core
             if (connection.KnownModels.Length == 0) await connection.ReadCatalogAsync(ct);
             var known = connection.KnownModels;
             return [.. known.Where(model => model == setup.CodexModel).Concat(known.Where(model => model != setup.CodexModel))];
+        }
+
+        public async Task<(string? Model, string? Problem)> OfferAsync(TranslationSetupV1 setup, CancellationToken ct)
+        {
+            if (!await connection.IsConnectedAsync(ct)) return (null, "not_connected");
+            if (connection.KnownModels.Length == 0) await connection.ReadCatalogAsync(ct);
+            var known = connection.KnownModels;
+            var model = known.Contains(setup.CodexModel, StringComparer.Ordinal) ? setup.CodexModel : known.FirstOrDefault();
+            if (connection.PlanLimitedUntil is not null || connection.LimitReached(setup.CodexDailyTokens, setup.CodexRunTokens)) return (model, "limit");
+            return model is null ? (null, "unavailable") : (model, null);
         }
 
         public async Task<TranslationMachine?> ChooseAsync(TranslationSetupV1 setup, string? model, CancellationToken ct)
