@@ -118,6 +118,7 @@ namespace Jularr.Backend.Logic.Playback
                     "PlaybackSessions" AS session
                 SET
                     "PositionMs" = @PositionMs,
+                    "StartedAt" = CASE WHEN @IsStarted THEN now() ELSE session."StartedAt" END,
                     "LastSeenAt" = now(),
                     "EndedAt" = CASE WHEN @IsEnded THEN now() END
                 WHERE

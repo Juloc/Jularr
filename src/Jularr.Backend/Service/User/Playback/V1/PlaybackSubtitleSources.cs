@@ -1,6 +1,9 @@
 using Jularr.Backend.Data.Logic.Playback;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Playback;
+using Jularr.Backend.Logic.Storage;
+using Jularr.Backend.Service.Core;
+using Jularr.Integrations.Logic.Storage;
 
 namespace Jularr.Backend.Service.User.Playback.V1
 {
@@ -11,6 +14,22 @@ namespace Jularr.Backend.Service.User.Playback.V1
         public static string CacheKey(PlaybackSubtitleSourceData source, int? streamIndex, string language) =>
             source.StoredFileId.ToString(global::System.Globalization.CultureInfo.InvariantCulture) + "-" + (streamIndex is { } stream ? PlaybackTracks.StreamKey(stream) : "file") + "-"
             + source.ModifiedAt.Ticks.ToString(global::System.Globalization.CultureInfo.InvariantCulture) + "-" + language;
+
+        // The subtitle as WebVTT, or as ASS from a track that is ASS or SSA and asked for as it is.
+        public static async Task<string> ReadAsync(LogicContext context, StorageAccess storage, PlaybackSubtitles subtitles, long mediaAssetId, long profileId, string key, bool styled, CancellationToken ct)
+        {
+            var (source, streamIndex) = await FindAsync(sql => context.ReadSql.ReadOptionalAsync<PlaybackSubtitleSourceData>(sql, ct), mediaAssetId, profileId, key);
+            if (styled && !(streamIndex is not null ? PlaybackTracks.IsStyled(source.Codec) : PlaybackTracks.IsStyledFile(source.RelativePath)))
+            {
+                throw new KeyNotFoundException("The subtitle was not found.");
+            }
+
+            var files = storage.Open(await context.ReadStorageMountAsync(source.StorageMountId, ct));
+            var path = StoragePath.Combine(source.RootRelativePath, source.RelativePath);
+            var cacheKey = source.StoredFileId.ToString(global::System.Globalization.CultureInfo.InvariantCulture) + "-" + (streamIndex is { } stream ? PlaybackTracks.StreamKey(stream) : "file") + "-"
+                + source.ModifiedAt.Ticks.ToString(global::System.Globalization.CultureInfo.InvariantCulture);
+            return await subtitles.ReadAsync(files, path, streamIndex, cacheKey, styled, ct);
+        }
 
         public static async Task<(PlaybackSubtitleSourceData Source, int? StreamIndex)> FindAsync(Func<SqlStatement, Task<PlaybackSubtitleSourceData?>> read, long mediaAssetId, long profileId, string key)
         {

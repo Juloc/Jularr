@@ -531,6 +531,101 @@ namespace Jularr.Backend.Tests
             Assert.AreNotEqual(sources.Grabbed[0], sources.Grabbed[1]);
         }
 
+        // A download whose folder holds nothing the import takes (only archives, or nothing at all) has nothing to assign: it fails as any release of no use, is blocked with the reason
+        // and the next release is searched at once; the person is told what the folder holds.
+        [TestMethod]
+        [DataRow("import_no_file", "release.rar", "release.r00")]
+        [DataRow("import_empty_folder")]
+        public async Task Manga_DownloadWithNothingToAssign_FailsIsBlockedAndTheNextReleaseIsSearchedAtOnce(string reason, params string[] files)
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            var sources = new FakeMangaSources { Rss = TwoReleases };
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, sources);
+            await WantFirstVolumeAsync(host);
+            await RunAsync<SearchDueWantedV1>(host);
+            Assert.HasCount(1, sources.Grabbed);
+            var folder = Directory.CreateDirectory(Path.Combine(downloads.Path, "Example Manga v01")).FullName;
+            foreach (var file in files)
+            {
+                File.WriteAllBytes(Path.Combine(folder, file), new byte[64]);
+            }
+
+            sources.History = """{"history":{"slots":[{"nzo_id":"SABnzbd_nzo_1","name":"Example Manga v01","status":"Completed","storage":"/downloads/Example Manga v01"}]}}""";
+            await RunAsync<MonitorDownloadsV1>(host);
+
+            // It leaves the queue as failed, its release is blocked with the reason and the target is due at once.
+            Assert.AreEqual(((short)4, reason, true), ((short)(await host.ScalarAsync("SELECT \"OperationStatusTypeId\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"))!,
+                (string)(await host.ScalarAsync("SELECT \"ErrorKey\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"))!, (bool)(await host.ScalarAsync("SELECT \"AttentionKey\" IS NULL FROM \"Operations\" WHERE \"OperationTypeId\" = 2"))!));
+            Assert.AreEqual(((short)3, reason), ((short)(await host.ScalarAsync("SELECT \"AcquisitionReleaseStatusTypeId\" FROM \"AcquisitionReleases\""))!, (string)(await host.ScalarAsync("SELECT \"ReasonKey\" FROM \"AcquisitionReleases\""))!));
+            Assert.AreEqual(1L, await host.ScalarAsync($"SELECT count(*) FROM \"ActivityEvents\" WHERE \"ActivityEventTypeId\" = 2 AND \"ReasonKey\" = '{reason}'"));
+            Assert.AreEqual(true, await host.ScalarAsync("SELECT \"NextSearchAt\" <= now() FROM \"WantedItems\" WHERE \"Id\" = 800"));
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"StoredFiles\" WHERE \"MediaAssetId\" IS NOT NULL"));
+
+            await RunAsync<SearchDueWantedV1>(host);
+            Assert.HasCount(2, sources.Grabbed);
+            Assert.AreNotEqual(sources.Grabbed[0], sources.Grabbed[1]);
+        }
+
+        // A download that waited before with nothing to assign (its proposal lists only files of a format the import does not take, or none) is failed by the cleanup pass once;
+        // one with a file a person can assign, or with something already placed, keeps waiting.
+        [TestMethod]
+        public async Task Manga_WaitingDownloadWithNothingToAssign_IsFailedByTheCleanupPassAndOthersKeepWaiting()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            var sources = new FakeMangaSources { Rss = TwoReleases };
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, sources);
+            await WantFirstVolumeAsync(host);
+            await RunAsync<SearchDueWantedV1>(host);
+            var folder = Directory.CreateDirectory(Path.Combine(downloads.Path, "Example Manga v01")).FullName;
+            File.WriteAllBytes(Path.Combine(folder, "Example Manga v01.cbz"), Archive("PK", 64));
+
+            // Kept for a person: a file with no reason, a file of a taken format, or something the import already placed.
+            foreach (var kept in new[]
+            {
+                """{"Source":{"Directory":"x"},"Files":[{"Path":"a.rar","Reason":"extension"},{"Path":"book.epub","Reason":null}]}""",
+                """{"Source":{"Directory":"x"},"Files":[{"Path":"a.rar","Reason":"extension"},{"Path":"b.cbz","Reason":"no_volume"}]}""",
+                """{"Source":{"Directory":"x"},"Files":[{"Path":"a.rar","Reason":"extension"}],"Handled":["c.cbz"]}"""
+            })
+            {
+                await host.Fixture.RunSqlAsync($"UPDATE \"Operations\" SET \"AttentionKey\" = 'import_nothing_placeable', \"AttentionProposal\" = '{kept}'::jsonb WHERE \"OperationTypeId\" = 2");
+                await RunAsync<MonitorDownloadsV1>(host);
+                Assert.AreEqual(((short)2, "import_nothing_placeable"), ((short)(await host.ScalarAsync("SELECT \"OperationStatusTypeId\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"))!,
+                    (string)(await host.ScalarAsync("SELECT \"AttentionKey\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"))!), kept);
+            }
+
+            // Nothing to assign: only archives.
+            await host.Fixture.RunSqlAsync("""UPDATE "Operations" SET "AttentionProposal" = '{"Source":{"Directory":"x"},"Files":[{"Path":"a.rar","Reason":"extension"},{"Path":"a.r00","Reason":"extension"}]}'::jsonb WHERE "OperationTypeId" = 2""");
+            await RunAsync<MonitorDownloadsV1>(host);
+            Assert.AreEqual(((short)4, "import_no_file"), ((short)(await host.ScalarAsync("SELECT \"OperationStatusTypeId\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"))!,
+                (string)(await host.ScalarAsync("SELECT \"ErrorKey\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"))!));
+            Assert.AreEqual(((short)3, "import_no_file"), ((short)(await host.ScalarAsync("SELECT \"AcquisitionReleaseStatusTypeId\" FROM \"AcquisitionReleases\""))!, (string)(await host.ScalarAsync("SELECT \"ReasonKey\" FROM \"AcquisitionReleases\""))!));
+            Assert.AreEqual(true, await host.ScalarAsync("SELECT \"NextSearchAt\" <= now() FROM \"WantedItems\" WHERE \"Id\" = 800"));
+        }
+
+        private const string TwoReleases = """
+            <rss><channel>
+              <item><title>Example Manga v01 (2019) (Digital) (Group)</title><guid>first</guid><link>https://indexer.example.test/getnzb/first</link><size>200000000</size></item>
+              <item><title>Example Manga v01 (2019) (Digital) (Other)</title><guid>second</guid><link>https://indexer.example.test/getnzb/second</link><size>190000000</size></item>
+            </channel></rss>
+            """;
+
+        // The manga's first volume is wanted (target 800).
+        private static async Task WantFirstVolumeAsync(Host host)
+        {
+            using var imported = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works/metadata", new ImportMetadataWorkDataV1(MediaType.Book, "101", MediaSubtype.Manga, "anilist"));
+            Assert.AreEqual(HttpStatusCode.OK, imported.StatusCode, await imported.Content.ReadAsStringAsync());
+            var work = (await imported.Content.ReadFromJsonAsync<WorkDetailsV1>())!;
+            await host.Fixture.RunSqlAsync($"""
+                INSERT INTO "AcquisitionRequests" ("Id", "WorkId", "RequestedByProfileId", "RequestedByAccountId", "UiLocaleId", "AcquisitionRequestStatusTypeId", "DecidedByAccountId", "DecidedAt")
+                VALUES (700, {work.Id}, 202, 42, 1, 2, 41, now());
+                INSERT INTO "WantedItems" ("Id", "WorkId") VALUES (800, {work.Id});
+                INSERT INTO "RequestTargets" ("AcquisitionRequestId", "WantedItemId") VALUES (700, 800);
+                UPDATE "WorkUnits" SET "IsMonitored" = ("Number" = 1) WHERE "WorkId" = {work.Id};
+                """);
+        }
+
         // A book of any folder is recognised by its file's name: proposed with its format, language and name, moved under the import's own name; only an administrator may do it.
         [TestMethod]
         public async Task Book_FromAnyFolder_IsRecognisedAndMovedByHand()

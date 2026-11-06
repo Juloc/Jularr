@@ -2329,6 +2329,8 @@ namespace Jularr.Frontend.Localization
             new("acquisition.outcome.usenet_extract_failed", "The archives could not be unpacked"),
             new("acquisition.outcome.import_no_media", "The download holds no video file"),
             new("acquisition.outcome.import_only_extras", "The download holds only samples or extras"),
+            new("acquisition.outcome.import_no_file", "The download holds no file the import takes, only archives or release files"),
+            new("acquisition.outcome.import_empty_folder", "The download folder is empty"),
             new("acquisition.outcome.import_wrong_series", "The files name another series"),
             new("acquisition.outcome.import_wrong_title", "The file names another film"),
             new("acquisition.outcome.import_wrong_episode", "The files name other episodes than the ones wanted"),

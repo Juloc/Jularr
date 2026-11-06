@@ -5763,6 +5763,14 @@
    "The download holds only samples or extras",
    "Der Download enthält nur Samples oder Extras"
   ],
+  "acquisition.outcome.import_no_file": [
+   "The download holds no file the import takes, only archives or release files",
+   "Der Download enthält keine Datei, die sich importieren lässt, nur Archive oder Release-Dateien"
+  ],
+  "acquisition.outcome.import_empty_folder": [
+   "The download folder is empty",
+   "Der Download-Ordner ist leer"
+  ],
   "acquisition.outcome.import_wrong_series": [
    "The files name another series",
    "Die Dateien nennen eine andere Serie"

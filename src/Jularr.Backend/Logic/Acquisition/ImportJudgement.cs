@@ -5,6 +5,7 @@ using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Logic.Acquisition;
 using Jularr.Backend.Logic.Library;
 using Jularr.Integrations.Data.Storage;
+using Jularr.Integrations.Logic.Storage;
 
 namespace Jularr.Backend.Logic.Acquisition
 {
@@ -32,6 +33,8 @@ namespace Jularr.Backend.Logic.Acquisition
     internal static class ImportJudgement
     {
         public const string NoMedia = "import_no_media";
+        public const string NoFile = "import_no_file";
+        public const string EmptyFolder = "import_empty_folder";
         public const string OnlyExtras = "import_only_extras";
         public const string WrongSeries = "import_wrong_series";
         public const string WrongTitle = "import_wrong_title";
@@ -45,10 +48,12 @@ namespace Jularr.Backend.Logic.Acquisition
         public static ImportVerdict Judge(MediaType mediaType, MediaSubtype? subtype, IReadOnlyList<string> titles, int? year, string releaseTitle, int? expectedSeason, int? expectedStart, int? expectedEnd,
             IReadOnlyList<StorageFile> files, IReadOnlyList<TargetUnit> units, QualityProfile? profile)
         {
-            // Other media types keep their own rules.
+            // Other media types keep their own rules, but a download with no file of a format they take has nothing to assign.
             if (mediaType is not (MediaType.Movie or MediaType.Series))
             {
-                return ImportVerdict.Clear;
+                return LibraryFileTypes.GetImportExtensions(mediaType, subtype) is { } accepted && !files.Any(file => StoragePath.HasExtension(file.RelativePath, accepted))
+                    ? new ImportVerdict(ImportVerdictKind.Discard, NoFile)
+                    : ImportVerdict.Clear;
             }
 
             var media = files.Where(file => LibraryFileTypes.GetAssetType(file.RelativePath) == MediaAssetType.Video).ToArray();

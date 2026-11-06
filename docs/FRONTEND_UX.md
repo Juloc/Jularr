@@ -105,10 +105,10 @@ SavePill, FolderPicker, IconInfo, TimePicker, FactList, Drawer, FilterDialog, Sh
   under it the release), the episode (`S01E05`, `S01E05–E07`, the season of a pack; volume and chapter for books), the episode's title, quality, the languages the release names,
   protocol (Usenet, Torrent, Direct by the client), time left, progress (bar and percent) and the actions; the medium width drops episode title, language and protocol, the narrow one
   episode and quality; on a phone each row is a card with the bar and time left under the title and the facts in one line. What waits for a person comes first. A **failed download
-  is not in the Queue**: a fault of the release (the client failed it, Jularr's Usenet could not repair or unpack it, the import found no video, only extras or another title) blocks
+  is not in the Queue**: a fault of the release (the client failed it, Jularr's Usenet could not repair or unpack it, the import found no video, only extras or another title, or a folder with nothing the import takes: empty, or only archives and release files) blocks
   the release, removes the job with its files (SABnzbd where the connection removes failed ones, qBittorrent with its data, Jularr's own Usenet and torrent downloaders by clearing the job's folders), makes the target due again and keeps "Download failed" with its reason in the History; an
   interruption or a grab problem not caused by the release (client unreachable or refusing, link gone) goes to the History too and is searched again later. An
-  **import that waits for a person** (unclear title, quality not allowed by the profile, other episodes, unreadable names, nothing placeable, partial import, a check at the source,
+  **import that waits for a person** (unclear title, quality not allowed by the profile, other episodes, unreadable names, files that cannot be placed, partial import, a check at the source,
   a storage or setup problem) stays as a row with the orange warning icon and its reason under the title, with Import (the manual import of its folder), read again or the source check. Owner's decision 5 Nov: the
   **manual import** is a dialog over the Queue like Sonarr's (also opened from Wanted): choose a folder, then one row per file, green when it fits,
   amber/red with the reason in plain words; only flagged rows need a person; Import moves the chosen files and each row shows where its file went or why not. A **grab its indexer

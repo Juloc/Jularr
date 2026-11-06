@@ -3,6 +3,8 @@ using System.Security.Cryptography;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Service;
 using Jularr.Backend.Data.User.Playback.V1;
+using Jularr.Backend.Data.Logic.Playback;
+using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Service.Core;
 using Microsoft.AspNetCore.DataProtection;
 
@@ -109,6 +111,49 @@ namespace Jularr.Backend.Service.User.Playback.V1
             var (sessionId, profileId) = _tokens.Read(Parameters.CastToken);
             var path = await _transcodes.GetSegmentAsync(sessionId, profileId, Parameters.Index, CancellationToken);
             return new CastSegmentV1(new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, FileOptions.Asynchronous));
+        }
+    }
+
+    // The text a cast device shows: a subtitle of the asset its signed session plays, as WebVTT.
+    [ServiceEndpoint("GET", "/api/v1/cast/{castToken}/subtitles/{key}", RateLimit = ServiceApi.CastRateLimit)]
+    public sealed class ReadCastSubtitleV1 : PublicService<CastSubtitleParametersV1>
+    {
+        private readonly StorageAccess _storage;
+        private readonly PlaybackSubtitles _subtitles;
+        private readonly PlaybackTranscodes _transcodes;
+        private readonly PlaybackCastTokens _tokens;
+
+        internal ReadCastSubtitleV1(StorageAccess storage, PlaybackSubtitles subtitles, PlaybackTranscodes transcodes, PlaybackCastTokens tokens)
+        {
+            _storage = storage;
+            _subtitles = subtitles;
+            _transcodes = transcodes;
+            _tokens = tokens;
+        }
+
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<CastSubtitleV1>()];
+        protected override ModuleRequirement GetInstanceModules(CastSubtitleParametersV1 parameters) => ModuleRequirement.All("Library", "Playback");
+
+        protected override async Task<IServiceOutput> OnRead()
+        {
+            // Only a session that is still playing names its asset.
+            var (sessionId, profileId) = _tokens.Read(Parameters.CastToken);
+            _ = _transcodes.Find(sessionId, profileId) ?? throw new KeyNotFoundException("The playback session is not active.");
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    session."MediaAssetId"
+                FROM
+                    "PlaybackSessions" AS session
+                WHERE
+                    session."PublicId" = @PlaybackSessionId
+                    AND session."ProfileId" = @ProfileId
+                    AND session."EndedAt" IS NULL;
+                """;
+            sql.Parameters.Add(new PlaybackSessionLookupData(sessionId, profileId));
+            var session = await Context.ReadSql.ReadRequiredAsync<PlaybackSessionAssetData>(sql, CancellationToken);
+            return new CastSubtitleV1(await PlaybackSubtitleSources.ReadAsync(Context, _storage, _subtitles, session.MediaAssetId, profileId, Parameters.Key, false, CancellationToken));
         }
     }
 }

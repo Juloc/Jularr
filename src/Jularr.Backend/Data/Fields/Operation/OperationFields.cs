@@ -24,6 +24,7 @@ namespace Jularr.Backend.Data.Fields.Operation
         public static readonly DateTimeField DismissedAt = new() { Required = false };
         public static readonly BoolField IsFinished = new();
         public static readonly BoolField HasProposal = new();
+        public static readonly BoolField IsEmpty = new();
         public static readonly BoolField BlocksRelease = new();
         public static readonly BoolField IsPaused = new();
         public static readonly BoolField CanPause = new();

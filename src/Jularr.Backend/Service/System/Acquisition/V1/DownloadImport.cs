@@ -69,11 +69,21 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                 parsedFacts?.Edition, parsedFacts?.Revision ?? 1);
 
             // A clear film or episode imports by itself, one of no use is excluded and searched again at once, a doubt waits for a person with its reason.
-            var verdict = ImportJudgement.Judge(download.MediaTypeId, download.MediaSubtypeId, [download.CanonicalTitle, .. target.Titles], download.ReleaseYear, download.Title, download.ExpectedParentUnitNumber,
-                download.ExpectedUnitStart, download.ExpectedUnitEnd, files, known, target.Definition is null ? null : AcquisitionSelectionLogic.ReadProfile(target));
+            // A download with nothing a person could assign (an empty folder, or only archives and release files) is of no use either.
+            var verdict = files.Count == 0 ? new ImportVerdict(ImportVerdictKind.Discard, ImportJudgement.NoFile)
+                : ImportJudgement.Judge(download.MediaTypeId, download.MediaSubtypeId, [download.CanonicalTitle, .. target.Titles], download.ReleaseYear, download.Title, download.ExpectedParentUnitNumber,
+                    download.ExpectedUnitStart, download.ExpectedUnitEnd, files, known, target.Definition is null ? null : AcquisitionSelectionLogic.ReadProfile(target));
             if (verdict.Kind == ImportVerdictKind.Discard)
             {
-                await FailAsync(context, download.OperationId, verdict.ReasonKey!, time.GetUtcNow().UtcDateTime, ct);
+                // The folder says it is empty only when nothing is in it but release files.
+                var reasonKey = verdict.ReasonKey!;
+                if (files.Count == 0)
+                {
+                    var everyFile = allSourceFiles ?? await ListAsync(source, sourceDirectory, files, ct);
+                    if (ImportPlacementLogic.Unplaced(everyFile, files, []).Count == 0) reasonKey = ImportJudgement.EmptyFolder;
+                }
+
+                await FailAsync(context, download.OperationId, reasonKey, time.GetUtcNow().UtcDateTime, ct);
                 return;
             }
 
@@ -449,6 +459,12 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
         // Retry only terminal history jobs. This never removes a job that remains in SABnzbd's active queue.
         public async Task<int> ProcessCleanupAsync(LogicContext context, CancellationToken ct)
         {
+            // Downloads that wait for a person although their folder holds nothing to assign are failed as a new one would be, once, here.
+            foreach (var stuck in await context.ExecuteBatchAsync((ctx, token) => ctx.ReadUnassignableDownloadsAsync(token), ct))
+            {
+                await FailAsync(context, stuck.OperationId, stuck.IsEmpty ? ImportJudgement.EmptyFolder : ImportJudgement.NoFile, time.GetUtcNow().UtcDateTime, ct);
+            }
+
             // Reconcile the durable download outcome after an interrupted enqueue; failed downloads still in the queue are settled as new failures are.
             await context.ExecuteBatchAsync(async (ctx, token) =>
             {
