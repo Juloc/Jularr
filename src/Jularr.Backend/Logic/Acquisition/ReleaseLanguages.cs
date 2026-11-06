@@ -13,9 +13,13 @@ namespace Jularr.Backend.Logic.Acquisition
             (Hebrew(), "he"), (Thai(), "th"), (Vietnamese(), "vi"), (Ukrainian(), "uk"), (Indonesian(), "id"), (English(), "en")
         ];
 
-        public static IReadOnlyList<string> Read(string tail, IReadOnlyList<string> bracketed)
+        public static IReadOnlyList<string> Read(string tail, IReadOnlyList<string> bracketed) => Named(tail, bracketed) is { Count: > 0 } named ? named : ["en"];
+
+        // The languages the tail states; none when it states none.
+        public static IReadOnlyList<string> Named(string tail, IReadOnlyList<string> bracketed)
         {
             var languages = bracketed.Select(language => language.ToLowerInvariant()).ToList();
+            tail = VideoReleaseJudge.WithoutSubtitleTags(tail);
             foreach (var (pattern, language) in Words)
             {
                 if (!languages.Contains(language) && pattern.IsMatch(tail))
@@ -24,7 +28,7 @@ namespace Jularr.Backend.Logic.Acquisition
                 }
             }
 
-            return languages.Count > 0 ? languages : ["en"];
+            return languages;
         }
 
         [GeneratedRegex(@"\b(?:german|deutsch|ger)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]

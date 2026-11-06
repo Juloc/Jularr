@@ -84,6 +84,9 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         // Every language the name states, as two letters; English when it states none.
         public IReadOnlyList<string> Languages { get; init; } = ["en"];
 
+        // The languages the name states behind its title; none when it states none (Languages then reads English).
+        public IReadOnlyList<string> NamedLanguages { get; init; } = [];
+
         // A remux, a full disc, raw HD, a regional or screener copy.
         public ReleaseQualityModifier Modifier { get; init; }
         public string? Edition { get; init; }

@@ -12,7 +12,8 @@ namespace Jularr.Backend.Logic.Acquisition
         {
             "the", "a", "an", "of", "and", "der", "die", "das", "und", "extended", "unrated", "remastered", "directors", "cut", "imax", "proper", "repack", "internal",
             "multi", "german", "dl", "dubbed", "uhd", "limited", "theatrical", "final", "special", "edition", "version", "complete", "hdr", "4k", "remux", "dc", "ws",
-            "english", "french", "truefrench", "vff", "italian", "spanish", "japanese", "korean", "russian", "dutch", "polish", "portuguese", "chinese"
+            "english", "french", "truefrench", "vff", "italian", "spanish", "japanese", "korean", "russian", "dutch", "polish", "portuguese", "chinese",
+            "indonesian", "turkish", "hindi", "swedish", "danish", "norwegian", "finnish", "czech", "hungarian", "greek", "arabic", "hebrew", "thai", "vietnamese", "ukrainian", "deutsch"
         };
 
         [GeneratedRegex(@"^(?:19|20)\d{2}$")]
@@ -52,8 +53,8 @@ namespace Jularr.Backend.Logic.Acquisition
         internal static (IReadOnlyList<string> Languages, bool AssumedOriginal) Languages(ReleaseInfo parsed, string? originalLanguage)
         {
             var original = originalLanguage is { Length: > 0 } code ? code.ToUpperInvariant() : null;
-            var words = parsed.RawTitle.Split(['.', ' ', '_', '-', '[', ']', '(', ')'], StringSplitOptions.RemoveEmptyEntries);
-            var named = parsed.AudioLanguages.Count > 0 ? parsed.AudioLanguages.Select(language => language.ToUpperInvariant()).ToList() : words.Select(word => word.ToUpperInvariant() switch
+            // The languages behind the title (any language a release name can state), and the scene words of a name without a year.
+            var named = parsed.NamedLanguages.Select(language => language.ToUpperInvariant()).Concat(WithoutSubtitleTags(parsed.RawTitle).Split(['.', ' ', '_', '-', '[', ']', '(', ')'], StringSplitOptions.RemoveEmptyEntries).Select(word => word.ToUpperInvariant() switch
             {
                 "GERMAN" => "DE",
                 "FRENCH" or "TRUEFRENCH" or "VFF" => "FR",
@@ -68,7 +69,7 @@ namespace Jularr.Backend.Logic.Acquisition
                 "PORTUGUESE" => "PT",
                 "CHINESE" => "ZH",
                 _ => null
-            }).OfType<string>().Distinct().ToList();
+            }).OfType<string>()).Distinct().ToList();
             if (named.Count == 0)
             {
                 return (original is null ? [] : [original], true);
@@ -89,6 +90,9 @@ namespace Jularr.Backend.Logic.Acquisition
         [GeneratedRegex(@"(?<![A-Za-z])(?:(?<language>GER(?:MAN)?|DEU|ENG(?:LISH)?|FRE(?:NCH)?|SPA(?:NISH)?|ITA(?:LIAN)?|JAP(?:ANESE)?|JPN|KOR(?:EAN)?|RUS(?:SIAN)?|POR(?:TUGUESE)?|DUT(?:CH)?|POL(?:ISH)?|CHI(?:NESE)?)[ ._-]?(?:SUBS?|SUBBED|SUBTITLES?)|(?:SUBS?|SUBBED|SUBTITLES?)[ ._-]?(?<language2>GER(?:MAN)?|DEU|ENG(?:LISH)?|FRE(?:NCH)?|SPA(?:NISH)?|ITA(?:LIAN)?|JAP(?:ANESE)?|JPN|KOR(?:EAN)?|RUS(?:SIAN)?|POR(?:TUGUESE)?|DUT(?:CH)?|POL(?:ISH)?|CHI(?:NESE)?)|(?<multi>MULTI[ ._-]?SUBS?)|(?<vostfr>VOSTFR))(?![A-Za-z])",
             RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
         private static partial Regex SubtitleTag();
+
+        // A name without its subtitle tags: "German.Subbed" and "VOSTFR" are no audio language.
+        internal static string WithoutSubtitleTags(string name) => SubtitleTag().Replace(name, " ");
 
         // The subtitles a name states: the bracketed language groups of a media-info style name and the scene tags (GerSub, German.Subbed, ENGSUB, VOSTFR; "*" for MULTi.SUBS).
         internal static IReadOnlyList<string> SubtitleLanguages(ReleaseInfo parsed)

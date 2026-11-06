@@ -2227,6 +2227,7 @@ namespace Jularr.Frontend.Localization
             new("wanted.view.Missing", "Missing"),
             new("wanted.view.CutoffUnmet", "Cutoff unmet"),
             new("wanted.belowCutoff", "Below cutoff"),
+            new("wanted.belowLanguage", "Language"),
             new("wanted.monitorsNewUnits", "New episodes and volumes"),
             new("wanted.unit", "Season, episode or volume"),
             new("wanted.unit.releasedOn", "Released"),
