@@ -17,16 +17,19 @@ namespace Jularr.E2E.Tests
             var page = session.Page;
             await Owner.SetUpAndSignInAsync(page);
 
-            // Empty lists draw no floating bar: no empty circle under the list. The offline keyless catalogs are switched off, so the background health check adds no task of its own.
+            // The offline keyless catalogs are switched off, so the background health check adds no task of its own.
             await jularr.RunSqlAsync("""
                 UPDATE "InstanceModules" SET "IsEnabled" = TRUE WHERE "Key" IN ('Acquisition', 'Requests');
                 UPDATE "Providers" SET "IsEnabled" = FALSE WHERE "ProtectedSecret" IS NULL;
                 """);
+            // Empty lists keep only Manual import in their bar, as in Sonarr; nothing else is offered without a row.
             foreach (var empty in new[] { "/Admin/Wanted", "/Admin/Queue" })
             {
                 await page.GotoAsync(empty);
                 await Assertions.Expect(page.Locator("main .navigation-tabs").First).ToBeVisibleAsync();
-                await Assertions.Expect(page.Locator(".floating-pill.action-dock:not(.action-dock--form)")).ToBeHiddenAsync();
+                var dock = page.Locator(".floating-pill.action-dock:not(.action-dock--form)");
+                await Assertions.Expect(dock.Locator("a[href*='import=true']")).ToBeVisibleAsync();
+                await Assertions.Expect(dock.Locator("form")).ToHaveCountAsync(0);
             }
 
             // A running download, a failed backup, a failed background job and a queued library search.
