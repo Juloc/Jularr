@@ -64,10 +64,10 @@ namespace Jularr.Backend.Data.Logic.Reading
         public bool IsCached { get; }
     }
 
-    // The DjVu file behind a prepared document, whether it is still the version the document was made of, and a page already drawn.
+    // The DjVu file behind a prepared document and whether it is still the version the document was made of.
     internal sealed class ReadingPageSourceData : BaseData
     {
-        public ReadingPageSourceData(long documentId, string relativePath, string rootRelativePath, long storageMountId, int sectionCount, bool isCurrent, byte[]? bytes, string? mediaType)
+        public ReadingPageSourceData(long documentId, string relativePath, string rootRelativePath, long storageMountId, int sectionCount, bool isCurrent, long cacheBudgetBytes)
         {
             DocumentId = documentId;
             RelativePath = relativePath;
@@ -75,8 +75,7 @@ namespace Jularr.Backend.Data.Logic.Reading
             StorageMountId = storageMountId;
             SectionCount = sectionCount;
             IsCurrent = isCurrent;
-            Bytes = bytes;
-            MediaType = mediaType;
+            CacheBudgetBytes = cacheBudgetBytes;
         }
 
         [DataField(typeof(ReadingFields), nameof(ReadingFields.DocumentId))]
@@ -97,28 +96,8 @@ namespace Jularr.Backend.Data.Logic.Reading
         [DataField(typeof(ReadingFields), nameof(ReadingFields.IsCached))]
         public bool IsCurrent { get; }
 
-        [JsonIgnore]
-        [DataField(typeof(ReadingFields), nameof(ReadingFields.Bytes), false)]
-        public byte[]? Bytes { get; }
-
-        [DataField(typeof(ReadingFields), nameof(ReadingFields.MediaType), false)]
-        public string? MediaType { get; }
-    }
-
-    // The cached pages of a document among the given paths.
-    internal sealed class ReadingResourcePathsData : BaseData
-    {
-        public ReadingResourcePathsData(long documentId, string[] paths)
-        {
-            DocumentId = documentId;
-            Paths = paths;
-        }
-
-        [DataField(typeof(ReadingFields), nameof(ReadingFields.DocumentId))]
-        public long DocumentId { get; }
-
-        [DataField(typeof(ReadingFields), nameof(ReadingFields.Paths))]
-        public string[] Paths { get; }
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.CacheBudgetBytes))]
+        public long CacheBudgetBytes { get; }
     }
 
     internal sealed class ReadingSourceLookupData : BaseData
@@ -552,15 +531,77 @@ namespace Jularr.Backend.Data.Logic.Reading
         public DateTime ProtectedSince { get; }
     }
 
-    internal sealed class ReadingEvictionData : BaseData
+    internal sealed class ReadingFileLookupData : BaseData
     {
-        public ReadingEvictionData(int count)
+        public ReadingFileLookupData(long documentId, long profileId, int pageIndex)
         {
-            Count = count;
+            DocumentId = documentId;
+            ProfileId = profileId;
+            PageIndex = pageIndex;
         }
 
-        [DataField(typeof(ReadingFields), nameof(ReadingFields.Count))]
-        public int Count { get; }
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.DocumentId))]
+        public long DocumentId { get; }
+
+        [DataField(typeof(ProfileFields), nameof(ProfileFields.Id))]
+        public long ProfileId { get; }
+
+        // A comic page's number; -1 for any other resource.
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.PageIndex))]
+        public int PageIndex { get; }
+    }
+
+    // The file behind a prepared document, whether it is still the version the document was made of, and the archive entry of a comic page.
+    internal sealed class ReadingFileSourceData : BaseData
+    {
+        public ReadingFileSourceData(long documentId, ReadingFormatType readingFormatTypeId, long storedFileId, string relativePath, long sizeBytes, DateTime modifiedAt,
+            string rootRelativePath, long storageMountId, bool isCurrent, string? pageEntry, long cacheBudgetBytes)
+        {
+            DocumentId = documentId;
+            ReadingFormatTypeId = readingFormatTypeId;
+            StoredFileId = storedFileId;
+            RelativePath = relativePath;
+            SizeBytes = sizeBytes;
+            ModifiedAt = modifiedAt;
+            RootRelativePath = rootRelativePath;
+            StorageMountId = storageMountId;
+            IsCurrent = isCurrent;
+            PageEntry = pageEntry;
+            CacheBudgetBytes = cacheBudgetBytes;
+        }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.DocumentId))]
+        public long DocumentId { get; }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.ReadingFormatTypeId))]
+        public ReadingFormatType ReadingFormatTypeId { get; }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.Id))]
+        public long StoredFileId { get; }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.RelativePath))]
+        public string RelativePath { get; }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.SizeBytes))]
+        public long SizeBytes { get; }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.ModifiedAt))]
+        public DateTime ModifiedAt { get; }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.RelativePath))]
+        public string RootRelativePath { get; }
+
+        [DataField(typeof(StorageMountFields), nameof(StorageMountFields.Id))]
+        public long StorageMountId { get; }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.IsCached))]
+        public bool IsCurrent { get; }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.PageEntry))]
+        public string? PageEntry { get; }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.CacheBudgetBytes))]
+        public long CacheBudgetBytes { get; }
     }
 
     internal sealed class ReadingProgressData : BaseData

@@ -6,6 +6,7 @@ using System.Text.RegularExpressions;
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Instance.V1;
 using Jularr.Backend.Data.Admin.Library.V1;
+using Jularr.Backend.Data.Admin.Media.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Enums.Reading;
@@ -13,6 +14,8 @@ using Jularr.Backend.Data.User.Discover.V1;
 using Jularr.Backend.Data.User.Instance.V1;
 using Jularr.Backend.Data.User.Reading.V1;
 using Jularr.Backend.Logic.Reading;
+using Jularr.Backend.Service.Core;
+using Microsoft.Extensions.DependencyInjection;
 using Host = Jularr.Backend.Tests.AuthenticationTests.Host;
 using TemporaryDirectory = Jularr.Backend.Tests.LibraryTests.TemporaryDirectory;
 
@@ -47,10 +50,14 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(section.Html, "data-b=\"0\"");
             Assert.AreEqual("Chapter One", section.Title);
 
-            // Images come from the cache; sections never through the resource route.
+            // Images come from the book file and stay on disk, never in the database; the browser keeps them for good. Sections never go through the resource route.
             using var image = await host.SendAsync(HttpMethod.Get, prefix + "/resource?path=OEBPS%2Fimages%2Fcover.png");
             Assert.AreEqual("image/png", image.Content.Headers.ContentType!.MediaType);
             CollectionAssert.AreEqual(Png, await image.Content.ReadAsByteArrayAsync());
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"ReadingResources\" WHERE \"MediaType\" LIKE 'image/%'"));
+            Assert.IsTrue(image.Headers.CacheControl!.Extensions.Any(extension => extension.Name == "immutable"));
+            Assert.IsNotNull(image.Headers.ETag);
+            Assert.IsNotNull(host.Services.GetRequiredService<ReadingFiles>().Find(document.DocumentId, "OEBPS/images/cover.png"));
             using var hidden = await host.SendAsync(HttpMethod.Get, prefix + "/resource?path=%3Asection%2F00000");
             Assert.AreEqual(HttpStatusCode.NotFound, hidden.StatusCode);
             using var toc = await host.SendAsync(HttpMethod.Get, prefix + "/toc");
@@ -92,6 +99,8 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(document.DocumentId, (await OpenAsync(host, first)).DocumentId);
             using var offlineSection = await host.SendAsync(HttpMethod.Get, prefix + "/sections/1");
             Assert.AreEqual(HttpStatusCode.OK, offlineSection.StatusCode);
+            using var offlineImage = await host.SendAsync(HttpMethod.Get, prefix + "/resource?path=OEBPS%2Fimages%2Fcover.png");
+            CollectionAssert.AreEqual(Png, await offlineImage.Content.ReadAsByteArrayAsync());
             using var uncached = await host.SendAsync(HttpMethod.Post, "/api/v1/reading/assets/" + second + "/open");
             Assert.AreEqual(HttpStatusCode.ServiceUnavailable, uncached.StatusCode);
             StringAssert.Contains(await uncached.Content.ReadAsStringAsync(), "reading_unavailable");
@@ -320,6 +329,23 @@ namespace Jularr.Backend.Tests
             using var image = await host.SendAsync(HttpMethod.Get, WebUtility.HtmlDecode(picture.Groups[1].Value));
             Assert.AreEqual(HttpStatusCode.OK, image.StatusCode);
             Assert.AreEqual("image/png", image.Content.Headers.ContentType?.MediaType);
+            var drawn = await image.Content.ReadAsByteArrayAsync();
+
+            // The pictures are drawn onto disk, not into the database; gone from the disk they are drawn again when shown, and on opening.
+            var files = host.Services.GetRequiredService<ReadingFiles>();
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"ReadingResources\" WHERE \"MediaType\" LIKE 'image/%'"));
+            Assert.IsTrue(files.IsComplete(document.DocumentId));
+            files.Delete([document.DocumentId]);
+            using (var redrawn = await host.SendAsync(HttpMethod.Get, WebUtility.HtmlDecode(picture.Groups[1].Value)))
+            {
+                Assert.AreEqual(HttpStatusCode.OK, redrawn.StatusCode);
+                CollectionAssert.AreEqual(drawn, await redrawn.Content.ReadAsByteArrayAsync());
+            }
+
+            Assert.IsTrue(files.IsComplete(document.DocumentId));
+            files.Delete([document.DocumentId]);
+            Assert.AreEqual(document.DocumentId, (await OpenAsync(host, second)).DocumentId);
+            Assert.IsTrue(files.IsComplete(document.DocumentId));
 
             // The reader reflows it and still offers the original.
             using var page = await host.SendAsync(HttpMethod.Get, "/Read/" + second);
@@ -641,6 +667,7 @@ namespace Jularr.Backend.Tests
             using var last = await host.SendAsync(HttpMethod.Get, prefix + Uri.EscapeDataString(":page/00002"));
             Assert.AreEqual("image/jpeg", last.Content.Headers.ContentType!.MediaType);
             CollectionAssert.AreEqual(jpeg, await last.Content.ReadAsByteArrayAsync());
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"ReadingResources\""));
 
             // The exact page is the progress; the reader opens there again.
             using var saved = await host.SendAsync(HttpMethod.Put, "/api/v1/reading/assets/" + asset + "/progress", new SaveReadingProgressDataV1("p2", 0.6667m, false));
@@ -709,6 +736,22 @@ namespace Jularr.Backend.Tests
             Assert.IsTrue(reopened.IsCached);
             Assert.AreEqual("s0/b2", reopened.Locator);
             Assert.IsTrue((long)(await host.ScalarAsync("SELECT \"CacheBytes\" FROM \"ReadingDocuments\" WHERE \"Id\" = " + recent.DocumentId))! > 0);
+        }
+
+        [TestMethod]
+        public async Task WorkDeletion_TakesTheBooksPicturesOffTheDisk()
+        {
+            using var storage = new TemporaryDirectory();
+            await using var host = await LibraryTests.CreateHostAsync(storage.Path);
+            var asset = await AddReadablePdfAsync(host, storage.Path);
+            var document = await OpenAsync(host, asset);
+            var files = host.Services.GetRequiredService<ReadingFiles>();
+            Assert.IsTrue(files.IsComplete(document.DocumentId));
+
+            var workId = (long)(await host.ScalarAsync("SELECT \"WorkId\" FROM \"MediaAssets\" WHERE \"Id\" = " + asset))!;
+            using var deleted = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works/" + workId + "/deletion", new DeleteWorkDataV1(false, false));
+            Assert.AreEqual(HttpStatusCode.OK, deleted.StatusCode, await deleted.Content.ReadAsStringAsync());
+            Assert.IsFalse(Directory.Exists(files.Folder(document.DocumentId)));
         }
 
         [TestMethod]

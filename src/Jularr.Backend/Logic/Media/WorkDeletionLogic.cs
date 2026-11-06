@@ -34,7 +34,17 @@ namespace Jularr.Backend.Logic.Media
                             JOIN "MediaAssets" AS asset ON asset."Id" = file."MediaAssetId"
                         WHERE
                             asset."WorkId" = work."Id"
-                    ), '{}') AS "StoredFileIds"
+                    ), '{}') AS "StoredFileIds",
+                    coalesce((
+                        SELECT
+                            array_agg(document."Id" ORDER BY document."Id")
+                        FROM
+                            "ReadingDocuments" AS document
+                            JOIN "StoredFiles" AS file ON file."Id" = document."StoredFileId"
+                            JOIN "MediaAssets" AS asset ON asset."Id" = file."MediaAssetId"
+                        WHERE
+                            asset."WorkId" = work."Id"
+                    ), '{}') AS "ReadingDocumentIds"
                 FROM
                     "Works" AS work
                 WHERE

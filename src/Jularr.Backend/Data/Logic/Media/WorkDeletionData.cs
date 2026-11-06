@@ -7,10 +7,11 @@ namespace Jularr.Backend.Data.Logic.Media
     // What stands in the way of deleting a title and which files it owns.
     internal sealed class WorkDeletionFactsData : BaseData
     {
-        public WorkDeletionFactsData(long[] activeDownloadIds, long[] storedFileIds)
+        public WorkDeletionFactsData(long[] activeDownloadIds, long[] storedFileIds, long[] readingDocumentIds)
         {
             ActiveDownloadIds = activeDownloadIds;
             StoredFileIds = storedFileIds;
+            ReadingDocumentIds = readingDocumentIds;
         }
 
         [DataField(typeof(WorkExclusionFields), nameof(WorkExclusionFields.ActiveDownloadIds))]
@@ -18,6 +19,10 @@ namespace Jularr.Backend.Data.Logic.Media
 
         [DataField(typeof(StoredFileFields), nameof(StoredFileFields.Ids))]
         public long[] StoredFileIds { get; }
+
+        // The prepared books of the title's files, whose pictures on disk leave with it.
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.Ids))]
+        public long[] ReadingDocumentIds { get; }
     }
 
     internal sealed class WorkDeletionData : BaseData

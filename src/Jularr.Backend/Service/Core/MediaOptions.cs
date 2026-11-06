@@ -17,6 +17,9 @@ namespace Jularr.Backend.Service.Core
         // Posters, backdrops and episode images fetched from the providers, one folder per Work; by default under the data folder.
         public string CoversPath { get; set; } = "";
 
+        // Pictures and drawn pages of prepared books, one folder per document, bounded by the Owner's reading cache; by default under the data folder.
+        public string ReadingCachePath { get; set; } = "";
+
         // The Bergamot engine and language models, kept once a reader needs them; by default under the data folder.
         public string TranslationPath { get; set; } = "";
 

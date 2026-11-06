@@ -249,6 +249,37 @@ namespace Jularr.Backend.Data.User.Reading.V1
         public string ContentType => "application/epub+zip";
     }
 
+    // A picture or page of a book from the disk: a book's content never changes under its document, a PDF's pictures only when its recognition is read anew.
+    public sealed class ReadingResourceFileV1 : BaseResponse, ICacheableFileOutput
+    {
+        public ReadingResourceFileV1(Stream content, string contentType, string eTag, DateTimeOffset lastModified, bool isVersioned)
+        {
+            Content = content;
+            ContentType = contentType;
+            ETag = eTag;
+            LastModified = lastModified;
+            IsVersioned = isVersioned;
+        }
+
+        [JsonIgnore]
+        public Stream Content { get; }
+
+        [JsonIgnore]
+        public string ContentType { get; }
+
+        [JsonIgnore]
+        public string ETag { get; }
+
+        [JsonIgnore]
+        public DateTimeOffset LastModified { get; }
+
+        [JsonIgnore]
+        public bool IsVersioned { get; }
+
+        [JsonIgnore]
+        public TimeSpan? MaxAge => TimeSpan.FromHours(1);
+    }
+
     public sealed class ReadingResourceV1 : BaseResponse, IBinaryOutput
     {
         public ReadingResourceV1(byte[] bytes, string contentType)

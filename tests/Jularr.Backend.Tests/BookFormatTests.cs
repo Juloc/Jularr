@@ -8,7 +8,9 @@ using Jularr.Backend.Data.User.Reading.V1;
 using Jularr.Backend.Logic.Acquisition;
 using Jularr.Backend.Logic.Library;
 using Jularr.Backend.Logic.Reading;
+using Jularr.Backend.Service.Core;
 using Jularr.Integrations.Data.Storage;
+using Microsoft.Extensions.DependencyInjection;
 using Host = Jularr.Backend.Tests.AuthenticationTests.Host;
 using TemporaryDirectory = Jularr.Backend.Tests.LibraryTests.TemporaryDirectory;
 
@@ -235,6 +237,18 @@ namespace Jularr.Backend.Tests
             var kindle = await ReadingTests.OpenAsync(host, assets[1]);
             using var first = await host.SendAsync(HttpMethod.Get, "/api/v1/reading/documents/" + kindle.DocumentId + "/sections/0");
             StringAssert.Contains((await first.Content.ReadFromJsonAsync<ReadingSectionV1>())!.Html, "/resource?path=images%2F00000.png");
+
+            // Its picture comes from the reading copy onto disk, never into the database, and is made again once it is gone.
+            var picture = "/api/v1/reading/documents/" + kindle.DocumentId + "/resource?path=images%2F00000.png";
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"ReadingResources\" WHERE \"MediaType\" LIKE 'image/%'"));
+            var files = host.Services.GetRequiredService<ReadingFiles>();
+            Assert.IsTrue(files.IsComplete(kindle.DocumentId));
+            files.Delete([kindle.DocumentId]);
+            using (var again = await host.SendAsync(HttpMethod.Get, picture))
+            {
+                Assert.AreEqual(HttpStatusCode.OK, again.StatusCode, await again.Content.ReadAsStringAsync());
+                Assert.AreEqual("image/png", again.Content.Headers.ContentType!.MediaType);
+            }
 
             // A protected one says so and leaves nothing behind.
             using var locked = await host.SendAsync(HttpMethod.Post, "/api/v1/reading/assets/" + assets[2] + "/open");

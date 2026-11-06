@@ -6,9 +6,11 @@ using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Enums.Reading;
 using Jularr.Backend.Logic.Acquisition;
 using Jularr.Backend.Logic.Library;
+using Jularr.Backend.Service.Core;
 using Jularr.Integrations.Data.Djvu;
 using Jularr.Integrations.Data.Storage;
 using Jularr.Integrations.Logic.Djvu;
+using Microsoft.Extensions.DependencyInjection;
 using SkiaSharp;
 using Host = Jularr.Backend.Tests.AuthenticationTests.Host;
 using TemporaryDirectory = Jularr.Backend.Tests.LibraryTests.TemporaryDirectory;
@@ -168,8 +170,11 @@ namespace Jularr.Backend.Tests
                 Assert.AreEqual((600, 800), (decoded.Width, decoded.Height));
             }
 
-            Assert.AreEqual(2L, await host.ScalarAsync("SELECT count(*) FROM \"ReadingResources\" WHERE \"ReadingDocumentId\" = " + document.DocumentId));
-            Assert.IsTrue((long)(await host.ScalarAsync("SELECT \"CacheBytes\" FROM \"ReadingDocuments\" WHERE \"Id\" = " + document.DocumentId))! > 0);
+            // Drawn pages go to disk, not into the database.
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"ReadingResources\" WHERE \"ReadingDocumentId\" = " + document.DocumentId));
+            var files = host.Services.GetRequiredService<ReadingFiles>();
+            Assert.IsNotNull(files.Find(document.DocumentId, ":page/00000"));
+            Assert.IsNotNull(files.Find(document.DocumentId, ":page/00001"));
 
             // The second page comes from the cache; a page past the end and a path that names no page are not found.
             using var second = await host.SendAsync(HttpMethod.Get, "/Read/" + asset + "?handler=Page&document=" + document.DocumentId + "&path=%3Apage%2F00001");

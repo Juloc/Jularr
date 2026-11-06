@@ -30,6 +30,8 @@ namespace Jularr.Backend.Data.Fields.Reading
         public static readonly ByteArrayField Bytes = new();
         public static readonly StringField Html = new() { AllowBlank = true };
         public static readonly IntField SectionIndex = new() { Minimum = 0, Maximum = 200_000 };
+        public static readonly IntField PageIndex = new() { Minimum = -1, Maximum = 100_000 };
+        public static readonly StringField PageEntry = new() { MaximumLength = 4096, Required = false };
 
         // "original" or a language code such as "de"; empty follows the profile's language.
         public static readonly StringField ReadingLanguage = new(NpgsqlTypes.NpgsqlDbType.Varchar) { MaximumLength = 8, Required = false, AllowBlank = false, Trim = true };

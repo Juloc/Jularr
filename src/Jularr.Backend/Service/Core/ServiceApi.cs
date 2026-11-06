@@ -140,6 +140,7 @@ namespace Jularr.Backend.Service.Core
                 options.OcrPath = Folder(options.OcrPath, "ocr");
                 options.SpeechPath = Folder(options.SpeechPath, "speech");
                 options.CoversPath = Folder(options.CoversPath, "covers");
+                options.ReadingCachePath = Folder(options.ReadingCachePath, "reading");
             });
             services.Configure<BrowserOptions>(options =>
             {
@@ -289,6 +290,7 @@ namespace Jularr.Backend.Service.Core
             services.TryAddTransient<ReadingContent>();
             services.TryAddTransient<ReadingDerivation>();
             services.TryAddSingleton<ReadingActivity>();
+            services.TryAddSingleton<ReadingFiles>();
             services.TryAddSingleton<TranslationFiles>();
             services.TryAddSingleton<LocalTranslationGate>();
             services.TryAddSingleton<BookTranslationProgress>();
@@ -646,6 +648,11 @@ namespace Jularr.Backend.Service.Core
                         : stored.MaxAge is { } age ? "private,max-age=" + ((long)age.TotalSeconds).ToString(global::System.Globalization.CultureInfo.InvariantCulture) : "private,no-cache";
                     http.Response.Headers.XContentTypeOptions = "nosniff";
                     http.Response.Headers.Vary = "Accept";
+                    if (stored.ContentType.StartsWith("image/svg", StringComparison.OrdinalIgnoreCase))
+                    {
+                        http.Response.Headers.ContentSecurityPolicy = "sandbox; default-src 'none'; style-src 'unsafe-inline'; img-src data:";
+                    }
+
                     return Results.Stream(stored.Content, stored.ContentType, null, stored.LastModified, new Microsoft.Net.Http.Headers.EntityTagHeaderValue(stored.ETag), true);
                 }
 

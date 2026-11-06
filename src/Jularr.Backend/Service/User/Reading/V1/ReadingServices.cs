@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Enums.Reading;
 using Jularr.Backend.Data.Enums.Service;
 using Jularr.Backend.Data.Logic.Playback;
 using Jularr.Backend.Data.Logic.Profile;
@@ -531,44 +532,39 @@ namespace Jularr.Backend.Service.User.Reading.V1
     [ServiceEndpoint("GET", "/api/v1/reading/documents/{documentId:long}/resource")]
     public sealed class ReadReadingResourceV1 : UserService<ReadingResourceParametersV1>
     {
-        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<ReadingResourceV1>()];
+        private readonly ReadingContent _content;
+
+        internal ReadReadingResourceV1(ReadingContent content)
+        {
+            _content = content;
+        }
+
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<ReadingResourceFileV1>()];
         protected override ModuleRequirement GetInstanceModules(ReadingResourceParametersV1 parameters) => ModuleRequirement.All("Library", "Reading");
         protected override ServicePermission GetPermission(ReadingResourceParametersV1 parameters, Type resultType) => new("profile.media.read");
 
         protected override async Task<IServiceOutput> OnRead()
         {
-            // Images only; sections go through the reader.
-            var sql = new SqlStatement();
-            sql.Statement =
-                """
-                SELECT
-                    resource."Bytes",
-                    resource."MediaType" AS "ContentType"
-                FROM
-                    "ReadingResources" AS resource
-                    JOIN "ReadingDocuments" AS document ON document."Id" = resource."ReadingDocumentId"
-                WHERE
-                    resource."ReadingDocumentId" = @DocumentId
-                    AND resource."Path" = @Path
-                    AND resource."MediaType" LIKE 'image/%'
-                    AND EXISTS (
-                        SELECT
-                            1
-                        FROM
-                            "StoredFiles" AS file
-                            JOIN "MediaAssets" AS asset ON asset."Id" = file."MediaAssetId"
-                        WHERE
-                            file."Id" = document."StoredFileId"
-                            AND EXISTS (SELECT 1 FROM "ProfileWorks" AS visible WHERE visible."WorkId" = asset."WorkId" AND visible."ProfileId" = @ProfileId)
-                    );
-                """;
-            sql.Parameters.Add(Parameters);
-            sql.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));
-            return await Context.ReadSql.ReadOptionalAsync<ReadingResourceV1>(sql, CancellationToken) ?? throw new KeyNotFoundException("The resource was not found.");
+            // Pictures and pages only, from the disk or the book's file; sections go through the reader.
+            if (Parameters.Path.StartsWith(':') && !Parameters.Path.StartsWith(":page/", StringComparison.Ordinal))
+            {
+                throw new KeyNotFoundException("The resource was not found.");
+            }
+
+            var source = await ReadingContent.ReadFileSourceAsync(Context, Parameters.DocumentId, Auth.ProfileId!.Value, Parameters.Path, CancellationToken)
+                ?? throw new KeyNotFoundException("The resource was not found.");
+            var file = await _content.ReadFileAsync(Context, source, Parameters.Path, CancellationToken) ?? throw new KeyNotFoundException("The resource was not found.");
+            if (!file.MediaType.StartsWith("image/", StringComparison.Ordinal))
+            {
+                throw new KeyNotFoundException("The resource was not found.");
+            }
+
+            var content = new FileStream(file.FullPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 4096, FileOptions.Asynchronous);
+            return new ReadingResourceFileV1(content, file.MediaType, "\"" + file.ETag + "\"", file.LastModified, source.ReadingFormatTypeId != ReadingFormatType.Pdf);
         }
     }
 
-    // A page of a book whose pages are drawn when first shown (DjVu): from the cache, else drawn now and kept there. The Reader asks for it through its own page.
+    // A page of a book whose pages are drawn when first shown (DjVu): from the disk, else drawn now and kept there. The Reader asks for it through its own page.
     public sealed class RenderReadingPageV1 : UserService<ReadingSectionParametersV1, NoData>
     {
         private readonly ReadingContent _content;
@@ -601,16 +597,13 @@ namespace Jularr.Backend.Service.User.Reading.V1
                             AND file."MissingSince" IS NULL
                             AND file."SizeBytes" = document."SourceSizeBytes"
                             AND file."ModifiedAt" = document."SourceModifiedAt") AS "IsCurrent",
-                        page."Bytes",
-                        page."MediaType"
+                        coalesce((SELECT settings."ReadingCacheBytes" FROM "InstanceSettings" AS settings), 2147483648) AS "CacheBudgetBytes"
                     FROM
                         "ReadingDocuments" AS document
                         JOIN "StoredFiles" AS file ON file."Id" = document."StoredFileId"
                         JOIN "MediaAssets" AS asset ON asset."Id" = file."MediaAssetId"
                         JOIN "LibraryRoots" AS root ON root."Id" = file."LibraryRootId"
                         JOIN "StorageMounts" AS mount ON mount."Id" = root."StorageMountId"
-                        LEFT JOIN "ReadingResources" AS page ON page."ReadingDocumentId" = document."Id"
-                            AND page."Path" = ':page/' || lpad(@SectionIndex::text, 5, '0')
                     WHERE
                         document."Id" = @DocumentId
                         AND EXISTS (SELECT 1 FROM "ProfileWorks" AS visible WHERE visible."WorkId" = asset."WorkId" AND visible."ProfileId" = @ProfileId)
@@ -624,9 +617,7 @@ namespace Jularr.Backend.Service.User.Reading.V1
                 return ctx.ReadSql.ReadOptionalAsync<ReadingPageSourceData>(sql, ct);
             }, CancellationToken) ?? throw new KeyNotFoundException("The page was not found.");
 
-            return source is { Bytes: { } bytes, MediaType: { } mediaType }
-                ? new ReadingResourceV1(bytes, mediaType)
-                : await _content.RenderPageAsync(Context, source, Parameters.SectionIndex, CancellationToken);
+            return await _content.RenderPageAsync(Context, source, Parameters.SectionIndex, CancellationToken);
         }
     }
 
@@ -651,10 +642,12 @@ namespace Jularr.Backend.Service.User.Reading.V1
     public sealed class ReadReadingEbookV1 : UserService<ReadingEbookParametersV1>
     {
         private readonly BookTranslationProgress _progress;
+        private readonly ReadingContent _content;
 
-        internal ReadReadingEbookV1(BookTranslationProgress progress)
+        internal ReadReadingEbookV1(BookTranslationProgress progress, ReadingContent content)
         {
             _progress = progress;
+            _content = content;
         }
 
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<ReadingEbookV1>()];
@@ -702,7 +695,6 @@ namespace Jularr.Backend.Service.User.Reading.V1
                     resource."ReadingDocumentId" = @DocumentId
                     AND (
                         resource."Path" LIKE ':section/%'
-                        OR resource."MediaType" LIKE 'image/%'
                         OR (resource."Path" ~ '^:localtranslation/v4/[^/]+/[a-z]{2,3}/[0-9]{5}$' AND split_part(resource."Path", '/', 4) = @Language)
                     );
                 """;
@@ -734,10 +726,23 @@ namespace Jularr.Backend.Service.User.Reading.V1
                     ?? throw new KeyNotFoundException("The book is not translated into that language in every section.");
             }
 
+            // The pictures the sections show, from the disk or the book's file.
+            var images = new List<ReadingEbookResourceData>();
+            if (await ReadingContent.ReadFileSourceAsync(Context, document.DocumentId, Auth.ProfileId!.Value, null, CancellationToken) is { } source)
+            {
+                foreach (var path in sections.SelectMany(section => ReadingHtml.ResourcePaths(section, document.DocumentId)).Distinct(StringComparer.Ordinal))
+                {
+                    if (await _content.ReadFileAsync(Context, source, path, CancellationToken) is { } file && file.MediaType.StartsWith("image/", StringComparison.Ordinal))
+                    {
+                        images.Add(new ReadingEbookResourceData(path, file.MediaType, await File.ReadAllBytesAsync(file.FullPath, CancellationToken)));
+                    }
+                }
+            }
+
             var original = document.Language ?? "und";
             var bytes = ReadingEbook.Build(new ReadingEbookContent(document.DocumentId, "urn:jularr:reading:" + document.DocumentId.ToString(CultureInfo.InvariantCulture) + (Parameters.Language is null ? "" : ":" + Parameters.Language),
                 document.Title, Parameters.Language ?? original, document.CacheCompletedAt, document.IsRightToLeft,
-                sections, [.. structure.Sections.Select(section => section.Title)], translation, structure.Toc, [.. stored.Values.Where(resource => resource.MediaType.StartsWith("image/", StringComparison.Ordinal))]));
+                sections, [.. structure.Sections.Select(section => section.Title)], translation, structure.Toc, images));
             return new ReadingEbookV1(bytes, FileName(document.Title, Parameters.Language));
         }
 

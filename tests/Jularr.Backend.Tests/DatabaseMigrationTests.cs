@@ -335,6 +335,53 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task ReadingFilesOnDisk_UpgradeDeletesOnlyPicturesAndPages_KeepsTextTranslationsAndChoices_AndRecountsTheCache()
+        {
+            using var folder = new LibraryTests.TemporaryDirectory();
+            var cs = TestPostgres.ResolveConnectionString(nameof(ReadingFilesOnDisk_UpgradeDeletesOnlyPicturesAndPages_KeepsTextTranslationsAndChoices_AndRecountsTheCache));
+            var options = Backup(folder.Path, out var backups);
+            var tools = Tools(cs, FakeDump(folder.Path, true), null);
+            var version = DatabaseBaseline.Migrations.Single(migration => migration.Name == "0051_reading_files_on_disk").Version;
+            await new DatabaseBaseline(cs, migrations: DatabaseBaseline.Migrations.Where(migration => migration.Version < version).ToArray()).StartAsync(CancellationToken.None);
+            await ExecuteAsync(cs,
+                """
+                INSERT INTO "ReadingDocuments" ("Id", "SourceSizeBytes", "SourceModifiedAt", "ContentHash", "AnalyzerVersion", "ReadingFormatTypeId", "Structure", "TotalCharacters",
+                    "CacheBytes", "CacheCompletedAt")
+                VALUES (900, 10, now(), decode(repeat('ab', 32), 'hex'), 1, 1, '{}', 0, 999999, now()), (901, 10, now(), decode(repeat('cd', 32), 'hex'), 1, 2, '{}', 0, 999999, now()),
+                    (902, 10, now(), decode(repeat('ef', 32), 'hex'), 1, 4, '{}', 0, 999999, now());
+                INSERT INTO "ReadingResources" ("ReadingDocumentId", "Path", "MediaType", "Bytes")
+                SELECT document."Id", item."Path", item."MediaType", convert_to(item."Text", 'UTF8')
+                FROM (VALUES (900), (901), (902)) AS document ("Id")
+                    CROSS JOIN (VALUES
+                        (':section/00000', 'text/html; charset=utf-8', '<p data-b="0">Text</p>'),
+                        (':smartpage/00000', 'text/html; charset=utf-8', '<p>Page</p>'),
+                        (':localtranslation/v4/translategemma:4b/de/00000', 'application/json', '{"Texts":["Text"]}'),
+                        (':localtranslation/v4/codex:gpt-5/de/00000', 'application/json', '{"Texts":["Text"]}'),
+                        ('OEBPS/images/cover.jpg', 'image/jpeg', 'jpeg bytes'),
+                        ('OEBPS/images/logo.svg', 'image/svg+xml', '<svg/>'),
+                        ('pdf/images/00000.png', 'image/png', 'png bytes'),
+                        ('pdf/smart/00001.jpg', 'image/jpeg', 'jpeg bytes'),
+                        (':page/00000', 'image/webp', 'webp bytes')) AS item ("Path", "MediaType", "Text");
+                INSERT INTO "ReadingTranslationChoices" ("ReadingDocumentId", "SectionIndex", "Language", "BlockIndex", "Model") VALUES (900, 0, 'de', 0, 'ollama:translategemma:12b');
+                """);
+            var before = await ScalarAsync(cs, """SELECT string_agg("ReadingDocumentId" || "Path" || encode("Bytes", 'hex'), ',' ORDER BY "ReadingDocumentId", "Path") FROM "ReadingResources" WHERE "MediaType" NOT LIKE 'image/%'""");
+            await new DatabaseBaseline(cs, options, tools).StartAsync(CancellationToken.None);
+
+            // Every picture and page left; text, Smart Pages, every model's translation and the choices stay byte for byte, after a backup.
+            Assert.AreEqual(0L, await ScalarAsync(cs, """SELECT count(*) FROM "ReadingResources" WHERE "MediaType" LIKE 'image/%'"""));
+            Assert.AreEqual(12L, await ScalarAsync(cs, """SELECT count(*) FROM "ReadingResources" """));
+            Assert.AreEqual(before, await ScalarAsync(cs, """SELECT string_agg("ReadingDocumentId" || "Path" || encode("Bytes", 'hex'), ',' ORDER BY "ReadingDocumentId", "Path") FROM "ReadingResources" """));
+            Assert.AreEqual(1L, await ScalarAsync(cs, """SELECT count(*) FROM "ReadingTranslationChoices" """));
+            Assert.AreEqual(1, Directory.GetDirectories(backups).Length);
+
+            // The documents stay prepared and count only what is left.
+            Assert.AreEqual(3L, await ScalarAsync(cs, """SELECT count(*) FROM "ReadingDocuments" WHERE "CacheCompletedAt" IS NOT NULL"""));
+            Assert.AreEqual(3L, await ScalarAsync(cs,
+                """SELECT count(*) FROM "ReadingDocuments" AS document WHERE "CacheBytes" = (SELECT sum(length("Bytes")) FROM "ReadingResources" WHERE "ReadingDocumentId" = document."Id")"""));
+            Assert.AreEqual(version, await ScalarAsync(cs, """SELECT "Version" FROM "DatabaseSchemaVersions" WHERE "Name" = '0051_reading_files_on_disk'"""));
+        }
+
+        [TestMethod]
         public async Task SharedQualityProfiles_UpgradeKeepsTheProfileOfEveryTarget_MergesAlikeProfilesFormatsAndGroups_AndNamesEveryRemuxAlike()
         {
             using var folder = new LibraryTests.TemporaryDirectory();
