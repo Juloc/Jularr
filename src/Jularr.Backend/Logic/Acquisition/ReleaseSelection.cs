@@ -25,6 +25,7 @@ namespace Jularr.Backend.Logic.Acquisition
             // source priority; other media retain source priority. Profile rules still decide eligibility.
             var ranked = evaluations
                 .OrderBy(evaluation => profile.IsBook && evaluation.Candidate.IsPart ? 1 : 0)
+                .ThenByDescending(evaluation => profile.IsVideo ? UpgradePolicy.FirstsCovered(profile, evaluation.Candidate.Languages) : 0)
                 .ThenBy(evaluation => profile.AppliesLanguages ? LanguageTier(profile, evaluation.Candidate) : 0)
                 .ThenBy(evaluation => profile.IsBook && profile.LanguageFallback == LanguageFallbackType.Any
                     && LanguageTier(profile, evaluation.Candidate) >= OtherKnownStep(profile) ? evaluation.QualityRank : 0)
@@ -203,7 +204,8 @@ namespace Jularr.Backend.Logic.Acquisition
                 return new ReleaseReason("OnlyCandidate");
             }
 
-            if (profile.AppliesLanguages && LanguageTier(profile, winner.Candidate) != LanguageTier(profile, runnerUp.Candidate))
+            if (profile.AppliesLanguages && (LanguageTier(profile, winner.Candidate) != LanguageTier(profile, runnerUp.Candidate)
+                || profile.IsVideo && UpgradePolicy.FirstsCovered(profile, winner.Candidate.Languages) != UpgradePolicy.FirstsCovered(profile, runnerUp.Candidate.Languages)))
             {
                 return new ReleaseReason("PreferredLanguage");
             }

@@ -5491,6 +5491,10 @@
    "Below cutoff",
    "Unter Qualitätsziel"
   ],
+  "wanted.belowLanguage": [
+   "Language",
+   "Sprache"
+  ],
   "wanted.monitorsNewUnits": [
    "New episodes and volumes",
    "Neue Folgen und Bände"
@@ -11296,6 +11300,18 @@
   "admin.browser.version": [
    "Installed version",
    "Installierte Version"
+  ],
+  "admin.browser.display": [
+   "Display",
+   "Anzeige"
+  ],
+  "admin.browser.display.virtual": [
+   "with a virtual display",
+   "mit virtuellem Bildschirm"
+  ],
+  "admin.browser.display.headless": [
+   "invisible (headless)",
+   "unsichtbar (headless)"
   ],
   "admin.browser.diskUsage": [
    "Managed storage",

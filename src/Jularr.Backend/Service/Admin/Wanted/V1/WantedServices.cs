@@ -20,6 +20,14 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                             below."WantedItemId"
                         FROM
                             "WantedBelowCutoff" AS below
+                    ), language_state AS MATERIALIZED (
+                        -- The films and series none of whose first languages their files have (the reason of their place below the cutoff).
+                        SELECT DISTINCT
+                            language."WantedItemId"
+                        FROM
+                            "WantedVideoLanguages" AS language
+                        WHERE
+                            language."IsNoneCovered"
                     )
                     SELECT
                         wanted."Id",
@@ -99,7 +107,13 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                                 cutoff_state."WantedItemId"
                             FROM
                                 cutoff_state
-                        ) AS "IsCutoffUnmet"
+                        ) AS "IsCutoffUnmet",
+                        wanted."Id" IN (
+                            SELECT
+                                language_state."WantedItemId"
+                            FROM
+                                language_state
+                        ) AS "IsLanguageOpen"
                     FROM
                         "WantedItems" AS wanted
                     INNER JOIN
@@ -140,6 +154,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                         base."Version",
                         coalesce(language."IsCovered", base."HasMedia") AS "HasMedia",
                         base."IsCutoffUnmet" AND coalesce(language."IsCovered", TRUE) AS "IsCutoffUnmet",
+                        base."IsLanguageOpen",
                         language."Language" AS "BookLanguage"
                     FROM
                         wanted_base AS base
@@ -175,6 +190,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                         wanted_state."GamePlatformId",
                         wanted_state."Version",
                         wanted_state."HasMedia",
+                        wanted_state."IsLanguageOpen",
                         wanted_state."BookLanguage"
                     FROM
                         wanted_state
@@ -202,6 +218,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                     wanted_page."MediaTypeId" = 2 OR wanted_page."MediaSubtypeId" IS NOT DISTINCT FROM 2 AS "HasUnits",
                     wanted_page."HasMedia",
                     wanted_page."BookLanguage",
+                    wanted_page."IsLanguageOpen",
                     download."Id" IS NOT NULL AS "IsDownloading",
                     download."ProgressPercent"::integer AS "ProgressPercent",
                     wanted_page."LastSearchedAt",
@@ -364,6 +381,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                             )
                     ) AS "HasMedia",
                     NULL::text AS "BookLanguage",
+                    FALSE AS "IsLanguageOpen",
                     download."Id" IS NOT NULL AS "IsDownloading",
                     download."ProgressPercent"::integer AS "ProgressPercent",
                     wanted_page."LastSearchedAt",

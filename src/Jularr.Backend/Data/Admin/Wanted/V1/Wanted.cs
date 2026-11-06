@@ -151,8 +151,9 @@ namespace Jularr.Backend.Data.Admin.Wanted.V1
     public sealed class WantedDetailsV1 : BaseResponse
     {
         public WantedDetailsV1(long id, long workId, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string canonicalTitle, string? platformName, bool isPaused, WantedPriorityType wantedPriorityTypeId, long version, string[] requestedLanguages, bool hasMedia,
-            bool isDownloading, int? progressPercent, DateTime? lastSearchedAt, string? outcomeKey, long? acquisitionProfileId, long? libraryRootId, bool monitorsNewUnits, bool hasUnits, long[]? tagIds = null, string? bookLanguage = null)
+            bool isDownloading, int? progressPercent, DateTime? lastSearchedAt, string? outcomeKey, long? acquisitionProfileId, long? libraryRootId, bool monitorsNewUnits, bool hasUnits, long[]? tagIds = null, string? bookLanguage = null, bool isLanguageOpen = false)
         {
+            IsLanguageOpen = isLanguageOpen;
             BookLanguage = bookLanguage;
             TagIds = tagIds ?? [];
             HasUnits = hasUnits;
@@ -214,6 +215,10 @@ namespace Jularr.Backend.Data.Admin.Wanted.V1
 
         [DataField(typeof(WantedItemFields), nameof(WantedItemFields.HasMedia))]
         public bool HasMedia { get; }
+
+        // The files of a film or series have none of the first languages of its chains; a release that has one replaces them (the feed offers it).
+        [DataField(typeof(WantedItemFields), nameof(WantedItemFields.IsLanguageOpen))]
+        public bool IsLanguageOpen { get; }
 
         [DataField(typeof(WantedItemFields), nameof(WantedItemFields.IsDownloading))]
         public bool IsDownloading { get; }

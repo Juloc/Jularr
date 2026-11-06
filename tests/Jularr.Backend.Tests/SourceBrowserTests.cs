@@ -80,6 +80,125 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        [DataRow(":99", false, false)]
+        [DataRow(null, true, true)]
+        [DataRow(null, false, false)]
+        public void Browser_LaunchUsesTheVirtualDisplayOrHeadless(string? display, bool headless, bool expectsHeadless)
+        {
+            var start = SourceBrowser.LaunchInfo("chrome", "--remote-debugging-port=9222 about:blank", display, headless);
+            Assert.AreEqual(expectsHeadless, start.Arguments.Contains("--headless=new --disable-gpu", StringComparison.Ordinal));
+            Assert.AreEqual(display is not null, start.Arguments.Contains("--enable-unsafe-swiftshader", StringComparison.Ordinal));
+            StringAssert.StartsWith(start.Arguments, "--remote-debugging-port=9222 about:blank");
+            Assert.AreEqual(display ?? Environment.GetEnvironmentVariable("DISPLAY"), start.Environment.TryGetValue("DISPLAY", out var value) ? value : null);
+        }
+
+        [TestMethod]
+        public async Task VirtualDisplay_TakesTheFirstFreeNumber_AndLeavesNothingBehind()
+        {
+            if (!OperatingSystem.IsLinux())
+            {
+                Assert.Inconclusive("The virtual display is Linux only.");
+                return;
+            }
+
+            using var folder = new TemporaryDirectory();
+            var server = FakeDisplayServer(folder.Path);
+            var record = Path.Combine(folder.Path, VirtualDisplay.RecordFile);
+
+            // A live server holds 99; a crashed one left its lock and socket on 100 and 101, the second with a number another process took since.
+            using var live = System.Diagnostics.Process.Start(server, ":99");
+            for (var wait = 0; wait < 50 && !File.Exists(Path.Combine(folder.Path, ".X11-unix", "X99")); wait++) await Task.Delay(100);
+            await File.WriteAllTextAsync(Path.Combine(folder.Path, ".X100-lock"), $"{await DeadProcessIdAsync(),10}\n");
+            await File.WriteAllTextAsync(Path.Combine(folder.Path, ".X11-unix", "X100"), "");
+            await File.WriteAllTextAsync(Path.Combine(folder.Path, ".X101-lock"), $"{Environment.ProcessId,10}\n");
+
+            var display = await VirtualDisplay.StartAsync(server, folder.Path, record, CancellationToken.None);
+            Assert.IsNotNull(display);
+            Assert.AreEqual(":100", display.Name);
+            var id = int.Parse((await File.ReadAllTextAsync(record)).Split(' ')[1], System.Globalization.CultureInfo.InvariantCulture);
+            StringAssert.Contains(await File.ReadAllTextAsync(Path.Combine(folder.Path, ".X100-lock")), id.ToString(System.Globalization.CultureInfo.InvariantCulture));
+
+            // The lock of a process that is no display server is stale as well.
+            using (var second = await VirtualDisplay.StartAsync(server, folder.Path, Path.Combine(folder.Path, "second.display"), CancellationToken.None))
+            {
+                Assert.AreEqual(":101", second?.Name);
+            }
+
+            display.Dispose();
+            Assert.IsFalse(Directory.Exists($"/proc/{id}"));
+            Assert.IsFalse(File.Exists(Path.Combine(folder.Path, ".X100-lock")));
+            Assert.IsFalse(File.Exists(Path.Combine(folder.Path, ".X11-unix", "X100")));
+            Assert.IsFalse(File.Exists(Path.Combine(folder.Path, ".X101-lock")));
+            Assert.IsFalse(File.Exists(record));
+            Assert.IsTrue(File.Exists(Path.Combine(folder.Path, ".X99-lock")));
+            live.Kill(true);
+        }
+
+        [TestMethod]
+        public async Task VirtualDisplay_ServerOfACrashedRun_IsStoppedAndItsNumberTakenAgain()
+        {
+            if (!OperatingSystem.IsLinux())
+            {
+                Assert.Inconclusive("The virtual display is Linux only.");
+                return;
+            }
+
+            using var folder = new TemporaryDirectory();
+            var server = FakeDisplayServer(folder.Path);
+            var record = Path.Combine(folder.Path, VirtualDisplay.RecordFile);
+
+            // The host ended without closing the display it started.
+            using var earlier = System.Diagnostics.Process.Start(server, ":99");
+            for (var wait = 0; wait < 50 && !File.Exists(Path.Combine(folder.Path, ".X11-unix", "X99")); wait++) await Task.Delay(100);
+            await File.WriteAllTextAsync(record, $"99 {earlier.Id}");
+
+            using var display = await VirtualDisplay.StartAsync(server, folder.Path, record, CancellationToken.None);
+            Assert.IsTrue(earlier.HasExited);
+            Assert.IsNotNull(display);
+            Assert.AreEqual(":99", display.Name);
+            Assert.AreNotEqual($"99 {earlier.Id}", await File.ReadAllTextAsync(record));
+        }
+
+        [TestMethod]
+        public async Task VirtualDisplay_WithoutAWorkingXvfb_IsNone()
+        {
+            if (!OperatingSystem.IsLinux())
+            {
+                Assert.Inconclusive("The virtual display is Linux only.");
+                return;
+            }
+
+            using var folder = new TemporaryDirectory();
+            var record = Path.Combine(folder.Path, VirtualDisplay.RecordFile);
+            var failing = Path.Combine(folder.Path, "Xvfb");
+            await File.WriteAllTextAsync(failing, "#!/bin/sh\nexit 1\n");
+            File.SetUnixFileMode(failing, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+
+            Assert.IsNull(await VirtualDisplay.StartAsync(null, folder.Path, record, CancellationToken.None));
+            Assert.IsNull(await VirtualDisplay.StartAsync(Path.Combine(folder.Path, "missing", "Xvfb"), folder.Path, record, CancellationToken.None));
+            Assert.IsNull(await VirtualDisplay.StartAsync(failing, folder.Path, record, CancellationToken.None));
+            Assert.IsFalse(File.Exists(record));
+        }
+
+        // A stand-in for Xvfb that takes its lock and socket below the given root like the real server does in /tmp.
+        [System.Runtime.Versioning.SupportedOSPlatform("linux")]
+        private static string FakeDisplayServer(string root)
+        {
+            var bin = Directory.CreateDirectory(Path.Combine(root, "bin")).FullName;
+            var server = Path.Combine(bin, "Xvfb");
+            File.WriteAllText(server, "#!/bin/sh\nroot=\"$(dirname \"$0\")/..\"\nn=\"${1#:}\"\nmkdir -p \"$root/.X11-unix\"\nprintf '%10d\\n' $$ > \"$root/.X$n-lock\"\n: > \"$root/.X11-unix/X$n\"\nwhile :; do sleep 1; done\n");
+            File.SetUnixFileMode(server, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            return server;
+        }
+
+        private static async Task<int> DeadProcessIdAsync()
+        {
+            using var process = System.Diagnostics.Process.Start("true");
+            await process.WaitForExitAsync();
+            return process.Id;
+        }
+
+        [TestMethod]
         public async Task ManagedBrowser_FailedUpdateKeepsPreviousPackageAvailable()
         {
             if (!OperatingSystem.IsLinux()) return;

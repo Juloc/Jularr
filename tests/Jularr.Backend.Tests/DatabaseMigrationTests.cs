@@ -543,6 +543,43 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual("701 703 704 705 706", string.Join(' ', due.Keys.Where(id => id < 707).Order()));
         }
 
+        [TestMethod]
+        public async Task VideoLanguages_FilesThatLackAFirstLanguage_AreOpen_FilesWithoutAudioNever()
+        {
+            using var folder = new LibraryTests.TemporaryDirectory();
+            var cs = TestPostgres.ResolveConnectionString(nameof(VideoLanguages_FilesThatLackAFirstLanguage_AreOpen_FilesWithoutAudioNever));
+            await new DatabaseBaseline(cs).StartAsync(CancellationToken.None);
+
+            // Two profiles whose first languages are German and Indonesian; films: 901 has a Japanese file, 902 a German one (Indonesian is missing), 903 both, 904 a file that states no audio,
+            // 905 an empty list (the work has no original language).
+            await ExecuteAsync(cs,
+                """
+                INSERT INTO "UiLocales" ("Id", "Locale", "Name") VALUES (91, 'de-DE', 'Deutsch'), (92, 'id', 'Indonesia') ON CONFLICT ("Locale") DO NOTHING;
+                INSERT INTO "Accounts" ("Id", "Username", "Email", "DisplayName", "AccountRoleTypeId") VALUES (41, 'language_owner', 'language@example.test', 'Owner', 1);
+                INSERT INTO "Profiles" ("Id", "OwnerAccountId", "DisplayName", "UiLocaleId") VALUES
+                    (301, 41, 'Deutsch', (SELECT "Id" FROM "UiLocales" WHERE "Locale" = 'de-DE')), (302, 41, 'Indonesia', (SELECT "Id" FROM "UiLocales" WHERE "Locale" = 'id'));
+                INSERT INTO "AccountProfiles" ("AccountId", "ProfileId") VALUES (41, 301), (41, 302);
+                INSERT INTO "Works" ("Id", "MediaTypeId", "MediaSubtypeId", "CanonicalTitle") VALUES
+                    (901, 1, NULL, 'Japanese'), (902, 1, NULL, 'German'), (903, 1, NULL, 'Both'), (904, 1, NULL, 'Unnamed'), (905, 1, NULL, 'Empty');
+                INSERT INTO "WantedItems" ("Id", "WorkId") SELECT "Id" - 200, "Id" FROM "Works" WHERE "Id" BETWEEN 901 AND 905;
+                INSERT INTO "StorageMounts" ("Id", "Name", "StorageProtocolTypeId", "SharePath", "IsReadOnly") OVERRIDING SYSTEM VALUE VALUES (1, 'Films', 3, '/films', FALSE);
+                INSERT INTO "LibraryRoots" ("Id", "Name", "MediaTypeId", "StorageMountId", "RelativePath") VALUES (1, 'Films', 1, 1, 'films');
+                INSERT INTO "WorkEditions" ("Id", "WorkId") SELECT "Id", "Id" FROM "Works" WHERE "Id" BETWEEN 901 AND 905;
+                INSERT INTO "WorkVersions" ("Id", "WorkId", "WorkEditionId") SELECT "Id", "Id", "Id" FROM "Works" WHERE "Id" BETWEEN 901 AND 905;
+                INSERT INTO "MediaAssets" ("Id", "WorkId", "WorkVersionId", "MediaAssetTypeId") SELECT "Id" - 900, "Id", "Id", 1 FROM "Works" WHERE "Id" BETWEEN 901 AND 905;
+                INSERT INTO "StoredFiles" ("LibraryRootId", "RelativePath", "SizeBytes", "ModifiedAt", "MediaAssetId", "LastSeenAt", "ReleaseLanguages", "ReleaseName") VALUES
+                    (1, 'a.mkv', 1, now(), 1, now(), '{ja}', 'Japanese.2020.1080p.WEB-DL-GRP'),
+                    (1, 'b.mkv', 1, now(), 2, now(), '{de}', 'German.2020.German.1080p.WEB-DL-GRP'),
+                    (1, 'c.mkv', 1, now(), 3, now(), '{de,id}', 'Both.2020.German.Indonesian.1080p.WEB-DL-GRP'),
+                    (1, 'd.mkv', 1, now(), 4, now(), NULL, 'Unnamed.2020.1080p.WEB-DL-GRP'),
+                    (1, 'e.mkv', 1, now(), 5, now(), '{}', 'Empty.2020.1080p.WEB-DL-GRP');
+                """);
+
+            // Open: 701 lacks both first languages, 702 lacks Indonesian (a Multi release may still replace it); the Wanted list's cutoff holds only the first.
+            Assert.AreEqual("701:t 702:f", (string)(await ScalarAsync(cs, """SELECT string_agg("WantedItemId" || ':' || CASE WHEN "IsNoneCovered" THEN 't' ELSE 'f' END, ' ' ORDER BY "WantedItemId") FROM "WantedVideoLanguages" """))!);
+            Assert.AreEqual("701", (string)(await ScalarAsync(cs, """SELECT string_agg("WantedItemId"::text, ' ' ORDER BY "WantedItemId") FROM "WantedBelowCutoff" """))!);
+        }
+
         // What the due search takes in every cycle (every two minutes) of one day, with a batch of `limit`; a target taken is searched, so it waits for its rhythm (a week).
         private static async Task<Dictionary<long, DateTime>> DueOverADayAsync(string cs, int limit, bool markSearched, int[]? perHour = null, int[]? perCycle = null)
         {
