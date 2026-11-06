@@ -72,6 +72,9 @@ namespace Jularr.E2E.Tests
 
         public Uri MusicBrainz => new(Address, "musicbrainz/ws/2/");
 
+        // The libretro No-Intro DATs: every platform lists one dump that no test file is.
+        public Uri Libretro => new(Address, "libretro/");
+
         public Uri OpenLibrary => new(Address, "openlibrary/");
 
         public Uri AniList => new(Address, "anilist/");
@@ -159,6 +162,17 @@ namespace Jularr.E2E.Tests
             });
             app.MapGet("/musicbrainz/ws/2/{**path}", MusicBrainzAnswer);
             app.MapGet("/openlibrary/{**path}", OpenLibraryAnswer);
+            app.MapGet("/libretro/{name}", () => Results.Text("""
+                clrmamepro (
+                	name "Fake"
+                	version "1"
+                )
+
+                game (
+                	name "Other Game (World)"
+                	rom ( name "Other Game (World).bin" size 4 crc 00000000 md5 00 sha1 0000000000000000000000000000000000000000 )
+                )
+                """));
             app.MapPost("/anilist/", services.AniListGraphQl);
             app.MapPost("/anilist-account/api/v2/oauth/token", services.AniListSignIn);
             app.MapGet("/sonarr/api/v3/{**path}", SonarrAnswer);

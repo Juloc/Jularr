@@ -18,10 +18,57 @@ interface Emulator {
 }
 
 const game = document.querySelector<HTMLElement>(".game[data-emulator]");
-if (game) start(game);
+if (game?.dataset.api) start(game, game.dataset.api);
+else if (game) load(game, {}, { "save-state-location": "browser" });
 
-function start(game: HTMLElement): void {
-    const api = game.dataset.api!;
+// EmulatorJS from Jularr itself; a file without its game keeps EmulatorJS's own saves in this browser.
+// A touch-first device (phone, tablet, also an iPad that names itself a Mac) gets the on-screen controls.
+function load(game: HTMLElement, settings: Record<string, unknown>, options: Record<string, string>): void {
+    Object.assign(window, {
+        EJS_player: "#game-screen",
+        EJS_core: game.dataset.emulator,
+        EJS_gameUrl: game.dataset.file,
+        EJS_gameName: game.dataset.title,
+        EJS_pathtodata: "/emulator/data/",
+        EJS_language: emulatorLanguage(game.dataset.language ?? "en"),
+        EJS_disableAutoLang: false,
+        EJS_defaultOptions: { "save-save-interval": "60", "virtual-gamepad": matchMedia("(pointer: coarse)").matches ? "enabled" : "disabled", ...options },
+        ...settings
+    });
+    const loader = document.createElement("script");
+    loader.src = "/emulator/data/loader.js";
+    document.body.append(loader);
+    if (game.dataset.emulator === "melonds") touchAsMouse(game.querySelector<HTMLElement>("#game-screen")!);
+}
+
+// The DS core reads its touch screen from the mouse; a finger on the picture presses, moves and lifts it like one (the on-screen buttons keep their own touches).
+function touchAsMouse(screen: HTMLElement): void {
+    let finger: number | null = null;
+    const send = (type: string, touch: Touch) => touch.target.dispatchEvent(new MouseEvent(type, {
+        bubbles: true, cancelable: true, view: window, clientX: touch.clientX, clientY: touch.clientY, screenX: touch.screenX, screenY: touch.screenY,
+        button: 0, buttons: type === "mouseup" ? 0 : 1
+    }));
+    const follow = (event: TouchEvent, type: string, ends: boolean) => {
+        const touch = [...event.changedTouches].find(item => item.identifier === finger);
+        if (!touch) return;
+        event.preventDefault();
+        send(type, touch);
+        if (ends) finger = null;
+    };
+    screen.addEventListener("touchstart", event => {
+        const touch = event.changedTouches[0];
+        if (finger !== null || !(touch?.target instanceof HTMLCanvasElement)) return;
+        finger = touch.identifier;
+        event.preventDefault();
+        send("mousemove", touch);
+        send("mousedown", touch);
+    }, { passive: false });
+    screen.addEventListener("touchmove", event => follow(event, "mousemove", false), { passive: false });
+    screen.addEventListener("touchend", event => follow(event, "mouseup", true), { passive: false });
+    screen.addEventListener("touchcancel", event => follow(event, "mouseup", true), { passive: false });
+}
+
+function start(game: HTMLElement, api: string): void {
     const antiforgery = game.dataset.antiforgery ?? "";
     const saveError = game.querySelector<HTMLElement>("[data-role=save-error]")!;
     const settings = window as unknown as Record<string, unknown>;
@@ -33,15 +80,7 @@ function start(game: HTMLElement): void {
     let saves = Promise.resolve();
     let playedMs = 0;
 
-    Object.assign(settings, {
-        EJS_player: "#game-screen",
-        EJS_core: game.dataset.emulator,
-        EJS_gameUrl: game.dataset.file,
-        EJS_gameName: game.dataset.title,
-        EJS_pathtodata: "/emulator/data/",
-        EJS_language: emulatorLanguage(game.dataset.language ?? "en"),
-        EJS_disableAutoLang: false,
-        EJS_defaultOptions: { "save-save-interval": "60" },
+    load(game, {
         EJS_ready: () => {
             emulator = settings.EJS_emulator as Emulator;
             emulator.on("saveSaveFiles", (data: Uint8Array) => {
@@ -51,10 +90,7 @@ function start(game: HTMLElement): void {
         EJS_onGameStart: () => queue(restoreMemory),
         EJS_onSaveState: (data: { state: Uint8Array }) => queue(() => saveState(data.state.slice())),
         EJS_onLoadState: () => queue(loadState)
-    });
-    const loader = document.createElement("script");
-    loader.src = "/emulator/data/loader.js";
-    document.body.append(loader);
+    }, {});
 
     // Saves and restores run one after another, so an older save never lands last.
     function queue(work: () => Promise<void>): void {

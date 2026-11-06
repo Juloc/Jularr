@@ -8193,6 +8193,50 @@
    "Played {0} h {1} min",
    "{0} Std. {1} Min. gespielt"
   ],
+  "game.browserSaves": [
+   "This file has no game yet: its saves stay in this browser.",
+   "Diese Datei hat noch kein Spiel: ihre Spielstände bleiben in diesem Browser."
+  ],
+  "game.files.title": [
+   "Game files",
+   "Spieldateien"
+  ],
+  "game.files.empty": [
+   "No game files yet. Add a folder as a games library and scan it.",
+   "Noch keine Spieldateien. Füge einen Ordner als Spiele-Bibliothek hinzu und durchsuche ihn."
+  ],
+  "game.files.name": [
+   "File",
+   "Datei"
+  ],
+  "game.files.system": [
+   "System",
+   "System"
+  ],
+  "game.files.size": [
+   "Size",
+   "Größe"
+  ],
+  "game.files.play": [
+   "Play",
+   "Spielen"
+  ],
+  "game.files.start": [
+   "Play",
+   "Spielen"
+  ],
+  "game.files.needsBios": [
+   "Needs a BIOS, not playable in the browser yet",
+   "Braucht ein BIOS, läuft noch nicht im Browser"
+  ],
+  "game.files.notPlayable": [
+   "Not playable in the browser",
+   "Läuft nicht im Browser"
+  ],
+  "library.gameFiles": [
+   "All game files",
+   "Alle Spieldateien"
+  ],
   "player.play": [
    "Play",
    "Abspielen"

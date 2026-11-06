@@ -15,6 +15,7 @@ namespace Jularr.Frontend.Framework
                 conventions.AddPageRoute("/Admin/Library/Library", "/Admin/Library/" + view);
             }
 
+            conventions.AddPageRoute("/User/Game/Game", "/Game/Files/{file:long}");
             conventions.AddPageRoute("/Admin/Dashboard/Dashboard", "/Admin");
             conventions.AddPageRoute("/Admin/Acquisition/Acquisition", "/Admin/Acquisition/Downloads");
             conventions.AddPageRoute("/Admin/Acquisition/Acquisition", "/Admin/Acquisition/Subtitles");

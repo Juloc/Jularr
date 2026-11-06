@@ -1,5 +1,6 @@
 using Jularr.Backend.Data.Logic.Library;
 using Jularr.Backend.Data.Logic.Media;
+using Jularr.Backend.Data.Logic.Playback;
 using Jularr.Backend.Infrastructure.Sql;
 
 namespace Jularr.Backend.Logic.Media
@@ -113,40 +114,70 @@ namespace Jularr.Backend.Logic.Media
 
         public static Task<IReadOnlyList<GameRomFileData>> ReadGameRomFilesAsync(this LogicContext ctx, StoredFileCursorData data, CancellationToken ct)
         {
-            // Unassigned files a DAT names.
+            // Unassigned files after their hash pass, with the dump and platform a DAT names.
             var sql = new SqlStatement();
             sql.Statement =
                 """
-                SELECT DISTINCT ON (file."Id")
+                SELECT
                     file."Id" AS "StoredFileId",
-                    rom."Name" AS "RomName"
+                    file."RelativePath",
+                    dump."Name" AS "RomName",
+                    dump."GamePlatformId"
                 FROM
                     "StoredFiles" AS file
-                    JOIN "GameRoms" AS rom ON rom."Sha1" = file."Sha1"
+                    LEFT JOIN LATERAL (
+                        SELECT
+                            rom."Name",
+                            catalog."GamePlatformId"
+                        FROM
+                            "GameRoms" AS rom
+                            JOIN "GameRomCatalogs" AS catalog ON catalog."Id" = rom."GameRomCatalogId"
+                        WHERE
+                            rom."Sha1" = file."Sha1"
+                        ORDER BY
+                            rom."GameRomCatalogId"
+                        LIMIT 1
+                    ) AS dump ON TRUE
                 WHERE
                     file."LibraryRootId" = @LibraryRootId
                     AND file."Id" > @AfterId
                     AND file."MediaAssetId" IS NULL
                     AND file."MissingSince" IS NULL
+                    AND file."ProbedAt" IS NOT NULL
                 ORDER BY
-                    file."Id",
-                    rom."GameRomCatalogId"
+                    file."Id"
                 LIMIT 100;
                 """;
             sql.Parameters.Add(data);
             return ctx.ReadSql.ReadListAsync<GameRomFileData>(sql, ct);
         }
 
-        public static Task<IReadOnlyList<WorkTitleMatchData>> ReadGameTitleMatchesAsync(this LogicContext ctx, WorkTitleLookupData data, CancellationToken ct)
+        public static Task<IReadOnlyList<GamePlatformIdentityData>> ReadEmulatedPlatformsAsync(this LogicContext ctx, EmulatedPlatformsData data, CancellationToken ct)
         {
-            // Titles compare like GameRomMatching.Key; only a single game wins.
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    platform."Id",
+                    platform."IgdbId"
+                FROM
+                    "GamePlatforms" AS platform
+                WHERE
+                    platform."IgdbId" = ANY(@EmulatedPlatforms);
+                """;
+            sql.Parameters.Add(data);
+            return ctx.ReadSql.ReadListAsync<GamePlatformIdentityData>(sql, ct);
+        }
+
+        public static Task<IReadOnlyList<GameTitleMatchData>> ReadGameTitleMatchesAsync(this LogicContext ctx, WorkTitleLookupData data, CancellationToken ct)
+        {
+            // Titles compare like GameRomMatching.Key; several games of one title name none.
             var sql = new SqlStatement();
             sql.Statement =
                 """
                 SELECT
                     lookup."Key" AS "Title",
-                    work."MediaTypeId",
-                    min(work."Id") AS "WorkId"
+                    CASE WHEN count(DISTINCT work."Id") = 1 THEN min(work."Id") END AS "WorkId"
                 FROM
                     "Works" AS work
                     JOIN "WorkTitles" AS title ON title."WorkId" = work."Id"
@@ -154,13 +185,10 @@ namespace Jularr.Backend.Logic.Media
                 WHERE
                     work."MediaTypeId" = 7
                 GROUP BY
-                    lookup."Key",
-                    work."MediaTypeId"
-                HAVING
-                    count(DISTINCT work."Id") = 1;
+                    lookup."Key";
                 """;
             sql.Parameters.Add(data);
-            return ctx.ReadSql.ReadListAsync<WorkTitleMatchData>(sql, ct);
+            return ctx.ReadSql.ReadListAsync<GameTitleMatchData>(sql, ct);
         }
 
         public static async Task TagGameRomReleasesAsync(this LogicContext ctx, LibraryRootIdData data, CancellationToken ct)

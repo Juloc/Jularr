@@ -393,7 +393,7 @@ namespace Jularr.Backend.Service.Core
                 handler: () => new HttpClientHandler { AllowAutoRedirect = true, MaxAutomaticRedirections = 3, UseCookies = false });
             AddClient<MusicBrainzClient>(services, 20, 4, agent: true, baseAddress: providers.MusicBrainz, provider: "musicbrainz");
             AddClient<IgdbClient>(services, 20, 8, agent: true, provider: "igdb");
-            AddClient<LibretroClient>(services, 60, 16, agent: true);
+            AddClient<LibretroClient>(services, 60, 16, agent: true, baseAddress: providers.Libretro);
             AddClient<SynologyClient>(services, 30, 4, handler: SynologyClient.CreateHandler);
             AddClient<ServarrApiClient>(services, 60, 32);
             AddClient<PlexServerClient>(services, 20, 16);

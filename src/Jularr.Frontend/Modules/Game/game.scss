@@ -1,8 +1,9 @@
-// The game fills the page; EmulatorJS draws its own controls inside the screen.
+// The game fills the window and no more: EmulatorJS takes the screen's height (inherit), so the screen needs a fixed one; its own controls sit inside.
 .game {
     display: grid;
     grid-template-rows: auto minmax(0, 1fr) auto;
-    min-height: 100dvh;
+    height: 100dvh;
+    overflow: hidden;
     background: #000;
     color: #fff;
 
@@ -29,6 +30,7 @@
     }
 
     &__screen {
+        height: 100%;
         min-height: 0;
     }
 

@@ -115,18 +115,58 @@ namespace Jularr.Backend.Data.Logic.Media
     }
 
     // An unassigned file whose hash a DAT names.
+    // An unassigned game file: the dump name and platform its verified hash gives, if any.
     internal sealed class GameRomFileData : BaseData
     {
-        public GameRomFileData(long storedFileId, string romName)
+        public GameRomFileData(long storedFileId, string relativePath, string? romName, long? gamePlatformId)
         {
             StoredFileId = storedFileId;
+            RelativePath = relativePath;
             RomName = romName;
+            GamePlatformId = gamePlatformId;
         }
 
         [DataField(typeof(StoredFileFields), nameof(StoredFileFields.Id))]
         public long StoredFileId { get; }
 
-        [DataField(typeof(GameRomFields), nameof(GameRomFields.Name))]
-        public string RomName { get; }
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.RelativePath))]
+        public string RelativePath { get; }
+
+        [DataField(typeof(GameRomFields), nameof(GameRomFields.Name), false)]
+        public string? RomName { get; }
+
+        [DataField(typeof(GamePlatformFields), nameof(GamePlatformFields.Id), false)]
+        public long? GamePlatformId { get; }
+    }
+
+    internal sealed class GamePlatformIdentityData : BaseData
+    {
+        public GamePlatformIdentityData(long id, int igdbId)
+        {
+            Id = id;
+            IgdbId = igdbId;
+        }
+
+        [DataField(typeof(GamePlatformFields), nameof(GamePlatformFields.Id))]
+        public long Id { get; }
+
+        [DataField(typeof(GamePlatformFields), nameof(GamePlatformFields.IgdbId))]
+        public int IgdbId { get; }
+    }
+
+    // A title key and its single game; no game when several share it.
+    internal sealed class GameTitleMatchData : BaseData
+    {
+        public GameTitleMatchData(string title, long? workId)
+        {
+            Title = title;
+            WorkId = workId;
+        }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.CanonicalTitle))]
+        public string Title { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.Id), false)]
+        public long? WorkId { get; }
     }
 }
