@@ -304,35 +304,35 @@ namespace Jularr.Backend.Tests
             chunky.Gate = gate;
             var url = Url(document, 0, ChunkProvider.Id) + "/passages";
 
-            // The second request fails: the first one's blocks are stored, the cause is the error code, and the lane is free.
-            var done = await PostChunkAsync(host, url, 0, []);
+            // A request breaks after its first block: that block is stored, the cause is the error code, and the lane is free.
             chunky.FailNext = "limit";
-            using (var failed = await host.SendAsync(HttpMethod.Post, url, new LocalReadingChunkDataV1("en", done.Blocks.Max(block => block.Index) + 1, [])))
+            using (var failed = await host.SendAsync(HttpMethod.Post, url, new LocalReadingChunkDataV1("en", 0, [])))
             {
                 Assert.AreEqual(HttpStatusCode.ServiceUnavailable, failed.StatusCode);
                 StringAssert.Contains(await failed.Content.ReadAsStringAsync(), "translation_limit_reached");
             }
             Assert.AreEqual(1, gate.HeavyWork.CurrentCount);
+            int[] stored;
             using (var read = await host.SendAsync(HttpMethod.Get, Url(document, 0, ChunkProvider.Id) + "?sourceLanguage=en"))
-            {
-                var stored = Texts((await read.Content.ReadFromJsonAsync<LocalReadingTranslationV1>(JsonSerializerOptions.Web))!);
-                CollectionAssert.AreEqual(done.Blocks.Select(block => block.Index).ToArray(), stored.Select((text, index) => (text, index)).Where(item => !string.IsNullOrEmpty(item.text)).Select(item => item.index).ToArray());
-            }
+                stored = [.. Texts((await read.Content.ReadFromJsonAsync<LocalReadingTranslationV1>(JsonSerializerOptions.Web))!).Select((text, index) => (text, index)).Where(item => !string.IsNullOrEmpty(item.text)).Select(item => item.index)];
+            Assert.AreEqual(1, stored.Length, "What came before the break is kept.");
 
-            // Other causes are named too.
+            // Other causes are named too (the request failing before any block).
+            chunky.FailAt = 0;
             foreach (var (problem, code) in new[] { ("not_connected", "translation_not_connected"), ("", "translation_request_failed") })
             {
                 chunky.FailNext = problem;
                 using var failed = await host.SendAsync(HttpMethod.Post, url, new LocalReadingChunkDataV1("en", 0, []));
                 StringAssert.Contains(await failed.Content.ReadAsStringAsync(), code);
             }
+            chunky.FailAt = 1;
 
             // The retry from the start translates only what is missing.
             var asked = chunky.Asked.Count;
             var rest = new List<int>();
             while (await PostChunkAsync(host, url, 0, []) is { Blocks.Length: > 0 } chunk) rest.AddRange(chunk.Blocks.Select(block => block.Index));
             Assert.AreEqual(asked + rest.Count, chunky.Asked.Count);
-            Assert.IsFalse(rest.Intersect(done.Blocks.Select(block => block.Index)).Any(), "A finished block is never asked again.");
+            Assert.IsFalse(rest.Intersect(stored).Any(), "A finished block is never asked again.");
 
             // A block whose answer fails the checks even alone is reported and, passed as skipped, left out of the next request.
             chunky.RefuseBlock = true;
@@ -504,6 +504,7 @@ namespace Jularr.Backend.Tests
             public List<int> Gates { get; } = [];
             public List<string> Asked { get; } = [];
             public string? FailNext { get; set; }
+            public int FailAt { get; set; } = 1;
             public bool RefuseBlock { get; set; }
             public int Characters { get; set; } = 6000;
             public int Calls => _calls;
@@ -523,20 +524,33 @@ namespace Jularr.Backend.Tests
 
             public Task<string> DigestAsync(TranslationMachine machine, CancellationToken ct) => Task.FromResult("chunky-1");
 
-            public Task<string?[]> TranslateBlocksAsync(TranslationMachine machine, string source, string target, IReadOnlyList<string> blocks, string? context, CancellationToken ct)
+            public Task<string?[]> TranslateBlocksAsync(TranslationMachine machine, string source, string target, IReadOnlyList<string> blocks, string? context, CancellationToken ct) =>
+                TranslateBlocksStreamAsync(machine, source, target, blocks, context, (_, _) => { }, ct);
+
+            // A block comes out as soon as it is answered; with FailNext set the request fails at block FailAt of the request (after the first one: a stream that breaks).
+            public Task<string?[]> TranslateBlocksStreamAsync(TranslationMachine machine, string source, string target, IReadOnlyList<string> blocks, string? context, Action<int, string> onBlock,
+                CancellationToken ct)
             {
                 _calls++;
                 Gates.Add(Gate?.HeavyWork.CurrentCount ?? -1);
-                if (FailNext is { } problem)
+                var answers = new string?[blocks.Count];
+                for (var index = 0; index < blocks.Count; index++)
                 {
-                    FailNext = null;
-                    _problem = problem.Length == 0 ? null : problem;
-                    throw new InvalidDataException("The model failed.");
+                    if (FailNext is { } problem && index == FailAt)
+                    {
+                        FailNext = null;
+                        _problem = problem.Length == 0 ? null : problem;
+                        throw new InvalidDataException("The model failed.");
+                    }
+
+                    if (RefuseBlock) continue;
+                    answers[index] = "Chunky: " + blocks[index];
+                    Asked.Add(blocks[index]);
+                    onBlock(index, answers[index]!);
                 }
 
                 _problem = null;
-                Asked.AddRange(blocks);
-                return Task.FromResult<string?[]>([.. blocks.Select(block => RefuseBlock ? null : "Chunky: " + block)]);
+                return Task.FromResult(answers);
             }
 
             public Task<string?> TranslateBlockAsync(TranslationMachine machine, string source, string target, string text, string? context, CancellationToken ct) =>

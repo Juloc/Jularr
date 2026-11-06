@@ -41,6 +41,9 @@ export function codexBar(reader: HTMLElement, view: CodexView): void {
     let running = false;
     let stopping = false;
     let last = true;
+    let request: AbortController | undefined;
+    // Leaving drops the request in flight, which stops Codex on the server.
+    lifetime.addEventListener("abort", () => request?.abort());
 
     function missing(): number {
         return view.list.filter((block, index) => block.trim() && !view.translated(index)).length;
@@ -92,28 +95,62 @@ export function codexBar(reader: HTMLElement, view: CodexView): void {
         last = own;
         show(stop);
         say(own ? "runningStart" : "runningNextStart");
-        const url = (own ? reader.dataset.localTranslationUrl! : `${sectionsUrl}${section + 1}/local-translations/`) + `${encodeURIComponent(view.target)}/${encodeURIComponent(view.model)}/passages`;
+        const base = own ? reader.dataset.localTranslationUrl! : `${sectionsUrl}${section + 1}/local-translations/`;
+        const url = `${base}${encodeURIComponent(view.target)}/${encodeURIComponent(view.model)}`;
+        request = new AbortController();
+        const signal = request.signal;
+        const started = Date.now();
+        let doneCharacters = 0;
+        // The time left from how fast the text came since the press, for the chapter on screen.
+        const estimate = () => {
+            const left = view.list.reduce((sum, block, index) => sum + (block.trim() && !view.translated(index) ? block.length : 0), 0);
+            const seconds = doneCharacters > 0 ? left * (Date.now() - started) / 1000 / doneCharacters : undefined;
+            if (seconds === undefined) return;
+            const minutes = minutesLeft(seconds);
+            if (minutes === 0) return say("runningShort");
+            say("running", texts[minutes === 1 ? "reader.codex.time.minute" : "reader.codex.time.minutes"].replace("{0}", String(minutes)));
+        };
         const result = await translateChapter({
             from: own ? view.top() : 0,
-            post: (from, skip) => fetch(url, { method: "POST", credentials: "same-origin", headers, body: JSON.stringify({ sourceLanguage: view.source, from, skip }) }),
-            arrived: blocks => { if (own && view.alive()) view.put(blocks); },
+            post: (from, skip) => fetch(`${url}/passages`, { method: "POST", credentials: "same-origin", headers, signal, body: JSON.stringify({ sourceLanguage: view.source, from, skip }) }),
+            // The blocks stored so far, shown while the request runs.
+            poll: own ? async () => {
+                const response = await fetch(`${url}?sourceLanguage=${encodeURIComponent(view.source)}`, { credentials: "same-origin", signal });
+                if (!response.ok) return;
+                const stored = JSON.parse((await response.json() as { blocks: string }).blocks) as string[];
+                const fresh = stored.flatMap((text, index) => typeof text === "string" && text.trim() && view.list[index]?.trim() && !view.translated(index) ? [{ index, text }] : []);
+                if (fresh.length > 0 && view.alive()) {
+                    doneCharacters += fresh.reduce((sum, block) => sum + view.list[block.index].length, 0);
+                    view.put(fresh);
+                    estimate();
+                }
+            } : undefined,
+            arrived: blocks => {
+                const fresh = blocks.filter(block => !view.translated(block.index));
+                if (own && view.alive() && fresh.length > 0) {
+                    doneCharacters += fresh.reduce((sum, block) => sum + (view.list[block.index]?.length ?? 0), 0);
+                    view.put(fresh);
+                }
+            },
             progress: ({ seconds, busy }) => {
-                if (!busy && seconds === undefined) return say(own ? "runningStart" : "runningNextStart");
                 if (busy) return say("busy");
-                const minutes = minutesLeft(seconds!);
-                if (minutes === 0) return say(own ? "runningShort" : "runningNextShort");
-                say(own ? "running" : "runningNext", texts[minutes === 1 ? "reader.codex.time.minute" : "reader.codex.time.minutes"].replace("{0}", String(minutes)));
+                if (own) return estimate();
+                if (seconds === undefined) return say("runningNextStart");
+                const minutes = minutesLeft(seconds);
+                if (minutes === 0) return say("runningNextShort");
+                say("runningNext", texts[minutes === 1 ? "reader.codex.time.minute" : "reader.codex.time.minutes"].replace("{0}", String(minutes)));
             },
             stopped: () => stopping || lifetime.aborted || own && !view.alive(),
             pause: milliseconds => new Promise(resolve => window.setTimeout(resolve, milliseconds))
         });
+        request = undefined;
         if (lifetime.aborted || own && !view.alive()) return;
         finish(result, own);
     }
 
     start!.onclick = () => void run(true);
     if (next) next.onclick = () => void run(false);
-    stop!.onclick = () => { stopping = true; };
+    stop!.onclick = () => { stopping = true; request?.abort(); };
     retry!.onclick = () => { if (bar.dataset.problem) location.reload(); else void run(last); };
 
     bar.hidden = false;

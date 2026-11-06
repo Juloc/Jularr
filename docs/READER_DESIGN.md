@@ -67,7 +67,7 @@ leaves, so the settings open with one press at every width. The language button 
 reading language set up its panel says so and leads to the profile settings. The languages are offered where a server model translates for
 this reader: the Owner's default or an installed TranslateGemma. Codex never translates by itself (owner's decision 6 Nov): where no local model answers, the Owner
 (`instance.settings.update`) reads the original text with a bar under the Reader (`Translate with Codex`; when the chapter is done `Translate next chapter with Codex`, never
-prefetched). A press translates the whole chapter live from the page in view onward, then round to the start, in chunks of up to 30 blocks (`TranslateLocalReadingPassagesV1`, one
+prefetched). A press translates the whole chapter live from the page in view onward, then round to the start, in chunks of up to 100 blocks, each one streamed request whose blocks are stored and shown as they are complete (`TranslateLocalReadingPassagesV1`, one
 request per call, no choice for other readers, the single translation lane held per request); the bar says what runs and the time left from the last requests, and names a failure
 in plain words (limit reached, not connected, busy, failed) with Try again that asks only for what is missing; texts already translated show on reopening without a request. With
 nothing to translate because the Ollama machines set up do not answer, the panel says the machine is not answering instead of offering nothing. While the server's translation shows and a machine has a

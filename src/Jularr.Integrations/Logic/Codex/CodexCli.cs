@@ -13,6 +13,7 @@ namespace Jularr.Integrations.Logic.Codex
     {
         private static readonly TimeSpan CommandTimeout = TimeSpan.FromSeconds(15);
         private static readonly TimeSpan ExecTimeout = TimeSpan.FromMinutes(4);
+        private static readonly TimeSpan StreamTimeout = TimeSpan.FromMinutes(6);
 
         public string? ExecutablePath { get; set; }
         public string HomePath { get; set; } = "";
@@ -121,6 +122,32 @@ namespace Jularr.Integrations.Logic.Codex
             }
         }
 
+        // One prompt in a thread of its own on the app-server, answered as the text arrives: `onText` gets each piece, so the caller sees the translation grow instead of
+        // waiting for the whole answer. The thread is as bare as it gets (a short instruction, no tools, no plugins, no environment notes), which is why a request costs about
+        // a fifth of an `exec` request. A failure of any kind (limit, error, empty answer, timeout) is an exception as with ExecAsync.
+        public async Task<CodexAnswer> StreamAsync(string model, string? effort, string prompt, Action<string> onText, CancellationToken ct)
+        {
+            if (!IsAvailable) throw new ProviderUnavailableException();
+            var work = Path.Combine(HomePath, "work");
+            Directory.CreateDirectory(work);
+            try
+            {
+                return await CodexAppServer.StreamAsync(Prepare(["app-server"]), work, model, effort, prompt, onText, StreamTimeout, ct);
+            }
+            catch (Win32Exception)
+            {
+                throw new ProviderUnavailableException();
+            }
+            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+            {
+                throw new InvalidDataException("Codex took too long.");
+            }
+            catch (Exception exception) when (exception is IOException or JsonException)
+            {
+                throw new InvalidDataException("Codex did not answer.", exception);
+            }
+        }
+
         // The events of a turn the account's usage limit stopped (`turn.failed`: "You've hit your usage limit ... try again at Nov 4th, 2026 7:41 AM."), else null.
         internal static CodexPlanLimitException? PlanLimitOf(string events)
         {
@@ -133,11 +160,7 @@ namespace Jularr.Integrations.Logic.Codex
                     if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty("type", out var type) || type.GetString() is not ("turn.failed" or "error")) continue;
                     var message = root.TryGetProperty("message", out var text) && text.ValueKind == JsonValueKind.String ? text.GetString()
                         : root.TryGetProperty("error", out var error) && error.ValueKind == JsonValueKind.Object && error.TryGetProperty("message", out var inner) && inner.ValueKind == JsonValueKind.String ? inner.GetString() : null;
-                    if (message is null || !message.Contains("usage limit", StringComparison.OrdinalIgnoreCase)) continue;
-                    var until = TryAgainPattern().Match(message);
-                    var cleaned = until.Success ? OrdinalPattern().Replace(until.Groups[1].Value.Trim().TrimEnd('.'), "$1") : null;
-                    return new CodexPlanLimitException(cleaned is not null && DateTime.TryParseExact(cleaned, ["MMM d, yyyy h:mm tt", "MMMM d, yyyy h:mm tt"], System.Globalization.CultureInfo.InvariantCulture,
-                        System.Globalization.DateTimeStyles.AssumeLocal | System.Globalization.DateTimeStyles.AdjustToUniversal, out var parsed) ? new DateTimeOffset(parsed, TimeSpan.Zero) : null);
+                    if (PlanLimitIn(message) is { } limit) return limit;
                 }
                 catch (JsonException)
                 {
@@ -145,6 +168,16 @@ namespace Jularr.Integrations.Logic.Codex
             }
 
             return null;
+        }
+
+        // The limit a message of Codex names ("You've hit your usage limit ... try again at Nov 4th, 2026 7:41 AM."), else null.
+        internal static CodexPlanLimitException? PlanLimitIn(string? message)
+        {
+            if (message is null || !message.Contains("usage limit", StringComparison.OrdinalIgnoreCase)) return null;
+            var until = TryAgainPattern().Match(message);
+            var cleaned = until.Success ? OrdinalPattern().Replace(until.Groups[1].Value.Trim().TrimEnd('.'), "$1") : null;
+            return new CodexPlanLimitException(cleaned is not null && DateTime.TryParseExact(cleaned, ["MMM d, yyyy h:mm tt", "MMMM d, yyyy h:mm tt"], System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.AssumeLocal | System.Globalization.DateTimeStyles.AdjustToUniversal, out var parsed) ? new DateTimeOffset(parsed, TimeSpan.Zero) : null);
         }
 
         [GeneratedRegex(@"try again at ([^\r\n]+)", RegexOptions.IgnoreCase)]

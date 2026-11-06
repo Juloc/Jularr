@@ -21,6 +21,27 @@ namespace Jularr.Backend.Tests
                     *'"method":"initialize"'*) printf '{"id":%s,"result":{}}\n' "$id" ;;
                     *'"method":"model/list"'*) printf '{"id":%s,"result":{"data":[{"model":"gpt-test"},{"model":"gpt-ok"}],"nextCursor":null}}\n' "$id" ;;
                     *'"method":"account/rateLimits/read"'*) printf '{"id":%s,"result":{}}\n' "$id" ;;
+                    *'"method":"thread/start"'*) printf '{"id":%s,"result":{"thread":{"id":"thread-1"}}}\n' "$id" ;;
+                    *'"method":"turn/start"'*)
+                      printf '{"id":%s,"result":{"turn":{"id":"turn-1"}}}\n' "$id"
+                      model=$(printf '%s' "$line" | sed -n 's/.*"model":"\([^"]*\)".*/\1/p')
+                      text=$(printf '%s' "$line" | sed -n 's/.*"text":"\(.*\)","text_elements".*/\1/p')
+                      prompt=$(printf '%b' "$text")
+                      echo "$model" >> "$CODEX_HOME/asked"
+                      if [ "$model" = limited ]; then
+                        printf '{"method":"error","params":{"threadId":"thread-1","turnId":"turn-1","willRetry":false,"error":{"message":"You hit your usage limit. Upgrade to Pro, or try again at Nov 4th, 2099 7:41 AM."}}}\n'
+                        printf '{"method":"turn/completed","params":{"threadId":"thread-1","turn":{"id":"turn-1","status":"failed","error":{"message":"You hit your usage limit."}}}}\n'
+                        continue
+                      fi
+                      if [ "$model" = broken ]; then
+                        printf '{"method":"turn/completed","params":{"threadId":"thread-1","turn":{"id":"turn-1","status":"failed","error":{"message":"The model failed."}}}}\n'
+                        continue
+                      fi
+                      printf '%s\n' "$prompt" | awk -v m="$model" '/^\[\[[0-9]+\]\]$/ { print; getline; print "Translated by " m ": " $0; print "" }' | while IFS= read -r out; do
+                        printf '{"method":"item/agentMessage/delta","params":{"threadId":"thread-1","turnId":"turn-1","itemId":"item-1","delta":"%s\\n"}}\n' "$out"
+                      done
+                      printf '{"method":"thread/tokenUsage/updated","params":{"threadId":"thread-1","turnId":"turn-1","tokenUsage":{"last":{"inputTokens":100,"cachedInputTokens":0,"outputTokens":50,"reasoningOutputTokens":0,"totalTokens":150},"total":{"inputTokens":100,"cachedInputTokens":0,"outputTokens":50,"reasoningOutputTokens":0,"totalTokens":150}}}}\n'
+                      printf '{"method":"turn/completed","params":{"threadId":"thread-1","turn":{"id":"turn-1","status":"completed"}}}\n' ;;
                   esac
                 done ;;
               exec)
@@ -161,6 +182,45 @@ namespace Jularr.Backend.Tests
             // The answer's parts by their numbers: a missing or empty part is null, order and extra lines do not matter.
             CollectionAssert.AreEqual(new string?[] { "A", null, "C\nmore" }, CodexTranslationProvider.Numbered("[[1]]\nA\n\n[[3]]\nC\nmore\n[[2]]\n\n", 3));
             CollectionAssert.AreEqual(new string?[] { "A", "B" }, CodexTranslationProvider.Numbered("noise\n[[2]]\nB\n[[1]]\nA\n[[9]]\nignored", 2));
+        }
+
+        [TestMethod]
+        public async Task Provider_StreamsBlocks_HandingEachOneOnWhenItIsComplete_CountsTheTokens_AndNamesAFailure()
+        {
+            using var folder = new Folder();
+            folder.SignIn();
+            using var connection = folder.Connection();
+            var provider = new CodexTranslationProvider(connection, TimeProvider.System);
+            var setup = new TranslationSetupV1([], null);
+            var machine = (await provider.ChooseAsync(setup, "gpt-test", default))!;
+
+            // One request for three blocks; each block is handed on as it is complete, in order, and the answers come back as well.
+            var arrived = new List<(int Index, string Text)>();
+            var answers = await provider.TranslateBlocksStreamAsync(machine, "ja", "de", ["Rina went home", "The rain stopped", "Kai waited"], null, (index, text) => arrived.Add((index, text)), default);
+            CollectionAssert.AreEqual(new[] { "Translated by gpt-test: Rina went home", "Translated by gpt-test: The rain stopped", "Translated by gpt-test: Kai waited" }, answers);
+            CollectionAssert.AreEqual(new[] { 0, 1, 2 }, arrived.Select(item => item.Index).ToArray());
+            Assert.AreEqual(1, File.ReadAllLines(Path.Combine(folder.Home, "asked")).Length);
+            Assert.AreEqual((150L, 150L), connection.Usage());
+            Assert.AreEqual("translate 3 blocks", connection.Requests().Single().What);
+
+            // A failed turn is an exception the caller names; the plan's limit rests Codex as with exec.
+            var broken = (await provider.ChooseAsync(setup, "broken", default))!;
+            await Assert.ThrowsExactlyAsync<InvalidDataException>(() => provider.TranslateBlocksStreamAsync(broken, "ja", "de", ["Rina went home"], null, (_, _) => { }, default));
+            Assert.IsNull(connection.PlanLimitedUntil);
+            var limited = (await provider.ChooseAsync(setup, "limited", default))!;
+            await Assert.ThrowsExactlyAsync<InvalidDataException>(() => provider.TranslateBlocksStreamAsync(limited, "ja", "de", ["Rina went home"], null, (_, _) => { }, default));
+            Assert.IsNotNull(connection.PlanLimitedUntil);
+        }
+
+        [TestMethod]
+        public void NumberedStream_CutsPartsAsTheAnswerComes_FirstTextOfANumberWins_AndIgnoresOtherNumbers()
+        {
+            var parts = new List<string>();
+            var stream = new NumberedStream(2, (index, text) => parts.Add(index + "=" + text));
+            foreach (var piece in new[] { "[[1", "]]\nA", "bc\n\n[[2]", "]\r\nB\nB2\n[[1]]\nagain\n[[9]]\nignored" }) stream.Add(piece);
+            Assert.AreEqual(3, parts.Count, "A part is complete when the next marker comes, not when the stream ends.");
+            stream.Complete();
+            CollectionAssert.AreEqual(new[] { "0=Abc", "1=B\nB2", "0=again" }, parts, "A repeated number is reported again; the caller keeps the first.");
         }
 
         [TestMethod]

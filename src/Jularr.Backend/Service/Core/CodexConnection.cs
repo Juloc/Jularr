@@ -176,7 +176,14 @@ namespace Jularr.Backend.Service.Core
         }
 
         // One prompt to the chosen model; its tokens are counted against the limits whether or not the answer is used. `what` names the request on the AI page.
-        internal async Task<string> ExecAsync(string model, string? effort, string prompt, string what, CancellationToken ct)
+        internal Task<string> ExecAsync(string model, string? effort, string prompt, string what, CancellationToken ct) =>
+            AskAsync(model, effort, what, token => _cli.ExecAsync(model, effort, prompt, token), ct);
+
+        // The same in a bare thread of the app-server, the answer's text handed to `onText` as it arrives; the request costs a fraction of an exec request.
+        internal Task<string> StreamAsync(string model, string? effort, string prompt, string what, Action<string> onText, CancellationToken ct) =>
+            AskAsync(model, effort, what, token => _cli.StreamAsync(model, effort, prompt, onText, token), ct);
+
+        private async Task<string> AskAsync(string model, string? effort, string what, Func<CancellationToken, Task<CodexAnswer>> ask, CancellationToken ct)
         {
             if (!CodexSettings.IsModelName(model) || effort is not null && !CodexSettings.IsEffortName(effort)) throw new InvalidDataException("Codex model or effort is not valid.");
             var request = new CodexRequest(what, model, effort, DateTimeOffset.UtcNow);
@@ -189,7 +196,7 @@ namespace Jularr.Backend.Service.Core
 
             try
             {
-                var answer = await _cli.ExecAsync(model, effort, prompt, ct);
+                var answer = await ask(ct);
                 Record(answer.Tokens);
                 lock (_gate)
                 {

@@ -92,3 +92,37 @@ test('the time left comes from the last three requests and rounds to minutes', (
     assert.equal(exports.minutesLeft(50), 1);
     assert.equal(exports.minutesLeft(130), 2);
 });
+
+test('while a request runs the stored blocks are fetched and shown, and once more after it failed', async () => {
+    let polls = 0;
+    const shown = [];
+    let release;
+    const answered = new Promise(resolve => { release = resolve; });
+    const result = exports.translateChapter({
+        from: 0,
+        post: async () => { await answered; return refusal('translation_request_failed'); },
+        arrived: blocks => shown.push(...blocks.map(block => block.index)),
+        poll: async () => { polls++; shown.push(100 + polls); if (polls === 3) release(); },
+        progress: () => undefined,
+        stopped: () => false,
+        pause: async () => { await new Promise(resolve => setImmediate(resolve)); }
+    });
+    const value = await result;
+    assert.equal(value.state, 'error');
+    assert.equal(value.problem, 'failed');
+    // Three rounds while the request ran, one more for what was stored before it failed.
+    assert.deepEqual([...shown], [101, 102, 103, 104]);
+});
+
+test('stopping drops the request in flight and ends as stopped, not as a failure', async () => {
+    let stopped = false;
+    const value = await exports.translateChapter({
+        from: 0,
+        post: async () => { stopped = true; throw new DOMException('aborted', 'AbortError'); },
+        arrived: () => undefined,
+        progress: () => undefined,
+        stopped: () => stopped,
+        pause: async () => undefined
+    });
+    assert.equal(value.state, 'stopped');
+});

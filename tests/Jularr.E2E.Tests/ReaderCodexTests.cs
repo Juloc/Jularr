@@ -97,19 +97,25 @@ namespace Jularr.E2E.Tests
             }
         }
 
-        // The stand-in CLI of the AI page, slowed to one second a request, noting every request in `asked`, failing from the request after the number in `failafter` and hitting its usage limit while `limit` exists.
-        private static string SlowCli => AiPageTests.Cli.Replace("\r\n", "\n").Replace("  exec)\n    prompt=$(cat)\n", "  exec)\n    prompt=$(cat)\n" + Hook, StringComparison.Ordinal);
+        // The stand-in CLI of the AI page, slowed (a second a request, a hundredth of a second a line of the streamed answer), noting every request in `asked`, failing from the request
+        // after the number in `failafter` and hitting its usage limit while `limit` exists.
+        private static string SlowCli => AiPageTests.Cli.Replace("\r\n", "\n").Replace("prompt=$(printf '%b' \"$text\")\n", "prompt=$(printf '%b' \"$text\")\n" + Hook, StringComparison.Ordinal)
+            .Replace("printf '{\"method\":\"item/agentMessage/delta\"", "sleep 0.01; printf '{\"method\":\"item/agentMessage/delta\"", StringComparison.Ordinal);
 
         private const string Hook = """
-                echo asked >> "$CODEX_HOME/asked"
-                sleep 1
-                if [ -f "$CODEX_HOME/failafter" ] && [ "$(wc -l < "$CODEX_HOME/asked")" -gt "$(cat "$CODEX_HOME/failafter")" ]; then exit 1; fi
-                if [ -f "$CODEX_HOME/limit" ]; then
-                  printf '{"type":"error","message":"You hit your usage limit. Upgrade to Pro, or try again at %s."}\n{"type":"turn.failed","error":{"message":"You hit your usage limit."}}\n' "Nov 4th, 2099 7:41 AM"
-                  exit 1
-                fi
+                                  echo asked >> "$CODEX_HOME/asked"
+                                  sleep 1
+                                  if [ -f "$CODEX_HOME/failafter" ] && [ "$(wc -l < "$CODEX_HOME/asked")" -gt "$(cat "$CODEX_HOME/failafter")" ]; then
+                                    printf '{"method":"turn/completed","params":{"threadId":"thread-1","turn":{"id":"turn-1","status":"failed","error":{"message":"The model failed."}}}}\n'
+                                    continue
+                                  fi
+                                  if [ -f "$CODEX_HOME/limit" ]; then
+                                    printf '{"method":"error","params":{"threadId":"thread-1","turnId":"turn-1","willRetry":false,"error":{"message":"You hit your usage limit. Upgrade to Pro, or try again at Nov 4th, 2099 7:41 AM."}}}\n'
+                                    printf '{"method":"turn/completed","params":{"threadId":"thread-1","turn":{"id":"turn-1","status":"failed","error":{"message":"You hit your usage limit."}}}}\n'
+                                    continue
+                                  fi
 
-            """ + "\n";
+                """ + "\n";
 
         private static string Setup(string folder, out string home)
         {
@@ -127,9 +133,9 @@ namespace Jularr.E2E.Tests
         public async Task Owner_WithoutAnAnsweringOllama_TranslatesAChapterByButtonOnly_LiveInChunks_AndKeepsItWhenReopened()
         {
             if (OperatingSystem.IsWindows()) Assert.Inconclusive("The stand-in CLI is a shell script.");
-            Assert.IsTrue(SlowCli.Contains("sleep 1", StringComparison.Ordinal), "The stand-in CLI must be slowed.");
+            Assert.IsTrue(SlowCli.Contains("sleep 1", StringComparison.Ordinal) && SlowCli.Contains("sleep 0.01", StringComparison.Ordinal), "The stand-in CLI must be slowed.");
             using var folders = new Folders("Books");
-            Steps.WriteEpub(Path.Combine(folders.Library, "Books", "codex-alone.epub"), "Codex Alone", "Local fixture", paragraphsPerChapter: 70);
+            Steps.WriteEpub(Path.Combine(folders.Library, "Books", "codex-alone.epub"), "Codex Alone", "Local fixture", paragraphsPerChapter: 320);
             var codexFolder = Path.Combine(Path.GetTempPath(), "jularr-codex-alone-" + Guid.NewGuid().ToString("N"));
             var executable = Setup(codexFolder, out var home);
             var asked = () => File.Exists(Path.Combine(home, "asked")) ? File.ReadAllLines(Path.Combine(home, "asked")).Length : 0;
@@ -174,19 +180,19 @@ namespace Jularr.E2E.Tests
                 Assert.IsTrue(asked() >= 1);
                 await Evidence.SaveAsync(page, "reader-codex-live-desktop");
                 await Assertions.Expect(bar.Locator("[data-role=codex-text]")).ToContainTextAsync("This chapter is translated.", new() { Timeout = 120_000 });
-                Assert.IsTrue(asked() >= 3, "Seventy blocks need several requests.");
+                Assert.IsTrue(asked() >= 3, "A chapter of 320 blocks needs several requests.");
                 await Assertions.Expect(bar.Locator("[data-codex=next]")).ToBeVisibleAsync();
                 await Assertions.Expect(bar.Locator("[data-codex=start]")).ToBeHiddenAsync();
                 var text = await page.Locator("[data-role=content]").InnerTextAsync();
                 Assert.IsFalse(System.Text.RegularExpressions.Regex.IsMatch(text, "(^|\n)Paragraph \\d+"), "Every paragraph is translated: " + text);
-                Assert.IsTrue(text.Contains("Codex gpt-one: Paragraph 70", StringComparison.Ordinal), text);
+                Assert.IsTrue(text.Contains("Codex gpt-one: Paragraph 320", StringComparison.Ordinal), text);
                 Assert.AreEqual(0L, await jularr.ScalarAsync("SELECT count(*) FROM \"ReadingTranslationChoices\""));
                 await Evidence.SaveAsync(page, "reader-codex-done-desktop");
 
                 // Reopened, the chapter is translated without a press and without a request.
                 var before = asked();
                 await page.ReloadAsync();
-                await Assertions.Expect(page.Locator("[data-role=content]")).ToContainTextAsync("Codex gpt-one: Paragraph 70", new() { Timeout = 60_000 });
+                await Assertions.Expect(page.Locator("[data-role=content]")).ToContainTextAsync("Codex gpt-one: Paragraph 320", new() { Timeout = 60_000 });
                 await Assertions.Expect(bar.Locator("[data-role=codex-text]")).ToContainTextAsync("This chapter is translated.");
                 await page.WaitForTimeoutAsync(1500);
                 Assert.AreEqual(before, asked());
@@ -219,7 +225,7 @@ namespace Jularr.E2E.Tests
         {
             if (OperatingSystem.IsWindows()) Assert.Inconclusive("The stand-in CLI is a shell script.");
             using var folders = new Folders("Books");
-            Steps.WriteEpub(Path.Combine(folders.Library, "Books", "codex-fails.epub"), "Codex Fails", "Local fixture", paragraphsPerChapter: 70);
+            Steps.WriteEpub(Path.Combine(folders.Library, "Books", "codex-fails.epub"), "Codex Fails", "Local fixture", paragraphsPerChapter: 320);
             var codexFolder = Path.Combine(Path.GetTempPath(), "jularr-codex-fails-" + Guid.NewGuid().ToString("N"));
             var executable = Setup(codexFolder, out var home);
             try
@@ -259,7 +265,7 @@ namespace Jularr.E2E.Tests
                 var asked = File.ReadAllLines(Path.Combine(home, "asked")).Length;
                 await bar.Locator("[data-codex=retry]").ClickAsync();
                 await Assertions.Expect(line).ToContainTextAsync("This chapter is translated.", new() { Timeout = 180_000 });
-                Assert.IsTrue(File.ReadAllLines(Path.Combine(home, "asked")).Length - asked <= 2, "Only the missing part is asked for again.");
+                Assert.IsTrue(File.ReadAllLines(Path.Combine(home, "asked")).Length - asked <= 3, "Only the missing part is asked for again.");
                 Assert.IsTrue((await page.Locator("[data-role=content]").InnerTextAsync()).Contains(finished[..40], StringComparison.Ordinal));
 
                 // The usage limit of the account is named as such, on the next chapter.

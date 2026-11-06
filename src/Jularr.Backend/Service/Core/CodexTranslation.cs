@@ -23,6 +23,11 @@ namespace Jularr.Backend.Service.Core
 
         Task<string?[]> TranslateBlocksAsync(TranslationMachine machine, string source, string target, IReadOnlyList<string> blocks, string? context, CancellationToken ct);
 
+        // The same blocks in one request whose answer is cut into blocks as it arrives: `onBlock` gets the position and text of each block that passed the checks the moment
+        // it is complete, so a caller can show and store it while the others are still coming. The result is as in TranslateBlocksAsync.
+        Task<string?[]> TranslateBlocksStreamAsync(TranslationMachine machine, string source, string target, IReadOnlyList<string> blocks, string? context, Action<int, string> onBlock,
+            CancellationToken ct);
+
         // One chapter's requests counted together until disposed (chapter from 1), for comparing what a chapter costs with each model.
         IDisposable BeginChapter(TranslationMachine machine, int chapter, string? title);
     }
@@ -38,10 +43,11 @@ namespace Jularr.Backend.Service.Core
 
         public string Key => ProviderKey;
 
-        // Short requests: a chapter in many of them, each with the passage around its blocks.
-        public int BatchCharacters => 6_000;
+        // A chapter in a few requests, each answered as a stream and stored block by block (the reader sees the text arrive, so a long request does not make it wait): a request
+        // costs about three thousand tokens besides its text, so fewer, longer ones are cheaper, while a failure loses at most the unfinished end of one.
+        public int BatchCharacters => 12_000;
 
-        public int BatchBlocks => 30;
+        public int BatchBlocks => 100;
 
         // The models the account offered when last asked, never a guess; empty until the AI page or the first translation has asked.
         public IReadOnlyList<string> Models
@@ -108,37 +114,34 @@ namespace Jularr.Backend.Service.Core
             return [.. blocks.Select((block, index) => parts[index] is { } part && OllamaLocalModels.LooksComplete(block, part, target) ? part : null)];
         }
 
+        // The blocks numbered in one request whose answer is cut into parts as it comes.
+        public async Task<string?[]> TranslateBlocksStreamAsync(TranslationMachine machine, string source, string target, IReadOnlyList<string> blocks, string? context, Action<int, string> onBlock,
+            CancellationToken ct)
+        {
+            var numbered = string.Join("\n\n", blocks.Select((block, index) => "[[" + (index + 1).ToString(CultureInfo.InvariantCulture) + "]]\n" + block));
+            var extra = "The text has " + blocks.Count.ToString(CultureInfo.InvariantCulture) + " numbered parts, each starting with a line [[n]]. Answer with the same lines [[n]] and the translation of each part under its own line; "
+                + "never merge, split, skip or reorder parts.";
+            var checkedParts = new string?[blocks.Count];
+            NumberedStream? stream = null;
+            void Begin() => stream = new NumberedStream(blocks.Count, (index, part) =>
+            {
+                if (checkedParts[index] is not null || !OllamaLocalModels.LooksComplete(blocks[index], part, target)) return;
+                checkedParts[index] = part;
+                onBlock(index, part);
+            });
+
+            await AskStreamAsync(machine, Prompt(source, target, numbered, context, extra), "translate " + blocks.Count.ToString(CultureInfo.InvariantCulture) + " blocks", Begin, piece => stream!.Add(piece), ct);
+            stream!.Complete();
+            return checkedParts;
+        }
+
         // The parts of an answer by their [[n]] lines; null where a part is missing.
         internal static string?[] Numbered(string answer, int count)
         {
             var parts = new string?[count];
-            var lines = answer.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n');
-            var number = -1;
-            var text = new List<string>();
-            void Flush()
-            {
-                if (number is >= 1 && number <= count && parts[number - 1] is null)
-                {
-                    var joined = string.Join("\n", text).Trim();
-                    if (joined.Length > 0) parts[number - 1] = joined;
-                }
-
-                text.Clear();
-            }
-
-            foreach (var line in lines)
-            {
-                var marker = line.Trim();
-                if (marker.Length > 4 && marker.StartsWith("[[", StringComparison.Ordinal) && marker.EndsWith("]]", StringComparison.Ordinal)
-                    && int.TryParse(marker.AsSpan(2, marker.Length - 4), NumberStyles.None, CultureInfo.InvariantCulture, out var next))
-                {
-                    Flush();
-                    number = next;
-                }
-                else text.Add(line);
-            }
-
-            Flush();
+            var stream = new NumberedStream(count, (index, part) => parts[index] ??= part);
+            stream.Add(answer);
+            stream.Complete();
             return parts;
         }
 
@@ -166,6 +169,24 @@ namespace Jularr.Backend.Service.Core
             }
         }
 
+        // The same with the answer streamed; `begin` runs before each attempt (the fallback model starts the answer anew).
+        private async Task<string> AskStreamAsync(TranslationMachine machine, string prompt, string what, Action begin, Action<string> onText, CancellationToken ct)
+        {
+            var query = Query(machine.Address);
+            if (connection.LimitReached(Number(query, "daily"), Number(query, "run"))) throw new InvalidDataException("The Codex token limit is reached.");
+            query.TryGetValue("effort", out var effort);
+            try
+            {
+                begin();
+                return await connection.StreamAsync(machine.Model, effort, prompt, what, onText, ct);
+            }
+            catch (InvalidDataException) when (query.TryGetValue("fallback", out var fallback))
+            {
+                begin();
+                return await connection.StreamAsync(fallback, effort, prompt, what, onText, ct);
+            }
+        }
+
         private static string Prompt(string source, string target, string text, string? context, string? extra = null)
         {
             var sourceName = CultureInfo.GetCultureInfo(source).EnglishName;
@@ -185,5 +206,54 @@ namespace Jularr.Backend.Service.Core
 
         private static long Number(Dictionary<string, string> query, string name) =>
             query.TryGetValue(name, out var value) && long.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var number) ? number : 0;
+    }
+
+    // The parts of an answer in the form "[[n]]" line, then its text, cut as the answer arrives: a part is complete when the next marker or the end comes, and the first
+    // text of a number wins.
+    internal sealed class NumberedStream(int count, Action<int, string> part)
+    {
+        private readonly global::System.Text.StringBuilder _line = new();
+        private readonly List<string> _text = [];
+        private int _number = -1;
+
+        public void Add(string piece)
+        {
+            foreach (var character in piece)
+            {
+                if (character == '\n') EndLine();
+                else _line.Append(character);
+            }
+        }
+
+        public void Complete()
+        {
+            if (_line.Length > 0) EndLine();
+            Flush();
+        }
+
+        private void EndLine()
+        {
+            var raw = _line.ToString().TrimEnd('\r');
+            _line.Clear();
+            var marker = raw.Trim();
+            if (marker.Length > 4 && marker.StartsWith("[[", StringComparison.Ordinal) && marker.EndsWith("]]", StringComparison.Ordinal)
+                && int.TryParse(marker.AsSpan(2, marker.Length - 4), NumberStyles.None, CultureInfo.InvariantCulture, out var next))
+            {
+                Flush();
+                _number = next;
+            }
+            else _text.Add(raw);
+        }
+
+        private void Flush()
+        {
+            if (_number >= 1 && _number <= count)
+            {
+                var joined = string.Join("\n", _text).Trim();
+                if (joined.Length > 0) part(_number - 1, joined);
+            }
+
+            _text.Clear();
+        }
     }
 }
