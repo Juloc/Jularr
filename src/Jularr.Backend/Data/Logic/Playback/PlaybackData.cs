@@ -180,6 +180,17 @@ namespace Jularr.Backend.Data.Logic.Playback
         public long ProfileId { get; }
     }
 
+    internal sealed class PlaybackSessionAssetData : BaseData
+    {
+        public PlaybackSessionAssetData(long mediaAssetId)
+        {
+            MediaAssetId = mediaAssetId;
+        }
+
+        [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.Id))]
+        public long MediaAssetId { get; }
+    }
+
     internal sealed class PlaybackStreamData : BaseData
     {
         public PlaybackStreamData(string relativePath, string rootRelativePath, long storageMountId)
@@ -202,8 +213,9 @@ namespace Jularr.Backend.Data.Logic.Playback
 
     internal sealed class PlaybackUpdateData : BaseData
     {
-        public PlaybackUpdateData(Guid playbackSessionId, long profileId, long positionMs, long? durationMs, bool isEnded, bool isCompleted)
+        public PlaybackUpdateData(Guid playbackSessionId, long profileId, long positionMs, long? durationMs, bool isEnded, bool isCompleted, bool isStarted)
         {
+            IsStarted = isStarted;
             PlaybackSessionId = playbackSessionId;
             ProfileId = profileId;
             PositionMs = positionMs;
@@ -229,6 +241,9 @@ namespace Jularr.Backend.Data.Logic.Playback
 
         [DataField(typeof(PlaybackFields), nameof(PlaybackFields.IsCompleted))]
         public bool IsCompleted { get; }
+
+        [DataField(typeof(PlaybackFields), nameof(PlaybackFields.IsStarted))]
+        public bool IsStarted { get; }
     }
 
     // An audio or subtitle stream of the media file, or a subtitle file beside it.

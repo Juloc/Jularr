@@ -3,6 +3,7 @@ import { updateRangeValue } from "../../Framework/Components/Range";
 import { progressReporter } from "../Tracking/Progress";
 import { inserted, keepAddress, pushAddress, releaseAddress, visit } from "../Navigation/PageSwap";
 import type { CastSender, CastState } from "./Cast";
+import { CastQueue, type QueueApi, type QueueChoice, type QueueEntry, type QueueItem } from "./CastQueue";
 import { awake, focus } from "../Playback/MediaFocus";
 import type { StyledSubtitles } from "./StyledSubtitles";
 import { deviceKind, libassWanted } from "./Device";
@@ -101,8 +102,15 @@ async function start(player: HTMLElement): Promise<void> {
     // A Chromecast showing this playback: its own session, its own position.
     let casting = false;
     let castSender: CastSender | null = null;
-    let castState: CastState = { connected: false, paused: true, currentTime: 0, duration: 0, device: "" };
+    let castState: CastState = { connected: false, paused: true, currentTime: 0, duration: 0, device: "", volume: 1, muted: false, contentId: "" };
     let castWasPlaying = false;
+    // The device plays a queue of episodes, each on a session of its own.
+    let castQueue: CastQueue | null = null;
+    let castPrevious: number | null = null;
+    // What the page's own track fields and neighbour buttons held before the device took over.
+    let castFields: Map<HTMLSelectElement, { children: Node[]; value: string }> | null = null;
+    let castButtons: { name: string; disabled: boolean }[] = [];
+    let castLabels: { title: string; context: string } | null = null;
     // What the Info pane shows besides the server's facts: measured while it is open.
     let hlsCodecs = "";
     let hlsSegmentMs = 0;
@@ -202,11 +210,12 @@ async function start(player: HTMLElement): Promise<void> {
 
     // Save acknowledged progress only; each plan has its own session.
     const report = (ended: boolean, completed = ended) => {
+        // A device goes on without this page: leaving only saves the place of the item it plays, no session ends.
+        if (casting) { castQueue?.report(); return; }
         if (!plan || !sourceReady && !ended) return;
         save({
-            positionMs: Math.floor((casting ? castState.currentTime : sourceReady ? video.currentTime : sourcePosition) * 1000),
-            durationMs: casting ? (castState.duration > 0 ? Math.round(castState.duration * 1000) : null)
-                : Number.isFinite(video.duration) && video.duration > 0 ? Math.round(video.duration * 1000) : null,
+            positionMs: Math.floor((sourceReady ? video.currentTime : sourcePosition) * 1000),
+            durationMs: Number.isFinite(video.duration) && video.duration > 0 ? Math.round(video.duration * 1000) : null,
             isEnded: ended,
             isCompleted: completed
         }, ended);
@@ -250,6 +259,7 @@ async function start(player: HTMLElement): Promise<void> {
     window.addEventListener("pagehide", event => report(!event.persisted, false), { signal });
 
     function go(direction: "previous" | "next") {
+        if (casting) { void castGo(direction); return; }
         const href = player.querySelector<HTMLElement>(`[data-action=${direction}][data-href]`)?.dataset.href;
         if (!href) return;
         report(true, false);
@@ -803,13 +813,22 @@ async function start(player: HTMLElement): Promise<void> {
         chapters.forEach((chapter, position) => chapter.setAttribute("aria-pressed", String(position === index)));
     }
 
-    video.addEventListener("volumechange", () => {
-        volume.value = String(video.muted ? 0 : video.volume);
+    // The volume of the picture here, or of the device while one plays it.
+    function showVolume(level: number, muted: boolean): void {
+        volume.value = String(muted ? 0 : level);
         volume.style.setProperty('--played', `${Number(volume.value) * 100}%`);
-        mute.setAttribute("aria-pressed", String(video.muted));
-        player.classList.toggle("player--muted", video.muted);
-        player.dataset.volumeLevel = video.muted || video.volume === 0 ? "0" : video.volume > 0.66 ? "3" : video.volume > 0.33 ? "2" : "1";
-    });
+        mute.setAttribute("aria-pressed", String(muted));
+        player.classList.toggle("player--muted", muted);
+        player.dataset.volumeLevel = muted || level === 0 ? "0" : level > 0.66 ? "3" : level > 0.33 ? "2" : "1";
+    }
+    video.addEventListener("volumechange", () => { if (!casting) showVolume(video.volume, video.muted); });
+
+    function setVolume(level: number): void {
+        const value = Math.max(0, Math.min(1, level));
+        if (casting) { castSender?.setVolume(value); castSender?.setMuted(value === 0); return; }
+        video.volume = value;
+        video.muted = value === 0;
+    }
     timeline.addEventListener('input', () => {
         seeking = true;
         timeline.style.setProperty('--played', `${Number(timeline.value) / Math.max(1, Number(timeline.max)) * 100}%`);
@@ -817,7 +836,7 @@ async function start(player: HTMLElement): Promise<void> {
     timeline.addEventListener('change', () => { if (casting) castSender?.seek(Number(timeline.value)); else jumpTo(Number(timeline.value)); seeking = false; wake(); });
     timeline.addEventListener('pointercancel', () => { seeking = false; timeline.value = String(Math.floor(video.currentTime)); wake(); });
     void previews();
-    volume.addEventListener("input", () => { video.volume = Number(volume.value); video.muted = video.volume === 0; });
+    volume.addEventListener("input", () => setVolume(Number(volume.value)));
     player.querySelector<HTMLElement>("[data-action=pip]")!.hidden = !document.pictureInPictureEnabled;
     player.querySelector<HTMLElement>('[data-action=fullscreen]')!.hidden = !document.fullscreenEnabled;
     volume.style.setProperty('--played', `${video.volume * 100}%`);
@@ -843,7 +862,7 @@ async function start(player: HTMLElement): Promise<void> {
         },
         back: () => seek(-10),
         forward: () => seek(30),
-        mute: () => { video.muted = !video.muted; },
+        mute: () => { if (casting) castSender?.setMuted(!castState.muted); else video.muted = !video.muted; },
         fullscreen: () => void (document.fullscreenElement ? document.exitFullscreen() : host.requestFullscreen()).catch(() => show('failed')),
         pip: () => void (document.pictureInPictureElement ? document.exitPictureInPicture() : video.requestPictureInPicture()).catch(() => show('failed')),
         theater: () => {
@@ -854,7 +873,10 @@ async function start(player: HTMLElement): Promise<void> {
         'subtitle-toggle': () => {
             const on = player.querySelector('[data-action=subtitle-toggle]')!.getAttribute('aria-pressed') === 'true';
             const choice = on ? { key: "", language: undefined } : lastSubtitle ?? firstSubtitle();
-            if (choice) { setChoice('subtitle', choice.key); showSubtitle(choice.key, choice.language); }
+            if (!choice) return;
+            setChoice('subtitle', choice.key);
+            if (casting) castQueue?.setSubtitle(choice.key || null);
+            else showSubtitle(choice.key, choice.language);
         },
         close: () => void minimize(),
         'next-now': () => { const href = next.dataset.href; stopCountdown(); if (href) void openEpisode(href); },
@@ -894,6 +916,11 @@ async function start(player: HTMLElement): Promise<void> {
             case "audio": {
                 const previous = audioIndex === null ? field.value : String(audioIndex);
                 if (switching || field.value === "") { setChoice("audio", previous); break; }
+                if (casting) {
+                    // The device plays another conversion of the item, at the same place; the next episodes follow the language.
+                    void castQueue!.setAudio(field.value).then(() => { audioIndex = Number(field.value); }, () => { setChoice("audio", previous); show("failed"); });
+                    break;
+                }
                 void replan(Number(field.value), quality).then(success => setChoice("audio", success ? field.value : previous));
                 break;
             }
@@ -907,7 +934,8 @@ async function start(player: HTMLElement): Promise<void> {
                 const option = (field as HTMLSelectElement).selectedOptions[0];
                 if (field.value) lastSubtitle = { key: field.value, language: option?.dataset.language };
                 setChoice("subtitle", field.value);
-                showSubtitle(field.value, option?.dataset.language);
+                if (casting) castQueue?.setSubtitle(field.value || null);
+                else showSubtitle(field.value, option?.dataset.language);
                 break;
             }
             case "subtitle2": if (field.value === "translate") { setChoice("subtitle2", secondKey); void translateSubtitle(); } else showSecondSubtitle(field.value); break;
@@ -970,7 +998,7 @@ async function start(player: HTMLElement): Promise<void> {
         if (player.classList.contains("player--mini") && !player.contains(event.target as Node)) return;
         const keys: Record<string, () => void> = {
             " ": actions.toggle, k: actions.toggle, ArrowLeft: () => seek(-10), j: () => seek(-10), ArrowRight: () => seek(30), l: () => seek(30),
-            ArrowUp: () => { video.volume = Math.min(1, video.volume + 0.05); }, ArrowDown: () => { video.volume = Math.max(0, video.volume - 0.05); },
+            ArrowUp: () => setVolume((casting ? castState.volume : video.volume) + 0.05), ArrowDown: () => setVolume((casting ? castState.volume : video.volume) - 0.05),
             m: actions.mute, f: actions.fullscreen
         };
         const handler = keys[event.key.length === 1 ? event.key.toLowerCase() : event.key];
@@ -1023,6 +1051,8 @@ async function start(player: HTMLElement): Promise<void> {
 
     // Stop ends the session and leaves the app as it is; progress stays.
     function stop(): void {
+        // Stop ends the casting too: every session of the queue ends and the device lets go.
+        if (casting) { casting = false; castQueue?.close(); castQueue = null; castSender?.stop(); }
         report(true, false);
         video.pause();
         hls?.destroy();
@@ -1197,6 +1227,7 @@ async function start(player: HTMLElement): Promise<void> {
         if (state.connected && !casting) { await startCasting(); return; }
         if (!state.connected && casting) { await endCasting(); return; }
         if (!casting) return;
+        castQueue?.update(state);
         if (state.duration > 0) {
             timeline.max = String(Math.floor(state.duration));
             player.querySelector("[data-role=duration]")!.textContent = clock(state.duration);
@@ -1204,7 +1235,118 @@ async function start(player: HTMLElement): Promise<void> {
         if (!seeking) timeline.value = String(Math.floor(state.currentTime));
         timeline.style.setProperty("--played", `${Number(timeline.value) / Math.max(1, Number(timeline.max)) * 100}%`);
         player.querySelector("[data-role=time]")!.textContent = clock(state.currentTime);
+        showVolume(state.volume, state.muted);
         setPlaying(!state.paused);
+    }
+
+    // The asset of an address like /api/v1/playback/assets/12/sessions, and the same address for another asset.
+    const assetOf = (address: string): number => Number(/\/assets\/(\d+)\//.exec(address)?.[1]);
+    const startUrlFor = (assetId: number): string => player.dataset.startUrl!.replace(/\/assets\/\d+\//, `/assets/${assetId}/`);
+
+    // What the queue asks of the server: the items after an asset, a session and its device address for each, and the progress of each session.
+    function castApi(): QueueApi {
+        return {
+            items: async (assetId, following) => {
+                const response = await fetch(`/Player/${assetId}?handler=Queue&count=${following}`, { credentials: "same-origin", headers: { Accept: "application/json" } });
+                if (!response.ok) throw new Error("cast_queue");
+                return await response.json() as QueueItem[];
+            },
+            plan: async (assetId, audioKey) => {
+                // The device plays HLS of H.264 and AAC from an address of its own session.
+                const response = await fetch(startUrlFor(assetId), {
+                    method: "POST",
+                    credentials: "same-origin",
+                    headers: { "Content-Type": "application/json", RequestVerificationToken: antiforgery },
+                    body: JSON.stringify({ containers: ["hls"], videoCodecs: ["h264"], audioCodecs: ["aac"], audioStreamIndex: audioKey === null ? null : Number(audioKey), quality })
+                });
+                if (!response.ok) throw new Error("cast_plan");
+                const planned = await response.json() as PlaybackPlan & { durationMs?: number | null };
+                return { sessionId: planned.playbackSessionId, resumeSeconds: planned.resumePositionMs / 1000, durationSeconds: (planned.durationMs ?? 0) / 1000 };
+            },
+            address: async sessionId => {
+                const response = await fetch(`/api/v1/playback/sessions/${sessionId}/cast`, { credentials: "same-origin" });
+                if (!response.ok) throw new Error("cast_address");
+                return location.origin + (await response.json() as { url: string }).url;
+            },
+            save: sessionId => progressReporter(player.dataset.sessionUrl + sessionId, antiforgery, failed => {
+                const feedback = player.querySelector<HTMLElement>('[data-role=save-error]');
+                if (feedback) feedback.hidden = !failed;
+            })
+        };
+    }
+
+    // The viewer's choices of this playback, as the queue follows them: the track keys of this item and the languages for the others.
+    function castChoice(assetId: number): QueueChoice {
+        const audio = player.querySelector<HTMLSelectElement>("select[data-setting=audio]")?.selectedOptions[0];
+        const subtitle = player.querySelector<HTMLSelectElement>("select[data-setting=subtitle]")?.selectedOptions[0];
+        return {
+            assetId,
+            audioKey: audioIndex === null ? null : String(audioIndex),
+            audioLanguage: audio?.dataset.language ?? null,
+            subtitleKey: subtitle?.value || null,
+            subtitleLanguage: subtitle?.value ? subtitle.dataset.language ?? null : null,
+            subtitleForced: subtitle?.dataset.forced === "true"
+        };
+    }
+
+    // The item that plays on the device changed: names, the neighbouring controls and the shown subtitle follow it.
+    function castChanged(entry: QueueEntry, index: number): void {
+        const own = entry.item.assetId === assetOf(player.dataset.startUrl!);
+        const title = player.querySelector(".player__title");
+        const context = player.querySelector(".player__context");
+        if (title) title.textContent = entry.item.title;
+        if (context) context.textContent = entry.item.context;
+        // Chapters and skippable stretches are those of the episode this page was opened with.
+        player.classList.toggle("player--cast-other", !own);
+        markEpisode(entry.item.assetId);
+        const neighbour = (name: string, enabled: boolean) => { const button = player.querySelector<HTMLButtonElement>(`[data-action=${name}]`); if (button) button.disabled = !enabled; };
+        neighbour("previous", index > 0 || castPrevious !== null);
+        neighbour("next", !!castQueue && (castQueue.canNext || castQueue.hasMore));
+        setTrackOptions(entry, own);
+    }
+
+    // The list of episodes beside the picture marks the one that plays.
+    function markEpisode(assetId: number): void {
+        player.querySelectorAll<HTMLElement>(".player__episodes > *").forEach(card => {
+            const link = card.matches("a") ? card : card.querySelector("a");
+            if (link?.getAttribute("href") === `/Player/${assetId}`) card.setAttribute("aria-current", "true");
+            else card.removeAttribute("aria-current");
+        });
+    }
+
+    // The two track fields list the tracks of the item on the device; for the page's own episode they are the ones it came with.
+    function setTrackOptions(entry: QueueEntry, own: boolean): void {
+        if (!castFields) return;
+        for (const [select, original] of castFields) {
+            const audio = select.dataset.setting === "audio";
+            const tracks = audio ? entry.item.audio : entry.item.subtitles;
+            if (own) {
+                select.replaceChildren(...original.children.map(child => child.cloneNode(true)));
+            } else {
+                const off = audio ? undefined : original.children.find(child => (child as HTMLOptionElement).value === "");
+                select.replaceChildren(...(off ? [off.cloneNode(true)] : []), ...tracks.map(track => {
+                    const option = new Option(track.label ?? track.key, track.key);
+                    if (track.language) option.dataset.language = track.language;
+                    if (track.forced) option.dataset.forced = "true";
+                    return option;
+                }));
+            }
+            select.value = audio ? entry.audioKey ?? "" : entry.activeSubtitle === null ? "" : entry.subtitles[entry.activeSubtitle].key;
+        }
+        player.querySelector("[data-action=subtitle-toggle]")?.setAttribute("aria-pressed", String(entry.activeSubtitle !== null));
+    }
+
+    // Previous and Next follow the queue of the device; before its first item the queue is built anew from the episode before.
+    async function castGo(direction: "previous" | "next"): Promise<void> {
+        if (!castQueue) return;
+        if (direction === "next") { castQueue.next(); return; }
+        if (castQueue.previous() || castPrevious === null) return;
+        try {
+            await castQueue.reopen(castPrevious, null);
+            castPrevious = null;
+        } catch {
+            show("failed");
+        }
     }
 
     async function startCasting(): Promise<void> {
@@ -1215,35 +1357,28 @@ async function start(player: HTMLElement): Promise<void> {
         const position = video.currentTime;
         video.pause();
         try {
-            // The device plays HLS of H.264 and AAC from an address of its own session.
-            const response = await fetch(player.dataset.startUrl!, {
-                method: "POST",
-                credentials: "same-origin",
-                headers: { "Content-Type": "application/json", RequestVerificationToken: antiforgery },
-                body: JSON.stringify({ containers: ["hls"], videoCodecs: ["h264"], audioCodecs: ["aac"], audioStreamIndex: audioIndex, quality })
-            });
-            if (!response.ok) throw new Error("cast_plan");
-            const planned = await response.json() as PlaybackPlan;
-            const address = await fetch(`/api/v1/playback/sessions/${planned.playbackSessionId}/cast`, { credentials: "same-origin" });
-            if (!address.ok) throw new Error("cast_address");
-            const { url } = await address.json() as { url: string };
-            const title = player.querySelector(".player__title")?.textContent ?? "";
-            const context = player.querySelector(".player__context")?.textContent ?? "";
-            await castSender!.load(location.origin + url, title, context, position);
-            report(true, false);
-            plan = planned;
-            save = progressReporter(player.dataset.sessionUrl + planned.playbackSessionId, antiforgery, failed => {
-                const feedback = player.querySelector<HTMLElement>('[data-role=save-error]');
-                if (feedback) feedback.hidden = !failed;
-            });
+            const assetId = assetOf(player.dataset.startUrl!);
+            const previous = player.querySelector<HTMLElement>("[data-action=previous][data-href]")?.dataset.href;
+            castPrevious = previous ? Number(previous.split("/").pop()) : null;
+            castFields = new Map(Array.from(player.querySelectorAll<HTMLSelectElement>("select[data-setting=audio], select[data-setting=subtitle]"))
+                .map(select => [select, { children: Array.from(select.children).map(child => child.cloneNode(true)), value: select.value }]));
+            castLabels = { title: player.querySelector(".player__title")?.textContent ?? "", context: player.querySelector(".player__context")?.textContent ?? "" };
+            castButtons = ["previous", "next"].map(name => ({ name, disabled: player.querySelector<HTMLButtonElement>(`[data-action=${name}]`)?.disabled ?? true }));
+            castQueue = new CastQueue(castApi(), castSender!, { get autoplay() { return autoplay; }, changed: castChanged, failed: () => show("failed") }, castChoice(assetId));
+            await castQueue.open(assetId, position);
+            // The device has the item now: the session of this page's own playback ends where it stands.
+            save({ positionMs: Math.floor(position * 1000), durationMs: Number.isFinite(video.duration) && video.duration > 0 ? Math.round(video.duration * 1000) : null, isEnded: true, isCompleted: false }, true);
+            plan = null;
             const panel = player.querySelector<HTMLElement>("[data-role=casting]")!;
             const label = panel.querySelector<HTMLElement>("[data-role=casting-text]")!;
             label.textContent = (label.dataset.template ?? "").replace("{0}", castState.device);
             panel.hidden = false;
             player.classList.add("player--casting");
+            status.hidden = true;
             stopLoading();
         } catch {
             casting = false;
+            castQueue = null;
             castSender?.stop();
             show("failed");
         } finally {
@@ -1251,15 +1386,34 @@ async function start(player: HTMLElement): Promise<void> {
         }
     }
 
-    // The device let go: the playback continues here at the place it reached.
+    // The device let go: every session of the queue ends, and the page goes on with the episode and place the device had reached.
     async function endCasting(): Promise<void> {
         casting = false;
-        const position = castState.currentTime;
-        report(true, false);
-        player.classList.remove("player--casting");
+        const left = castQueue?.close() ?? null;
+        castQueue = null;
+        player.classList.remove("player--casting", "player--cast-other");
         player.querySelector<HTMLElement>("[data-role=casting]")!.hidden = true;
+        video.dispatchEvent(new Event("volumechange"));
+        const own = assetOf(player.dataset.startUrl!);
+        for (const { name, disabled } of castButtons) { const button = player.querySelector<HTMLButtonElement>(`[data-action=${name}]`); if (button) button.disabled = disabled; }
+        // The page's own fields come back, with the audio track the viewer chose meanwhile.
+        for (const [select, original] of castFields ?? []) {
+            select.replaceChildren(...original.children.map(child => child.cloneNode(true)));
+            select.value = select.dataset.setting === "audio" && audioIndex !== null ? String(audioIndex) : original.value;
+        }
+        castFields = null;
+        markEpisode(own);
+        if (castLabels) {
+            const title = player.querySelector(".player__title");
+            const context = player.querySelector(".player__context");
+            if (title) title.textContent = castLabels.title;
+            if (context) context.textContent = castLabels.context;
+        }
+        // Another episode of the queue: its page opens at the place that was saved for it.
+        if (left && !left.finished && left.assetId !== own) { await openEpisode("/Player/" + left.assetId); return; }
+        const position = left?.finished ? 0 : left?.position ?? castState.currentTime;
         video.currentTime = position;
-        if (await replan(audioIndex, quality) && castWasPlaying) void video.play().catch(() => undefined);
+        if (await replan(audioIndex, quality) && castWasPlaying && !left?.finished) void video.play().catch(() => undefined);
     }
 
     // Android and desktop browsers show the playback as media: notification, lock screen and headset keys name the title and carry play, pause, seek and the neighbouring episodes.
@@ -1414,12 +1568,11 @@ async function start(player: HTMLElement): Promise<void> {
                 if (Math.abs(dy) <= Math.abs(dx)) { start = null; return; }
                 const left = start.x - video.getBoundingClientRect().left < start.width / 2;
                 kind = left ? "brightness" : "volume";
-                origin = left ? (brightnessAt === 0 ? positionOf(1) : brightnessAt) : video.muted ? 0 : video.volume;
+                origin = left ? (brightnessAt === 0 ? positionOf(1) : brightnessAt) : casting ? (castState.muted ? 0 : castState.volume) : video.muted ? 0 : video.volume;
             }
             const level = Math.min(1, Math.max(0, origin - dy / (start.height * 0.7)));
             if (kind === "volume") {
-                video.muted = false;
-                video.volume = level;
+                setVolume(level);
                 hud(level === 0 ? "muted" : "volume", String(Math.round(level * 100)), level);
             } else {
                 brightnessAt = level < AutoBelow ? 0 : level;

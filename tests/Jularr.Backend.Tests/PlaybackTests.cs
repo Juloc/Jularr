@@ -415,6 +415,73 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task CastSubtitle_SignedAddressOfActiveSession_ServesWebVttAndNothingElse()
+        {
+            using var storage = new LibraryTests.TemporaryDirectory();
+            using var cache = new LibraryTests.TemporaryDirectory();
+            await using var host = await LibraryTests.CreateHostAsync(storage.Path, settings: new Dictionary<string, string>
+            {
+                ["Media:FfmpegPath"] = Path.Combine(cache.Path, "missing-ffmpeg"),
+                ["Media:TranscodeCachePath"] = cache.Path
+            });
+            var mountId = await LibraryTests.CreateMountAsync(host);
+            var folder = Path.Combine(storage.Path, mountId.ToString(System.Globalization.CultureInfo.InvariantCulture), "Movies", "Film (2001)");
+            Directory.CreateDirectory(folder);
+            File.WriteAllText(Path.Combine(folder, "Film.mkv"), "jklmnopq");
+            File.WriteAllText(Path.Combine(folder, "Film.de.srt"), "1\r\n00:00:01,000 --> 00:00:02,000\r\nGrüße\r\n");
+            var rootId = await LibraryTests.CreateRootAsync(host, mountId, "Movies", MediaType.Movie);
+            await LibraryTests.ScanAsync(host, rootId);
+            var fileId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"StoredFiles\" WHERE \"RelativePath\" LIKE '%.mkv'"))!;
+            using var assigned = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/library/files/" + fileId + "/assignment", new AssignLibraryFileDataV1(null, "Film", null, null, null));
+            var assetId = (await assigned.Content.ReadFromJsonAsync<AssignLibraryFileResultV1>())!.MediaAssetId;
+            await host.Fixture.RunSqlAsync($$"""
+                UPDATE "StoredFiles" SET "ProbedAt" = now(), "DurationMs" = 13500 WHERE "Id" = {{fileId}};
+                INSERT INTO "MediaTracks" ("StoredFileId", "StreamIndex", "MediaTrackTypeId", "Codec", "IsDefault", "IsForced") VALUES
+                    ({{fileId}}, 0, 1, 'h264', TRUE, FALSE),
+                    ({{fileId}}, 1, 2, 'aac', TRUE, FALSE);
+                """);
+
+            using var listed = await host.SendAsync(HttpMethod.Get, "/api/v1/playback/assets/" + assetId + "/tracks");
+            var sidecar = (await listed.Content.ReadFromJsonAsync<BaseDataList<PlaybackTrackV1>>())!.Single(track => track.Key.StartsWith('f'));
+
+            using var started = await host.SendAsync(HttpMethod.Post, "/api/v1/playback/assets/" + assetId + "/sessions", Hls);
+            var plan = (await started.Content.ReadFromJsonAsync<PlaybackPlanV1>())!;
+            using var castAddress = await host.SendAsync(HttpMethod.Get, "/api/v1/playback/sessions/" + plan.PlaybackSessionId + "/cast");
+            var cast = (await castAddress.Content.ReadFromJsonAsync<PlaybackCastV1>())!;
+            var subtitles = cast.Url.Replace("playlist.m3u8", "subtitles/", StringComparison.Ordinal);
+            using var anonymous = ((TestServer)host.Services.GetRequiredService<IServer>()).CreateClient();
+
+            // The device reads the subtitle from another origin, without signing in.
+            using var subtitle = await anonymous.GetAsync(subtitles + sidecar.Key);
+            Assert.AreEqual(HttpStatusCode.OK, subtitle.StatusCode, await subtitle.Content.ReadAsStringAsync());
+            Assert.AreEqual("text/vtt", subtitle.Content.Headers.ContentType!.MediaType);
+            Assert.AreEqual("*", subtitle.Headers.GetValues("Access-Control-Allow-Origin").Single());
+            var vtt = await subtitle.Content.ReadAsStringAsync();
+            StringAssert.StartsWith(vtt, "WEBVTT");
+            StringAssert.Contains(vtt, "Grüße");
+
+            // Another track of the asset, a forged address and an ended session name nothing.
+            using var unknown = await anonymous.GetAsync(subtitles + "f999999");
+            Assert.AreEqual(HttpStatusCode.NotFound, unknown.StatusCode);
+            using var forged = await anonymous.GetAsync(subtitles.Replace("/api/v1/cast/", "/api/v1/cast/x", StringComparison.Ordinal) + sidecar.Key);
+            Assert.AreEqual(HttpStatusCode.NotFound, forged.StatusCode);
+
+            // A session made ahead of time counts its time from the moment its item starts to play, not from its making.
+            var made = (DateTime)(await host.ScalarAsync("SELECT \"StartedAt\" FROM \"PlaybackSessions\" WHERE \"PublicId\" = '" + plan.PlaybackSessionId + "'"))!;
+            await Task.Delay(50);
+            using var progress = await host.SendAsync(HttpMethod.Put, "/api/v1/playback/sessions/" + plan.PlaybackSessionId, new UpdatePlaybackDataV1(500, 13_500, false, false));
+            Assert.AreEqual(made, (DateTime)(await host.ScalarAsync("SELECT \"StartedAt\" FROM \"PlaybackSessions\" WHERE \"PublicId\" = '" + plan.PlaybackSessionId + "'"))!);
+            using var started2 = await host.SendAsync(HttpMethod.Put, "/api/v1/playback/sessions/" + plan.PlaybackSessionId, new UpdatePlaybackDataV1(500, 13_500, false, false, isStarted: true));
+            Assert.AreEqual(HttpStatusCode.OK, started2.StatusCode, await started2.Content.ReadAsStringAsync());
+            Assert.IsTrue((DateTime)(await host.ScalarAsync("SELECT \"StartedAt\" FROM \"PlaybackSessions\" WHERE \"PublicId\" = '" + plan.PlaybackSessionId + "'"))! > made);
+
+            using var ended = await host.SendAsync(HttpMethod.Put, "/api/v1/playback/sessions/" + plan.PlaybackSessionId, new UpdatePlaybackDataV1(1_000, 13_500, true, false));
+            Assert.AreEqual(HttpStatusCode.OK, ended.StatusCode);
+            using var gone = await anonymous.GetAsync(subtitles + sidecar.Key);
+            Assert.AreEqual(HttpStatusCode.NotFound, gone.StatusCode);
+        }
+
+        [TestMethod]
         public async Task CacheSize_CountsEveryFileAndIgnoresFoldersRemovedWhileCounting()
         {
             using var cache = new LibraryTests.TemporaryDirectory();

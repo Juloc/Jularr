@@ -92,6 +92,31 @@ namespace Jularr.Frontend.Pages.User.Player
             return Page();
         }
 
+        // What a cast device queues: this item and the ones that follow it by the player's own next rule, each with its label and the tracks the device can show.
+        public async Task<IActionResult> OnGetQueueAsync(int count = 3)
+        {
+            var queue = new List<object>();
+            long? assetId = Id;
+            for (var index = 0; assetId is { } current && index <= Math.Clamp(count, 0, 6); index++)
+            {
+                var item = await read.ExecuteAsync<PlaybackItemV1>(new MediaAssetParametersV1(current), HttpContext.RequestAborted);
+                var tracks = await readTracks.ExecuteAsync<BaseDataList<PlaybackTrackV1>>(new MediaAssetParametersV1(current), HttpContext.RequestAborted);
+                var audio = tracks.Where(track => track.MediaTrackTypeId == MediaTrackType.Audio && track.IsSupported).Select((track, position) => (Track: track, Described: Track(track, position)));
+                var subtitles = tracks.Where(track => track.MediaTrackTypeId == MediaTrackType.Subtitle && track.IsSupported).Select((track, position) => Track(track, position));
+                queue.Add(new
+                {
+                    assetId = item.MediaAssetId,
+                    title = item.CanonicalTitle,
+                    context = MediaUnitLabel.Format(texts, item.WorkUnitTypeId, item.UnitNumber, item.ParentUnitNumber, item.UnitTitle) ?? "",
+                    audio = audio.Select(pair => new { key = pair.Described.Key, label = pair.Described.Label, language = pair.Described.Language, selected = pair.Described.IsSelected }),
+                    subtitles = subtitles.Select(track => new { key = track.Key, label = track.Label, language = track.Language, forced = track.IsForced, selected = track.IsSelected })
+                });
+                assetId = item.NextMediaAssetId;
+            }
+
+            return new JsonResult(queue);
+        }
+
         protected override async Task LoadDataAsync()
         {
             _item = await read.ExecuteAsync<PlaybackItemV1>(new MediaAssetParametersV1(Id), HttpContext.RequestAborted);

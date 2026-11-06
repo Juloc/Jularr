@@ -13,6 +13,7 @@ namespace Jularr.Backend.Data.Fields.Playback
         public static readonly IntField SegmentIndex = new() { Minimum = 0, Maximum = 1_000_000 };
         public static readonly BoolField IsEnded = new();
         public static readonly BoolField IsCompleted = new();
+        public static readonly BoolField IsStarted = new();
         public static readonly StringArrayField Formats = new() { ItemMaximumLength = 32 };
         public static readonly StringField StreamUrl = new(NpgsqlDbType.Text) { MaximumLength = 256, Required = false };
         // The signed, time-limited address a cast device plays from (it cannot sign in).
