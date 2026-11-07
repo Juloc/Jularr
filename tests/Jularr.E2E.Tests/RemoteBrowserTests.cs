@@ -38,6 +38,24 @@ namespace Jularr.E2E.Tests
         }
 
         [TestMethod]
+        [DataRow(375)]
+        [DataRow(768)]
+        [DataRow(1440)]
+        [Timeout(90_000)]
+        public async Task LoadingPage_ShowsItsStatusAtOnceAndThenTheView(int width)
+        {
+            await using var fixture = await Fixture.StartAsync(width, frameDelay: 2500);
+            await Assertions.Expect(fixture.Feedback).ToHaveTextAsync("The page is loading, this can take up to 30 seconds");
+            await Assertions.Expect(fixture.Input).ToBeDisabledAsync();
+            await Assertions.Expect(fixture.Reconnect).ToBeHiddenAsync();
+            await Evidence.SaveAsync(fixture.Page, "browser-loading-" + width);
+            await Assertions.Expect(fixture.Feedback).ToHaveTextAsync("Ready", new() { Timeout = 8_000 });
+            await Assertions.Expect(fixture.Input).ToBeEnabledAsync();
+            await Evidence.SaveAsync(fixture.Page, "browser-loaded-" + width);
+            CollectionAssert.AreEqual(Array.Empty<string>(), fixture.Problems.ToArray());
+        }
+
+        [TestMethod]
         [Timeout(90_000)]
         public async Task RepeatedFrameFailure_StopsAndOffersOneDirectReconnect()
         {
@@ -127,7 +145,7 @@ namespace Jularr.E2E.Tests
             public int Frames => Volatile.Read(ref _frames);
             public int Reopens => Volatile.Read(ref _reopens);
 
-            public static async Task<Fixture> StartAsync(int width, bool active = true, long? operationId = null)
+            public static async Task<Fixture> StartAsync(int width, bool active = true, long? operationId = null, int frameDelay = 0)
             {
                 var playwright = await Playwright.CreateAsync();
                 var browser = await playwright.Chromium.LaunchAsync();
@@ -151,6 +169,7 @@ namespace Jularr.E2E.Tests
                     else if (uri.AbsolutePath.EndsWith("/frame", StringComparison.Ordinal))
                     {
                         Interlocked.Increment(ref fixture._frames);
+                        if (frameDelay > 0) await Task.Delay(frameDelay);
                         await route.FulfillAsync(new() { Status = fixture.FrameStatus, ContentType = "image/svg+xml",
                             Body = "<svg xmlns='http://www.w3.org/2000/svg' width='800' height='600'><rect width='800' height='600' fill='#eee'/><text x='40' y='80'>Isolated source page</text></svg>" });
                     }
@@ -181,7 +200,7 @@ namespace Jularr.E2E.Tests
                 <div class="remote-browser" data-remote-browser="/api/v1/admin/browser/assistance/fixture"
                      data-active="{{active.ToString().ToLowerInvariant()}}" data-width="800" data-height="600"
                      data-ready="Ready" data-retrying="Reconnecting" data-failed="Disconnected" data-denied="Access ended">
-                  <p data-browser-feedback>Disconnected</p>
+                  <p data-browser-feedback>{{(active ? "The page is loading, this can take up to 30 seconds" : "Disconnected")}}</p>
                   <div data-browser-reconnect><form method="post" action="{{System.Net.WebUtility.HtmlEncode(ReopenAddress)}}"><button>Reconnect</button></form></div>
                   <img class="remote-browser__image" data-browser-image alt="Source browser" width="800" height="600">
                   <label for="input">Source input</label><textarea id="input" data-browser-text data-browser-input></textarea>

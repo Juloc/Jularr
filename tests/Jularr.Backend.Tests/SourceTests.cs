@@ -552,6 +552,81 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task AnnasArchive_WaitingDownloadsContinueByThemselvesOnceTheBrowserReadsTheSourceAgain()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            var sources = new FakeSources { SlowGate = true };
+            using var browserPages = new HttpClient(sources, disposeHandler: false);
+            var browser = new BrowserAssistanceTests.Interaction
+            {
+                ReadHtml = async (address, ct) =>
+                {
+                    using var response = await browserPages.GetAsync(address, ct);
+                    return response.IsSuccessStatusCode ? await response.Content.ReadAsStringAsync(ct) : null;
+                }
+            };
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, sources, browser);
+            using var created = await host.SendAsync(HttpMethod.Post, Connections, new SaveAcquisitionConnectionDataV1("Anna", AcquisitionConnectionType.AnnasArchive,
+                "https://annas.example.test", null, true, 60, [], null, null, null));
+            Assert.AreEqual(HttpStatusCode.OK, created.StatusCode, await created.Content.ReadAsStringAsync());
+            await GrabAnnaAsync(host, await CreateWantedBookAsync(host));
+            await RunAsync<MonitorDownloadsV1>(host);
+            Assert.AreEqual("source_manual_link", await AttentionAsync());
+
+            // A browser that has not read the source since is not through the check: the download keeps waiting and the source is not asked.
+            var asked = Asked();
+            await RunAsync<MonitorDownloadsV1>(host);
+            Assert.AreEqual("source_manual_link", await AttentionAsync());
+            Assert.AreEqual(asked, Asked());
+
+            // The browser reads the source again and the check is gone: nobody has to open anything.
+            browser.LastOutcome = "read";
+            sources.SlowGate = false;
+            await RunAsync<MonitorDownloadsV1>(host);
+            await WaitForSlowPageAsync(host);
+            Assert.IsTrue(File.Exists(Path.Combine(storage.Path, "1", "Books", "Jane Austen", "Pride and Prejudice (1813)", "Pride and Prejudice.epub")));
+            Assert.AreEqual(DBNull.Value, await AttentionAsync());
+
+            Task<object?> AttentionAsync() => host.ScalarAsync("SELECT \"AttentionKey\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2");
+            int Asked() => sources.Requests.Count(request => request.StartsWith("annas.example.test/slow_download/", StringComparison.Ordinal));
+        }
+
+        [TestMethod]
+        public async Task AnnasArchive_AStillClosedSourceIsAskedAgainOnlyOncePerInterval()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            var sources = new FakeSources { SlowGate = true };
+            using var browserPages = new HttpClient(sources, disposeHandler: false);
+            var browser = new BrowserAssistanceTests.Interaction
+            {
+                LastOutcome = "read",
+                ReadHtml = async (address, ct) =>
+                {
+                    using var response = await browserPages.GetAsync(address, ct);
+                    return response.IsSuccessStatusCode ? await response.Content.ReadAsStringAsync(ct) : null;
+                }
+            };
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, sources, browser);
+            using var created = await host.SendAsync(HttpMethod.Post, Connections, new SaveAcquisitionConnectionDataV1("Anna", AcquisitionConnectionType.AnnasArchive,
+                "https://annas.example.test", null, true, 60, [], null, null, null));
+            Assert.AreEqual(HttpStatusCode.OK, created.StatusCode, await created.Content.ReadAsStringAsync());
+            await GrabAnnaAsync(host, await CreateWantedBookAsync(host));
+            await RunAsync<MonitorDownloadsV1>(host);
+            Assert.AreEqual("source_manual_link", await host.ScalarAsync("SELECT \"AttentionKey\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"));
+
+            // The next cycle releases it once and the source asks the check again; later cycles leave the download waiting.
+            await RunAsync<MonitorDownloadsV1>(host);
+            var asked = sources.Requests.Count(request => request.StartsWith("annas.example.test/slow_download/", StringComparison.Ordinal));
+            Assert.IsTrue(asked > 0);
+            await RunAsync<MonitorDownloadsV1>(host);
+            await RunAsync<MonitorDownloadsV1>(host);
+            Assert.AreEqual("source_manual_link", await host.ScalarAsync("SELECT \"AttentionKey\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"));
+            Assert.AreEqual(asked, sources.Requests.Count(request => request.StartsWith("annas.example.test/slow_download/", StringComparison.Ordinal)));
+        }
+
+        [TestMethod]
         public async Task AnnasArchive_ChecksWaitForAPermittedPersonAndThenContinue()
         {
             using var storage = new TemporaryDirectory();

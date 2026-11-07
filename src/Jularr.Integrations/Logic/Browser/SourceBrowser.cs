@@ -313,6 +313,7 @@ namespace Jularr.Integrations.Logic.Browser
             {
                 if (HasManualControl) return null;
                 await StartBrowserAsync(ct);
+                _lastAttemptAt = DateTime.UtcNow;
                 var current = await _client!.EvaluateAsync("location.href", ct);
                 var preferred = Uri.TryCreate(current, UriKind.Absolute, out var currentAddress)
                     ? safe.FindIndex(address => SameOrigin(currentAddress, address)) : -1;
@@ -328,12 +329,15 @@ namespace Jularr.Integrations.Logic.Browser
 
                 if (opened.Count == 0)
                 {
+                    _lastOutcome = "no answer";
                     return null;
                 }
 
                 var deadline = DateTime.UtcNow.AddSeconds(_options.PageTimeoutSeconds);
                 while (DateTime.UtcNow < deadline)
                 {
+                    // A person took the browser over; the search is left for later.
+                    if (HasManualControl) return null;
                     foreach (var page in opened)
                     {
                         var state = await ReadStateAsync(page.Session, ct);
@@ -347,6 +351,9 @@ namespace Jularr.Integrations.Logic.Browser
                             continue;
                         }
 
+                        _lastUrl = DiagnosticOrigin(page.Address);
+                        _lastOutcome = "read";
+                        _lastError = null;
                         Note("read", $"{DiagnosticOrigin(page.Address)} ({state.Html.Length} bytes)");
                         return new BrowserPage(page.Address, state.Html);
                     }
@@ -354,10 +361,14 @@ namespace Jularr.Integrations.Logic.Browser
                     await Task.Delay(PollMilliseconds, ct);
                 }
 
+                // The pages stayed on the source's check; the browser is not through it.
+                _lastOutcome = _refused ? "refused" : "no answer";
                 return null;
             }
             catch (Exception exception) when (exception is SourceBrowserException or JsonException)
             {
+                _lastOutcome = "error";
+                _lastError = exception.Message;
                 Note("error", exception.Message);
                 return null;
             }
@@ -814,6 +825,7 @@ namespace Jularr.Integrations.Logic.Browser
             var deadline = DateTime.UtcNow.AddSeconds(_options.PageTimeoutSeconds);
             while (DateTime.UtcNow < deadline)
             {
+                if (HasManualControl) return null;
                 var page = await ReadStateAsync(ct);
                 if (page is null)
                 {

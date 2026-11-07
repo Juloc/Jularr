@@ -585,6 +585,31 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Browser_ManualViewOpensAtOnceWhileTheSourcePageStillLoads()
+        {
+            var executable = Environment.GetEnvironmentVariable("JULARR_BROWSER");
+            if (string.IsNullOrWhiteSpace(executable)) Assert.Inconclusive("JULARR_BROWSER names no browser.");
+            using var folder = new TemporaryDirectory();
+            using var server = new CheckPage();
+            using var browser = new SourceBrowser(new BrowserOptions { Path = executable, ProfilePath = folder.Path, AllowPrivateAddressesForTests = true, PageTimeoutSeconds = 10 });
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+            var ct = timeout.Token;
+
+            // Start the browser first, so only the page load is measured.
+            await browser.StartAsync(ct);
+            var started = DateTime.UtcNow;
+            var view = await browser.BeginManualAsync(new Uri(server.Address, "/slow"), DateTimeOffset.UtcNow.AddMinutes(2), ct);
+            Assert.IsTrue(DateTime.UtcNow - started < TimeSpan.FromSeconds(5), "The view opens without waiting for the page.");
+            Assert.IsTrue(view.Width > 0 && view.Height > 0);
+            Assert.IsTrue(browser.HasManualControl);
+            var frame = await browser.CaptureManualAsync(DateTimeOffset.UtcNow.AddMinutes(2), ct);
+            Assert.IsTrue(frame.Length > 0);
+            Assert.IsTrue(DateTime.UtcNow - started < TimeSpan.FromSeconds(5), "The picture of the loading page does not wait for it either.");
+            await browser.EndManualAsync(ct);
+            await browser.StopAsync();
+        }
+
+        [TestMethod]
         public async Task Browser_ManualAndAutomaticReadsKeepPrimaryPageSessionAndResumeItsPage()
         {
             var executable = Environment.GetEnvironmentVariable("JULARR_BROWSER");
@@ -706,6 +731,15 @@ namespace Jularr.Backend.Tests
                     }
 
                     LastCookie = context.Request.Headers["Cookie"];
+                    if (context.Request.Url!.AbsolutePath == "/slow")
+                    {
+                        // A source that takes long to answer: the view must not wait for it.
+                        await Task.Delay(TimeSpan.FromSeconds(8));
+                        context.Response.StatusCode = 204;
+                        context.Response.Close();
+                        continue;
+                    }
+
                     if (context.Request.Url!.AbsolutePath == "/manual") ManualPageOpened.TrySetResult(context.Request.Url);
                     if (context.Request.Url!.AbsolutePath is "/manual" or "/accepted" or "/session" or "/needs-person")
                     {

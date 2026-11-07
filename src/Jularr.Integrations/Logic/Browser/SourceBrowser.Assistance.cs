@@ -18,20 +18,18 @@ namespace Jularr.Integrations.Logic.Browser
                 throw new SourceBrowserException("Manual assistance requires a local browser and a public HTTPS source.");
             }
 
-            await _gate.WaitAsync(ct);
+            // A person comes first: automatic work that holds the browser sees this and lets go, so the view opens without waiting for it.
+            Interlocked.Exchange(ref _manualUntil, expiresAt.UtcTicks);
+            var locked = false;
             try
             {
+                await _gate.WaitAsync(ct);
+                locked = true;
                 await StartBrowserAsync(ct);
                 _manualMouseDown = false;
-                Interlocked.Exchange(ref _manualUntil, expiresAt.UtcTicks);
                 await _client!.SendAsync("Browser.setDownloadBehavior", new { behavior = "deny" }, ct);
                 await _client.SendAsync("Page.bringToFront", null, ct);
                 var current = await _client!.EvaluateAsync("location.href", ct);
-                if (!Uri.TryCreate(current, UriKind.Absolute, out var currentAddress) || !CanResumeManualPage(address, currentAddress, opensPage)
-                    || !await IsSafeSourceAsync(currentAddress, ct))
-                {
-                    await _client.SendAsync("Page.navigate", new { url = address.AbsoluteUri }, ct);
-                }
                 using var metrics = JsonDocument.Parse(await _client.SendAsync("Page.getLayoutMetrics", null, ct));
                 var viewport = metrics.RootElement.GetProperty("result").GetProperty("cssVisualViewport");
                 _viewport = new BrowserViewport((int)viewport.GetProperty("clientWidth").GetDouble(), (int)viewport.GetProperty("clientHeight").GetDouble());
@@ -40,6 +38,13 @@ namespace Jularr.Integrations.Logic.Browser
                     throw new SourceBrowserException("The browser viewport is outside the supported size.");
                 }
 
+                // The size is read before the page is asked for: a page that is still loading answers nothing else.
+                if (!Uri.TryCreate(current, UriKind.Absolute, out var currentAddress) || !CanResumeManualPage(address, currentAddress, opensPage)
+                    || !await IsSafeSourceAsync(currentAddress, ct))
+                {
+                    // The page loads in the background: the view opens at once and shows the page as it arrives.
+                    _ = NavigateInBackgroundAsync(_client, address);
+                }
                 Note("manual", "a permitted administrator controls the source browser");
                 return _viewport;
             }
@@ -50,7 +55,19 @@ namespace Jularr.Integrations.Logic.Browser
             }
             finally
             {
-                _gate.Release();
+                if (locked) _gate.Release();
+            }
+        }
+
+        private async Task NavigateInBackgroundAsync(DevToolsClient client, Uri address)
+        {
+            try
+            {
+                await client.SendAsync("Page.navigate", new { url = address.AbsoluteUri }, CancellationToken.None);
+            }
+            catch (Exception exception) when (exception is SourceBrowserException or JsonException or ObjectDisposedException or IOException)
+            {
+                Note("error", exception.Message);
             }
         }
 

@@ -286,6 +286,7 @@ namespace Jularr.Backend.Service.Core
             services.AddSingleton<ISourceBrowser>(provider => provider.GetRequiredService<SourceBrowser>());
             services.AddSingleton<IBrowserInteraction>(provider => provider.GetRequiredService<SourceBrowser>());
             services.TryAddSingleton<BrowserAssistance>();
+            services.TryAddSingleton<SourceGateRelease>();
             services.TryAddSingleton<VpnTunnels>();
             services.TryAddTransient<ReadingContent>();
             services.TryAddTransient<ReadingDerivation>();

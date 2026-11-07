@@ -576,10 +576,13 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
         private readonly DownloadImport _import;
         private readonly StorageAccess _storage;
         private readonly RunDirectDownloadJobV1 _runner;
+        private readonly SourceGateRelease _gates;
 
-        internal MonitorDownloadsV1(SabnzbdClient sabnzbd, QbittorrentClient qbittorrent, DownloadImport import, IDataProtectionProvider protection, TimeProvider time, StorageAccess storage, RunDirectDownloadJobV1 runner)
+        internal MonitorDownloadsV1(SabnzbdClient sabnzbd, QbittorrentClient qbittorrent, DownloadImport import, IDataProtectionProvider protection, TimeProvider time, StorageAccess storage, RunDirectDownloadJobV1 runner,
+            SourceGateRelease gates)
         {
             _runner = runner;
+            _gates = gates;
             _storage = storage;
             _sabnzbd = sabnzbd;
             _qbittorrent = qbittorrent;
@@ -595,6 +598,12 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
 
         protected override async Task<IServiceOutput> OnExecute()
         {
+            // The source browser is through the source's check again: what waited for a person asks once more.
+            if (_gates.IsDue() && await Context.ExecuteBatchAsync((ctx, ct) => ctx.ResumeSourceDownloadsAsync(new SourceResumeData(null), ct), CancellationToken) > 0)
+            {
+                _gates.Released();
+            }
+
             var downloads = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadActiveDownloadsAsync(ct), CancellationToken);
             foreach (var group in downloads.GroupBy(download => download.AcquisitionConnectionId))
             {

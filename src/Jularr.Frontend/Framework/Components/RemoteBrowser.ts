@@ -24,7 +24,8 @@ export function initializeRemoteBrowser(): void {
             controls.forEach(control => { control.disabled = !ready; });
             image.tabIndex = ready ? 0 : -1;
             image.classList.toggle('remote-browser__image--disconnected', !ready);
-            if (reconnect) reconnect.hidden = ready;
+            // Loading or reconnecting by itself is not a failure: the button is only for a view that has stopped.
+            if (reconnect) reconnect.hidden = ready || !stopped;
         };
         const fail = (denied = false) => {
             if (stopped) return;
