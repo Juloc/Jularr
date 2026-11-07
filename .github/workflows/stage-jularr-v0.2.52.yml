@@ -1,0 +1,54 @@
+name: Stage Jularr v0.2.52 (one time)
+
+# A one-shot bridge for the tagged release. The GitHub App connector cannot create
+# git tag refs directly; a GITHUB_TOKEN-created tag must dispatch Release explicitly.
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/stage-jularr-v0.2.52.yml'
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  stage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Verify exact main commit and CI, tag v0.2.52, dispatch Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TARGET_SHA: 2a71c7cc0f06cdb64a45c6641b4e578748a5ada9
+          TAG: v0.2.52
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Only an already-merged commit may be tagged.
+          main_sha="$(gh api "repos/${GH_REPO}/git/ref/heads/main" --jq .object.sha)"
+          status="$(gh api "repos/${GH_REPO}/compare/${TARGET_SHA}...${main_sha}" --jq .status)"
+          if [[ "${status}" != "identical" && "${status}" != "ahead" ]]; then
+            echo "::error::Target commit is not an ancestor of main."
+            exit 1
+          fi
+          for workflow in "Frontend" "Backend Full"; do
+            state="$(gh run list --commit "${TARGET_SHA}" --workflow "${workflow}" --limit 50 \
+              --json status,conclusion,createdAt \
+              --jq 'map(select(.status == "completed")) | sort_by(.createdAt) | last | .conclusion // "missing"')"
+            if [[ "${state}" != "success" ]]; then
+              echo "::error::${workflow} for ${TARGET_SHA} is ${state}, not success."
+              exit 1
+            fi
+            echo "${workflow}: success."
+          done
+          if gh api "repos/${GH_REPO}/git/ref/tags/${TAG}" >/dev/null 2>&1; then
+            echo "::error::Tag ${TAG} already exists; not changing it."
+            exit 1
+          fi
+          gh api "repos/${GH_REPO}/git/refs" -X POST \
+            -f ref="refs/tags/${TAG}" -f sha="${TARGET_SHA}"
+          # GITHUB_TOKEN tag pushes do not emit a tag-push workflow event.
+          gh workflow run release.yml --ref "${TAG}" -f dry_run=false
+          echo "Release dispatched for ${TAG} at ${TARGET_SHA}."
