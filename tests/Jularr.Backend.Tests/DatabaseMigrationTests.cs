@@ -382,6 +382,45 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task ManualImportReleaseNames_UpgradeGivesAssignedFilmsAndEpisodesTheirReleaseName_AndLeavesEveryOtherFileAlone()
+        {
+            using var folder = new LibraryTests.TemporaryDirectory();
+            var cs = TestPostgres.ResolveConnectionString(nameof(ManualImportReleaseNames_UpgradeGivesAssignedFilmsAndEpisodesTheirReleaseName_AndLeavesEveryOtherFileAlone));
+            var options = Backup(folder.Path, out var backups);
+            var tools = Tools(cs, FakeDump(folder.Path, true), null);
+            var version = DatabaseBaseline.Migrations.Single(migration => migration.Name == "0052_manual_import_release_names").Version;
+            await new DatabaseBaseline(cs, migrations: DatabaseBaseline.Migrations.Where(migration => migration.Version < version).ToArray()).StartAsync(CancellationToken.None);
+            await ExecuteAsync(cs,
+                """
+                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle") VALUES (501, 1, 'Film'), (502, 3, 'Book');
+                INSERT INTO "WantedItems" ("Id", "WorkId") VALUES (601, 501), (602, 502);
+                INSERT INTO "StorageMounts" ("Id", "Name", "StorageProtocolTypeId", "SharePath", "IsReadOnly") OVERRIDING SYSTEM VALUE VALUES (1, 'Movies', 3, '/movies', FALSE);
+                INSERT INTO "LibraryRoots" ("Id", "Name", "MediaTypeId", "StorageMountId", "RelativePath") VALUES (1, 'Movies', 1, 1, 'movies');
+                INSERT INTO "WorkEditions" ("Id", "WorkId") VALUES (501, 501), (502, 502);
+                INSERT INTO "WorkVersions" ("Id", "WorkId", "WorkEditionId") VALUES (501, 501, 501), (503, 501, 501), (502, 502, 502);
+                INSERT INTO "MediaAssets" ("Id", "WorkId", "WorkVersionId", "MediaAssetTypeId") VALUES (1, 501, 501, 1), (2, 501, 503, 1), (3, 502, 502, 3);
+                INSERT INTO "StoredFiles" ("Id", "LibraryRootId", "RelativePath", "SizeBytes", "ModifiedAt", "MediaAssetId", "LastSeenAt", "ReleaseName", "ReleaseGroup") VALUES
+                    (1, 1, 'Film (2020) WEBDL-1080p ZeroTwo.mkv', 1, now(), 1, now(), 'Film (2020) WEBDL-1080p ZeroTwo', NULL),
+                    (2, 1, 'Film (2020) WEBRip-1080p WOTT.mkv', 1, now(), 2, now(), 'Film.2020.German.DL.1080p.WEBRip.h265-WOTT', 'WOTT'),
+                    (3, 1, 'book.epub', 1, now(), 3, now(), 'Book (epub)', NULL);
+                INSERT INTO "AcquisitionReleases" ("Id", "WantedItemId", "ReleaseIdentity", "Title", "AcquisitionReleaseStatusTypeId") VALUES
+                    (1, 601, 'zero', 'Film.2020.German.DL.EAC3.1080p.DV.HDR.DSNP.WEB.H265-ZeroTwo', 1),
+                    (2, 602, 'book', 'Book.epub.release-GRP', 1);
+                INSERT INTO "ActivityEvents" ("ActivityEventTypeId", "WorkId", "AcquisitionReleaseId", "StoredFileId", "WorkTitle", "ReleaseTitle") VALUES
+                    (7, 501, 1, 1, 'Film', 'Film.2020.German.DL.EAC3.1080p.DV.HDR.DSNP.WEB.H265-ZeroTwo'),
+                    (7, 502, 2, 3, 'Book', 'Book.epub.release-GRP'),
+                    (3, 501, NULL, 2, 'Film', 'Film.2020.German.DL.1080p.WEBRip.h265-WOTT');
+                """);
+            await new DatabaseBaseline(cs, options, tools).StartAsync(CancellationToken.None);
+
+            // The assigned film takes its release's name and group; a file of an import by itself, and a book, keep what they had.
+            Assert.AreEqual("Film.2020.German.DL.EAC3.1080p.DV.HDR.DSNP.WEB.H265-ZeroTwo", await ScalarAsync(cs, """SELECT "ReleaseName" FROM "StoredFiles" WHERE "Id" = 1"""));
+            Assert.AreEqual("ZeroTwo", await ScalarAsync(cs, """SELECT "ReleaseGroup" FROM "StoredFiles" WHERE "Id" = 1"""));
+            Assert.AreEqual("Film.2020.German.DL.1080p.WEBRip.h265-WOTT", await ScalarAsync(cs, """SELECT "ReleaseName" FROM "StoredFiles" WHERE "Id" = 2"""));
+            Assert.AreEqual("Book (epub)", await ScalarAsync(cs, """SELECT "ReleaseName" FROM "StoredFiles" WHERE "Id" = 3"""));
+        }
+
+        [TestMethod]
         public async Task SharedQualityProfiles_UpgradeKeepsTheProfileOfEveryTarget_MergesAlikeProfilesFormatsAndGroups_AndNamesEveryRemuxAlike()
         {
             using var folder = new LibraryTests.TemporaryDirectory();

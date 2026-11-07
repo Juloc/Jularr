@@ -64,9 +64,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                 : [.. units.Select(unit => new TargetUnit(unit.WorkUnitId, null, unit.Number, unit.HasMedia, title: unit.Title))];
             IReadOnlyList<TargetUnit> chapters = [.. chapterUnits.Select(unit => new TargetUnit(unit.WorkUnitId, unit.ParentNumber, unit.Number, unit.HasMedia, title: unit.Title))];
 
-            var parsedFacts = ReleaseFacts.Of(download.Title, download.MediaTypeId == MediaType.Movie);
-            var facts = new ReleaseFact(TextLimit.Cut(download.Title, 500)!, parsedFacts?.ReleaseGroup, download.QualityKey ?? parsedFacts?.QualityKey,
-                parsedFacts?.Edition, parsedFacts?.Revision ?? 1);
+            var facts = ReleaseFacts.OfRelease(download.Title, download.MediaTypeId == MediaType.Movie, download.QualityKey);
 
             // A clear film or episode imports by itself, one of no use is excluded and searched again at once, a doubt waits for a person with its reason.
             // A download with nothing a person could assign (an empty folder, or only archives and release files) is of no use either.
@@ -336,9 +334,14 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                             : new ActivityEventData(ActivityEventType.Imported, operationId: request.OperationId, storedFileId: file.Id), token);
                     }
 
+                    // The release counts as imported once a file of it is in the library, also while a person still settles the rest of its download.
                     if (request.OperationId is { } finished && request.FinishesDownload)
                     {
                         await ctx.CompleteDownloadAsync(new DownloadOperationParameters(finished), token);
+                    }
+                    else if (request.OperationId is { } waiting)
+                    {
+                        await ctx.MarkDownloadReleaseImportedAsync(new DownloadOperationParameters(waiting), token);
                     }
 
                     // The scan analyses the new streams.

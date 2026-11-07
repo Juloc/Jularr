@@ -15,7 +15,8 @@ candidate in this order; a later step never repairs an earlier one:
    blocked release group.
 4. The profile: allowed qualities, sizes, release profile terms and the minimum custom format score.
 5. Marks for a person (`SelectionCandidate.Flag`, manual search only: a size outside the limits, a blocked release group), an
-   unrequested language, no upgrade of the present file, an ambiguous identity: Manual review.
+   unrequested language, a release the library already holds (its name on a present file of the unit, or an imported release of the target: "Already in the library", never an upgrade
+   of itself whatever its file's evidence says), no upgrade of the present file, an ambiguous identity: Manual review.
 6. Everything else is Eligible; Auto takes the best Eligible candidate at once (no wait times).
 
 The score of a row is the sum of its points: the profile's custom formats and its release group's rating plus the media type's own
@@ -168,7 +169,7 @@ UI locale) or the original title in the original language. One language counts (
 
 ## Tests
 
-`VideoLanguageUpgradeTests`, `AutoApprovalTests`, `SeriesTitleIdentityTests` (confusable series and anime titles, aliases, years, import), `BookLanguageSelectionTests` (multi-language result sets), `ReleaseSelectionTests`.
+`VideoLanguageUpgradeTests` (also `ReleaseTheLibraryHolds_*`), `AutoApprovalTests`, `SeriesTitleIdentityTests` (confusable series and anime titles, aliases, years, import), `BookLanguageSelectionTests` (multi-language result sets), `ReleaseSelectionTests`.
 `BookReleaseCorpusTests` reads the golden corpus
 [book-releases.tsv](../tests/Jularr.Backend.Tests/Fixtures/ReleaseNames/book-releases.tsv): the eleven Nyaa answers for
 "Mushoku Tensei: Jobless Reincarnation" plus Sonarr, Radarr, Readarr and Lidarr style names, each with the expected parse, size

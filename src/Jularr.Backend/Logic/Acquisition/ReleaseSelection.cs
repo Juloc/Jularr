@@ -142,6 +142,13 @@ namespace Jularr.Backend.Logic.Acquisition
                 return new CandidateEvaluation(candidate, SelectionDecision.ManualReview, score, reliability, reasons);
             }
 
+            // A release the library already holds is only taken by hand, as another version.
+            if (candidate.IsInstalledRelease)
+            {
+                reasons.Add(new SelectionReason(SelectionReasonKind.Quality, "AlreadyInLibrary", candidate.InstalledQuality));
+                return new CandidateEvaluation(candidate, SelectionDecision.ManualReview, score, reliability, reasons);
+            }
+
             // What is no upgrade of the present quality is only taken by hand, as another version.
             if (candidate.InstalledQuality is { } installed && !(candidate.InstalledNeedsReplacement && profile.UpgradeAllowed) && !UpgradePolicy.IsUpgrade(profile, installed, score.QualityKey, false,
                 candidate.InstalledFormatScore, score.FormatScore, candidate.InstalledLanguages, candidate.Languages))

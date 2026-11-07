@@ -5903,6 +5903,10 @@
    "No upgrade of the present quality",
    "Kein Upgrade der vorhandenen Qualität"
   ],
+  "acquisition.reason.AlreadyInLibrary": [
+   "Already in the library",
+   "Schon in der Bibliothek"
+  ],
   "acquisition.reason.SizeUnknown": [
    "Size unknown",
    "Größe unbekannt"

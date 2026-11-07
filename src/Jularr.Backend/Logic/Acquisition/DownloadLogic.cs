@@ -60,6 +60,15 @@ namespace Jularr.Backend.Logic.Acquisition
                             AND (release."AcquisitionReleaseStatusTypeId" = 4
                                 OR (release."AcquisitionReleaseStatusTypeId" = 3 AND {{ReleaseFaultSql}}))
                     ) AS "ReleaseIdentities",
+                    ARRAY(
+                        SELECT
+                            release."ReleaseIdentity"
+                        FROM
+                            "AcquisitionReleases" AS release
+                        WHERE
+                            release."WantedItemId" = wanted."Id"
+                            AND release."AcquisitionReleaseStatusTypeId" = 2
+                    ) AS "ImportedReleaseIdentities",
                     wanted."IsPaused",
                     EXISTS (
                         SELECT
@@ -1355,7 +1364,8 @@ namespace Jularr.Backend.Logic.Acquisition
                     release."WantedItemId",
                     operation."AcquisitionConnectionId",
                     operation."ExternalId",
-                    operation."AttentionProposal"::text AS "AttentionProposal"
+                    operation."AttentionProposal"::text AS "AttentionProposal",
+                    release."Title" AS "ReleaseTitle"
                 FROM
                     "Operations" AS operation
                     JOIN "AcquisitionReleases" AS release ON release."Id" = operation."AcquisitionReleaseId"
@@ -1780,6 +1790,30 @@ namespace Jularr.Backend.Logic.Acquisition
                 """;
             sql.Parameters.Add(data);
             return (await ctx.ReadSql.ReadOptionalAsync<DownloadFinishedData>(sql, ct))?.IsFinished ?? false;
+        }
+
+        // A file of the release is in the library while its download still waits for a person: the release is imported, the download stays.
+        public static async Task MarkDownloadReleaseImportedAsync(this LogicContext ctx, DownloadOperationParameters data, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                UPDATE
+                    "AcquisitionReleases" AS release
+                SET
+                    "AcquisitionReleaseStatusTypeId" = 2,
+                    "ReasonKey" = NULL,
+                    "UpdatedAt" = now()
+                FROM
+                    "Operations" AS operation
+                WHERE
+                    operation."Id" = @OperationId
+                    AND operation."OperationTypeId" = 2
+                    AND release."Id" = operation."AcquisitionReleaseId"
+                    AND release."AcquisitionReleaseStatusTypeId" = 1;
+                """;
+            sql.Parameters.Add(data);
+            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
         }
 
         public static async Task CompleteDownloadAsync(this LogicContext ctx, DownloadOperationParameters data, CancellationToken ct)

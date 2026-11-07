@@ -45,6 +45,32 @@ namespace Jularr.Backend.Tests
             Assert.IsTrue(AcquisitionSelectionLogic.NeedsUpgrade(AcquisitionSelectionLogic.ReadProfile(target), AcquisitionSelectionLogic.Installed(AcquisitionSelectionLogic.ReadProfile(target), target)!.Value));
         }
 
+        // The file's own evidence may be poor (a name without the release's words); the library still never takes the release it holds again.
+        [TestMethod]
+        public void ReleaseTheLibraryHolds_IsNeverTakenAgain_ByItsNameOnTheFileOrByAnImportOfIt()
+        {
+            // The file is named like the original; the German release would be a language upgrade of it.
+            var poor = File("Example Movie (2020) WEBDL-1080p.mkv");
+            Assert.AreEqual(German, Select(Target(poor, "de||1"), German).Winner!.Candidate.Parsed!.RawTitle);
+
+            // An import of that release is no upgrade, whatever the evidence says; a person can still take it.
+            var identity = Offer(German).Identity;
+            var target = new WantedTargetData(1, 1, MediaType.Movie, null, "Example Movie", 2020, [], 1, "Movies", Definition, [], false, true, false, 0, [], [], null, null, null, poor,
+                originalLanguage: "ja", languageChains: ["de||1"], importedReleaseIdentities: [identity]);
+            var result = Select(target, German);
+            Assert.IsNull(result.Winner);
+            Assert.AreEqual((SelectionDecision.ManualReview, "AlreadyInLibrary"), (Row(result, German).Decision, Row(result, German).Reasons[^1].Code));
+
+            // Its own name on the file counts the same: the Bluray named on a file stored as WEB-DL would be a quality upgrade of it.
+            const string bluray = "Example.Movie.2020.1080p.BluRay.H264-AAA";
+            Assert.AreEqual(bluray, Select(Target(poor, "de||1"), bluray).Winner!.Candidate.Parsed!.RawTitle);
+            var named = Target(File(bluray), "de||1");
+            Assert.IsNull(Select(named, bluray).Winner);
+
+            // Another release of the film is still judged by the profile: a better quality replaces the file.
+            Assert.AreEqual("Example.Movie.2020.German.1080p.BluRay.H264-FFF", Select(target, German, "Example.Movie.2020.German.1080p.BluRay.H264-FFF").Winner!.Candidate.Parsed!.RawTitle);
+        }
+
         [TestMethod]
         public void FileInTheFirstLanguage_IsNeverReplacedByABetterQualityInAnotherLanguage()
         {

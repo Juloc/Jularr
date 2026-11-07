@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Runtime.CompilerServices;
 using Jularr.Backend.Data.Enums.Acquisition;
+using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Logic.Acquisition;
 using Jularr.Backend.Logic.Media;
@@ -186,6 +187,9 @@ namespace Jularr.Backend.Logic.Acquisition
 
             // Failed and blocked releases stay visible but are never taken.
             var blocked = target.ReleaseIdentities.ToHashSet(StringComparer.Ordinal);
+
+            // The release names of the files present for this unit; one of them, or an imported release of the target, is the present file itself.
+            var presentNames = installed is null ? [] : ReadInstalledEvidence(target).GetValueOrDefault(scope?.Unit.Id ?? 0)?.Select(file => file.Facts.ReleaseName).ToHashSet(StringComparer.Ordinal) ?? [];
             return ReleaseSelectionEngine.Select(profile, [.. offers.Select(offer => kind switch
             {
                 AcquisitionKind.Book or AcquisitionKind.LightNovel => Candidate(offer, BookReleaseJudge.Judge([target.CanonicalTitle, .. target.EditionTitles], target.Author, offer,
@@ -220,6 +224,7 @@ namespace Jularr.Backend.Logic.Acquisition
                     SubtitlesInChain = judgement.SubtitleLanguages.Any(language => language == "*" || profile.LanguageOrder.Contains(language, StringComparer.OrdinalIgnoreCase)),
                     InstalledQuality = installed?.Quality,
                     InstalledNeedsReplacement = installed?.NeedsReplacement ?? false,
+                    IsInstalledRelease = installed is not null && (presentNames.Contains(TextLimit.Cut(offer.Title, 500)!) || target.ImportedReleaseIdentities.Contains(offer.Identity, StringComparer.Ordinal)),
                     RuntimeMinutes = judgement.Parsed?.IsSeasonPack == true && scope is { Units.All.Count: > 0 } && profile.RuntimeMinutes is { } minutes
                         ? (decimal)minutes * scope.Units.All.Count : null,
                     InstalledFormatScore = installed?.FormatScore,

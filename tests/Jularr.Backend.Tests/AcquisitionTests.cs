@@ -326,6 +326,9 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(DBNull.Value, await host.ScalarAsync("SELECT \"AttentionKey\" FROM \"Operations\" WHERE \"Id\" = " + operationId));
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"MediaAssets\""));
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"ActivityEvents\" WHERE \"ActivityEventTypeId\" = 7"));
+            // The file keeps the name of the release the download was grabbed for, not the name of the file inside it, and the release counts as imported.
+            Assert.AreEqual(await host.ScalarAsync("SELECT \"Title\" FROM \"AcquisitionReleases\""), await host.ScalarAsync("SELECT \"ReleaseName\" FROM \"StoredFiles\" WHERE \"MediaAssetId\" IS NOT NULL"));
+            Assert.AreEqual((short)2, await host.ScalarAsync("SELECT \"AcquisitionReleaseStatusTypeId\" FROM \"AcquisitionReleases\""));
             // A terminal import schedules durable cleanup for the next monitoring cycle.
             await RunAsync<MonitorDownloadsV1>(host);
             CollectionAssert.AreEqual(new[] { "history:delete:SABnzbd_nzo_1:0" }, usenet.Commands);
@@ -432,6 +435,8 @@ namespace Jularr.Backend.Tests
             Assert.IsFalse(one.FinishedDownload);
             Assert.AreEqual((short)2, await host.ScalarAsync("SELECT \"OperationStatusTypeId\" FROM \"Operations\" WHERE \"Id\" = " + operationId));
             Assert.AreEqual(0, usenet.Commands.Count);
+            // A file of the release is in the library, so the release is imported although its download still waits.
+            Assert.AreEqual((short)2, await host.ScalarAsync("SELECT \"AcquisitionReleaseStatusTypeId\" FROM \"AcquisitionReleases\""));
             // The import moved it: the download's folder lists only the files still to decide.
             using var read = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/" + operationId + "/manual-import/files");
             var files = (await read.Content.ReadFromJsonAsync<ManualImportDownloadV1>())!.Files;
@@ -529,6 +534,8 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(true, await host.ScalarAsync($"SELECT \"DismissedAt\" IS NOT NULL FROM \"Operations\" WHERE \"Id\" = {operation}"));
             Assert.AreEqual((short)4, await host.ScalarAsync("SELECT \"AcquisitionReleaseStatusTypeId\" FROM \"AcquisitionReleases\""));
             Assert.AreEqual(true, await host.ScalarAsync("SELECT \"NextSearchAt\" <= now() FROM \"WantedItems\" WHERE \"Id\" = 600"));
+            // The history names the removal.
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"ActivityEvents\" WHERE \"ActivityEventTypeId\" = 8 AND \"ReasonKey\" = 'download_removed' AND \"ReleaseTitle\" IS NOT NULL"));
 
             // Nothing is left to remove twice.
             using var again = await host.SendAsync(HttpMethod.Post, $"/api/v1/admin/activity/{operation}/remove", new RemoveActivityDownloadDataV1(false));
@@ -548,6 +555,7 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.OK, removed.StatusCode, await removed.Content.ReadAsStringAsync());
             Assert.AreEqual((short)5, await host.ScalarAsync("SELECT \"AcquisitionReleaseStatusTypeId\" FROM \"AcquisitionReleases\""));
             Assert.AreEqual(true, await host.ScalarAsync("SELECT \"NextSearchAt\" > now() + interval '20 minutes' FROM \"WantedItems\" WHERE \"Id\" = 600"));
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"ActivityEvents\" WHERE \"ActivityEventTypeId\" = 2 AND \"ReasonKey\" = 'download_removed' AND \"ReleaseTitle\" IS NOT NULL"));
         }
 
         [TestMethod]
@@ -2541,11 +2549,11 @@ namespace Jularr.Backend.Tests
             using var wantedRead = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/wanted/600");
             Assert.IsTrue((await wantedRead.Content.ReadFromJsonAsync<WantedDetailsV1>())!.HasMedia);
 
-            // Manual search can target one episode.
+            // Manual search can target one episode; the release it came from is already in the library.
             using var manual = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/wanted/600/search", new SearchWantedDataV1(2, 1));
             var candidates = (await manual.Content.ReadFromJsonAsync<BaseDataList<WantedReleaseCandidateV1>>())!.ToArray();
             var installedEpisode = candidates.Single(candidate => candidate.Title == "Example.Show.S02E01.1080p.WEB-DL.H264-GRP");
-            Assert.AreEqual("NotAnUpgrade", installedEpisode.ReasonCode);
+            Assert.AreEqual("AlreadyInLibrary", installedEpisode.ReasonCode);
             Assert.AreEqual(ReleaseDecisionType.ManualReview, installedEpisode.ReleaseDecisionTypeId);
             Assert.AreEqual("WrongSeason", candidates.Single(candidate => candidate.Title == "Example.Show.S01E01.1080p.WEB-DL.H264-GRP").ReasonCode);
         }
