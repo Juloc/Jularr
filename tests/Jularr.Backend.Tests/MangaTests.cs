@@ -126,12 +126,12 @@ namespace Jularr.Backend.Tests
             Assert.IsTrue(File.Exists(Path.Combine(library, "Example Manga v03 {anilist-101}.cbr")));
             Assert.AreEqual((short)6, await host.ScalarAsync("SELECT \"AcquisitionRequestStatusTypeId\" FROM \"AcquisitionRequests\""));
 
-            // A present volume of equal quality is a manual choice; other series and chapter releases do not fill it.
+            // The release a present volume came from is already in the library; other series and chapter releases do not fill it.
             using var manual = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/wanted/800/search", new SearchWantedDataV1(null, 3));
             Assert.AreEqual(HttpStatusCode.OK, manual.StatusCode, await manual.Content.ReadAsStringAsync());
             var candidates = (await manual.Content.ReadFromJsonAsync<BaseDataList<WantedReleaseCandidateV1>>())!.ToArray();
             var installed = candidates.Single(candidate => candidate.Title.StartsWith("Example Manga v03", StringComparison.Ordinal));
-            Assert.AreEqual((ReleaseDecisionType.ManualReview, "NotAnUpgrade"), (installed.ReleaseDecisionTypeId, installed.ReasonCode));
+            Assert.AreEqual((ReleaseDecisionType.ManualReview, "AlreadyInLibrary"), (installed.ReleaseDecisionTypeId, installed.ReasonCode));
             Assert.AreEqual("WrongVolume", candidates.Single(candidate => candidate.Title.StartsWith("Example Manga v01-02", StringComparison.Ordinal)).ReasonCode);
             Assert.AreEqual("ChaptersOnly", candidates.Single(candidate => candidate.Title.StartsWith("Example Manga c010", StringComparison.Ordinal)).ReasonCode);
             Assert.AreEqual(ReleaseDecisionType.Rejected, candidates.Single(candidate => candidate.Title.StartsWith("Other Manga", StringComparison.Ordinal)).ReleaseDecisionTypeId);
