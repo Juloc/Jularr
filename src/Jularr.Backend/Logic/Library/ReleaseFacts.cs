@@ -33,6 +33,13 @@ namespace Jularr.Backend.Logic.Library
             return new ReleaseFact(TextLimit.Cut(release.RawTitle, 500)!, TextLimit.Cut(group, 64), TextLimit.Cut(quality, 64), TextLimit.Cut(edition, 64), revision);
         }
 
+        // A download's own release names every file it brings, as an import by itself and one by hand both keep it.
+        public static ReleaseFact OfRelease(string title, bool movie, string? qualityKey = null)
+        {
+            var parsed = Of(title, movie);
+            return new ReleaseFact(TextLimit.Cut(title, 500)!, parsed?.ReleaseGroup, qualityKey ?? parsed?.QualityKey, parsed?.Edition, parsed?.Revision ?? 1);
+        }
+
         // A scanned file's own name unless its folder says more, as scene folders often do.
         public static ReleaseFact? OfPath(string relativePath, bool movie = false)
         {

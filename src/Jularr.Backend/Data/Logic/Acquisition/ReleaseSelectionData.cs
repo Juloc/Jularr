@@ -120,6 +120,9 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         // The quality already present; only an upgrade of it can be taken.
         public string? InstalledQuality { get; init; }
         public bool InstalledNeedsReplacement { get; init; }
+
+        // The present file is this very release (its name on the file, or an import of it): never an upgrade of itself, whatever the file's own evidence says.
+        public bool IsInstalledRelease { get; init; }
         public decimal? RuntimeMinutes { get; init; }
 
         // The indexer entry the release came from, for release profiles bound to one.

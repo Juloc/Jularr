@@ -2390,6 +2390,7 @@ namespace Jularr.Frontend.Localization
             new("acquisition.reason.ContainsTarget", "Contains the target"),
             new("acquisition.reason.QualityNotAllowed", "Quality not allowed"),
             new("acquisition.reason.NotAnUpgrade", "No upgrade of the present quality"),
+            new("acquisition.reason.AlreadyInLibrary", "Already in the library"),
             new("acquisition.reason.LanguageNotAllowed", "Language not allowed by the request"),
             new("acquisition.reason.LanguageUnknown", "File language is unknown; review manually"),
             new("acquisition.reason.LanguageUnknownLastResort", "Language unknown · last resort"),

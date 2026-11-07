@@ -23,7 +23,7 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
     internal sealed record ManualImportTarget(WantedTargetData Target, NamingSet Patterns, IReadOnlyList<TargetUnit> Units, LibraryRootLocationData? Root, IReadOnlyList<TargetUnit> Chapters);
 
     // The waiting download an import by hand is for: the files already imported, whether the person finishes it now, and the proposal it keeps them in.
-    internal sealed record ManualImportDownload(long OperationId, IReadOnlyList<string> Handled, bool Finishes, string Proposal);
+    internal sealed record ManualImportDownload(long OperationId, IReadOnlyList<string> Handled, bool Finishes, string Proposal, string ReleaseTitle);
 
     internal static class ManualImport
     {
@@ -338,9 +338,11 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
                 var target = loaded.Target;
                 var isMovie = target.MediaTypeId == MediaType.Movie;
 
-                // A video is named by its release facts; a book's file by its own name, with its format as its quality.
+                // A video is named by its release facts, those of the download's own release when it is placed for the title it was grabbed for (as an import by itself keeps them), else by
+                // its own name; a book's file by its own name, with its format as its quality.
+                var ownRelease = download is not null && target.WantedItemId == wantedItemId && target.MediaTypeId != MediaType.Book;
                 ReleaseFact? FactsOf(string path) => target.MediaTypeId == MediaType.Book ? ReleaseFacts.WithQuality(null, path, qualities.GetValueOrDefault(path))
-                    : ReleaseFacts.WithQuality(ReleaseFacts.OfPath(path, isMovie), path, qualities.GetValueOrDefault(path));
+                    : ReleaseFacts.WithQuality(ownRelease ? ReleaseFacts.OfRelease(download!.ReleaseTitle, isMovie) : ReleaseFacts.OfPath(path, isMovie), path, qualities.GetValueOrDefault(path));
 
                 // Only the last group finishes the download, and only when nothing before it went wrong.
                 var finishesHere = finishes && index == plans.Count - 1 && firstFailure is null;
@@ -600,7 +602,7 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
             var files = await ManualImport.ListFolderAsync(source, reference.Directory, CancellationToken);
             var handled = ImportProposal.ReadHandled(download.AttentionProposal);
             var result = await ManualImport.RunAsync(Context, _import, download.WantedItemId, source, reference.Directory, files, isReadOnly, Data.Files, Auth.AccountId,
-                new ManualImportDownload(download.OperationId, handled, Data.FinishesDownload, download.AttentionProposal), CancellationToken);
+                new ManualImportDownload(download.OperationId, handled, Data.FinishesDownload, download.AttentionProposal, download.ReleaseTitle), CancellationToken);
 
             // A finished download's client lets go of the job once the move left nothing an import would take; files nobody imported keep it.
             if (result.FinishedDownload)

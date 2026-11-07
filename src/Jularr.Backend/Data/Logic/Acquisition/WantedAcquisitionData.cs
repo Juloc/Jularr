@@ -46,8 +46,10 @@ namespace Jularr.Backend.Data.Logic.Acquisition
             string[] requestedLocales, string? author, string? platformAbbreviation, int? platformIgdbId, string? installedFiles = null,
             string[]? editionTitles = null, string[]? isbns = null, string? originalLanguage = null, string? formats = null, string? qualitySizes = null,
             int? runtimeMinutes = null, string? releaseProfiles = null, string[]? monitoredEditionLanguages = null, string[]? unmonitoredEditionLanguages = null,
-            string? releaseGroupRatings = null, string[]? languageTitles = null, string[]? wantedLanguages = null, string[]? missingLanguages = null, string[]? languageChains = null, string? languageRules = null)
+            string? releaseGroupRatings = null, string[]? languageTitles = null, string[]? wantedLanguages = null, string[]? missingLanguages = null, string[]? languageChains = null, string? languageRules = null,
+            string[]? importedReleaseIdentities = null)
         {
+            ImportedReleaseIdentities = importedReleaseIdentities ?? [];
             LanguageRules = languageRules ?? "[]";
             LanguageChains = languageChains ?? [];
             WantedLanguages = wantedLanguages ?? [];
@@ -118,6 +120,10 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
         [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.ReleaseIdentities))]
         public string[] ReleaseIdentities { get; }
+
+        // The releases of this target an import (or a person's assignment) already put into the library.
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.ImportedReleaseIdentities))]
+        public string[] ImportedReleaseIdentities { get; }
 
         [DataField(typeof(WantedItemFields), nameof(WantedItemFields.IsPaused))]
         public bool IsPaused { get; }
@@ -834,8 +840,9 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
     internal sealed class ManualImportDownloadData : BaseData
     {
-        public ManualImportDownloadData(long operationId, long wantedItemId, long acquisitionConnectionId, string? externalId, string attentionProposal)
+        public ManualImportDownloadData(long operationId, long wantedItemId, long acquisitionConnectionId, string? externalId, string attentionProposal, string releaseTitle)
         {
+            ReleaseTitle = releaseTitle;
             OperationId = operationId;
             WantedItemId = wantedItemId;
             AcquisitionConnectionId = acquisitionConnectionId;
@@ -857,6 +864,9 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
         [DataField(typeof(OperationFields), nameof(OperationFields.AttentionProposal))]
         public string AttentionProposal { get; }
+
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.Title))]
+        public string ReleaseTitle { get; }
     }
 
     internal sealed class DownloadActionData : BaseData

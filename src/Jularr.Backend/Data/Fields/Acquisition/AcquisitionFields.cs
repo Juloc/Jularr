@@ -62,6 +62,7 @@ namespace Jularr.Backend.Data.Fields.Acquisition
         public static readonly StringField ReleaseIdentity = new(NpgsqlDbType.Varchar) { MaximumLength = 600, AllowBlank = false };
         public static readonly StringArrayField IndexerFlags = new() { MaximumLength = 32, ItemMaximumLength = 128 };
         public static readonly StringArrayField ReleaseIdentities = new() { ItemMaximumLength = 600 };
+        public static readonly StringArrayField ImportedReleaseIdentities = new() { ItemMaximumLength = 600 };
         public static readonly StringField TargetLanguage = new(NpgsqlDbType.Varchar) { MaximumLength = 2, Required = false };
         public static readonly StringField Title = new(NpgsqlDbType.Varchar) { MaximumLength = 1000, AllowBlank = false };
         public static readonly StringField SourceUrl = new(NpgsqlDbType.Varchar) { MaximumLength = 2048, Required = false, Format = StringFormat.HttpUrl };
