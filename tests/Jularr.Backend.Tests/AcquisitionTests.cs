@@ -2549,11 +2549,11 @@ namespace Jularr.Backend.Tests
             using var wantedRead = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/wanted/600");
             Assert.IsTrue((await wantedRead.Content.ReadFromJsonAsync<WantedDetailsV1>())!.HasMedia);
 
-            // Manual search can target one episode.
+            // Manual search can target one episode; the release it came from is already in the library.
             using var manual = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/wanted/600/search", new SearchWantedDataV1(2, 1));
             var candidates = (await manual.Content.ReadFromJsonAsync<BaseDataList<WantedReleaseCandidateV1>>())!.ToArray();
             var installedEpisode = candidates.Single(candidate => candidate.Title == "Example.Show.S02E01.1080p.WEB-DL.H264-GRP");
-            Assert.AreEqual("NotAnUpgrade", installedEpisode.ReasonCode);
+            Assert.AreEqual("AlreadyInLibrary", installedEpisode.ReasonCode);
             Assert.AreEqual(ReleaseDecisionType.ManualReview, installedEpisode.ReleaseDecisionTypeId);
             Assert.AreEqual("WrongSeason", candidates.Single(candidate => candidate.Title == "Example.Show.S01E01.1080p.WEB-DL.H264-GRP").ReasonCode);
         }
