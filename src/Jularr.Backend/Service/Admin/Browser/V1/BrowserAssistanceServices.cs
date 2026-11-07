@@ -127,7 +127,7 @@ namespace Jularr.Backend.Service.Admin.Browser.V1
         protected override async Task<IServiceOutput> OnExecute()
         {
             var sourceId = await _assistance.CloseAsync(Auth.SessionPublicId ?? throw new SecurityException(), Parameters.LeaseId, CancellationToken);
-            await Context.ExecuteBatchAsync((ctx, ct) => ctx.ResumeSourceDownloadsAsync(new AcquisitionConnectionParameters(sourceId), ct), CancellationToken);
+            await Context.ExecuteBatchAsync((ctx, ct) => ctx.ResumeSourceDownloadsAsync(new SourceResumeData(sourceId), ct), CancellationToken);
             return new UpdateResult(true);
         }
 

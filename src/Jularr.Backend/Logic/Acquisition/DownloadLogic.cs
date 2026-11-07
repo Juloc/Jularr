@@ -1667,8 +1667,9 @@ namespace Jularr.Backend.Logic.Acquisition
             }
         }
 
-        // Closing the source browser retries its unresolved links; ordinary download/import failures stay untouched.
-        public static Task<int> ResumeSourceDownloadsAsync(this LogicContext ctx, AcquisitionConnectionParameters data, CancellationToken ct)
+        // Closing the source browser, or a browser that reads the source again, retries its unresolved links; ordinary download/import failures stay untouched.
+        // Without a connection every enabled Anna's Archive source is meant.
+        public static Task<int> ResumeSourceDownloadsAsync(this LogicContext ctx, SourceResumeData data, CancellationToken ct)
         {
             var sql = new SqlStatement();
             sql.Statement =
@@ -1682,7 +1683,7 @@ namespace Jularr.Backend.Logic.Acquisition
                 FROM
                     "AcquisitionConnections" AS connection
                 WHERE
-                    operation."AcquisitionConnectionId" = @AcquisitionConnectionId
+                    (@AcquisitionConnectionId::bigint IS NULL OR operation."AcquisitionConnectionId" = @AcquisitionConnectionId)
                     AND connection."Id" = operation."AcquisitionConnectionId"
                     AND connection."AcquisitionConnectionTypeId" = 5
                     AND connection."IsEnabled"

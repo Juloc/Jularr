@@ -279,7 +279,8 @@ namespace Jularr.Backend.Tests
             public static readonly byte[] Picture = [0xff, 0xd8, 0xff, 0xd9];
             public bool HasManualControl { get; set; }
             public bool IsAvailable => true;
-            public SourceBrowserStatus Status => new("fixture-browser", null, "fixture-profile", true, null, null, null, null, null, 0);
+            public string? LastOutcome { get; set; }
+            public SourceBrowserStatus Status => new("fixture-browser", null, "fixture-profile", true, null, null, LastOutcome, null, null, 0);
             public IReadOnlyList<SourceBrowserEvent> Events => [];
             public int Starts { get; private set; }
             public int Ends { get; private set; }

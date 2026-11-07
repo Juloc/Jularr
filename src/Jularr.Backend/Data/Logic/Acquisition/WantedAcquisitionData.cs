@@ -407,6 +407,13 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         public int? MaxConnections { get; } = maxConnections;
     }
 
+    // The source whose waiting links are retried; none means every Anna's Archive source.
+    internal sealed class SourceResumeData(long? acquisitionConnectionId) : BaseData
+    {
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.Id), false)]
+        public long? AcquisitionConnectionId { get; } = acquisitionConnectionId;
+    }
+
     internal sealed class DownloadLookupData(long? operationId) : BaseData
     {
         [DataField(typeof(OperationFields), nameof(OperationFields.Id), false)]
