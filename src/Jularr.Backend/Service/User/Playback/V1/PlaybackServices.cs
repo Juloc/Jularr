@@ -357,6 +357,12 @@ namespace Jularr.Backend.Service.User.Playback.V1
                         "MediaTracks" AS track
                     WHERE
                         track."StoredFileId" = @Id
+                        -- Existing scans may still contain an embedded album cover as a video stream.
+                        AND (track."MediaTrackTypeId" <> 1 OR NOT EXISTS (
+                            SELECT 1 FROM "StoredFiles" AS audioFile
+                            JOIN "MediaAssets" AS audioAsset ON audioAsset."Id" = audioFile."MediaAssetId"
+                            WHERE audioFile."Id" = track."StoredFileId" AND audioAsset."MediaAssetTypeId" = 2
+                        ))
                     ORDER BY
                         track."StreamIndex";
                     """;
