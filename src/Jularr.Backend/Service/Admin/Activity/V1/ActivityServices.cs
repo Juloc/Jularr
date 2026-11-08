@@ -38,6 +38,8 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
                     coalesce(operation."AttentionKey", operation."ErrorKey", operation."HintKey") AS "ReasonKey",
                     operation."CreatedAt",
                     operation."FinishedAt",
+                    operation."DownloadCompletedAt",
+                    operation."DownloadWaitUntil",
                     connection."Name" AS "ConnectionName",
                     indexer."Name" AS "IndexerName",
                     operation."SizeBytes",
@@ -118,10 +120,11 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
                             @ActivityFilterTypeId = 1 AND state."ActivityFilterTypeId" <> 3
                             OR state."ActivityFilterTypeId" = @ActivityFilterTypeId
                         )
-                        -- The Downloads page: its queue is what is still open, its history every finished download.
+                        -- A downloader's history starts at post-processing, independently of its library import.
                         OR @DownloadsOnly AND operation."OperationTypeId" = 2 AND (
-                            @ActivityFilterTypeId = 3 AND operation."OperationStatusTypeId" IN (3, 4)
+                            @ActivityFilterTypeId = 3 AND (operation."OperationStatusTypeId" IN (3, 4) OR operation."DownloadStateTypeId" IN (4, 5, 6, 7, 8, 9))
                             OR @ActivityFilterTypeId <> 3 AND operation."OperationStatusTypeId" IN (1, 2)
+                                AND coalesce(operation."DownloadStateTypeId", 1) NOT IN (4, 5, 6, 7, 8, 9)
                         )
                     )
                     -- The Files view includes all supported external download clients.
@@ -145,13 +148,18 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
                         OR @DownloadClientKindId = 5 AND connection."AcquisitionConnectionTypeId" IN (3, 4, 5, 11)
                     )
                 ORDER BY
-                    -- The Downloads page's queue in the order its clients take it (priority, the order a person gave, the oldest first); a finished download by when it ended.
+                    -- Started downloads before untouched ones; within each group retain the client's priority and order.
                     -- Elsewhere what needs a person comes first, then what runs, each newest first.
+                    CASE WHEN @DownloadsOnly AND @ActivityFilterTypeId <> 3 THEN
+                        operation."DownloadStateTypeId" IN (2, 10) OR operation."ProgressPercent" > 0 OR operation."RemainingBytes" < operation."SizeBytes" END DESC NULLS LAST,
                     CASE WHEN @DownloadsOnly AND @ActivityFilterTypeId <> 3 THEN operation."DownloadPriorityTypeId" END DESC,
                     CASE WHEN @DownloadsOnly AND @ActivityFilterTypeId <> 3 THEN operation."QueuePosition" END NULLS LAST,
                     CASE WHEN @DownloadsOnly AND @ActivityFilterTypeId <> 3 THEN operation."Id" END,
                     NOT @DownloadsOnly AND @ActivityFilterTypeId <> 3 AND state."ActivityFilterTypeId" IN (4, 6) DESC,
-                    CASE WHEN @DownloadsOnly AND @ActivityFilterTypeId = 3 THEN operation."FinishedAt" END DESC NULLS LAST,
+                    CASE WHEN @DownloadsOnly AND @ActivityFilterTypeId = 3 THEN operation."OperationStatusTypeId" IN (1, 2)
+                        AND operation."DownloadStateTypeId" IN (4, 6, 7, 8, 9) AND operation."AttentionKey" IS NULL END DESC,
+                    CASE WHEN @DownloadsOnly AND @ActivityFilterTypeId = 3 THEN
+                        CASE WHEN operation."OperationStatusTypeId" = 4 THEN operation."FinishedAt" ELSE coalesce(operation."DownloadCompletedAt", operation."FinishedAt") END END DESC NULLS LAST,
                     operation."CreatedAt" DESC,
                     operation."Id" DESC
                 LIMIT @PageSize
@@ -294,15 +302,19 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
                     client."ClientConnectionId" AS "AcquisitionConnectionId",
                     min(client."Id") AS "SettingsConnectionId",
                     min(client."Name") AS "Name",
-                    count(operation."Id") FILTER (WHERE operation."OperationStatusTypeId" IN (1, 2))::integer AS "QueueCount",
+                    count(operation."Id") FILTER (WHERE operation."OperationStatusTypeId" IN (1, 2)
+                        AND coalesce(operation."DownloadStateTypeId", 1) NOT IN (4, 5, 6, 7, 8, 9))::integer AS "QueueCount",
                     count(operation."Id") FILTER (WHERE operation."OperationStatusTypeId" IN (1, 2) AND operation."AttentionKey" IS NULL
-                        AND operation."DownloadStateTypeId" IN (2, 4))::integer AS "ActiveCount",
+                        AND operation."DownloadStateTypeId" = 2)::integer AS "ActiveCount",
+                    count(operation."Id") FILTER (WHERE operation."OperationStatusTypeId" IN (1, 2) AND operation."AttentionKey" IS NULL
+                        AND operation."DownloadStateTypeId" IN (4, 6, 7, 8, 9))::integer AS "PostProcessingCount",
                     count(operation."Id") FILTER (WHERE operation."OperationStatusTypeId" IN (1, 2) AND operation."AttentionKey" IS NULL
                         AND operation."DownloadStateTypeId" = 3)::integer AS "PausedCount",
                     count(operation."Id") FILTER (WHERE operation."OperationStatusTypeId" = 4 OR operation."AttentionKey" IS NOT NULL)::integer AS "WarningCount",
                     coalesce(sum(operation."RemainingBytes" / operation."EtaSeconds") FILTER (WHERE operation."OperationStatusTypeId" IN (1, 2)
                         AND operation."DownloadStateTypeId" = 2 AND operation."EtaSeconds" > 0), 0)::bigint AS "BytesPerSecond",
-                    coalesce(sum(operation."RemainingBytes") FILTER (WHERE operation."OperationStatusTypeId" IN (1, 2)), 0)::bigint AS "RemainingBytes",
+                    coalesce(sum(operation."RemainingBytes") FILTER (WHERE operation."OperationStatusTypeId" IN (1, 2)
+                        AND coalesce(operation."DownloadStateTypeId", 1) NOT IN (4, 5, 6, 7, 8, 9)), 0)::bigint AS "RemainingBytes",
                     '{}'::bigint[] AS "SpeedSamples"
                 FROM
                     client

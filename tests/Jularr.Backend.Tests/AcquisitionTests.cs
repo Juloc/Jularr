@@ -738,7 +738,7 @@ namespace Jularr.Backend.Tests
             CollectionAssert.AreEqual(new long[] { 2 }, await IdsAsync("activityFilterTypeId=All&downloadPriorityTypeId=High"));
             using var moved = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/6/move", new MoveActivityDownloadDataV1(2));
             Assert.AreEqual(HttpStatusCode.OK, moved.StatusCode, await moved.Content.ReadAsStringAsync());
-            CollectionAssert.AreEqual(new long[] { 6, 2 }, await IdsAsync("activityFilterTypeId=All&downloadClientKindId=Usenet"));
+            CollectionAssert.AreEqual(new long[] { 2, 6 }, await IdsAsync("activityFilterTypeId=All&downloadClientKindId=Usenet"), "An already started download stays above untouched downloads; their engine order remains saved.");
             Assert.AreEqual((short)3, await host.ScalarAsync("SELECT \"DownloadPriorityTypeId\" FROM \"Operations\" WHERE \"Id\" = 6"));
             using var limited = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/clients/speed-limit?downloadClientKindId=Usenet", new SetDownloadSpeedLimitDataV1(5_000_000));
             Assert.AreEqual(HttpStatusCode.OK, limited.StatusCode, await limited.Content.ReadAsStringAsync());
@@ -785,6 +785,71 @@ namespace Jularr.Backend.Tests
             Assert.IsFalse(directHtml.Contains("Release 1", StringComparison.Ordinal), "Another client's download is not on the Direct tab.");
             Assert.IsFalse(directHtml.Contains("add=true", StringComparison.Ordinal), "Direct sources take no download by hand.");
             Assert.IsFalse(directHtml.Contains("maxBytesPerSecond", StringComparison.Ordinal), "Direct sources keep their own pace.");
+        }
+
+        [TestMethod]
+        public async Task DownloadsLifecycle_PostProcessingAndImportAttention_AreHistoryWithoutFinishingTheOperation()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, new FakeUsenet(), razor: true);
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "AcquisitionConnections" ("Id", "Name", "AcquisitionConnectionTypeId", "Host", "UseSsl") VALUES (901, 'Lifecycle news', 6, 'news.example.test', TRUE);
+                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle") VALUES (901, 1, 'Lifecycle Film');
+                INSERT INTO "WantedItems" ("Id", "WorkId") VALUES (901, 901);
+                INSERT INTO "AcquisitionReleases" ("Id", "WantedItemId", "ReleaseIdentity", "Title", "AcquisitionReleaseStatusTypeId")
+                VALUES (901, 901, 'lifecycle', 'Lifecycle.Film.2020.1080p', 1);
+                INSERT INTO "Operations" ("Id", "OperationTypeId", "OperationStatusTypeId", "AcquisitionReleaseId", "AcquisitionConnectionId", "DownloadStateTypeId")
+                VALUES (901, 2, 2, 901, 901, 1);
+                """);
+
+            async Task<long[]> IdsAsync(string query)
+            {
+                using var response = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/activity?" + query);
+                Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, await response.Content.ReadAsStringAsync());
+                return [.. (await response.Content.ReadFromJsonAsync<PageResult<ActivityItemV1>>())!.Items.Select(item => item.Id)];
+            }
+            async Task<DownloadClientV1> ClientAsync()
+            {
+                using var response = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/activity/clients");
+                return (await response.Content.ReadFromJsonAsync<BaseDataList<DownloadClientV1>>())!.Single(client => client.DownloadClientKindId == DownloadClientKind.Usenet);
+            }
+
+            CollectionAssert.Contains(await IdsAsync("downloadsOnly=true"), 901L);
+            await host.Fixture.RunSqlAsync("""UPDATE "Operations" SET "DownloadStateTypeId" = 2, "SizeBytes" = 1000, "RemainingBytes" = 600, "EtaSeconds" = 6 WHERE "Id" = 901""");
+            var client = await ClientAsync();
+            Assert.AreEqual((1, 1, 0, 100L), (client.QueueCount, client.ActiveCount, client.PostProcessingCount, client.BytesPerSecond));
+            foreach (var stage in new[] { 6, 7, 8, 9, 4 })
+            {
+                await host.Fixture.RunSqlAsync($"""UPDATE "Operations" SET "DownloadStateTypeId" = {stage}, "RemainingBytes" = 0, "EtaSeconds" = NULL WHERE "Id" = 901""");
+                CollectionAssert.DoesNotContain(await IdsAsync("downloadsOnly=true"), 901L);
+                CollectionAssert.Contains(await IdsAsync("downloadsOnly=true&activityFilterTypeId=History"), 901L);
+                client = await ClientAsync();
+                Assert.AreEqual((0, 0, 1, 0L), (client.QueueCount, client.ActiveCount, client.PostProcessingCount, client.BytesPerSecond));
+            }
+
+            await host.Fixture.RunSqlAsync("""UPDATE "Operations" SET "DownloadStateTypeId" = 5, "AttentionKey" = 'import_ambiguous_title' WHERE "Id" = 901""");
+            CollectionAssert.Contains(await IdsAsync("queueOnly=true"), 901L, "Arr+ retains the unresolved import.");
+            CollectionAssert.DoesNotContain(await IdsAsync("downloadsOnly=true"), 901L);
+            CollectionAssert.Contains(await IdsAsync("downloadsOnly=true&activityFilterTypeId=History"), 901L);
+            client = await ClientAsync();
+            Assert.AreEqual((0, 0, 0, 1), (client.QueueCount, client.ActiveCount, client.PostProcessingCount, client.WarningCount));
+            Assert.AreEqual((short)2, await host.ScalarAsync("""SELECT "OperationStatusTypeId" FROM "Operations" WHERE "Id" = 901"""));
+            Assert.AreEqual(DBNull.Value, await host.ScalarAsync("""SELECT "FinishedAt" FROM "Operations" WHERE "Id" = 901"""));
+
+            using var fragment = await host.SendAsync(HttpMethod.Get, "/Admin/Downloads?handler=Live&Client=Usenet");
+            var html = await fragment.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, fragment.StatusCode, html);
+            StringAssert.Contains(html, "Download completed");
+            StringAssert.Contains(html, "Import needs help:");
+            StringAssert.Contains(html, "/Admin/Queue?operation=901");
+            Assert.IsFalse(html.Contains("handler=DeleteHistory", StringComparison.Ordinal), "An unresolved import cannot be deleted through history.");
+            Assert.AreEqual("no-store", fragment.Headers.CacheControl!.ToString());
+            await host.Fixture.RunSqlAsync("""UPDATE "Operations" SET "OperationStatusTypeId" = 4, "AttentionKey" = NULL, "ErrorKey" = 'download_failed', "FinishedAt" = now() WHERE "Id" = 901""");
+            using var failed = await host.SendAsync(HttpMethod.Get, "/Admin/Downloads?handler=Live&Client=Usenet");
+            var failureHtml = await failed.Content.ReadAsStringAsync();
+            StringAssert.Contains(failureHtml, "Failed");
+            Assert.IsFalse(failureHtml.Contains("Imported into library", StringComparison.Ordinal), "An import failure cannot claim library availability.");
         }
 
         // The pages of the Downloads group: the news servers with what their last pass measured, the external clients, and the speed limit of every client that can be held back.
@@ -1605,7 +1670,7 @@ namespace Jularr.Backend.Tests
             // Unpacking is shown until the client reports completion.
             usenet.History = """{"history":{"slots":[{"nzo_id":"SABnzbd_nzo_1","name":"Example","status":"Extracting"}]}}""";
             await RunAsync<MonitorDownloadsV1>(host);
-            Assert.AreEqual(DownloadStateType.PostProcessing, (await ReadActivityAsync(host, ActivityFilterType.All)).Single().DownloadStateTypeId);
+            Assert.AreEqual(DownloadStateType.Extracting, (await ReadActivityAsync(host, ActivityFilterType.All)).Single().DownloadStateTypeId);
 
             // A path outside the client mapping is never read.
             usenet.History = """{"history":{"slots":[{"nzo_id":"SABnzbd_nzo_1","name":"Example","status":"Completed","storage":"/elsewhere/../downloads/x"}]}}""";
@@ -1614,6 +1679,9 @@ namespace Jularr.Backend.Tests
             var waiting = (await ReadActivityAsync(host, ActivityFilterType.All)).Single();
             Assert.AreEqual("import_path_unmapped", waiting.ReasonKey);
             Assert.AreEqual("Example Movie", waiting.WorkTitle);
+            Assert.AreEqual(DownloadStateType.Completed, waiting.DownloadStateTypeId);
+            Assert.IsNotNull(waiting.DownloadCompletedAt, "The downloader is finished even though its import needs help.");
+            var downloadCompletedAt = waiting.DownloadCompletedAt;
 
             // An existing library file is kept; the import takes a free name.
             var library = Path.Combine(storage.Path, "1", "Movies", "Example Movie (2020)");
@@ -1636,6 +1704,8 @@ namespace Jularr.Backend.Tests
             usenet.History = $$$"""{"history":{"slots":[{"nzo_id":"SABnzbd_nzo_1","name":"Example","status":"Completed","storage":"/downloads/movies/{{{Feature}}}"}]}}""";
             await RunAsync<MonitorDownloadsV1>(host);
 
+            Assert.AreEqual(downloadCompletedAt, (await ReadActivityAsync(host, ActivityFilterType.History)).Single().DownloadCompletedAt,
+                "Import completion does not change when the downloader finished.");
             Assert.IsFalse(File.Exists(Path.Combine(completed, Feature + ".mkv")), "The import moved the film.");
             Assert.IsFalse(Directory.Exists(completed), "The move left only a sample, so SABnzbd's job goes with it.");
             Assert.AreEqual("existing", File.ReadAllText(Path.Combine(library, "Example Movie (2020) [WEBDL-1080p].mkv")));

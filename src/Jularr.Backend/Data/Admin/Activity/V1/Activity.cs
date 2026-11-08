@@ -41,7 +41,7 @@ namespace Jularr.Backend.Data.Admin.Activity.V1
         [DataField(typeof(OperationFields), nameof(OperationFields.TorrentOnly))]
         public bool TorrentOnly { get; }
 
-        // Only downloads, as the Downloads page lists them: with All what is still open, with History every finished one.
+        // Downloader queue with All; post-processing and finished downloads with History, independently of library import.
         [DataField(typeof(OperationFields), nameof(OperationFields.DownloadsOnly))]
         public bool DownloadsOnly { get; }
 
@@ -168,8 +168,10 @@ namespace Jularr.Backend.Data.Admin.Activity.V1
             string? reasonKey, DateTime createdAt, DateTime? finishedAt, string? connectionName, long? sizeBytes, long? remainingBytes, int? etaSeconds, DownloadStateType? downloadStateTypeId, string? manualUrl = null, bool canPause = false, bool canRetryImport = false, bool isWaiting = false, bool canImportManually = false, string? indexerName = null, long? bytesPerSecond = null, bool canBrowseFiles = false, long? sabnzbdConnectionId = null,
             long? acquisitionConnectionId = null, DownloadClientKind? downloadClientKindId = null, MediaType? mediaTypeId = null, bool canRetry = false,
             DownloadPriorityType downloadPriorityTypeId = DownloadPriorityType.Normal, string[]? unmatchedFiles = null, string[]? unmatchedFileReasons = null,
-            string? qualityKey = null, int? parentUnitNumber = null, int? unitStart = null, int? unitEnd = null, string? unitTitle = null, DateTime? waitUntil = null)
+            string? qualityKey = null, int? parentUnitNumber = null, int? unitStart = null, int? unitEnd = null, string? unitTitle = null, DateTime? waitUntil = null, DateTime? downloadCompletedAt = null, DateTime? downloadWaitUntil = null)
         {
+            DownloadWaitUntil = downloadWaitUntil;
+            DownloadCompletedAt = downloadCompletedAt;
             QualityKey = qualityKey;
             ParentUnitNumber = parentUnitNumber;
             UnitStart = unitStart;
@@ -239,6 +241,9 @@ namespace Jularr.Backend.Data.Admin.Activity.V1
 
         [DataField(typeof(OperationFields), nameof(OperationFields.FinishedAt))]
         public DateTime? FinishedAt { get; }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.FinishedAt), false)]
+        public DateTime? DownloadCompletedAt { get; }
 
         [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.Name), false)]
         public string? ConnectionName { get; }
@@ -339,6 +344,9 @@ namespace Jularr.Backend.Data.Admin.Activity.V1
         // A grab the indexer limited waits, not failed: it is tried again when the indexer's pause ends.
         [DataField(typeof(OperationFields), nameof(OperationFields.DownloadWaitUntil))]
         public DateTime? WaitUntil { get; }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.DownloadWaitUntil))]
+        public DateTime? DownloadWaitUntil { get; }
     }
 
     public sealed class ReadDownloadClientsParametersV1 : BaseParameters
@@ -349,8 +357,9 @@ namespace Jularr.Backend.Data.Admin.Activity.V1
     public sealed class DownloadClientV1 : BaseResponse
     {
         public DownloadClientV1(DownloadClientKind downloadClientKindId, long? acquisitionConnectionId, long settingsConnectionId, string name, int queueCount, int activeCount, int pausedCount,
-            int warningCount, long bytesPerSecond, long remainingBytes, long[]? speedSamples = null)
+            int warningCount, long bytesPerSecond, long remainingBytes, long[]? speedSamples = null, int postProcessingCount = 0)
         {
+            PostProcessingCount = postProcessingCount;
             SpeedSamples = speedSamples ?? [];
             DownloadClientKindId = downloadClientKindId;
             AcquisitionConnectionId = acquisitionConnectionId;
@@ -378,12 +387,15 @@ namespace Jularr.Backend.Data.Admin.Activity.V1
         [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.Name))]
         public string Name { get; }
 
-        // Open downloads, those that fetch or unpack now, those paused, and those that failed unseen or wait for a person.
+        // Transfer queue, active transfers, post-processing, paused downloads and unresolved warnings.
         [DataField(typeof(OperationFields), nameof(OperationFields.QueueCount))]
         public int QueueCount { get; }
 
         [DataField(typeof(OperationFields), nameof(OperationFields.QueueCount))]
         public int ActiveCount { get; }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.QueueCount))]
+        public int PostProcessingCount { get; }
 
         [DataField(typeof(OperationFields), nameof(OperationFields.QueueCount))]
         public int PausedCount { get; }
@@ -402,7 +414,7 @@ namespace Jularr.Backend.Data.Admin.Activity.V1
         public long[] SpeedSamples { get; }
 
         public DownloadClientV1 WithSamples(long[] samples) => new(DownloadClientKindId, AcquisitionConnectionId, SettingsConnectionId, Name, QueueCount, ActiveCount, PausedCount, WarningCount,
-            BytesPerSecond, RemainingBytes, samples);
+            BytesPerSecond, RemainingBytes, samples, PostProcessingCount);
     }
 
     // What a news server of Jularr's Usenet downloader did in its last pass: the connections it held, its pace, and its articles with the missing ones since the start.

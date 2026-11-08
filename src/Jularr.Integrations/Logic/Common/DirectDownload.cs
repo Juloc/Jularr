@@ -41,15 +41,16 @@ namespace Jularr.Integrations.Logic.Common
 
         // A file behind a browser check is fetched by a real browser; the storage rules stay the caller's.
         public static async Task SaveFileAsync(HttpClient http, Uri uri, string destination, ISourceGateResolver gates, ISourceBrowser browser, long? maximumBytes,
-            Func<long, IDisposable>? reserveWrite, CancellationToken ct)
+            Func<long, IDisposable>? reserveWrite, CancellationToken ct, Func<long, long?, Task>? progress = null)
         {
             try
             {
                 using var response = await SendAsync(http, uri, null, gates, ct);
-                await SaveAsync(response, destination, maximumBytes, ct, reserveWrite);
+                await SaveAsync(response, destination, maximumBytes, ct, reserveWrite, progress);
             }
             catch (DirectDownloadException exception) when (exception.Failure == DirectDownloadFailure.Gate)
             {
+                if (progress is not null) await progress(0, null);
                 await browser.SaveFileAsync(uri, destination, maximumBytes, reserveWrite, ct);
             }
         }
@@ -94,7 +95,7 @@ namespace Jularr.Integrations.Logic.Common
             }
         }
 
-        public static async Task SaveAsync(HttpResponseMessage response, string destination, long? maximumBytes, CancellationToken ct, Func<long, IDisposable>? reserveWrite = null)
+        public static async Task SaveAsync(HttpResponseMessage response, string destination, long? maximumBytes, CancellationToken ct, Func<long, IDisposable>? reserveWrite = null, Func<long, long?, Task>? progress = null)
         {
             if (maximumBytes is null && reserveWrite is null)
             {
@@ -107,15 +108,17 @@ namespace Jularr.Integrations.Logic.Common
             }
 
             await using var source = await response.Content.ReadAsStreamAsync(ct);
-            await CopyAsync(source, destination, maximumBytes, reserveWrite, ct);
+            if (progress is not null) await progress(0, response.Content.Headers.ContentLength);
+            await CopyAsync(source, destination, maximumBytes, reserveWrite, ct, progress, response.Content.Headers.ContentLength);
         }
 
         // The file is written in pieces; the limit and the reservation are the storage's rules.
-        public static async Task CopyAsync(Stream source, string destination, long? maximumBytes, Func<long, IDisposable>? reserveWrite, CancellationToken ct)
+        public static async Task CopyAsync(Stream source, string destination, long? maximumBytes, Func<long, IDisposable>? reserveWrite, CancellationToken ct, Func<long, long?, Task>? progress = null, long? sizeBytes = null)
         {
             await using var target = new FileStream(destination, FileMode.CreateNew, FileAccess.Write, FileShare.None, 81920, useAsync: true);
             var buffer = new byte[81920];
             long total = 0;
+            var sampled = global::System.Diagnostics.Stopwatch.StartNew();
             int read;
             while ((read = await source.ReadAsync(buffer, ct)) > 0)
             {
@@ -124,10 +127,18 @@ namespace Jularr.Integrations.Logic.Common
                     throw new DirectDownloadException(DirectDownloadFailure.TooLarge, "The file is too large.");
                 }
 
-                using var reservation = reserveWrite?.Invoke(read);
-                await target.WriteAsync(buffer.AsMemory(0, read), ct);
+                using (reserveWrite?.Invoke(read))
+                {
+                    await target.WriteAsync(buffer.AsMemory(0, read), ct);
+                }
                 total += read;
+                if (progress is not null && sampled.Elapsed >= TimeSpan.FromSeconds(1))
+                {
+                    await progress(total, sizeBytes);
+                    sampled.Restart();
+                }
             }
+            if (progress is not null) await progress(total, sizeBytes);
         }
 
         private static async Task<(HttpResponseMessage Response, Uri Final)> FollowAsync(HttpClient http, Uri uri, DirectCredentials? credentials, ISourceGateResolver gates, CancellationToken ct)

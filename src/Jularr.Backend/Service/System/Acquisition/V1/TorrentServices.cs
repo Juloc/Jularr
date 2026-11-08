@@ -179,6 +179,11 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                     await HintAsync(download, null);
                     try
                     {
+                        await Context.ExecuteBatchAsync(async (ctx, ct) =>
+                        {
+                            await ctx.SetDownloadStageAsync(new DownloadOperationParameters(download.OperationId), DownloadStateType.Moving, ct);
+                            return true;
+                        }, CancellationToken);
                         var extensions = LibraryFileTypes.GetImportExtensions(download.MediaTypeId, download.MediaSubtypeId);
                         var complete = await paths.CompleteAsync(download.OperationId, pass.OutputPath!, extensions, CancellationToken, download.MediaTypeId, download.MediaSubtypeId);
                         var state = new StorageScanState();

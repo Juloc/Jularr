@@ -246,7 +246,7 @@ namespace Jularr.Integrations.Logic.AnnasArchive
             return mirrors;
         }
 
-        public async Task DownloadAsync(Uri site, string memberKey, string md5, string destination, CancellationToken ct, long? maximumBytes = null, Func<long, IDisposable>? reserveWrite = null)
+        public async Task DownloadAsync(Uri site, string memberKey, string md5, string destination, CancellationToken ct, long? maximumBytes = null, Func<long, IDisposable>? reserveWrite = null, Func<long, long?, Task>? progress = null)
         {
             // The member API names a download address; the file is fetched without the key.
             Uri target;
@@ -274,7 +274,7 @@ namespace Jularr.Integrations.Logic.AnnasArchive
                 throw new AnnasArchiveException(AnnasArchiveFailure.InvalidResponse, "Anna's Archive returned invalid JSON.", exception);
             }
 
-            await DownloadFileAsync(target, destination, ct, maximumBytes, reserveWrite);
+            await DownloadFileAsync(target, destination, ct, maximumBytes, reserveWrite, progress);
         }
 
         // The public slow download: the page's own countdown is handed to the caller, its check is never passed.
@@ -338,13 +338,13 @@ namespace Jularr.Integrations.Logic.AnnasArchive
         }
 
         // A file link a person obtained after the site's own check; no key is sent.
-        public async Task DownloadFileAsync(Uri file, string destination, CancellationToken ct, long? maximumBytes = null, Func<long, IDisposable>? reserveWrite = null)
+        public async Task DownloadFileAsync(Uri file, string destination, CancellationToken ct, long? maximumBytes = null, Func<long, IDisposable>? reserveWrite = null, Func<long, long?, Task>? progress = null)
         {
             var complete = false;
             var destinationExisted = File.Exists(destination);
             try
             {
-                await DirectDownload.SaveFileAsync(http, file, destination, gates, browser, maximumBytes, reserveWrite, ct);
+                await DirectDownload.SaveFileAsync(http, file, destination, gates, browser, maximumBytes, reserveWrite, ct, progress);
                 // The site may answer with a page instead of the file; then the browser fetches it.
                 if (await IsDocumentAsync(destination, ct))
                 {
@@ -353,6 +353,7 @@ namespace Jularr.Integrations.Logic.AnnasArchive
                 }
 
                 File.Delete(destination);
+                if (progress is not null) await progress(0, null);
                 await browser.SaveFileAsync(file, destination, maximumBytes, reserveWrite, ct);
                 if (!await IsDocumentAsync(destination, ct))
                 {

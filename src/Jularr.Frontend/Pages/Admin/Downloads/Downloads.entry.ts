@@ -1,4 +1,5 @@
-import { onPage } from "../../../Modules/Navigation/PageSwap";
+import { inserted, onPage, regionSwapped } from "../../../Modules/Navigation/PageSwap";
+import { mergeLive, onLiveChange, type LiveEntities } from "../../../Modules/Live/Live";
 import { dropIndex, scrollSpeed } from "../../../Framework/Components/SortableList";
 import { beforeAfterMove } from "./Downloads";
 
@@ -86,4 +87,80 @@ function install(): void {
     });
 }
 
-onPage(import.meta.url, install);
+// The stream patches values; list membership, available actions, tabs and paging come from the same authorized server-rendered view.
+let refreshTimer: ReturnType<typeof setTimeout> | undefined;
+let safetyTimer: ReturnType<typeof setInterval> | undefined;
+let request: AbortController | undefined;
+let acting = false;
+let lastRefresh = 0;
+const parts = "[data-downloads-part]";
+
+function occupied(): boolean {
+    return acting || document.hidden || !document.querySelector(parts) || !!document.querySelector(
+        'dialog[open], [data-open="true"], .downloads-row--dragging, .downloads-pick:active, [data-downloads-part] input:checked, '
+        + '[data-downloads-part] input:focus, [data-downloads-part] select:focus, [data-downloads-part] button:focus-visible, [data-downloads-part] a:focus-visible');
+}
+
+async function refreshDownloads(): Promise<void> {
+    refreshTimer = undefined;
+    if (request || occupied()) return;
+    lastRefresh = Date.now();
+    const address = new URL(location.href);
+    address.searchParams.set("handler", "Live");
+    const before = location.href;
+    const controller = new AbortController();
+    request = controller;
+    try {
+        const response = await fetch(address, { credentials: "same-origin", cache: "no-store", signal: controller.signal });
+        if (!response.ok || response.redirected) throw new Error("download_snapshot_unavailable");
+        const template = document.createElement("template");
+        template.innerHTML = await response.text();
+        const next = Array.from(template.content.querySelectorAll<HTMLElement>(parts));
+        const values = template.content.querySelector<HTMLElement>("[data-downloads-values]")?.dataset.downloadsValues;
+        if (next.length !== 4 || !values) throw new Error("download_snapshot_incomplete");
+        const entities = JSON.parse(values) as LiveEntities;
+        if (controller.signal.aborted || before !== location.href || occupied()) return;
+        mergeLive(entities);
+        const position = { x: window.scrollX, y: window.scrollY };
+        for (const part of next) {
+            const current = document.getElementById(part.id);
+            if (!current) return;
+            current.replaceWith(part);
+            inserted(part);
+        }
+        regionSwapped();
+        window.scrollTo(position.x, position.y);
+        const error = document.querySelector<HTMLElement>("[data-downloads-live-error]");
+        if (error) error.hidden = true;
+    } catch {
+        if (!controller.signal.aborted && before === location.href) {
+            const error = document.querySelector<HTMLElement>("[data-downloads-live-error]");
+            if (error) error.hidden = false;
+        }
+    } finally {
+        if (request === controller) request = undefined;
+    }
+}
+
+function scheduleRefresh(): void {
+    if (!document.querySelector(parts) || refreshTimer !== undefined) return;
+    refreshTimer = setTimeout(() => void refreshDownloads(), Math.max(250, 2_000 - (Date.now() - lastRefresh)));
+}
+
+onLiveChange(scheduleRefresh);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) scheduleRefresh(); });
+document.addEventListener("htmx:config:request", () => {
+    acting = true;
+    request?.abort();
+});
+document.addEventListener("htmx:after:request", () => { acting = false; });
+document.addEventListener("htmx:error", () => { acting = false; });
+
+onPage(import.meta.url, () => {
+    install();
+    request?.abort();
+    clearTimeout(refreshTimer);
+    refreshTimer = undefined;
+    clearInterval(safetyTimer);
+    safetyTimer = setInterval(scheduleRefresh, 5_000);
+});

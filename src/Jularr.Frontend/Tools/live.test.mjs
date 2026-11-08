@@ -159,3 +159,32 @@ test('a refused stream is opened again later, a little slower each time', () => 
     view.sources[1].handlers.error();
     assert.equal(view.timers[1].delay, 2000);
 });
+
+
+test('list refresh listeners follow received snapshots and updates, not replaying cached values into inserted markup', () => {
+    const view = stream();
+    let changes = 0;
+    view.exports.onLiveChange(() => changes++);
+    view.exports.syncLive();
+    const event = { data: JSON.stringify({ entities: { 'request:1': { text: { phase: 'Searching' } } } }) };
+    view.sources[0].handlers.snapshot(event);
+    assert.equal(changes, 1);
+    view.exports.syncLive();
+    assert.equal(changes, 1, 'Refreshing markup must not cause a refresh loop.');
+    view.sources[0].handlers.update(event);
+    assert.equal(changes, 2);
+});
+
+
+test('newer fragment values survive rebinding without reopening the stream or notifying refresh listeners', () => {
+    const view = stream();
+    let changes = 0;
+    view.exports.onLiveChange(() => changes++);
+    view.exports.syncLive();
+    view.sources[0].handlers.snapshot({ data: JSON.stringify({ entities: { 'request:1': { text: { phase: 'Downloading' } } } }) });
+    view.exports.mergeLive({ 'request:1': { text: { phase: 'Completed' } } });
+    view.exports.syncLive();
+    assert.equal(view.block.children[0].textContent, 'Completed');
+    assert.equal(changes, 1);
+    assert.equal(view.sources.length, 1);
+});

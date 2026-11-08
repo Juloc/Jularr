@@ -1,7 +1,10 @@
 using System.Globalization;
+using System.Text.Encodings.Web;
+using System.Text.Json;
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Acquisition.V1;
 using Jularr.Backend.Data.Admin.Activity.V1;
+using Jularr.Backend.Data.Admin.Live.V1;
 using Jularr.Backend.Data.Admin.Network.V1;
 using Jularr.Backend.Data.Admin.Storage.V1;
 using Jularr.Backend.Data.Common;
@@ -40,6 +43,7 @@ namespace Jularr.Frontend.Pages.Admin.Downloads
         // The limits offered beside the speed, in megabytes per second; a limit set elsewhere joins them.
         private static readonly long[] Limits = [1, 2, 5, 10, 20, 50, 100, 250];
 
+        private readonly List<IUiComponent> _liveParts = [];
         private IReadOnlyList<DownloadClientV1> _clients = [];
         private DownloadClientV1? _client;
         private PageResult<ActivityItemV1>? _queue;
@@ -104,22 +108,41 @@ namespace Jularr.Frontend.Pages.Admin.Downloads
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
 
             // The heading with the client's icon buttons, the clients as pill tabs under it; then the figures, the queue, the history and the client's own panels.
-            page.Content.Add(new Div([new H1(new Text("admin.downloads.title")), new Span().Class("downloads-panel__spacer"), .. HeadButtons(csrf)]).Class("downloads-head"));
-            page.Content.Add(new Div(Tabs()).Class("downloads-tabs"));
+            _liveParts.Clear();
+            var controls = new Region("downloads-controls",
+                new Div([new Span().Class("downloads-panel__spacer"), .. HeadButtons(csrf)]).Class("downloads-head"),
+                new Div(Tabs()).Class("downloads-tabs")).Attribute("data-downloads-part", "");
+            page.Content.Add(controls);
+            _liveParts.Add(controls);
             page.Content.Add(Figures(csrf));
-            if (_queue is { } queue) page.Content.Add(QueuePanel(queue, csrf));
-            if (_history is { } history) page.Content.Add(HistoryPanel(history, csrf));
+            page.Content.Add(new P(new Text("downloads.liveInterrupted")).Class("downloads-live-status").Attribute("role", "status")
+                .Attribute("data-downloads-live-error", "").Attribute("hidden", "hidden"));
+            if (_queue is { } queue)
+            {
+                var panel = new Region("downloads-queue", QueuePanel(queue, csrf)).Attribute("data-downloads-part", "");
+                page.Content.Add(panel);
+                _liveParts.Add(panel);
+            }
+            if (_history is { } history)
+            {
+                var panel = new Region("downloads-history", HistoryPanel(history, csrf)).Attribute("data-downloads-part", "");
+                page.Content.Add(panel);
+                _liveParts.Add(panel);
+            }
             page.Content.AddRange(ClientPanels(csrf));
 
             if (FormError is not null) page.Content.Add(new P(new Text(FormError.ResourceKey)).Attribute("role", "alert"));
             if (RemoveId is { } removing && _queue?.Items.FirstOrDefault(item => item.Id == removing) is { } chosen) page.Content.Add(RemoveDialog(chosen, csrf));
             if (Adding && AddLabel() is { } addLabel) page.Content.Add(AddDialog(addLabel, csrf));
             page.Content.Add(BulkRemove());
-            if (Shown().Any(client => DownloadClientKinds.HasPriorities(client.DownloadClientKindId))) page.Content.Add(PriorityChoice());
-            if (_history is { Items.Count: > 0 }) page.Content.Add(ClearHistory(csrf));
+            page.Content.Add(PriorityChoice());
+            page.Content.Add(ClearHistory(csrf));
             page.Content.Add(new PostForm(Address(handler: "Bulk"), csrf, []).Attribute("id", BulkForm));
             page.Content.Add(new PostForm(Address(handler: "Move"), csrf, [("operationId", ""), ("beforeOperationId", "")]).Attribute("id", MoveForm));
-            page.Content.Add(Dock());
+            var dock = Dock();
+            dock.Attribute("id", "downloads-dock").Attribute("data-downloads-part", "");
+            page.Content.Add(dock);
+            _liveParts.Add(dock);
         }
 
         // All first, then each client with its open downloads; SABnzbd and qBittorrent go by their own names.
@@ -168,7 +191,8 @@ namespace Jularr.Frontend.Pages.Admin.Downloads
             {
                 speed,
                 Stat("downloads.remaining", LiveFigure(key, "remaining", figures, "downloads-stat__value"), LiveFigure(key, "eta", figures, "downloads-stat__foot")),
-                Stat("downloads.active", LiveFigure(key, "active", figures, "downloads-stat__value"), LiveFigure(key, "waiting", figures, "downloads-stat__foot"))
+                Stat("downloads.transferring", LiveFigure(key, "active", figures, "downloads-stat__value"),
+                    new Div(LiveFigure(key, "waiting", figures, "downloads-stat__foot"), LiveFigure(key, "processing", figures, "downloads-stat__foot")))
             };
             if (_space is { } space)
             {
@@ -249,11 +273,11 @@ namespace Jularr.Frontend.Pages.Admin.Downloads
             cells.Add(ProgressCell(item, phase, progress));
             cells.Add(new Span(new Span(new ValueText(LiveEntities.Percent(progress))).Attribute("data-live-text", "percent")).Class("list-value")
                 .Attribute("data-live", LiveKeys.Operation(item.Id)));
-            cells.Add(Value(item.SizeBytes is { } size ? ByteSize.Format(size) : null));
-            cells.Add(LiveValue(item, "speed", says ? "" : LiveEntities.OperationSpeed(texts, item.OperationStatusTypeId, item.DownloadStateTypeId, item.BytesPerSecond)));
+            cells.Add(LiveValue(item, "bytes", LiveFacts.Progress(null, item.SizeBytes, item.RemainingBytes)));
+            cells.Add(LiveValue(item, "speed", says ? "" : LiveEntities.OperationSpeed(texts, item.OperationStatusTypeId, item.DownloadStateTypeId, item.BytesPerSecond), missing: true));
             cells.Add(LiveValue(item, "eta", says ? "" : LiveFacts.Eta(item.EtaSeconds)));
             cells.Add(QueueActions(item, csrf));
-            return new ListRow(cells, progress is null ? [] : [ListPanel.Fact("downloads.progress", new ValueText(LiveEntities.Percent(progress)))], (item.WorkTitle ?? "") + " " + item.Title);
+            return new ListRow(cells, [ListPanel.Fact("downloads.eta", LiveValue(item, "eta", LiveFacts.Eta(item.EtaSeconds)))], (item.WorkTitle ?? "") + " " + item.Title);
         }
 
         // Pause or go on, put it first, take it out (after a question).
@@ -277,7 +301,7 @@ namespace Jularr.Frontend.Pages.Admin.Downloads
             var all = _client is null;
             var columns = new List<ListColumn> { new("downloads.name", ListRole.Main) };
             if (all) columns.Add(new ListColumn("downloads.client", ListRole.Data, 2));
-            columns.AddRange([new ListColumn("table.status", ListRole.Status), new ListColumn("activity.reason", ListRole.Data, 1), new ListColumn("activity.size", ListRole.Data, 1),
+            columns.AddRange([new ListColumn("table.status", ListRole.Status), new ListColumn("downloads.progress"), new ListColumn("activity.size", ListRole.Data, 1),
                 new ListColumn("downloads.finished"), new ListColumn("common.actions", ListRole.Actions, Head: new Span())]);
             var empty = new Div(new IconTile(Glyph("history", 22), UiTone.Neutral), new P(new Text("downloads.history.empty")));
             var list = new ListPanel("downloads.history", columns, [.. history.Items.Select(item => HistoryRow(item, all, csrf))], empty)
@@ -296,23 +320,41 @@ namespace Jularr.Frontend.Pages.Admin.Downloads
 
         private ListRow HistoryRow(ActivityItemV1 item, bool all, string? csrf)
         {
-            var phase = Phase(item);
+            var open = item.OperationStatusTypeId is OperationStatusType.Queued or OperationStatusType.Running;
+            var delivered = item.OperationStatusTypeId != OperationStatusType.Failed
+                && (item.DownloadStateTypeId == DownloadStateType.Completed || item.OperationStatusTypeId == OperationStatusType.Completed);
+            var phase = item.OperationStatusTypeId == OperationStatusType.Failed ? "failed" : delivered ? "completed" : Phase(item);
             var id = item.Id.ToString(CultureInfo.InvariantCulture);
-            var finished = item.FinishedAt ?? item.CreatedAt;
-            var cells = new List<IUiComponent> { new Span(new Truncated(item.WorkTitle ?? item.Title)).Class("downloads-name downloads-name--plain") };
+            var ended = item.OperationStatusTypeId == OperationStatusType.Failed ? item.FinishedAt : item.DownloadCompletedAt ?? item.FinishedAt;
+            var status = item.OperationStatusTypeId == OperationStatusType.Failed ? texts["operation.status.Failed"]
+                : item.IsWaiting && !delivered ? texts["activity.waiting"]
+                : delivered ? texts["downloads.transferCompleted"]
+                : LiveEntities.OperationStatus(texts, false, item.OperationStatusTypeId, item.DownloadStateTypeId);
+            var reason = item.ReasonKey is { } key ? LiveEntities.Reason(texts, item.OperationTypeId, key) : "";
+            var detail = delivered ? !open ? texts["downloads.imported"] : item.IsWaiting
+                ? string.Format(CultureInfo.CurrentCulture, texts["downloads.importNeedsHelp"], reason) : texts["downloads.importing"] : reason;
+            IUiComponent title = new Div(new Span(new Truncated(item.WorkTitle ?? item.Title)).Class("downloads-name"),
+                new Span(new ValueText(detail)).Class("downloads-reason"));
+            var cells = new List<IUiComponent> { title };
             if (all) cells.Add(ClientCell(item));
-            cells.Add(new Div(new Span(new Text("operation.status." + item.OperationStatusTypeId)).Class("downloads-pill")).Class("downloads-phase").Attribute("data-phase", phase));
-            cells.Add(item.ReasonKey is { } key && LiveEntities.Reason(texts, item.OperationTypeId, key) is { Length: > 0 } reason
-                ? new Span(new Truncated(reason)).Class("list-value list-value--dim") : new Span());
+            cells.Add(new Div(new Span(new ValueText(status)).Class("downloads-pill")).Class("downloads-phase").Attribute("data-phase", phase));
+            cells.Add(open && !delivered && !item.IsWaiting
+                ? new Div(new Progress().Attribute("max", "100").TextAttribute("aria-label", "downloads.postProcessing").Class("downloads-bar"))
+                    .Class("downloads-phase downloads-progress").Attribute("data-phase", phase) : new Span());
             cells.Add(Value(item.SizeBytes is { } size ? ByteSize.Format(size) : null));
-            cells.Add(new Span(new ValueText(Ago(finished))).Class("list-value list-value--dim").Attribute("title", LocalTime.Fallback(finished)));
+            cells.Add(ended is { } finished
+                ? new Span(new ValueText(Ago(finished))).Class("list-value list-value--dim").Attribute("title", LocalTime.Fallback(finished)) : Value(null));
 
             var actions = new List<IUiComponent>();
-            if (item.CanRetry) actions.Add(RowPost("Retry", id, "sync", "activity.retry", csrf));
-            else if (item.WorkId is { } workId) actions.Add(IconLink("info", texts["downloads.details"], "/Admin/Works/" + workId.ToString(CultureInfo.InvariantCulture)));
-            actions.Add(RowPost("DeleteHistory", id, "trash", "downloads.deleteEntry", csrf, danger: true));
+            if (open) actions.Add(IconLink("info", texts["downloads.details"], "/Admin/Queue?operation=" + id));
+            else
+            {
+                if (item.CanRetry) actions.Add(RowPost("Retry", id, "sync", "activity.retry", csrf));
+                else if (item.WorkId is { } workId) actions.Add(IconLink("info", texts["downloads.details"], "/Admin/Works/" + workId.ToString(CultureInfo.InvariantCulture)));
+                actions.Add(RowPost("DeleteHistory", id, "trash", "downloads.deleteEntry", csrf, danger: true));
+            }
             cells.Add(new Div([.. actions]).Class("list-actions downloads-actions"));
-            return new ListRow(cells, [ListPanel.Fact("downloads.finished", new ValueText(Ago(finished)), Glyph("clock", 14))]);
+            return new ListRow(cells, ended is { } time ? [ListPanel.Fact("downloads.finished", new ValueText(Ago(time)), Glyph("clock", 14))] : []);
         }
 
         // How long ago a download ended, as the history says it.
@@ -326,12 +368,19 @@ namespace Jularr.Frontend.Pages.Admin.Downloads
         }
 
         // The box (and the handle) and the title in bold; the title leads to its management page.
-        private static IUiComponent Name(ActivityItemV1 item, IUiComponent pick)
+        private IUiComponent Name(ActivityItemV1 item, IUiComponent pick)
         {
             IUiComponent title = item.WorkId is { } workId
                 ? new A(new Truncated(item.WorkTitle ?? item.Title)).Attribute("href", "/Admin/Works/" + workId.ToString(CultureInfo.InvariantCulture)).Attribute("title", item.Title)
                 : new Truncated(item.Title);
-            return new Div(pick, new Strong(title).Class("downloads-name")).Class("downloads-namecell");
+            var reason = item.ReasonKey is { } key ? LiveEntities.Reason(texts, item.OperationTypeId, key) : "";
+
+            if (reason.Length == 0 && DownloadState(item) == DownloadStateType.Queued)
+                reason = texts["downloads.waitingSlot"];
+            return new Div(pick, new Div(new Strong(title).Class("downloads-name"),
+                DownloadState(item) == DownloadStateType.Queued && (item.WaitUntil ?? item.DownloadWaitUntil) is { } until ? new Span(new Text("queue.limitedUntil"), new ValueText(" "), new LocalTime(until, "time")).Class("downloads-reason")
+                    : new Span(new ValueText(reason)).Class("downloads-reason"),
+                LiveValue(item, "bytes", LiveFacts.Progress(null, item.SizeBytes, item.RemainingBytes)))).Class("downloads-namecell");
         }
 
         private IUiComponent ClientCell(ActivityItemV1 item) => item.DownloadClientKindId is { } kind
@@ -342,30 +391,35 @@ namespace Jularr.Frontend.Pages.Admin.Downloads
 
         // The state pill follows the phase the stream sets, in the phase's colour.
         private IUiComponent StatusCell(ActivityItemV1 item, string phase) =>
-            new Div(new Span(new Span(new ValueText(LiveEntities.OperationStatus(texts, item.IsWaiting, item.OperationStatusTypeId, Says(item) ? null : item.DownloadStateTypeId))).Attribute("data-live-text", "status"))
+            new Div(new Span(new Span(new ValueText(LiveEntities.OperationStatus(texts, item.IsWaiting, item.OperationStatusTypeId, Says(item) ? null : DownloadState(item)))).Attribute("data-live-text", "status"))
                 .Class("downloads-pill")).Class("downloads-phase downloads-status").Attribute("data-phase", phase).Attribute("data-live", LiveKeys.Operation(item.Id));
 
         private IUiComponent ProgressCell(ActivityItemV1 item, string phase, int? progress)
         {
-            var bar = new Progress().Attribute("max", "100").TextAttribute("aria-label", "live.progress").Class("downloads-bar").Attribute("data-live-value", "percent");
-            if (progress is { } value) bar.Attribute("value", value.ToString(CultureInfo.InvariantCulture));
+            var bar = new Progress().Attribute("max", "100").TextAttribute("aria-label", "live.progress").Class("downloads-bar");
+            if (progress is { } value) bar.Attribute("value", value.ToString(CultureInfo.InvariantCulture)).Attribute("data-live-value", "percent");
+            else if (DownloadState(item) != DownloadStateType.Downloading || Says(item)) bar.Attribute("hidden", "hidden");
             return new Div(bar).Class("downloads-phase downloads-progress").Attribute("data-phase", phase).Attribute("data-live", LiveKeys.Operation(item.Id));
         }
 
-        private static IUiComponent LiveValue(ActivityItemV1 item, string name, string text)
+        private static IUiComponent LiveValue(ActivityItemV1 item, string name, string text, bool missing = false)
         {
             var field = new Span(new ValueText(text)).Attribute("data-live-text", name);
             if (text.Length == 0) field.Attribute("hidden", "hidden");
-            return new Span(field).Class("list-value").Attribute("data-live", LiveKeys.Operation(item.Id));
+            return new Span(field, missing ? new Span(new ValueText("–")).Class("downloads-unknown") : new Span())
+                .Class("list-value").Attribute("data-live", LiveKeys.Operation(item.Id));
         }
 
         private static IUiComponent Value(string? text) => text is null ? new Span(new ValueText("–")).Class("list-value list-value--dim") : new Span(new ValueText(text)).Class("list-value");
 
         // The phase as the stream names it: waiting for a person, else what the client does, else how the download ended.
+        private static DownloadStateType? DownloadState(ActivityItemV1 item) => item.DownloadStateTypeId
+            ?? (item.OperationStatusTypeId == OperationStatusType.Running ? DownloadStateType.Resolving : DownloadStateType.Queued);
+
         private static string Phase(ActivityItemV1 item)
         {
             var running = item.OperationStatusTypeId is OperationStatusType.Queued or OperationStatusType.Running;
-            return (item.IsWaiting ? "waiting" : (running && item.DownloadStateTypeId is { } state ? state.ToString() : item.OperationStatusTypeId.ToString())).ToLowerInvariant();
+            return (item.IsWaiting ? "waiting" : (running && DownloadState(item) is { } state ? state.ToString() : item.OperationStatusTypeId.ToString())).ToLowerInvariant();
         }
 
         private static bool Says(ActivityItemV1 item) => item.ReasonKey is not null && (item.IsWaiting || item.OperationStatusTypeId is OperationStatusType.Failed or OperationStatusType.Queued or OperationStatusType.Running);
@@ -654,6 +708,25 @@ namespace Jularr.Frontend.Pages.Admin.Downloads
             return Page();
         }
 
+        public async Task<IActionResult> OnGetLiveAsync()
+        {
+            await LoadDownloadListsAsync();
+            PreparePage();
+            using var writer = new StringWriter(CultureInfo.InvariantCulture);
+            foreach (var part in _liveParts) part.WriteTo(writer, HtmlEncoder.Default, texts);
+            var entities = new Dictionary<string, LiveEntity>(StringComparer.Ordinal)
+            {
+                [LiveKeys.Downloads(_client is { } client ? ReadDownloadClientsV1.Key(client.DownloadClientKindId, client.AcquisitionConnectionId) : LiveKeys.AllDownloads)]
+                    = LiveEntities.Downloads(texts, Shown())
+            };
+            foreach (var item in _queue!.Items)
+                entities[LiveKeys.Operation(item.Id)] = LiveEntities.Operation(texts, new LiveOperationV1(item.Id, item.OperationTypeId, item.OperationStatusTypeId, item.DownloadStateTypeId,
+                    item.IsWaiting, item.ProgressPercent, item.SizeBytes, item.RemainingBytes, item.EtaSeconds, item.BytesPerSecond, item.ReasonKey));
+            new Div().Attribute("data-downloads-values", JsonSerializer.Serialize(entities, JsonSerializerOptions.Web)).WriteTo(writer, HtmlEncoder.Default, texts);
+            Response.Headers.CacheControl = "no-store";
+            return Content(writer.ToString(), "text/html");
+        }
+
         public async Task<IActionResult> OnPostPauseAsync([BindRequired] long operationId) => await PauseAsync(operationId, true);
 
         public async Task<IActionResult> OnPostResumeAsync([BindRequired] long operationId) => await PauseAsync(operationId, false);
@@ -765,7 +838,7 @@ namespace Jularr.Frontend.Pages.Admin.Downloads
             return LocalRedirect(Address());
         }
 
-        protected override async Task LoadDataAsync()
+        private async Task LoadDownloadListsAsync()
         {
             var ct = HttpContext.RequestAborted;
             await LoadClientsAsync();
@@ -775,6 +848,13 @@ namespace Jularr.Frontend.Pages.Admin.Downloads
                 downloadClientKindId: kind, acquisitionConnectionId: connectionId, mediaTypeId: Category, downloadPriorityTypeId: Priority), ct);
             _history = await read.ExecuteAsync<PageResult<ActivityItemV1>>(new ReadActivityParametersV1(ActivityFilterType.History, Math.Max(1, HistoryPage), downloadsOnly: true, failedOnly: FailedOnly,
                 downloadClientKindId: kind, acquisitionConnectionId: connectionId), ct);
+        }
+
+        protected override async Task LoadDataAsync()
+        {
+            await LoadDownloadListsAsync();
+            var ct = HttpContext.RequestAborted;
+            var kind = _client?.DownloadClientKindId;
 
             // The add dialog's titles: every wanted title whose name holds the search.
             if (Adding && !string.IsNullOrWhiteSpace(AddQuery))

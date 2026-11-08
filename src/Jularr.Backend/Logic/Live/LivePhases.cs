@@ -36,7 +36,7 @@ namespace Jularr.Backend.Logic.Live
             int? eta = active.Any(download => download.EtaSeconds is not null) ? active.Max(download => download.EtaSeconds ?? 0) : null;
 
             return new LiveProgressData(active.Length, percent, size, remaining, eta, speed,
-                active.All(download => download.DownloadStateTypeId == DownloadStateType.PostProcessing),
+                active.All(download => DownloadStates.IsHistory(download.DownloadStateTypeId)),
                 active.Any(download => download.IsWaiting),
                 active.All(download => download.DownloadStateTypeId == DownloadStateType.Paused));
         }

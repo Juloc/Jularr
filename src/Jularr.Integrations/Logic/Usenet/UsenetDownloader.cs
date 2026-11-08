@@ -12,7 +12,7 @@ namespace Jularr.Integrations.Logic.Usenet
         private const long Slack = 1024 * 1024;
 
         public async Task<UsenetProgress> DownloadAsync(UsenetServer server, IReadOnlyList<NzbFile> files, string directory, IReadOnlySet<string> finished, DateTimeOffset until,
-            long maximumJobBytes, CancellationToken ct, long minimumFreeBytes = 0, Func<long, IDisposable>? reserveWrite = null, Func<long, CancellationToken, ValueTask>? throttle = null)
+            long maximumJobBytes, CancellationToken ct, long minimumFreeBytes = 0, Func<long, IDisposable>? reserveWrite = null, Func<long, CancellationToken, ValueTask>? throttle = null, Func<long, Task>? report = null)
         {
             var queue = new ConcurrentQueue<(NzbFile File, NzbSegment Segment)>(files.SelectMany(file => file.Segments.Where(segment => !finished.Contains(segment.MessageId))
                 .Select(segment => (file, segment))));
@@ -155,7 +155,8 @@ namespace Jularr.Integrations.Logic.Usenet
                             reservation?.Dispose();
                             lock (fileLengths) pendingGrowth -= reservedGrowth;
                         }
-                        Interlocked.Add(ref downloaded, part.Data.Length);
+                        var received = Interlocked.Add(ref downloaded, part.Data.Length);
+                        if (report is not null) await report(received);
                         (part.IsIntact ? done : damaged).Add(item.Segment.MessageId);
                     }
                 }));

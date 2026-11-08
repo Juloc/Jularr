@@ -12,6 +12,104 @@ namespace Jularr.E2E.Tests
 
         [TestMethod]
         [Timeout(300_000)]
+        public async Task Downloads_LiveMovesIntoHistory_AndKeepsImportAttentionSeparate()
+        {
+            await using var jularr = await JularrInstance.StartAsync();
+            await using var browser = await BrowserSession.StartAsync(jularr);
+            var page = browser.Page;
+            await Owner.SetUpAndSignInAsync(page);
+            await jularr.RunSqlAsync("""
+                UPDATE "InstanceModules" SET "IsEnabled" = TRUE WHERE "Key" IN ('Acquisition', 'Requests');
+                UPDATE "Providers" SET "IsEnabled" = FALSE WHERE "ProtectedSecret" IS NULL;
+                INSERT INTO "AcquisitionConnections" ("Id", "Name", "AcquisitionConnectionTypeId", "Host", "UseSsl") VALUES (9601, 'Test news', 6, 'news.example.test', TRUE);
+                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle") VALUES (9601, 1, 'Live Download Film');
+                INSERT INTO "WantedItems" ("Id", "WorkId") VALUES (9601, 9601);
+                INSERT INTO "AcquisitionReleases" ("Id", "WantedItemId", "ReleaseIdentity", "Title", "AcquisitionReleaseStatusTypeId")
+                VALUES (9601, 9601, 'live-download', 'Live.Download.Film.1080p', 1);
+                INSERT INTO "Operations" ("Id", "OperationTypeId", "OperationStatusTypeId", "AcquisitionReleaseId", "AcquisitionConnectionId",
+                    "DownloadStateTypeId", "ProgressPercent", "SizeBytes", "RemainingBytes", "EtaSeconds", "DownloadWaitUntil")
+                VALUES (9601, 2, 2, 9601, 9601, 2, 40, 10000000, 6000000, 60, now() + interval '1 day');
+                """);
+            try
+            {
+                await page.GotoAsync("/Admin/Downloads");
+                await page.EvaluateAsync("window.__downloadsDocument = 17");
+                var queue = page.Locator("#downloads-queue .list-row", new() { HasText = "Live Download Film" });
+                var history = page.Locator("#downloads-history .list-row", new() { HasText = "Live Download Film" });
+                await Assertions.Expect(queue.Locator(".downloads-pill")).ToHaveTextAsync("Downloading");
+                await Assertions.Expect(queue.Locator("progress")).ToHaveAttributeAsync("value", "40");
+                await Assertions.Expect(page.Locator("[data-live-text=active]")).ToHaveTextAsync("1");
+
+                // Without navigation or reload, post-processing moves the row below and updates its actions and the figures.
+                await jularr.RunSqlAsync("""UPDATE "Operations" SET "DownloadStateTypeId" = 8, "RemainingBytes" = 0, "EtaSeconds" = NULL WHERE "Id" = 9601""");
+                await Assertions.Expect(queue).ToHaveCountAsync(0, new() { Timeout = 20_000 });
+                await Assertions.Expect(history.Locator(".downloads-pill")).ToHaveTextAsync("Unpacking");
+                await Assertions.Expect(history.Locator("progress")).ToBeVisibleAsync();
+                await Assertions.Expect(history.Locator("progress")).Not.ToHaveAttributeAsync("value", new System.Text.RegularExpressions.Regex(".+"));
+                await Assertions.Expect(page.Locator("[data-live-text=active]")).ToHaveTextAsync("0");
+                await Assertions.Expect(page.Locator("[data-live-text=processing]")).ToHaveTextAsync("1 post-processing");
+                await Evidence.SaveAsync(page, "downloads-unpacking-desktop");
+
+                await jularr.RunSqlAsync("""UPDATE "Operations" SET "DownloadStateTypeId" = 5, "AttentionKey" = 'import_ambiguous_title' WHERE "Id" = 9601""");
+                await Assertions.Expect(history).ToContainTextAsync("Import needs help:", new() { Timeout = 20_000 });
+                await Assertions.Expect(history.Locator(".downloads-pill")).ToHaveTextAsync("Download completed");
+                await Assertions.Expect(history.Locator("form")).ToHaveCountAsync(0);
+                Assert.AreEqual(17, await page.EvaluateAsync<int>("window.__downloadsDocument"), "The document was not reloaded.");
+                await page.SetViewportSizeAsync(390, 844);
+                await page.WaitForFunctionAsync("document.getElementById('app-sidebar').getBoundingClientRect().right <= 1");
+                Assert.IsTrue(await page.EvaluateAsync<bool>("document.documentElement.scrollWidth <= innerWidth + 1"));
+                await Evidence.SaveAsync(page, "downloads-import-attention-phone");
+
+                // Arr+ still owns the unresolved import; completing it only changes the import line in the download history.
+                await page.GotoAsync("/Admin/Queue");
+                await Assertions.Expect(Steps.ListRow(page, "Live Download Film")).ToContainTextAsync("The file's title does not clearly match the film");
+                await page.GotoAsync("/Admin/Downloads");
+                await jularr.RunSqlAsync("""UPDATE "Operations" SET "OperationStatusTypeId" = 3, "AttentionKey" = NULL, "FinishedAt" = now() WHERE "Id" = 9601""");
+                await Assertions.Expect(history).ToContainTextAsync("Imported into library", new() { Timeout = 20_000 });
+                await Assertions.Expect(history.GetByRole(AriaRole.Button, new() { Name = "Delete from history" })).ToHaveCountAsync(1);
+                // A newly queued download appears live; selecting it survives value updates, and its pause/resume actions really post.
+                await jularr.RunSqlAsync("""
+                    INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle") VALUES (9602, 1, 'Waiting Download Film');
+                    INSERT INTO "WantedItems" ("Id", "WorkId") VALUES (9602, 9602);
+                    INSERT INTO "AcquisitionReleases" ("Id", "WantedItemId", "ReleaseIdentity", "Title", "AcquisitionReleaseStatusTypeId")
+                    VALUES (9602, 9602, 'waiting-download', 'Waiting.Download.Film.1080p', 1);
+                    INSERT INTO "Operations" ("Id", "OperationTypeId", "OperationStatusTypeId", "AcquisitionReleaseId", "AcquisitionConnectionId", "DownloadStateTypeId", "DownloadWaitUntil")
+                    VALUES (9602, 2, 2, 9602, 9601, 1, now() + interval '1 day');
+                    """);
+                var waiting = page.Locator("#downloads-queue .list-row", new() { HasText = "Waiting Download Film" });
+                await Assertions.Expect(waiting).ToContainTextAsync("Waiting until", new() { Timeout = 20_000 });
+                var checkbox = waiting.GetByRole(AriaRole.Checkbox);
+                await checkbox.CheckAsync();
+                await jularr.RunSqlAsync("""UPDATE "Operations" SET "DownloadStateTypeId" = 2, "ProgressPercent" = 60, "SizeBytes" = 1000, "RemainingBytes" = 400, "EtaSeconds" = 2 WHERE "Id" = 9602""");
+                await Assertions.Expect(waiting.Locator(".downloads-pill")).ToHaveTextAsync("Downloading", new() { Timeout = 20_000 });
+                await Assertions.Expect(checkbox).ToBeCheckedAsync();
+                await checkbox.UncheckAsync();
+                await page.Locator("#downloads-queue h2").ClickAsync();
+                await Steps.FollowAsync(page, waiting.GetByRole(AriaRole.Button, new() { Name = "Pause", Exact = true }));
+                await Assertions.Expect(waiting.Locator(".downloads-pill")).ToHaveTextAsync("Paused");
+                await Steps.FollowAsync(page, waiting.GetByRole(AriaRole.Button, new() { Name = "Resume", Exact = true }));
+                await Assertions.Expect(waiting.Locator(".downloads-pill")).ToHaveTextAsync("Downloading");
+
+                // A download failure leaves the top list and exposes its reason in history.
+                await jularr.RunSqlAsync("""UPDATE "Operations" SET "OperationStatusTypeId" = 4, "ErrorKey" = 'download_failed', "FinishedAt" = now() WHERE "Id" = 9602""");
+                await Assertions.Expect(waiting).ToHaveCountAsync(0, new() { Timeout = 20_000 });
+                var failed = page.Locator("#downloads-history .list-row", new() { HasText = "Waiting Download Film" });
+                await Assertions.Expect(failed.Locator(".downloads-pill")).ToHaveTextAsync("Failed");
+                await Assertions.Expect(failed.Locator(".downloads-reason")).Not.ToBeEmptyAsync();
+                await Assertions.Expect(page.Locator("[data-live-text=active]")).ToHaveTextAsync("0");
+                await Assertions.Expect(page.Locator("[data-live-text=speed]").First).ToHaveTextAsync("0 B/s");
+                await Evidence.SaveAsync(page, "downloads-failure-phone");
+                CollectionAssert.AreEqual(Array.Empty<string>(), browser.Problems.ToArray(), string.Join(Environment.NewLine, browser.Problems));
+            }
+            catch
+            {
+                await Evidence.SaveAsync(page, nameof(Downloads_LiveMovesIntoHistory_AndKeepsImportAttentionSeparate));
+                throw;
+            }
+        }
+
+        [TestMethod]
+        [Timeout(300_000)]
         public async Task Indexers_EditedInTheirDialog_ShowTodaysQueriesAgainstTheLimit()
         {
             using var folders = new Folders("Movies");

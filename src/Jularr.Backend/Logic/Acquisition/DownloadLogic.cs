@@ -694,6 +694,7 @@ namespace Jularr.Backend.Logic.Acquisition
                     "RemainingBytes" = NULL,
                     "EtaSeconds" = NULL,
                     "DownloadStateTypeId" = NULL,
+                    "DownloadCompletedAt" = NULL,
                     "ProcessedCount" = 0,
                     "ErrorKey" = NULL,
                     "AttentionKey" = NULL,
@@ -1000,8 +1001,23 @@ namespace Jularr.Backend.Logic.Acquisition
         {
             "Paused" => DownloadStateType.Paused,
             "Queued" => DownloadStateType.Queued,
+            "QuickCheck" or "Verifying" => DownloadStateType.Verifying,
+            "Repairing" => DownloadStateType.Repairing,
+            "Extracting" => DownloadStateType.Extracting,
+            "Moving" => DownloadStateType.Moving,
+            "Running" => DownloadStateType.PostProcessing,
+            "Completed" => DownloadStateType.Completed,
+            "Grabbing" => DownloadStateType.Resolving,
             _ => DownloadStateType.Downloading
         };
+
+        // A downloader's stage changes independently of the operation, which stays open until its import is settled.
+        public static async Task SetDownloadStageAsync(this LogicContext ctx, DownloadOperationParameters data, DownloadStateType stage, CancellationToken ct)
+        {
+            var progress = new[] { new { data.OperationId, DownloadStateTypeId = (byte)stage,
+                RemainingBytes = DownloadStates.IsHistory(stage) ? (long?)0 : null, EtaSeconds = (int?)null } };
+            await ctx.UpdateDownloadProgressAsync(new DownloadProgressData(global::System.Text.Json.JsonSerializer.Serialize(progress)), ct);
+        }
 
         public static async Task UpdateDownloadProgressAsync(this LogicContext ctx, DownloadProgressData data, CancellationToken ct)
         {
@@ -1017,6 +1033,7 @@ namespace Jularr.Backend.Logic.Acquisition
                     "RemainingBytes" = item."RemainingBytes",
                     "EtaSeconds" = item."EtaSeconds",
                     "DownloadStateTypeId" = item."DownloadStateTypeId",
+                    "DownloadCompletedAt" = CASE WHEN item."DownloadStateTypeId" = 5 THEN coalesce(operation."DownloadCompletedAt", now()) ELSE operation."DownloadCompletedAt" END,
                     "DownloadPriorityTypeId" = coalesce(item."DownloadPriorityTypeId", operation."DownloadPriorityTypeId"),
                     "QueuePosition" = coalesce(item."QueuePosition", operation."QueuePosition")
                 FROM
@@ -1026,11 +1043,12 @@ namespace Jularr.Backend.Logic.Acquisition
                     operation."Id" = item."OperationId"
                     AND operation."OperationTypeId" = 2
                     AND operation."OperationStatusTypeId" = 2
-                    AND (operation."ProgressPercent", operation."SizeBytes", operation."RemainingBytes", operation."EtaSeconds", operation."DownloadStateTypeId",
+                    AND ((operation."ProgressPercent", operation."SizeBytes", operation."RemainingBytes", operation."EtaSeconds", operation."DownloadStateTypeId",
                         operation."DownloadPriorityTypeId", operation."QueuePosition")
                         IS DISTINCT FROM (coalesce(item."ProgressPercent", operation."ProgressPercent"), coalesce(item."SizeBytes", operation."SizeBytes"), item."RemainingBytes",
                         item."EtaSeconds", item."DownloadStateTypeId", coalesce(item."DownloadPriorityTypeId", operation."DownloadPriorityTypeId"),
-                        coalesce(item."QueuePosition", operation."QueuePosition"));
+                        coalesce(item."QueuePosition", operation."QueuePosition"))
+                        OR item."DownloadStateTypeId" = 5 AND operation."DownloadCompletedAt" IS NULL);
                 """;
             sql.Parameters.Add(data);
             await ctx.ExecuteAsyncForAffectedRows(sql, ct);

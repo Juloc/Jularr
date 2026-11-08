@@ -9,6 +9,25 @@ namespace Jularr.Backend.Tests
     {
         private static readonly DateTimeOffset Start = new(2026, 10, 29, 12, 0, 0, TimeSpan.Zero);
 
+        [TestMethod]
+        public async Task DirectDownload_ReportsActualBytesAndKnownSize_WithoutInventingAnUnknownSize()
+        {
+            using var folder = new LibraryTests.TemporaryDirectory();
+            var payload = new byte[100_000];
+            using var response = new HttpResponseMessage(global::System.Net.HttpStatusCode.OK) { Content = new ByteArrayContent(payload) };
+            var samples = new List<(long Done, long? Size)>();
+            await DirectDownload.SaveAsync(response, Path.Combine(folder.Path, "known.bin"), 200_000, CancellationToken.None,
+                progress: (done, size) => { samples.Add((done, size)); return Task.CompletedTask; });
+            Assert.AreEqual((0L, (long?)payload.Length), samples.First());
+            Assert.AreEqual(((long)payload.Length, (long?)payload.Length), samples.Last());
+            Assert.AreEqual(payload.Length, new FileInfo(Path.Combine(folder.Path, "known.bin")).Length);
+
+            samples.Clear();
+            await DirectDownload.CopyAsync(new MemoryStream(payload), Path.Combine(folder.Path, "unknown.bin"), 200_000, null, CancellationToken.None,
+                progress: (done, size) => { samples.Add((done, size)); return Task.CompletedTask; });
+            Assert.AreEqual(((long)payload.Length, (long?)null), samples.Last(), "A missing Content-Length must stay unknown.");
+        }
+
         // Every block waits behind the ones before it at the limit's rate; an idle downloader saves nothing up, and no limit lets everything through.
         [TestMethod]
         public void RateLimiter_BlocksFollowEachOtherAtTheRate_AndNoLimitWaitsNothing()

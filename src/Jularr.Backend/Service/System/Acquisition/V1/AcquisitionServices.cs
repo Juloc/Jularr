@@ -460,11 +460,28 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
         {
             var staging = paths.Incomplete(download.OperationId, download.MediaTypeId, download.MediaSubtypeId);
             UsenetPassResult pass;
+            var elapsed = global::System.Diagnostics.Stopwatch.StartNew();
+            long? firstDone = null;
+            async Task ReportAsync(DownloadStateType stage, long done, long size)
+            {
+                firstDone ??= done;
+                var remaining = Math.Max(0, size - done);
+                var speed = (done - firstDone.Value) / Math.Max(0.001, elapsed.Elapsed.TotalSeconds);
+                var progress = new[] { new { download.OperationId, SizeBytes = (long?)size, RemainingBytes = (long?)remaining,
+                    ProgressPercent = stage == DownloadStateType.Downloading && size > 0 ? (int?)Math.Clamp(done * 100 / size, 0, 99) : null,
+                    EtaSeconds = stage == DownloadStateType.Downloading && speed > 0 && remaining > 0
+                        ? (int?)Math.Min(int.MaxValue, Math.Ceiling(remaining / speed)) : null, DownloadStateTypeId = (byte)stage } };
+                await Context.ExecuteBatchAsync(async (ctx, ct) =>
+                {
+                    await ctx.UpdateDownloadProgressAsync(new DownloadProgressData(JsonSerializer.Serialize(progress)), ct);
+                    return true;
+                }, CancellationToken);
+            }
             try
             {
                 pass = paths.IsComplete(download.OperationId, download.MediaTypeId, download.MediaSubtypeId)
                     ? new UsenetPassResult(UsenetPassState.Completed, 100, 0, 0, outputPath: paths.Complete(download.OperationId, download.MediaTypeId, download.MediaSubtypeId))
-                    : await _jobs.RunAsync(connection, staging, _time.GetUtcNow() + PassLength, CancellationToken, paths, download.OperationId);
+                    : await _jobs.RunAsync(connection, staging, _time.GetUtcNow() + PassLength, CancellationToken, paths, download.OperationId, ReportAsync);
             }
             catch (UsenetException exception) when (exception.Failure is UsenetFailure.Unauthorized or UsenetFailure.ConnectionLimit)
             {
@@ -514,6 +531,11 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                 default:
                     try
                     {
+                        await Context.ExecuteBatchAsync(async (ctx, ct) =>
+                        {
+                            await ctx.SetDownloadStageAsync(new DownloadOperationParameters(download.OperationId), DownloadStateType.Moving, ct);
+                            return true;
+                        }, CancellationToken);
                         var extensions = LibraryFileTypes.GetImportExtensions(download.MediaTypeId, download.MediaSubtypeId);
                         var complete = await paths.CompleteAsync(download.OperationId, pass.OutputPath!, extensions, CancellationToken, download.MediaTypeId, download.MediaSubtypeId);
                         var state = new StorageScanState();
@@ -819,7 +841,9 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                 return;
             }
 
-            var state = new[] { new { download.OperationId, ProgressPercent = (int?)99, SizeBytes = (long?)null, RemainingBytes = (long?)0, EtaSeconds = (int?)null, DownloadStateTypeId = (byte)DownloadStateType.PostProcessing } };
+            var state = new[] { new { download.OperationId, ProgressPercent = (int?)null, SizeBytes = (long?)null, RemainingBytes = (long?)0, EtaSeconds = (int?)null,
+                DownloadStateTypeId = (byte)(finished.Status is "QuickCheck" or "Verifying" or "Repairing" or "Extracting" or "Moving"
+                    ? DownloadLogic.ReadDownloadState(finished.Status) : DownloadStateType.PostProcessing) } };
             await Context.ExecuteBatchAsync(async (ctx, ct) =>
             {
                 await ctx.UpdateDownloadProgressAsync(new DownloadProgressData(JsonSerializer.Serialize(state)), ct);
@@ -829,6 +853,11 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
 
         private async Task ImportAsync(DownloadData download, AcquisitionConnectionData connection, string? storagePath)
         {
+            await Context.ExecuteBatchAsync(async (ctx, ct) =>
+            {
+                await ctx.SetDownloadStageAsync(new DownloadOperationParameters(download.OperationId), DownloadStateType.Completed, ct);
+                return true;
+            }, CancellationToken);
             // Only mapped client folders are read; otherwise the download waits for the Owner.
             if (storagePath is null || connection.RemotePath is null || connection.LocalPath is null && connection.DownloadStorageMountId is null
                 || ImportPlacementLogic.MapRemotePath(storagePath, connection.RemotePath) is not { } relative)
@@ -949,8 +978,28 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                 try
                 {
                     await paths.PrepareIncompleteAsync(download.OperationId, CancellationToken, download.MediaTypeId, download.MediaSubtypeId);
+                    await Context.ExecuteBatchAsync(async (ctx, ct) =>
+                    {
+                        await ctx.SetDownloadStageAsync(new DownloadOperationParameters(download.OperationId), DownloadStateType.Resolving, ct);
+                        return true;
+                    }, CancellationToken);
                     File.Delete(path + ".part");
-                    if (await _direct.DownloadAsync(connection, download, path + ".part", paths, CancellationToken) is { } pass)
+                    var elapsed = global::System.Diagnostics.Stopwatch.StartNew();
+                    async Task ReportAsync(long done, long? size)
+                    {
+                        var remaining = size is { } total ? (long?)Math.Max(0, total - done) : null;
+                        var speed = done / Math.Max(0.001, elapsed.Elapsed.TotalSeconds);
+                        var progress = new[] { new { download.OperationId, SizeBytes = size, RemainingBytes = remaining,
+                            ProgressPercent = size > 0 ? (int?)Math.Clamp(done * 100 / size.Value, 0, 99) : null,
+                            EtaSeconds = speed > 0 && remaining > 0 ? (int?)Math.Min(int.MaxValue, Math.Ceiling(remaining.Value / speed)) : null,
+                            DownloadStateTypeId = (byte)DownloadStateType.Downloading } };
+                        await Context.ExecuteBatchAsync(async (ctx, ct) =>
+                        {
+                            await ctx.UpdateDownloadProgressAsync(new DownloadProgressData(JsonSerializer.Serialize(progress)), ct);
+                            return true;
+                        }, CancellationToken);
+                    }
+                    if (await _direct.DownloadAsync(connection, download, path + ".part", paths, CancellationToken, ReportAsync) is { } pass)
                     {
                         // A pass kept its part; the next job continues where it ended.
                         var progress = new[]
@@ -1012,6 +1061,11 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
 
             try
             {
+                await Context.ExecuteBatchAsync(async (ctx, ct) =>
+                {
+                    await ctx.SetDownloadStageAsync(new DownloadOperationParameters(download.OperationId), DownloadStateType.Moving, ct);
+                    return true;
+                }, CancellationToken);
                 var complete = await paths.CompleteAsync(download.OperationId, staging, LibraryFileTypes.GetImportExtensions(download.MediaTypeId, download.MediaSubtypeId), CancellationToken, download.MediaTypeId, download.MediaSubtypeId);
                 var file = new FileInfo(Path.Combine(complete, name));
                 await _import.PlaceAsync(Context, download, new LocalStorageFiles(complete), new ImportSourceRef(null, complete, ""), [new StorageFile(name, file.Length, file.LastWriteTimeUtc)], true, CancellationToken);

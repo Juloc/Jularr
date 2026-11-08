@@ -161,7 +161,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
         };
 
         // Null when the file is written; a source that downloads in passes (Narō) says how far this pass got.
-        public async Task<DirectDownloadPass?> DownloadAsync(AcquisitionConnectionData source, DownloadData download, string destination, DownloadStoragePaths paths, CancellationToken ct)
+        public async Task<DirectDownloadPass?> DownloadAsync(AcquisitionConnectionData source, DownloadData download, string destination, DownloadStoragePaths paths, CancellationToken ct, Func<long, long?, Task>? report = null)
         {
             var directory = Path.GetDirectoryName(destination)!;
             IDisposable Reserve(long bytes) => paths.ReserveWrite(download.OperationId, directory, bytes);
@@ -178,10 +178,10 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                         var id = download.ExternalId?.Split(':') is [_, var key, ..] && int.TryParse(key, NumberStyles.None, CultureInfo.InvariantCulture, out var bookId)
                             ? bookId
                             : throw new DirectSourceException("acquisition_grab_failed");
-                        await _gutenberg.DownloadAsync(id, destination, ct, paths.Settings.MaxJobBytes, Reserve);
+                        await _gutenberg.DownloadAsync(id, destination, ct, paths.Settings.MaxJobBytes, Reserve, report);
                         break;
                     case AcquisitionConnectionType.Opds:
-                        await _opds.DownloadAsync(Opds(source), address, destination, ct, paths.Settings.MaxJobBytes, Reserve);
+                        await _opds.DownloadAsync(Opds(source), address, destination, ct, paths.Settings.MaxJobBytes, Reserve, report);
                         break;
                     case AcquisitionConnectionType.Narou:
                     {
@@ -210,7 +210,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                         {
                             try
                             {
-                                await _annas.DownloadAsync(configured, AcquisitionConnectionInput.Unprotect(_protector, memberKey), md5, destination, ct, paths.Settings.MaxJobBytes, Reserve);
+                                await _annas.DownloadAsync(configured, AcquisitionConnectionInput.Unprotect(_protector, memberKey), md5, destination, ct, paths.Settings.MaxJobBytes, Reserve, report);
                                 break;
                             }
                             catch (AnnasArchiveException exception) when (exception.Failure == AnnasArchiveFailure.Unavailable
@@ -225,7 +225,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                         {
                             if (download.SourceLinkUrl is { } link)
                             {
-                                await _annas.DownloadFileAsync(new Uri(link), destination, ct, paths.Settings.MaxJobBytes, Reserve);
+                                await _annas.DownloadFileAsync(new Uri(link), destination, ct, paths.Settings.MaxJobBytes, Reserve, report);
                             }
                             else
                             {
@@ -245,7 +245,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                                     throw new DirectSourceException("acquisition_grab_failed");
                                 }
 
-                                await _annas.DownloadFileAsync(page.File, destination, ct, paths.Settings.MaxJobBytes, Reserve);
+                                await _annas.DownloadFileAsync(page.File, destination, ct, paths.Settings.MaxJobBytes, Reserve, report);
                             }
                         }
                         catch (AnnasArchiveException exception) when (download.SourceLinkUrl is not null || exception.Failure is AnnasArchiveFailure.Gate)
