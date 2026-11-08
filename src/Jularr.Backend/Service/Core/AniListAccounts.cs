@@ -147,12 +147,15 @@ namespace Jularr.Backend.Service.Core
                 return true;
             }, ct);
 
-            // Every entry is a title with a page of its own, a catalog one when the library holds none
-            foreach (var group in entries.GroupBy(entry => entry.IsManga ? (entry.IsNovel ? MediaSubtype.LightNovel : MediaSubtype.Manga) : MediaSubtype.Anime))
+            // The profile's AniList list does not add library Works. Only the instance's enabled catalog cache keeps its titles as catalog Works.
+            if (await context.ExecuteBatchAsync((ctx, token) => ctx.KeepsDiscoverListsAsync(token), ct, mode: SqlAccessMode.ReadOnly))
             {
-                var works = group.Select(entry => new ExternalWorkData(AniListMetadata.Namespace, entry.MediaId.ToString(CultureInfo.InvariantCulture), entry.Title, null, entry.ReleaseYear, null, null,
-                    entry.CoverUrl, null, null)).ToArray();
-                await MetadataCatalog.KeepWorksAsync(context, new ExternalWorkListData(AniListMetadata.Namespace, group.Key == MediaSubtype.Anime ? MediaType.Series : MediaType.Book, group.Key), works, ct);
+                foreach (var group in entries.GroupBy(entry => entry.IsManga ? (entry.IsNovel ? MediaSubtype.LightNovel : MediaSubtype.Manga) : MediaSubtype.Anime))
+                {
+                    var works = group.Select(entry => new ExternalWorkData(AniListMetadata.Namespace, entry.MediaId.ToString(CultureInfo.InvariantCulture), entry.Title, null, entry.ReleaseYear, null, null,
+                        entry.CoverUrl, null, null)).ToArray();
+                    await MetadataCatalog.KeepWorksAsync(context, new ExternalWorkListData(AniListMetadata.Namespace, group.Key == MediaSubtype.Anime ? MediaType.Series : MediaType.Book, group.Key), works, ct);
+                }
             }
 
             // Taken over

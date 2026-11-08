@@ -146,7 +146,7 @@ namespace Jularr.Frontend.Pages.User.Favorites
             return new Div(link).Class("favorites-collection");
         }
 
-        // An entry of an AniList list: every one is a Work with its page; one the library holds no unit of says so instead of its figures. A Work the profile may not see leads to a search of the title.
+        // An AniList entry links to a known Work, or to a title search when it is not in the instance's catalog. An entry without a library title shows that status.
         private IUiComponent AniListCard(AniListEntryV1 entry)
         {
             var href = entry.WorkId is { } workId ? "/Details/" + workId.ToString(CultureInfo.InvariantCulture) : "/?q=" + Uri.EscapeDataString(entry.Title);
