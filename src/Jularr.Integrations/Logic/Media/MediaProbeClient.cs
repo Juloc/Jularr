@@ -179,6 +179,8 @@ namespace Jularr.Integrations.Logic.Media
 
                     var tags = stream.TryGetProperty("tags", out var tagValues) ? tagValues : default;
                     var disposition = stream.TryGetProperty("disposition", out var flags) ? flags : default;
+                    // Embedded album art is reported by FFprobe as video, but it is not a playable video stream.
+                    if (type == "video" && Flag(disposition, "attached_pic")) continue;
                     var language = tags.ValueKind == JsonValueKind.Object ? Text(tags, "language") : null;
                     streams.Add(new MediaProbeStream(index.GetInt32(), type, Text(stream, "codec_name"), language is "und" ? null : language,
                         tags.ValueKind == JsonValueKind.Object ? Text(tags, "title") : null, Number(stream, "width"), Number(stream, "height"), Number(stream, "channels"),
