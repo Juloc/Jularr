@@ -9836,6 +9836,13 @@
    "Delete",
    "Löschen"
   ],
+  "works.delete.progress": ["{0} of {1} titles processed", "{0} von {1} Werken bearbeitet"],
+  "works.delete.current": ["Deleting: {0}", "Wird gelöscht: {0}"],
+  "works.delete.deleted": ["Deleted", "Gelöscht"],
+  "works.delete.retry": ["Retry selected titles", "Ausgewählte Werke erneut versuchen"],
+  "works.delete.unconfirmed": ["No confirmation received. Check whether the title still exists before retrying.", "Keine Bestätigung erhalten. Prüfe vor einem erneuten Versuch, ob das Werk noch vorhanden ist."],
+  "works.delete.stopped": ["Session or permissions changed. Remaining titles were not processed.", "Anmeldung oder Berechtigungen geändert. Die übrigen Werke wurden nicht bearbeitet."],
+  "works.delete.refreshFailed": ["The list could not be refreshed. Reload it before deleting more titles.", "Die Liste konnte nicht aktualisiert werden. Lade sie vor weiteren Löschversuchen neu."],
   "works.report": [
    "{0}: {1} of {2} titles",
    "{0}: {1} von {2} Titeln"

@@ -100,7 +100,7 @@
 }
 
 // What the last action did: how many, and why the others stayed.
-.works-report {
+.works-report, .works-delete-progress {
     margin-bottom: 12px;
     padding: 10px 14px;
     border: 1px solid var(--border);
@@ -119,6 +119,15 @@
 .work-dialog--wide { width: min(860px, 94vw); max-height: 90vh; overflow-y: auto; }
 
 .works-add-form, .works-delete-form { display: grid; gap: 16px; }
+
+.works-delete-progress {
+    margin: 16px 0 0;
+
+    progress { width: 100%; accent-color: var(--accent); }
+    .works-report__reason { white-space: normal; }
+    .works-report__title { flex: 0 1 40%; }
+    ul { max-height: 35vh; overflow-y: auto; }
+}
 
 // The search of the providers and the manual title are two ways to the same thing.
 .works-add-form > form + form, .works-add-form > .page-table-wrap + form { padding-top: 16px; border-top: 1px solid var(--border); }

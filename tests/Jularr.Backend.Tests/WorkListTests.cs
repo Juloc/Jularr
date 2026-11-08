@@ -178,6 +178,69 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Delete_FiftySelectedTitles_ContinuesPastAnIndividualFailure()
+        {
+            await using var host = await CreateAsync();
+            await SeedAsync(host);
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle")
+                SELECT id, 1, 'Delete target ' || id FROM generate_series(1001, 1050) AS id;
+                INSERT INTO "WantedItems" ("Id", "WorkId") SELECT id, id FROM generate_series(1001, 1050) AS id;
+                INSERT INTO "AcquisitionReleases" ("Id", "WantedItemId", "ReleaseIdentity", "Title", "AcquisitionReleaseStatusTypeId")
+                VALUES (1025, 1025, 'delete-busy', 'Busy film', 1);
+                INSERT INTO "Operations" ("Id", "OperationTypeId", "OperationStatusTypeId", "AcquisitionReleaseId") VALUES (1025, 2, 2, 1025);
+                """);
+
+            var report = await PostAsync(host, "deletion", new DeleteWorksDataV1([.. Enumerable.Range(1001, 50).Select(id => (long)id)], false, false));
+            Assert.AreEqual(50, report.Count);
+            Assert.AreEqual(49, report.Count(item => item.OutcomeKey == "done"));
+            Assert.AreEqual("download_active", report.Single(item => item.Id == 1025).OutcomeKey);
+            Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "Works" WHERE "Id" BETWEEN 1001 AND 1050"""));
+            Assert.AreEqual(1025L, await host.ScalarAsync("""SELECT "Id" FROM "Works" WHERE "Id" BETWEEN 1001 AND 1050"""));
+
+            using var tooMany = await host.SendAsync(HttpMethod.Post, Bulk + "deletion", new DeleteWorksDataV1([.. Enumerable.Range(1, 101).Select(id => (long)id)], false, false));
+            Assert.AreEqual(HttpStatusCode.BadRequest, tooMany.StatusCode);
+        }
+
+        [TestMethod]
+        public async Task Razor_Delete_KeepsFailedTitlesSelected_AndOneTitleReturnsAnEncodedOutcome()
+        {
+            await using var host = await CreateAsync(razor: true);
+            await SeedAsync(host);
+            using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Works?view=Table&type=movies");
+            var html = await page.Content.ReadAsStringAsync();
+            var csrf = WebUtility.HtmlDecode(Regex.Match(html, "name=\"__RequestVerificationToken\" value=\"([^\"]+)\"").Groups[1].Value);
+            using var deleted = await host.SendAsync(HttpMethod.Post, "/Admin/Works?handler=Delete&view=Table&type=movies", new FormUrlEncodedContent([
+                new("__RequestVerificationToken", csrf), new("workIds", "902"), new("workIds", "905")]));
+            Assert.AreEqual(HttpStatusCode.Redirect, deleted.StatusCode);
+            using var after = await host.SendAsync(HttpMethod.Get, deleted.Headers.Location!.ToString());
+            var result = await after.Content.ReadAsStringAsync();
+            Assert.IsTrue(Regex.IsMatch(result, "<input(?=[^>]*name=\"workIds\")(?=[^>]*value=\"905\")(?=[^>]*checked=\"checked\")[^>]*>"), "The failed title lost its selection.");
+            Assert.IsFalse(result.Contains("data-work-title=\"Beta\"", StringComparison.Ordinal));
+
+            await host.Fixture.RunSqlAsync("""UPDATE "Works" SET "CanonicalTitle" = '<Busy & film>' WHERE "Id" = 905""");
+            using var one = await host.SendAsync(HttpMethod.Post, "/Admin/Works?handler=DeleteOne", new Dictionary<string, string> { ["__RequestVerificationToken"] = csrf, ["workId"] = "905" });
+            var outcome = await one.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, one.StatusCode, outcome);
+            StringAssert.Contains(outcome, "data-delete-outcome=\"download_active\"");
+            StringAssert.Contains(outcome, "&lt;Busy &amp; film&gt;");
+            Assert.IsFalse(outcome.Contains("<html", StringComparison.Ordinal));
+
+            using var requestWithoutCsrf = new HttpRequestMessage(HttpMethod.Post, "/Admin/Works?handler=DeleteOne")
+            {
+                Content = new FormUrlEncodedContent([new("workId", "901")])
+            };
+            requestWithoutCsrf.Headers.Add("Cookie", string.Join("; ", host.Cookies.Select(cookie => cookie.Key + "=" + cookie.Value)));
+            using var invalidCsrf = await host.Client.SendAsync(requestWithoutCsrf);
+            Assert.AreEqual(HttpStatusCode.BadRequest, invalidCsrf.StatusCode);
+            Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "Works" WHERE "Id" = 901"""));
+            await host.Fixture.RunSqlAsync("""UPDATE "Accounts" SET "AccountRoleTypeId" = 2 WHERE "Id" = 41""");
+            using var denied = await host.SendAsync(HttpMethod.Post, "/Admin/Works?handler=DeleteOne", new Dictionary<string, string> { ["__RequestVerificationToken"] = csrf, ["workId"] = "901" });
+            Assert.IsTrue(denied.StatusCode is HttpStatusCode.Forbidden or HttpStatusCode.Unauthorized or HttpStatusCode.Redirect, await denied.Content.ReadAsStringAsync());
+            Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "Works" WHERE "Id" = 901"""));
+        }
+
+        [TestMethod]
         public async Task Delete_WithItsData_DiscardsTheRunningDownloadWithoutAnError()
         {
             await using var host = await CreateAsync();
