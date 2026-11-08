@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using Jularr.Backend.Data.Logic.Acquisition;
+using Jularr.Backend.Data.Enums.Operation;
 using Jularr.Backend.Service.Admin.Acquisition.V1;
 using Jularr.Backend.Service.Core;
 using Jularr.Integrations.Data.Usenet;
@@ -72,7 +73,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
         private static partial Regex RarPart();
 
         public async Task<UsenetPassResult> RunAsync(AcquisitionConnectionData server, string staging, DateTimeOffset until, CancellationToken ct,
-            DownloadStoragePaths paths, long operationId)
+            DownloadStoragePaths paths, long operationId, Func<DownloadStateType, long, long, Task>? report = null)
         {
             var settings = paths.Settings;
             NzbContent content;
@@ -110,10 +111,28 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             UsenetProgress progress;
             _speeds.Usenet.BytesPerSecond = settings.MaxBytesPerSecond ?? 0;
             var started = global::System.Diagnostics.Stopwatch.GetTimestamp();
+            var kept = files.SelectMany(file => file.Segments).Where(segment => finished.Contains(segment.MessageId)).Sum(segment => segment.Bytes);
+            using var reportGate = new SemaphoreSlim(1);
+            var sampled = global::System.Diagnostics.Stopwatch.StartNew();
+            if (report is not null) await report(kept < announced ? DownloadStateType.Downloading : DownloadStateType.Verifying, kept, announced);
+            async Task ReportAsync(long received)
+            {
+                if (report is null || !await reportGate.WaitAsync(0, ct)) return;
+                try
+                {
+                    if (sampled.Elapsed < TimeSpan.FromSeconds(1)) return;
+                    await report(DownloadStateType.Downloading, Math.Min(announced, kept + received), announced);
+                    sampled.Restart();
+                }
+                finally
+                {
+                    reportGate.Release();
+                }
+            }
             try
             {
                 progress = await _downloader.DownloadAsync(Server(server), files, directory, finished, until, maximumJobBytes, ct, settings.FreeSpaceReserveBytes!.Value,
-                    bytes => paths.ReserveWrite(operationId, directory, bytes), _speeds.Usenet.WaitAsync);
+                    bytes => paths.ReserveWrite(operationId, directory, bytes), _speeds.Usenet.WaitAsync, ReportAsync);
             }
             catch (UsenetStorageBudgetException)
             {
@@ -135,6 +154,8 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                     progressed: progress.Done.Count + progress.Damaged.Count > 0);
             }
 
+            if (report is not null) await report(DownloadStateType.Verifying, size, size);
+
             // Damaged articles need the repair files; a finished step is not repeated.
             var damaged = state.Any(line => line.StartsWith('!')) || progress.Damaged.Count > 0;
             if (damaged && !File.Exists(Path.Combine(staging, RepairedName)))
@@ -150,6 +171,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                     return new UsenetPassResult(UsenetPassState.Waiting, 100, size, 0, "usenet_repair_missing", progressed: false);
                 }
 
+                if (report is not null) await report(DownloadStateType.Repairing, size, size);
                 if (!await _tools.RepairAsync(par2, ct, () => paths.CheckCapacity()))
                 {
                     return new UsenetPassResult(UsenetPassState.Failed, 100, size, 0, "usenet_repair_failed");
@@ -197,6 +219,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
 
             Directory.CreateDirectory(output);
 
+            if (report is not null) await report(DownloadStateType.Extracting, size, size);
             foreach (var archive in archives)
             {
                 if (!await _tools.ExtractAsync(archive, output, content.Password, ct, () => paths.CheckCapacity()))

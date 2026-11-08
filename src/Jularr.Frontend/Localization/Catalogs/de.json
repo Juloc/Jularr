@@ -92,6 +92,15 @@
   "downloads.remaining": ["Remaining", "Verbleibend"],
   "downloads.etaIn": ["ETA {0}", "Fertig in {0}"],
   "downloads.active": ["Active", "Aktiv"],
+  "downloads.transferring": ["Downloading", "Wird heruntergeladen"],
+  "downloads.processing": ["{0} post-processing", "{0} in Nachbearbeitung"],
+  "downloads.postProcessing": ["Post-processing in progress", "Nachbearbeitung läuft"],
+  "downloads.transferCompleted": ["Download completed", "Download abgeschlossen"],
+  "downloads.importing": ["Importing into library", "Wird in die Bibliothek importiert"],
+  "downloads.imported": ["Imported into library", "In die Bibliothek importiert"],
+  "downloads.importNeedsHelp": ["Import needs help: {0}", "Import benötigt Hilfe: {0}"],
+  "downloads.waitingSlot": ["Waiting for a download slot", "Wartet auf einen freien Download-Platz"],
+  "downloads.liveInterrupted": ["Live updates interrupted. Retrying…", "Live-Aktualisierung unterbrochen. Erneuter Versuch…"],
   "downloads.waiting": ["{0} waiting", "{0} wartend"],
   "downloads.free": ["Free space", "Freier Speicher"],
   "downloads.reserve": ["reserve {0}", "Reserve {0}"],
@@ -7998,9 +8007,15 @@
    "Pausiert"
   ],
   "activity.state.PostProcessing": [
-   "Unpacking",
-   "Wird entpackt"
+   "Post-processing",
+   "Wird nachbearbeitet"
   ],
+  "activity.state.Completed": ["Download completed", "Download abgeschlossen"],
+  "activity.state.Verifying": ["Verifying", "Wird überprüft"],
+  "activity.state.Repairing": ["Repairing", "Wird repariert"],
+  "activity.state.Extracting": ["Unpacking", "Wird entpackt"],
+  "activity.state.Moving": ["Moving files", "Dateien werden verschoben"],
+  "activity.state.Resolving": ["Preparing download", "Download wird vorbereitet"],
   "activity.retry": [
    "Retry",
    "Erneut versuchen"

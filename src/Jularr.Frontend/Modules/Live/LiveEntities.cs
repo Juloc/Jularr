@@ -35,13 +35,16 @@ namespace Jularr.Frontend.Modules.Live
             // A waiting or failed entry says why, and so does a running one that is hinted (no peers); otherwise a running one says how far it is.
             var running = operation.OperationStatusTypeId is OperationStatusType.Queued or OperationStatusType.Running;
             var says = operation.ReasonKey is not null && (operation.IsWaiting || running || operation.OperationStatusTypeId == OperationStatusType.Failed);
-            var phase = operation.IsWaiting ? "waiting" : (running && operation.DownloadStateTypeId is { } state ? state.ToString() : operation.OperationStatusTypeId.ToString()).ToLowerInvariant();
+            var state = operation.DownloadStateTypeId ?? (operation.OperationTypeId == OperationType.Download && running
+                ? operation.OperationStatusTypeId == OperationStatusType.Running ? DownloadStateType.Resolving : DownloadStateType.Queued : (DownloadStateType?)null);
+            var phase = operation.IsWaiting ? "waiting" : (running && state is { } known ? known.ToString() : operation.OperationStatusTypeId.ToString()).ToLowerInvariant();
             var progress = says ? null : operation.ProgressPercent;
-            return new LiveEntity(phase, null, progress, Texts(("status", OperationStatus(texts, operation.IsWaiting, operation.OperationStatusTypeId, says ? null : operation.DownloadStateTypeId)),
+            return new LiveEntity(phase, null, progress, Texts(("status", OperationStatus(texts, operation.IsWaiting, operation.OperationStatusTypeId, says ? null : state)),
                 ("reason", says ? Reason(texts, operation.OperationTypeId, operation.ReasonKey) : null),
                 ("speed", says ? null : OperationSpeed(texts, operation.OperationStatusTypeId, operation.DownloadStateTypeId, operation.BytesPerSecond)),
                 ("detail", says ? null : OperationDetail(progress, operation.SizeBytes, operation.RemainingBytes, operation.EtaSeconds)),
-                ("percent", Percent(progress)), ("eta", says ? null : LiveFacts.Eta(operation.EtaSeconds))));
+                ("percent", Percent(progress)), ("bytes", LiveFacts.Progress(null, operation.SizeBytes, operation.RemainingBytes)),
+                ("eta", says ? null : LiveFacts.Eta(operation.EtaSeconds))));
         }
 
         // The queue's tiles: how many run, the pace, how many import and how many failed.
@@ -59,6 +62,7 @@ namespace Jularr.Frontend.Modules.Live
             return new LiveEntity("downloads", null, null, Texts(("speed", LiveFacts.Speed(speed)), ("remaining", ByteSize.Format(remaining)),
                 ("eta", speed > 0 && remaining > 0 ? string.Format(CultureInfo.CurrentCulture, texts["downloads.etaIn"], LiveFacts.Eta((int)Math.Min(int.MaxValue, remaining / speed))) : null),
                 ("active", Count(active)), ("waiting", string.Format(CultureInfo.CurrentCulture, texts["downloads.waiting"], waiting)),
+                ("processing", string.Format(CultureInfo.CurrentCulture, texts["downloads.processing"], clients.Sum(client => client.PostProcessingCount))),
                 ("line", Sparkline.Points([.. SpeedLine(clients).Select(value => (double)value)], height: SpeedLineHeight))));
         }
 

@@ -53,10 +53,10 @@ namespace Jularr.Integrations.Logic.Opds
             return [.. (feed.Root?.Elements(Atom + "entry") ?? []).Take(50).Select(entry => ReadEntry(target, entry)).OfType<OpdsBook>()];
         }
 
-        public async Task DownloadAsync(OpdsConnection connection, Uri source, string destination, CancellationToken ct, long? maximumBytes = null, Func<long, IDisposable>? reserveWrite = null)
+        public async Task DownloadAsync(OpdsConnection connection, Uri source, string destination, CancellationToken ct, long? maximumBytes = null, Func<long, IDisposable>? reserveWrite = null, Func<long, long?, Task>? progress = null)
         {
             using var response = await DirectDownload.SendAsync(http, source, Credentials(connection), gates, ct);
-            await DirectDownload.SaveAsync(response, destination, maximumBytes, ct, reserveWrite);
+            await DirectDownload.SaveAsync(response, destination, maximumBytes, ct, reserveWrite, progress);
         }
 
         private static OpdsBook? ReadEntry(Uri feed, XElement entry)

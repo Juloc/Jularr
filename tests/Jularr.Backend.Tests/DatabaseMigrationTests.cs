@@ -63,6 +63,35 @@ namespace Jularr.Backend.Tests
             """);
 
         [TestMethod]
+        public async Task DownloadStages_UpgradeKeepsUnresolvedImportsAndSourceWaitsSeparate()
+        {
+            using var folder = new LibraryTests.TemporaryDirectory();
+            var cs = TestPostgres.ResolveConnectionString(nameof(DownloadStages_UpgradeKeepsUnresolvedImportsAndSourceWaitsSeparate));
+            var options = Backup(folder.Path, out _);
+            var tools = Tools(cs, FakeDump(folder.Path, true), null);
+            await new DatabaseBaseline(cs, migrations: DatabaseBaseline.Migrations.Where(migration => migration.Version < 53).ToArray()).StartAsync(CancellationToken.None);
+            await ExecuteAsync(cs, """
+                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle") VALUES (901, 1, 'Kept download');
+                INSERT INTO "WantedItems" ("Id", "WorkId") VALUES (901, 901);
+                INSERT INTO "AcquisitionReleases" ("Id", "WantedItemId", "ReleaseIdentity", "Title", "AcquisitionReleaseStatusTypeId")
+                VALUES (901, 901, 'kept-901', 'Kept 901', 1), (902, 901, 'kept-902', 'Kept 902', 1), (903, 901, 'kept-903', 'Kept 903', 1);
+                INSERT INTO "Operations" ("Id", "OperationTypeId", "OperationStatusTypeId", "AcquisitionReleaseId", "AttentionKey", "AttentionProposal", "DownloadStateTypeId", "RemainingBytes")
+                VALUES (901, 2, 2, 901, 'import_ambiguous_title', '{"Source":{"LocalRoot":"/test","Directory":""}}', 2, 100),
+                    (902, 2, 2, 902, 'source_manual_link', NULL, NULL, NULL), (903, 2, 1, 903, NULL, NULL, 1, NULL);
+                """);
+            await new DatabaseBaseline(cs, options, tools).StartAsync(CancellationToken.None);
+            Assert.AreEqual((short)5, await ScalarAsync(cs, """SELECT "DownloadStateTypeId" FROM "Operations" WHERE "Id" = 901"""));
+            Assert.AreEqual((short)2, await ScalarAsync(cs, """SELECT "OperationStatusTypeId" FROM "Operations" WHERE "Id" = 901"""));
+            Assert.AreEqual(0L, await ScalarAsync(cs, """SELECT "RemainingBytes" FROM "Operations" WHERE "Id" = 901"""));
+            Assert.AreEqual(DBNull.Value, await ScalarAsync(cs, """SELECT "DownloadStateTypeId" FROM "Operations" WHERE "Id" = 902"""));
+            Assert.AreEqual((short)1, await ScalarAsync(cs, """SELECT "DownloadStateTypeId" FROM "Operations" WHERE "Id" = 903"""));
+            Assert.AreEqual(3L, await ScalarAsync(cs, """SELECT count(*) FROM "Operations";"""));
+            await ExecuteAsync(cs, """UPDATE "Operations" SET "DownloadStateTypeId" = 8, "AttentionKey" = NULL, "AttentionProposal" = NULL WHERE "Id" = 901""");
+            Assert.AreEqual((short)5, await ScalarAsync(cs, """SELECT "ActivityFilterTypeId" FROM "OperationQueueStates" WHERE "OperationId" = 901"""));
+            Assert.AreEqual(DatabaseBaseline.CurrentVersion, await ScalarAsync(cs, """SELECT max("Version") FROM "DatabaseSchemaVersions";"""));
+        }
+
+        [TestMethod]
         public async Task WorkCatalogColumns_UpgradeKeepsWorksMarksThemDetailedAndAddsDefaults()
         {
             using var folder = new LibraryTests.TemporaryDirectory();

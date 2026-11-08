@@ -65,13 +65,13 @@ namespace Jularr.Integrations.Logic.Gutenberg
             }
         }
 
-        public async Task DownloadAsync(int bookId, string destination, CancellationToken ct, long? maximumBytes = null, Func<long, IDisposable>? reserveWrite = null)
+        public async Task DownloadAsync(int bookId, string destination, CancellationToken ct, long? maximumBytes = null, Func<long, IDisposable>? reserveWrite = null, Func<long, long?, Task>? progress = null)
         {
             // Redirects stay on gutenberg.org over HTTPS; the size is bounded.
             using var response = await SendAsync(EpubUri(bookId), ct);
             try
             {
-                await DirectDownload.SaveAsync(response, destination, maximumBytes, ct, reserveWrite);
+                await DirectDownload.SaveAsync(response, destination, maximumBytes, ct, reserveWrite, progress);
             }
             catch (DirectDownloadException exception) when (exception.Failure != DirectDownloadFailure.TooLarge)
             {

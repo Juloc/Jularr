@@ -71,6 +71,18 @@ let source: EventSource | undefined;
 let retry: ReturnType<typeof setTimeout> | undefined;
 let delay = FirstDelay;
 let latest: LiveEntities | undefined;
+const listeners = new Set<() => void>();
+
+// Pages with changing list membership refresh their authorized HTML after a new snapshot, using the existing stream.
+export function onLiveChange(listener: () => void): void {
+    listeners.add(listener);
+}
+
+// A newer authorized HTML snapshot carries its values too, so rebinding cannot replay older stream values over its rows and figures.
+export function mergeLive(entities: LiveEntities): void {
+    latest = { ...latest, ...entities };
+    applyLive(document, latest);
+}
 
 const wanted = () => !document.hidden && document.querySelector("#app-content [data-live]") !== null;
 
@@ -92,6 +104,7 @@ function open(): void {
         delay = FirstDelay;
         latest = (JSON.parse((event as MessageEvent<string>).data) as { entities: LiveEntities }).entities;
         applyLive(document, latest);
+        for (const listener of listeners) listener();
     };
     stream.addEventListener("snapshot", received);
     stream.addEventListener("update", received);

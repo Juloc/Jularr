@@ -41,6 +41,11 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
         public async Task PlaceAsync(LogicContext context, DownloadData download, StorageFiles source, ImportSourceRef sourceRef, IReadOnlyList<StorageFile> files, bool isComplete, CancellationToken ct,
             IReadOnlyList<StorageFile>? allSourceFiles = null)
         {
+            await context.ExecuteBatchAsync(async (ctx, token) =>
+            {
+                await ctx.SetDownloadStageAsync(new DownloadOperationParameters(download.OperationId), DownloadStateType.Completed, token);
+                return true;
+            }, ct);
             var sourceDirectory = sourceRef.Directory;
             if (!isComplete)
             {

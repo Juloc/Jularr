@@ -120,6 +120,13 @@ SavePill, FolderPicker, IconInfo, TimePicker, FactList, Drawer, FilterDialog, Sh
   the book being translated (read-only, leading to the book) and the notices of failed background jobs (a failed "Discover cache" or "Subtitles" job), in *Needs your help* (Retry where
   the task can run again, Dismiss; a job leads to the Schedule), *Running* and *Waiting*; the Jobs figure counts the tasks that need help, once. **Wanted** has the views *Missing*
   (the default), *Cutoff unmet* and *All* (last, the only one that also lists available targets). The Queue's old filters, live tiles and list of finished operations stay gone.
+- Owner's decision 8 Nov, Downloads (`/Admin/Downloads`) follows SABnzbd: the upper queue contains transfers and downloads still waiting to start,
+  already-started rows first without changing the downloader's saved priority/order. History begins when transfer ends and shows real verification,
+  repair, extraction and moving stages live (an unknown percentage is indeterminate), then downloader completion or failure. Library import remains
+  the existing Arr+ operation: a delivered download with an unresolved import stays in download History with its reason and a link to its Queue details;
+  it is never presented as an unfinished transfer or as available in the library. Counts distinguish transfers, waiting downloads and post-processing.
+  The existing stream patches values and requests authorized HTML fragments for changing rows, actions, client counts and paging; hidden pages rest,
+  active selection/dialogs/edits are preserved, and failed refreshes retain the snapshot with a retry notice. No full-document reload is needed.
 - Owner's decision 20 Oct, sidebar modes: on `/Admin/*` the sidebar shows only the administration menu, all groups open; the user
   entries are not shown, and the Jularr logo (linking to the user home) is the way back. No extra back button.
   The user menu has one entry, Administration, that opens the first allowed entry. On a narrow header a breadcrumb part with sub-pages opens them as a menu, the first part stays whole and a long last part (the title) ends in an ellipsis with its full text in a tip.

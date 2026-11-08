@@ -51,6 +51,7 @@ namespace Jularr.Backend.Tests
             // Importing only once every running download is unpacking; waiting and paused say so.
             Assert.IsFalse(LivePhases.Combine([Download(state: DownloadStateType.PostProcessing), Download()])!.IsImporting);
             Assert.IsTrue(LivePhases.Combine([Download(state: DownloadStateType.PostProcessing), Download(state: DownloadStateType.PostProcessing)])!.IsImporting);
+            Assert.IsTrue(LivePhases.Combine([Download(state: DownloadStateType.Extracting), Download(state: DownloadStateType.Completed)])!.IsImporting);
             Assert.IsTrue(LivePhases.Combine([Download(waiting: true), Download()])!.IsWaiting);
             Assert.IsTrue(LivePhases.Combine([Download(state: DownloadStateType.Paused)])!.IsPaused);
         }
