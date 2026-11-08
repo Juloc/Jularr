@@ -6,6 +6,7 @@ Navigation only. Rules: [Frontend conventions](../../docs/FRONTEND_CONVENTIONS.m
 ## Host and framework
 
 - Library Search All: [Works.Search.cs](Pages/Admin/Works/Works.Search.cs), [status/results refresh](Pages/Admin/Works/Works.entry.ts), [behavior and verification](../../docs/ACQUISITION_SEARCH_ALL.md); E2E `WorkSearchRunTests` covers all/filtered/selected, cancellation and mobile layout.
+- Selected Works deletion: [Works.cshtml.cs](Pages/Admin/Works/Works.cshtml.cs) invokes `DeleteWorksV1` for the native selection or the authorized per-title `DeleteOne` fragment; [Works.entry.ts](Pages/Admin/Works/Works.entry.ts) owns progress and selection across failures. Tests: backend `WorkListTests`, E2E `WorkDeletionTests`.
 
 - [Program.cs](Program.cs): single host, service registration, authorization, request culture and Razor/API routing.
 - [UiText.cs](Framework/UiText.cs), [UiResources.cs](Localization/UiResources.cs): service-backed request language pack and English registration inputs; [Catalogs](Localization/Catalogs) hold the shipped languages (`{key: [English, text]}`).

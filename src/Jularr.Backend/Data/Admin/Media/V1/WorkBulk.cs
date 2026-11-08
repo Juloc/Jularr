@@ -79,7 +79,7 @@ namespace Jularr.Backend.Data.Admin.Media.V1
             AddsExclusion = addsExclusion;
         }
 
-        [DataField(typeof(WorkListFields), nameof(WorkListFields.HeavyWorkIds))]
+        [DataField(typeof(WorkListFields), nameof(WorkListFields.WorkIds))]
         public long[] WorkIds { get; }
 
         [DataField(typeof(WorkExclusionFields), nameof(WorkExclusionFields.DeletesFiles))]

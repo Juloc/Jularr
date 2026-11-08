@@ -224,7 +224,7 @@ namespace Jularr.Frontend.Pages.Admin.Works
         {
             var id = item.Id.ToString(CultureInfo.InvariantCulture);
             var card = new MediaCard(assets, item.CanonicalTitle, "/Admin/Works/" + id, item.PosterUrl).Facts(item.ReleaseYear, MediaTypeLabel.Key(item.MediaTypeId, item.MediaSubtypeId), null).Label(StatusChip(item));
-            if (Selectable) card.Select(ListIdentity.Select("workIds", id, BulkForm, "works.select"));
+            if (Selectable) card.Select(Selection(item));
             if (item.WantedItemId is not null && item.MediaTypeId != MediaType.Game && CanManageWanted)
             {
                 var label = texts[item.IsMonitored ? "work.monitor.stop" : "work.monitor.start"];
@@ -256,7 +256,7 @@ namespace Jularr.Frontend.Pages.Admin.Works
             if (facts.Count > 0) more.Add(new Truncated(string.Join(" · ", facts)));
             var identity = new ListIdentity(new ListPoster(item.PosterUrl is { } poster ? new MediaImage(poster, "", 56, 84) : null, large: true),
                 new A(new Truncated(item.CanonicalTitle)).Class("list-identity__title").Attribute("href", "/Admin/Works/" + id), subline,
-                select: Selectable ? ListIdentity.Select("workIds", id, BulkForm, "works.select") : null, more: more);
+                select: Selectable ? Selection(item) : null, more: more);
             return new ListRow([identity, StatusChip(item), Actions(item, csrf)]);
         }
 
@@ -298,12 +298,15 @@ namespace Jularr.Frontend.Pages.Admin.Works
             var subline = item.ReleaseYear is { } year ? (IUiComponent)new Span(type, new ValueText(" · " + year.ToString(CultureInfo.InvariantCulture))) : type;
             var identity = new ListIdentity(new ListPoster(MediaImage.Or(assets, item.PosterUrl, "", 38, 56)),
                 new A(new Truncated(item.CanonicalTitle)).Class("list-identity__title").Attribute("href", home), subline,
-                select: Selectable ? ListIdentity.Select("workIds", id, BulkForm, "works.select") : null);
+                select: Selectable ? Selection(item) : null);
             var cells = new List<IUiComponent> { identity, StatusChip(item) };
             cells.AddRange(Columns.Select(column => ColumnCell(column.Key, item)));
             cells.Add(Actions(item, csrf));
             return new ListRow(cells, Caption(item));
         }
+
+        private IUiComponent Selection(WorkListItemV1 item) => ListIdentity.Select("workIds", item.Id.ToString(CultureInfo.InvariantCulture), BulkForm, "works.select", _selectedWorkIds.Contains(item.Id))
+            .Attribute("data-work-title", item.CanonicalTitle);
 
         private IUiComponent StatusChip(WorkListItemV1 item)
         {
@@ -406,7 +409,14 @@ namespace Jularr.Frontend.Pages.Admin.Works
             var exclusion = new Toggle("work.delete.exclusion");
             exclusion.Control.Attribute("name", "addsExclusion");
             return new Modal(assets, "works-delete", "works.delete.title",
-                [new PostForm(Address("Delete"), csrf, [], new Div().Attribute("data-works-ids", ""), files, exclusion, new Button(new Text("works.delete.confirm")).Submit()).Class("works-delete-form")]);
+                [new PostForm(Address("Delete"), csrf, [], new Div().Attribute("data-works-ids", ""), files, exclusion, new Button(new Text("works.delete.confirm")).Submit()).Class("works-delete-form")
+                    .Attribute("data-delete-one", Address("DeleteOne")).TextAttribute("data-progress", "works.delete.progress").TextAttribute("data-current", "works.delete.current")
+                    .Attribute("data-summary", string.Format(CultureInfo.CurrentCulture, texts["works.report"], texts["works.action.delete"], "{0}", "{1}"))
+                    .TextAttribute("data-confirm", "works.delete.confirm")
+                    .TextAttribute("data-unconfirmed", "works.delete.unconfirmed").TextAttribute("data-stopped", "works.delete.stopped").TextAttribute("data-retry", "works.delete.retry")
+                    .TextAttribute("data-refresh-failed", "works.delete.refreshFailed"),
+                    new Div(new P().Attribute("data-delete-count", "").Attribute("role", "status"), new Progress().Attribute("value", "0").Attribute("max", "1").TextAttribute("aria-label", "works.delete.title"),
+                        new P().Attribute("data-delete-current", ""), new Ul().Attribute("data-delete-failures", "")).Class("works-delete-progress").Attribute("hidden", "hidden")]);
         }
 
         // What happened to the titles of the last action: how many, and why the others stayed.

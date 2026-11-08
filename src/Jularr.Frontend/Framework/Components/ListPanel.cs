@@ -62,8 +62,11 @@ namespace Jularr.Frontend.Framework
         }
 
         // The box of a row that can be chosen: it counts in the dock's bulk zone and belongs to the form named by formId, which the bulk buttons carry.
-        public static IUiComponent Select(string name, string value, string formId, string labelKey) =>
-            new Input().Attribute("type", "checkbox").Attribute("name", name).Attribute("value", value).Attribute("form", formId).Attribute("data-dock-select", "").Class("list-select").TextAttribute("aria-label", labelKey);
+        public static HtmlElement Select(string name, string value, string formId, string labelKey, bool selected = false)
+        {
+            var box = new Input().Attribute("type", "checkbox").Attribute("name", name).Attribute("value", value).Attribute("form", formId).Attribute("data-dock-select", "").Class("list-select").TextAttribute("aria-label", labelKey);
+            return selected ? box.Attribute("checked", "checked") : box;
+        }
 
         // The head of the name column of a list whose rows can be chosen: the box that chooses every row of the page (the dock counts them), before the head's label or sort link.
         public static IUiComponent SelectAllHead(IUiComponent label, string labelKey) =>

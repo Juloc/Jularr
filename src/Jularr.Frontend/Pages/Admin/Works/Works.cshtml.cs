@@ -36,6 +36,7 @@ namespace Jularr.Frontend.Pages.Admin.Works
         private SearchMetadataDataV1? _search;
         private BaseDataList<MetadataSearchResultV1>? _results;
         private bool _bulkFailed;
+        private HashSet<long> _selectedWorkIds = [];
         private WorksViewType _view;
         private SearchRunDetailsV1? _searchRun;
         private ScopeSelection? _scopes;
@@ -103,6 +104,10 @@ namespace Jularr.Frontend.Pages.Admin.Works
 
         protected override void Define(Page page)
         {
+            if (TempData["WorksSelection"] is string selection)
+            {
+                _selectedWorkIds = selection.Split(',').Select(value => long.Parse(value, CultureInfo.InvariantCulture)).ToHashSet();
+            }
             page.Title("admin.works.title");
             page.Navigation("nav.admin");
             page.Asset("Pages/Admin/Work/Work.entry.scss");
@@ -125,10 +130,11 @@ namespace Jularr.Frontend.Pages.Admin.Works
             page.Content.Add(new MediaTypeBar(assets, Scopes.ListedSlugs, Scopes.ChosenSlugs, "library.scope.", types => Address(types: types)));
             page.Content.Add(Toolbar());
             if (_searchRun is { } run && (SearchJob is not null || run.OperationStatusTypeId is OperationStatusType.Queued or OperationStatusType.Running)) page.Content.Add(SearchPanel(csrf));
+            var catalog = new List<IUiComponent>();
             if (_works is { } works)
             {
-                page.Content.Add(Titles(works.Items, csrf).Paged(works.Items.Count, PageSize, primary: true));
-                if (_summary is { TotalCount: > 0 } summary) page.Content.Add(Footer(summary));
+                catalog.Add(Titles(works.Items, csrf).Paged(works.Items.Count, PageSize, primary: true));
+                if (_summary is { TotalCount: > 0 } summary) catalog.Add(Footer(summary));
                 if (_view == WorksViewType.Table) page.Content.Add(new ColumnPicker());
                 if (works.Items.Count > 0 && CanManageMedia) page.Content.Add(DeleteDialog(csrf));
                 if (works.Items.Count > 0 && Selectable)
@@ -144,15 +150,16 @@ namespace Jularr.Frontend.Pages.Admin.Works
             // Titles deleted with an exclusion stay out of requests until the exclusion is removed.
             if (_exclusions is { } exclusions && (exclusions.Items.Count > 0 || ExclusionPage > 1))
             {
-                page.Content.Add(new UiSection("admin.works.exclusions", [new Table<WorkExclusionV1>(exclusions.Items)
+                catalog.Add(new UiSection("admin.works.exclusions", [new Table<WorkExclusionV1>(exclusions.Items)
                     .Text(item => item.Title, "media.title")
                     .Content("media.type", item => new Text(MediaTypeLabel.Key(item.MediaTypeId, null)))
                     .Content("common.actions", item => new PostForm(Address("RemoveExclusion"), csrf, [("workExclusionId", item.Id.ToString(CultureInfo.InvariantCulture))],
                         new Button(new Text("admin.works.exclusion.remove")).Submit())).Paged(key: "exclusions")]));
             }
 
+            page.Content.Add(new Div([.. catalog]).Attribute("data-works-catalog", ""));
             page.Content.Add(AddDialog(csrf));
-            page.Content.Add(Dock(_works, csrf));
+            page.Content.Add(Dock(_works, csrf).Attribute("data-works-dock", ""));
         }
 
         public async Task<IActionResult> OnGetAsync()
@@ -246,8 +253,22 @@ namespace Jularr.Frontend.Pages.Admin.Works
         {
             _bulkFailed = true;
             var ids = workIds ?? [];
+            _selectedWorkIds = ids.ToHashSet();
             if (ids.Length == 0) return Reported("delete", new BaseDataList<WorkBulkOutcomeV1>([]));
-            return Reported("delete", await deleteWorks.ExecuteAsync<BaseDataList<WorkBulkOutcomeV1>>(new WorksBulkParametersV1(), new DeleteWorksDataV1(ids, deletesFiles, addsExclusion), HttpContext.RequestAborted));
+            var outcomes = await deleteWorks.ExecuteAsync<BaseDataList<WorkBulkOutcomeV1>>(new WorksBulkParametersV1(), new DeleteWorksDataV1(ids, deletesFiles, addsExclusion), HttpContext.RequestAborted);
+            var failed = outcomes.Where(item => item.OutcomeKey != "done").Select(item => item.Id).ToArray();
+            if (failed.Length > 0) TempData["WorksSelection"] = string.Join(',', failed);
+            return Reported("delete", outcomes);
+        }
+
+        // The browser asks for one title at a time, using the same permission, deletion rules and per-title failure handling as the native form.
+        public async Task<IActionResult> OnPostDeleteOneAsync([BindRequired] long workId, bool deletesFiles, bool addsExclusion)
+        {
+            _bulkFailed = true;
+            var outcomes = await deleteWorks.ExecuteAsync<BaseDataList<WorkBulkOutcomeV1>>(new WorksBulkParametersV1(), new DeleteWorksDataV1([workId], deletesFiles, addsExclusion), HttpContext.RequestAborted);
+            var outcome = outcomes.Single();
+            return Partial("_UiComponent", new Li(new Span(new ValueText(outcome.CanonicalTitle)).Class("works-report__title"), new Span(new Text(outcome.OutcomeKey == "done" ? "works.delete.deleted" : OutcomeKey(outcome.OutcomeKey))).Class("works-report__reason"))
+                .Attribute("data-delete-id", outcome.Id.ToString(CultureInfo.InvariantCulture)).Attribute("data-delete-outcome", outcome.OutcomeKey));
         }
 
         protected override async Task LoadDataAsync()

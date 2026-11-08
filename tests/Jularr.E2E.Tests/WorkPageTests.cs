@@ -294,8 +294,9 @@ namespace Jularr.E2E.Tests
                 await page.Locator(".list-head").GetByRole(AriaRole.Checkbox, new() { Name = "Select all titles", Exact = true }).CheckAsync();
                 await page.Locator("[data-works-delete]").ClickAsync();
                 await Assertions.Expect(page.Locator("#works-delete")).ToBeVisibleAsync();
-                await Steps.SubmitAsync(page, page.Locator("#works-delete form"));
-                await Assertions.Expect(page.Locator(".works-report")).ToContainTextAsync("Delete");
+                await page.Locator("#works-delete form button[type=submit]").ClickAsync();
+                await Assertions.Expect(page.Locator(".works-delete-progress")).ToHaveAttributeAsync("data-running", "false", new() { Timeout = 30_000 });
+                await Assertions.Expect(page.Locator(".works-delete-progress")).ToContainTextAsync("Delete");
                 CollectionAssert.AreEqual(Array.Empty<string>(), session.Problems.ToArray());
             }
             catch (Exception exception) when (exception is not AssertInconclusiveException)
