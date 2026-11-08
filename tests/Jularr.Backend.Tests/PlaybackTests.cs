@@ -273,6 +273,33 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public void Music_FlacEmbeddedCover_IsNotPlayedAsVideo()
+        {
+            var probe = MediaProbeClient.Parse("""
+                {"format":{"format_name":"flac","duration":"60.0","bit_rate":"1100000"},"streams":[
+                    {"index":0,"codec_type":"audio","codec_name":"flac","channels":2,"disposition":{"default":1}},
+                    {"index":1,"codec_type":"video","codec_name":"mjpeg","width":600,"height":600,"disposition":{"attached_pic":1}}]}
+                """);
+            Assert.AreEqual(1, probe.Streams.Count);
+            Assert.AreEqual("audio", probe.Streams[0].CodecType);
+            Assert.AreEqual("flac", probe.Streams[0].Codec);
+
+            // Even for previously scanned files, an audio-only plan must explicitly disable video mapping.
+            var conversion = PlaybackLogic.PlanConversion([new PlaybackTrackData(0, MediaTrackType.Audio, "flac", true)],
+                Hls.Containers.ToHashSet(), Hls.VideoCodecs.ToHashSet(), Hls.AudioCodecs.ToHashSet());
+            Assert.IsNotNull(conversion);
+            Assert.IsNull(conversion.VideoStreamIndex);
+            var args = MediaTranscoder.BuildArguments(new TranscodeRequest("/music/cover.flac", "/cache/music", 0, 6,
+                conversion.VideoStreamIndex, conversion.AudioStreamIndex, conversion.CopyVideo, conversion.CopyAudio,
+                ["-c:v", "h264_vaapi"], ["-hwaccel", "vaapi"])).ToList();
+            CollectionAssert.Contains(args, "-vn");
+            CollectionAssert.DoesNotContain(args, "0:v:0?");
+            CollectionAssert.DoesNotContain(args, "h264_vaapi");
+            CollectionAssert.DoesNotContain(args, "-hwaccel");
+            CollectionAssert.Contains(args, "-c:a");
+        }
+
+        [TestMethod]
         public void Music_DeviceQuality_ConvertsOnlyClearlyLargerAudio()
         {
             // A lossless album track on a device asking for small music becomes 128 kbit/s AAC; a small MP3, the original setting and video stay as they are.

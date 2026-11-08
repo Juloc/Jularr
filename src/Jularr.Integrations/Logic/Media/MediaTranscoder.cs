@@ -277,13 +277,19 @@ namespace Jularr.Integrations.Logic.Media
             var arguments = new List<string> { "-hide_banner", "-loglevel", "error", "-nostdin" };
 
             // Input seeking and pacing.
-            if (!request.CopyVideo) arguments.AddRange(request.HardwareAccelerationArguments);
+            if (request.VideoStreamIndex is not null && !request.CopyVideo) arguments.AddRange(request.HardwareAccelerationArguments);
             arguments.AddRange(["-readrate", ReadRate, "-readrate_initial_burst", InitialBurstSeconds, "-ss", offset, "-i", request.InputPath]);
-            arguments.AddRange(["-map", request.VideoStreamIndex is { } video ? "0:" + video.ToString(CultureInfo.InvariantCulture) : "0:v:0?"]);
+            // No video stream means audio-only: never let FFmpeg automatically pick attached cover art.
+            if (request.VideoStreamIndex is { } video) arguments.AddRange(["-map", "0:" + video.ToString(CultureInfo.InvariantCulture)]);
+            else arguments.Add("-vn");
             arguments.AddRange(["-map", request.AudioStreamIndex is { } audio ? "0:" + audio.ToString(CultureInfo.InvariantCulture) : "0:a:0?", "-sn", "-dn"]);
 
             // Copy what the client plays; segment boundaries follow the grid.
-            if (request.CopyVideo)
+            if (request.VideoStreamIndex is null)
+            {
+                // Audio-only HLS needs no video encoder, keyframes or hardware device.
+            }
+            else if (request.CopyVideo)
             {
                 arguments.AddRange(["-c:v", "copy"]);
             }
