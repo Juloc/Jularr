@@ -130,7 +130,8 @@ namespace Jularr.E2E.Tests
 
                 // Three more episodes of the season, a German and an English subtitle file for each, and the streams of every file.
                 var extra = Directory.CreateDirectory(Path.Combine(folders.Library, "Series", "cast-extra")).FullName;
-                foreach (var number in new[] { 3, 4, 5 }) await File.WriteAllBytesAsync(Path.Combine(extra, "Episode " + number + ".mkv"), bytes);
+                // Register the fixture tracks before placing their files in the watched library.
+                // Otherwise a concurrent library scan can insert the same relative paths first.
                 await jularr.RunSqlAsync("""
                     DO $$
                     DECLARE source record; unit bigint; asset bigint; n int;
@@ -159,6 +160,9 @@ namespace Jularr.E2E.Tests
                     UNION ALL SELECT file."Id", 1, 2, 'aac', 'eng', 2, TRUE, FALSE FROM "StoredFiles" AS file WHERE NOT file."IsSubtitle"
                     UNION ALL SELECT file."Id", 2, 2, 'aac', 'ger', 2, FALSE, FALSE FROM "StoredFiles" AS file WHERE NOT file."IsSubtitle";
                     """);
+                // Now the scanner sees already-registered tracks instead of racing their insert.
+                foreach (var number in new[] { 3, 4, 5 })
+                    await File.WriteAllBytesAsync(Path.Combine(extra, "Episode " + number + ".mkv"), bytes);
                 var assets = new List<long>();
                 for (var number = 1; number <= 5; number++)
                 {
