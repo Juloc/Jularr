@@ -27,6 +27,22 @@ namespace Jularr.Frontend.Pages.Admin.Browser
         private PageResult<WantedDetailsV1>? _wanted;
         private InstanceModuleDetailsV1? _browserModule;
 
+        // The browser's fixed English notes, by their text; a note with an address or a figure in it stays as the browser wrote it.
+        private static readonly Dictionary<string, string> NoteKeys = new(StringComparer.Ordinal)
+        {
+            ["the source refused this browser"] = "admin.browser.note.refusedBrowser",
+            ["the source is not a public HTTPS address"] = "admin.browser.note.notHttps",
+            ["the source address could not be resolved"] = "admin.browser.note.unresolved",
+            ["a permitted administrator controls the source browser"] = "admin.browser.note.manual",
+            ["the source browser is available to automatic work again"] = "admin.browser.note.manualEnded",
+            ["the browser is stopped"] = "admin.browser.note.stopped",
+            ["the browser begins as a new client"] = "admin.browser.note.reset"
+        };
+
+        private string KindText(string kind) => texts.Has("admin.browser.kind." + kind) ? texts["admin.browser.kind." + kind] : kind;
+
+        private string NoteText(string note) => NoteKeys.TryGetValue(note, out var key) ? texts[key] : note;
+
         protected override void Define(Page page)
         {
             page.Title("admin.browser.title");
@@ -41,7 +57,7 @@ namespace Jularr.Frontend.Pages.Admin.Browser
                 var key = browser.IsRunning ? "admin.browser.running" : browser.IsAvailable ? "admin.browser.configured" : "admin.browser.missing";
                 var tone = browser.IsRunning ? UiTone.Success : browser.IsAvailable ? UiTone.Warning : UiTone.Neutral;
                 page.Content.Add(new Div(new StateChip(new Text(key), tone),
-                    browser.LastError is { } error ? new P(new ValueText(error)) : new Span()));
+                    browser.LastError is { } error ? new P(new ValueText(NoteText(error))) : new Span()));
                 page.Content.Add(new P(new Text("admin.browser.installation"), new ValueText(": "),
                     new Text("admin.browser.installation." + browser.InstallationState)));
                 if (browser.TotalBytes > 0 && browser.InstallationState == "downloading")
@@ -99,7 +115,7 @@ namespace Jularr.Frontend.Pages.Admin.Browser
 
             // What the browser is and what it did last.
             page.Content.Add(new H2(new Text("admin.browser.state")));
-            page.Content.Add(new Table<BrowserEventV1>([.. _status?.Events.Items ?? []]).Text(item => item.Kind, "admin.browser.kind").Text(item => item.Message, "admin.browser.message").Text(item => item.At, "admin.browser.at"));
+            page.Content.Add(new Table<BrowserEventV1>([.. (_status?.Events.Items ?? []).Select(item => new BrowserEventV1(item.At, KindText(item.Kind), NoteText(item.Message)))]).Text(item => item.Kind, "admin.browser.kind").Text(item => item.Message, "admin.browser.message").Text(item => item.At, "admin.browser.at"));
             // What the administrator can make it do.
             page.Content.Add(new H2(new Text("admin.browser.actions")));
             page.Content.Add(new Form<RunBrowserActionDataV1>(form =>
