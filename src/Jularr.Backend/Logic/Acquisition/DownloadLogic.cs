@@ -1589,26 +1589,8 @@ namespace Jularr.Backend.Logic.Acquisition
                 return;
             }
 
-            // A person is told once per title and reason; a repeat folds into the unread notice.
-            sql = new SqlStatement();
-            sql.Statement =
-                """
-                SELECT
-                    work."Id" AS "WorkId",
-                    work."CanonicalTitle" AS "Title"
-                FROM
-                    "Operations" AS operation
-                    JOIN "AcquisitionReleases" AS release ON release."Id" = operation."AcquisitionReleaseId"
-                    JOIN "WantedItems" AS wanted ON wanted."Id" = release."WantedItemId"
-                    JOIN "Works" AS work ON work."Id" = wanted."WorkId"
-                WHERE
-                    operation."Id" = @OperationId;
-                """;
-            sql.Parameters.Add(data);
-            if (await ctx.ReadOptionalAsync<FailedWorkData>(sql, ct) is { } waiting)
-            {
-                await ctx.NotifyStaffAsync(new StaffNotificationData(NotificationType.DownloadWaiting, waiting.WorkId, NotificationSubject.Join(waiting.Title, data.AttentionKey), "/Admin/Queue"), ct);
-            }
+            // Staff are told once, not per title: every waiting download folds into the one unread notice, and the queue lists which.
+            await ctx.NotifyStaffAsync(new StaffNotificationData(NotificationType.DownloadWaiting, null, NotificationSubject.DownloadsWaiting, "/Admin/Queue"), ct);
         }
 
         // A grab its indexer limited stays in the queue, waiting for the indexer's pause; its release keeps the protected link it is fetched from again, which marks the wait.

@@ -54,11 +54,13 @@ namespace Jularr.Frontend.Pages.User.Notifications
 
         private IUiComponent Item(NotificationV1 item)
         {
-            // A subject of two parts names the title and, as its reason, what the person is asked.
+            // All waiting downloads share one notice that points to the queue; older notices name one title and, as its reason, what the person is asked.
+            var isSummary = item.Subject == NotificationSubject.DownloadsWaiting;
             var (title, reason) = NotificationSubject.Split(item.Subject);
-            var text = reason is null ? string.Format(CultureInfo.CurrentCulture, texts["notifications.message." + item.NotificationTypeId], item.Subject)
+            var text = isSummary ? texts["notifications.message.DownloadsWaiting"]
+                : reason is null ? string.Format(CultureInfo.CurrentCulture, texts["notifications.message." + item.NotificationTypeId], item.Subject)
                 : string.Format(CultureInfo.CurrentCulture, texts["notifications.message." + item.NotificationTypeId], title, texts["acquisition.outcome." + reason]);
-            if (item.Occurrences > 1) text += " " + string.Format(CultureInfo.CurrentCulture, texts["notifications.times"], item.Occurrences);
+            if (item.Occurrences > 1 && !isSummary) text += " " + string.Format(CultureInfo.CurrentCulture, texts["notifications.times"], item.Occurrences);
             IUiComponent message = item.Link is { } link ? new A(new ValueText(text)).Attribute("href", link) : new Span(new ValueText(text));
             return new Li(message, new Span(new LocalTime(item.CreatedAt)).Class("notifications__time"))
                 .Class("notifications__item" + (item.IsRead ? "" : " notifications__item--unread")).Attribute("data-list-key", item.Id.ToString(CultureInfo.InvariantCulture));
