@@ -37,6 +37,7 @@ namespace Jularr.Backend.Service.Core
         private static readonly TimeSpan Answer = TimeSpan.FromSeconds(3);
         private readonly ConcurrentDictionary<Uri, DateTimeOffset> _resting = new();
         private readonly ConcurrentDictionary<Uri, Task> _waking = new();
+        private readonly ConcurrentDictionary<Uri, (DateTimeOffset At, string Reason)> _lastFailure = new();
 
         // The free space the Owner typed on the translation page, else the configured value; 0 means no model download is allowed.
         public static async Task<long> FreeBytesAsync(LogicContext ctx, long configured, CancellationToken ct)
@@ -69,7 +70,7 @@ namespace Jularr.Backend.Service.Core
                 catch (Exception exception) when (exception is HttpRequestException or JsonException or InvalidDataException
                     || exception is OperationCanceledException && !ct.IsCancellationRequested)
                 {
-                    Fail(server);
+                    Fail(server, ReasonOf(exception));
                 }
             }
             return null;
@@ -90,15 +91,34 @@ namespace Jularr.Backend.Service.Core
                 catch (Exception exception) when (exception is HttpRequestException or JsonException or InvalidDataException
                     || exception is OperationCanceledException && !ct.IsCancellationRequested)
                 {
-                    Fail(server);
+                    Fail(server, ReasonOf(exception));
                     return [];
                 }
             }));
             return [.. answers.SelectMany(installed => installed).Distinct(StringComparer.Ordinal)];
         }
 
-        // A machine that did not answer or failed a block rests; the next in the order takes its work.
-        public void Fail(Uri server) => _resting[server] = time.GetUtcNow() + Rest;
+        // A machine that did not answer or failed a block rests; the next in the order takes its work. The reason is what the Owner reads as its last error.
+        public void Fail(Uri server, string reason = "unreachable")
+        {
+            _resting[server] = time.GetUtcNow() + Rest;
+            _lastFailure[server] = (time.GetUtcNow(), reason);
+        }
+
+        // Until when the machine rests after a failure, and what failed last (the reason and when); both empty for a machine that never failed since the start.
+        public (DateTimeOffset? RestingUntil, string? Reason, DateTimeOffset? FailedAt) StateOf(Uri server)
+        {
+            var resting = _resting.TryGetValue(server, out var until) && until > time.GetUtcNow() ? until : (DateTimeOffset?)null;
+            return _lastFailure.TryGetValue(server, out var failure) ? (resting, failure.Reason, failure.At) : (resting, null, null);
+        }
+
+        // Why a question to a machine failed, as a key of the page's texts.
+        public static string ReasonOf(Exception exception) => exception switch
+        {
+            OperationCanceledException => "timeout",
+            HttpRequestException => "unreachable",
+            _ => "invalid_answer"
+        };
 
         // Machines are set up, and every one of them rests after it did not answer.
         public bool AllResting(string[] saved) => Order(saved) is { Length: > 0 } order && order.All(_resting.ContainsKey);
@@ -130,7 +150,7 @@ namespace Jularr.Backend.Service.Core
             }
             catch (Exception exception) when (exception is HttpRequestException or JsonException or InvalidDataException or OperationCanceledException)
             {
-                Fail(server);
+                Fail(server, ReasonOf(exception));
             }
         }
     }

@@ -16452,6 +16452,114 @@
    "Translated works",
    "Übersetzte Werke"
   ],
+  "translation.status.title": [
+   "Status",
+   "Status"
+  ],
+  "translation.status.ready": [
+   "Running",
+   "Läuft"
+  ],
+  "translation.status.noMachine": [
+   "No machine",
+   "Kein Rechner"
+  ],
+  "translation.status.unreachable": [
+   "No machine answers",
+   "Kein Rechner antwortet"
+  ],
+  "translation.status.noModel": [
+   "No model",
+   "Kein Modell"
+  ],
+  "translation.progress.nowTitle": [
+   "Now",
+   "Jetzt"
+  ],
+  "translation.progress.languages": [
+   "Languages",
+   "Sprachen"
+  ],
+  "translation.progress.openSections": [
+   "Sections open",
+   "Abschnitte offen"
+  ],
+  "translation.machines.title": [
+   "Ollama machines",
+   "Ollama-Rechner"
+  ],
+  "translation.machine.resting": [
+   "Resting",
+   "Ruht"
+  ],
+  "translation.machine.noModel": [
+   "No model",
+   "Kein Modell"
+  ],
+  "translation.machine.reachable": [
+   "Reachable",
+   "Erreichbar"
+  ],
+  "translation.machine.yes": [
+   "Yes",
+   "Ja"
+  ],
+  "translation.machine.no": [
+   "No",
+   "Nein"
+  ],
+  "translation.machine.answers": [
+   "Answers with",
+   "Antwortet mit"
+  ],
+  "translation.machine.noApproved": [
+   "no approved model installed",
+   "kein freigegebenes Modell installiert"
+  ],
+  "translation.machine.none": [
+   "nothing",
+   "nichts"
+  ],
+  "translation.machine.loaded": [
+   "Loaded now",
+   "Gerade geladen"
+  ],
+  "translation.machine.restingUntil": [
+   "Resting until",
+   "Ruht bis"
+  ],
+  "translation.machine.lastError": [
+   "Last error",
+   "Letzter Fehler"
+  ],
+  "translation.machine.noError": [
+   "none since the start",
+   "keiner seit dem Start"
+  ],
+  "translation.machine.error.timeout": [
+   "No answer in time",
+   "Keine Antwort in der Zeit"
+  ],
+  "translation.machine.error.unreachable": [
+   "Not reachable",
+   "Nicht erreichbar"
+  ],
+  "translation.machine.error.invalid_answer": [
+   "Unusable answer",
+   "Unbrauchbare Antwort"
+  ],
+  "translation.models.title": [
+   "Models",
+   "Modelle"
+  ],
+  "translation.benchmark.title": [
+   "Speed test",
+   "Geschwindigkeitstest"
+  ],
+  "translation.cache.title": [
+   "This browser",
+   "Dieser Browser"
+  ],
   "translation.books.title": [
    "Translated works",
    "Übersetzte Werke"
