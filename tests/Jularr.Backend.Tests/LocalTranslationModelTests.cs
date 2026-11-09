@@ -14,6 +14,24 @@ namespace Jularr.Backend.Tests
         private static readonly Uri Ollama = new("http://ollama:11434/");
 
         [TestMethod]
+        public async Task Machine_ThatAcceptsTheConnectionButNeverAnswers_FailsAfterItsLimit_AndTheNextMachineTakesOver()
+        {
+            using var http = new HttpClient(new Silent());
+            var models = new OllamaLocalModels(http) { QuestionLimit = TimeSpan.FromMilliseconds(200), GenerateLimit = TimeSpan.FromMilliseconds(200) };
+            var clock = new Clock();
+            var machines = new LocalTranslationMachines(models, Options.Create(new LocalTranslationOptions { Endpoint = "http://ollama:11434" }), clock);
+
+            // Neither a question nor a translation hangs for the client's own 65 minutes; both end as the timeout the callers already treat as a failed machine.
+            await Assert.ThrowsExactlyAsync<TaskCanceledException>(async () => await models.InstalledAsync(Ollama, default));
+            await Assert.ThrowsExactlyAsync<TaskCanceledException>(async () => await models.TranslateAsync(Ollama, "translategemma:12b", "en", "de", "Hello", default));
+            // A caller that cancels itself still ends as a cancellation, not as a failed machine.
+            using var own = new CancellationTokenSource(50);
+            await Assert.ThrowsAsync<OperationCanceledException>(async () => await models.InstalledAsync(Ollama, own.Token));
+            Assert.IsNull(await machines.ChooseAsync([], default), "A machine that does not answer is passed over and rests.");
+            Assert.IsTrue(machines.AllResting([]));
+        }
+
+        [TestMethod]
         public async Task Machines_TranslateInTheOwnersOrder_PassOverOneThatFails_AndReturnToItAfterItsRest()
         {
             var handler = new Machines();
@@ -347,6 +365,16 @@ namespace Jularr.Backend.Tests
 
             using var negative = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/translation/free-bytes", new TranslationFreeBytesDataV1(-1));
             Assert.AreEqual(System.Net.HttpStatusCode.BadRequest, negative.StatusCode);
+        }
+
+        // A machine that took the connection and never answers.
+        private sealed class Silent : HttpMessageHandler
+        {
+            protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+            {
+                await Task.Delay(Timeout.Infinite, cancellationToken);
+                throw new InvalidOperationException();
+            }
         }
 
         private sealed class FakeOllama : HttpMessageHandler
