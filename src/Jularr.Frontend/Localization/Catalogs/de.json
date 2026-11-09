@@ -7261,6 +7261,10 @@
    "A download of {0} waits for a decision: {1}.",
    "Ein Download von {0} wartet auf eine Entscheidung: {1}."
   ],
+  "notifications.message.DownloadsWaiting": [
+   "Downloads are waiting for a decision. Open the queue to see which.",
+   "Downloads warten auf eine Entscheidung. Die Warteschlange zeigt welche."
+  ],
   "notifications.message.StorageOffline": [
    "The storage connection {0} stays offline.",
    "Die Speicherverbindung {0} bleibt offline."

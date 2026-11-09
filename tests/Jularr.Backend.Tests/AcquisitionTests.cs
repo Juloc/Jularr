@@ -1971,7 +1971,7 @@ namespace Jularr.Backend.Tests
             // Read again unchanged, the same doubt is no new notice.
             await RunAsync<MonitorDownloadsV1>(host);
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"Notifications\" WHERE \"NotificationTypeId\" = 6"));
-            Assert.AreEqual("Example Movieimport_ambiguous_title", await host.ScalarAsync("SELECT \"Subject\" FROM \"Notifications\" WHERE \"NotificationTypeId\" = 6"));
+            Assert.AreEqual("waiting", await host.ScalarAsync("SELECT \"Subject\" FROM \"Notifications\" WHERE \"NotificationTypeId\" = 6"));
             Assert.AreEqual("/Admin/Queue", await host.ScalarAsync("SELECT \"Link\" FROM \"Notifications\" WHERE \"NotificationTypeId\" = 6"));
 
             // The same doubt after another try folds into the unread notice.
@@ -1979,11 +1979,12 @@ namespace Jularr.Backend.Tests
             await RunAsync<MonitorDownloadsV1>(host);
             Assert.AreEqual((1L, 2), ((long)(await host.ScalarAsync("SELECT count(*) FROM \"Notifications\" WHERE \"NotificationTypeId\" = 6"))!, (int)(await host.ScalarAsync("SELECT max(\"Occurrences\") FROM \"Notifications\" WHERE \"NotificationTypeId\" = 6"))!));
 
-            // The inbox says which download waits and why.
+            // The inbox shows one summary that points to the queue, without a title or a repeat count.
             using var inbox = await host.SendAsync(HttpMethod.Get, "/Notifications");
             var html = await inbox.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, inbox.StatusCode, html);
-            StringAssert.Contains(html, "A download of Example Movie waits for a decision: The file&#x27;s title does not clearly match the film.");
+            StringAssert.Contains(html, "Downloads are waiting for a decision. Open the queue to see which.");
+            Assert.IsFalse(html.Contains("(2×)", StringComparison.Ordinal), html);
         }
 
         [TestMethod]

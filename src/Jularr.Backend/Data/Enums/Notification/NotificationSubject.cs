@@ -3,6 +3,9 @@ namespace Jularr.Backend.Data.Enums.Notification
     // A subject of two parts, such as a title and the reason a download waits; one unread notice is kept for the same pair.
     public static class NotificationSubject
     {
+        // The one subject all waiting downloads share, so they fold into one unread notice.
+        public const string DownloadsWaiting = "waiting";
+
         private const char Separator = '\u001F';
 
         public static string Join(string title, string reason) => title + Separator + reason;

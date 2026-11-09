@@ -2836,6 +2836,7 @@ namespace Jularr.Frontend.Localization
             new("notifications.message.MediaAvailable", "{0} is available."),
             new("notifications.message.DownloadFailed", "A download of {0} failed."),
             new("notifications.message.DownloadWaiting", "A download of {0} waits for a decision: {1}."),
+            new("notifications.message.DownloadsWaiting", "Downloads are waiting for a decision. Open the queue to see which."),
             new("notifications.message.StorageOffline", "The storage connection {0} stays offline."),
             new("notifications.type.RequestApproved", "Approved requests"),
             new("notifications.type.RequestRejected", "Declined requests"),
