@@ -319,6 +319,39 @@ namespace Jularr.Backend.Tests
             bytes is [0xFF, 0x0A, ..] || bytes.Length > 12 && bytes[4..8].SequenceEqual("JXL "u8.ToArray());
 
         [TestMethod]
+        public async Task BookWithoutAnyProvider_GetsTheCoverOfItsOwnFile_AndAFileWithoutOneIsNotAskedAgain()
+        {
+            using var storage = new LibraryTests.TemporaryDirectory();
+            await using var host = await LibraryTests.CreateHostAsync(storage.Path);
+            var (_, _) = await ReadingTests.CreateBooksAsync(host, storage.Path, "Covered Book", "Broken Book");
+
+            // Both books are Works of the library that no provider knows: no poster at all.
+            Assert.AreEqual(2L, await host.ScalarAsync("SELECT count(*) FROM \"Works\" WHERE \"MediaTypeId\" = 3"));
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"WorkMetadataFacts\" WHERE \"FactKey\" = 'Poster'"));
+            var broken = Directory.EnumerateFiles(storage.Path, "Broken Book.epub", SearchOption.AllDirectories).Single();
+            await File.WriteAllTextAsync(broken, "this is no archive");
+
+            // The cover job takes the cover from the EPUB's package; the unreadable file gets none.
+            await RunAsync(host, scope => scope.ServiceProvider.GetRequiredService<StoreBookFileCoversV1>().ExecuteAsync<UpdateResult>(new CoverParametersV1(), default));
+            var workId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Works\" WHERE \"CanonicalTitle\" = 'Covered Book'"))!;
+            StringAssert.StartsWith((string)(await host.ScalarAsync("SELECT \"Value\" FROM \"WorkMetadataFacts\" WHERE \"FactKey\" = 'Poster' AND \"WorkId\" = " + workId))!,
+                "/api/v1/covers/" + workId + "/poster?v=");
+            using var served = await host.SendAsync(HttpMethod.Get, "/api/v1/covers/" + workId + "/poster");
+            Assert.AreEqual(HttpStatusCode.OK, served.StatusCode);
+            StringAssert.StartsWith(served.Content.Headers.ContentType!.MediaType, "image/");
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"WorkMetadataFacts\" WHERE \"FactKey\" = 'Poster'"));
+
+            // It is not asked again for a week, and a book with a provider's poster is left alone.
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"WorkCovers\" WHERE \"FailedAt\" IS NOT NULL AND \"SourceUrl\" = '" + CoverStore.FileSource + "'"));
+            await File.WriteAllBytesAsync(broken, ReadingTests.BuildEpub("Broken Book"));
+            await RunAsync(host, scope => scope.ServiceProvider.GetRequiredService<StoreBookFileCoversV1>().ExecuteAsync<UpdateResult>(new CoverParametersV1(), default));
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"WorkMetadataFacts\" WHERE \"FactKey\" = 'Poster'"));
+            await host.Fixture.RunSqlAsync("UPDATE \"WorkCovers\" SET \"FailedAt\" = now() - interval '8 days' WHERE \"FailedAt\" IS NOT NULL");
+            await RunAsync(host, scope => scope.ServiceProvider.GetRequiredService<StoreBookFileCoversV1>().ExecuteAsync<UpdateResult>(new CoverParametersV1(), default));
+            Assert.AreEqual(2L, await host.ScalarAsync("SELECT count(*) FROM \"WorkMetadataFacts\" WHERE \"FactKey\" = 'Poster'"));
+        }
+
+        [TestMethod]
         public async Task Cover_ChangedAddress_IsFetchedAgain_AndAFailureKeepsTheProviderAddress()
         {
             var images = new FakeImages();
