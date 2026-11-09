@@ -11479,6 +11479,82 @@
    "When",
    "Wann"
   ],
+  "admin.browser.kind.navigate": [
+   "Opening a page",
+   "Seite wird geöffnet"
+  ],
+  "admin.browser.kind.read": [
+   "Read",
+   "Gelesen"
+  ],
+  "admin.browser.kind.error": [
+   "Error",
+   "Fehler"
+  ],
+  "admin.browser.kind.refused": [
+   "Refused",
+   "Abgelehnt"
+  ],
+  "admin.browser.kind.no answer": [
+   "No answer",
+   "Keine Antwort"
+  ],
+  "admin.browser.kind.manual": [
+   "Manual control",
+   "Manuelle Steuerung"
+  ],
+  "admin.browser.kind.manual-ended": [
+   "Manual control ended",
+   "Manuelle Steuerung beendet"
+  ],
+  "admin.browser.kind.stopped": [
+   "Stopped",
+   "Gestoppt"
+  ],
+  "admin.browser.kind.reset": [
+   "Reset",
+   "Zurückgesetzt"
+  ],
+  "admin.browser.kind.display": [
+   "Display",
+   "Anzeige"
+  ],
+  "admin.browser.kind.started": [
+   "Started",
+   "Gestartet"
+  ],
+  "admin.browser.kind.retry": [
+   "Retry",
+   "Neuer Versuch"
+  ],
+  "admin.browser.note.refusedBrowser": [
+   "The source refused this browser",
+   "Die Quelle hat diesen Browser abgelehnt"
+  ],
+  "admin.browser.note.notHttps": [
+   "The source is not a public HTTPS address",
+   "Die Quelle ist keine öffentliche HTTPS-Adresse"
+  ],
+  "admin.browser.note.unresolved": [
+   "The source address could not be resolved",
+   "Die Adresse der Quelle ließ sich nicht auflösen"
+  ],
+  "admin.browser.note.manual": [
+   "An administrator controls the source browser",
+   "Ein Administrator steuert den Quellen-Browser"
+  ],
+  "admin.browser.note.manualEnded": [
+   "The source browser is available to automatic work again",
+   "Der Quellen-Browser steht der automatischen Arbeit wieder zur Verfügung"
+  ],
+  "admin.browser.note.stopped": [
+   "The browser is stopped",
+   "Der Browser ist gestoppt"
+  ],
+  "admin.browser.note.reset": [
+   "The browser begins as a new client",
+   "Der Browser beginnt als neuer Client"
+  ],
   "admin.browser.actions": [
    "What the browser may do",
    "Was der Browser tun darf"

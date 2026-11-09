@@ -211,6 +211,15 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(html, "data-remote-browser");
             StringAssert.Contains(html, "Done and close");
             StringAssert.Contains(html, "Reconnect");
+
+            // The browser's fixed notes read as texts of the page, not as the English the browser wrote them in.
+            browser.Events = [new SourceBrowserEvent(DateTime.UtcNow, "refused", "the source is not a public HTTPS address")];
+            using var withEvents = await host.SendAsync(HttpMethod.Get, "/Admin/Browser");
+            var eventsHtml = await withEvents.Content.ReadAsStringAsync();
+            StringAssert.Contains(eventsHtml, "The source is not a public HTTPS address");
+            StringAssert.Contains(eventsHtml, ">Refused<");
+            Assert.IsFalse(eventsHtml.Contains("the source is not a public HTTPS address", StringComparison.Ordinal));
+            browser.Events = [];
             Assert.IsTrue(html.IndexOf("handler=OpenView", StringComparison.Ordinal) < html.IndexOf("What the browser did", StringComparison.Ordinal));
             using var openedFromPage = await host.SendAsync(HttpMethod.Post, "/Admin/Browser?handler=OpenView", new Dictionary<string, string>
             {
@@ -281,7 +290,7 @@ namespace Jularr.Backend.Tests
             public bool IsAvailable => true;
             public string? LastOutcome { get; set; }
             public SourceBrowserStatus Status => new("fixture-browser", null, "fixture-profile", true, null, null, LastOutcome, null, null, 0);
-            public IReadOnlyList<SourceBrowserEvent> Events => [];
+            public IReadOnlyList<SourceBrowserEvent> Events { get; set; } = [];
             public int Starts { get; private set; }
             public int Ends { get; private set; }
             public int Inputs { get; private set; }
