@@ -37,8 +37,9 @@ namespace Jularr.E2E.Tests
         // The repository holding this test project.
         public static string Repository { get; } = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".."));
 
-        // Settings are configuration keys such as "Providers:Tmdb".
-        public static async Task<JularrInstance> StartAsync(IReadOnlyDictionary<string, string>? settings = null)
+        // Settings are configuration keys such as "Providers:Tmdb". beforeStart prepares the empty database (an earlier schema, say); whileStarting
+        // runs after the host process has started and before the instance counts as ready, for what the start itself shows (the update page).
+        public static async Task<JularrInstance> StartAsync(IReadOnlyDictionary<string, string>? settings = null, Func<string, Task>? beforeStart = null, Func<JularrInstance, Task>? whileStarting = null)
         {
             var admin = Environment.GetEnvironmentVariable("JULARR_TEST_DB");
             if (string.IsNullOrWhiteSpace(admin))
@@ -51,7 +52,17 @@ namespace Jularr.E2E.Tests
             try
             {
                 await instance.CreateDatabaseAsync();
+                if (beforeStart is not null)
+                {
+                    await beforeStart(instance.ConnectionString);
+                }
+
                 instance.StartHost();
+                if (whileStarting is not null)
+                {
+                    await whileStarting(instance);
+                }
+
                 await instance.WaitUntilReadyAsync();
                 Latest = instance;
                 return instance;

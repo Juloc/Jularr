@@ -17,6 +17,14 @@ a new numbered migration. `DatabaseBaselineTests`/`DatabaseMigrationTests` fail 
 
 ## Startup
 
+While this runs, the configured addresses are not closed: `StartupStatusServer` (Frontend) listens from the moment the process has built its services and
+answers every request with 503, `Retry-After: 5` and a self-contained German page ("Jularr wird aktualisiert", `maintenance.startup.*`) that shows
+the step (Sicherung, Datenbank-Update with "Schritt x von y", Start), the run time and reloads itself every 4 seconds. It needs neither the database
+nor the built frontend. `DatabaseUpgrade.RunAsync` reports each phase (`DatabaseUpgradeProgress`); `StartupHandover` makes the status listener give up the
+addresses only when the application's own server is about to bind them, so the port is never closed in between. A plain restart with nothing to update shows
+"Jularr startet" without steps. The log records `Backup before the update took … s` and `Database migrations took … s`. SIGTERM during the update cancels it
+(the migrations are one transaction) and the process ends without starting the application.
+
 `DatabaseUpgrade.RunAsync` (called by `Program.cs` before the host serves) runs `DatabaseBaseline`, the one owner, under a PostgreSQL
 advisory lock so two instances never migrate at once. Migrations run automatically, without confirmation.
 
@@ -26,7 +34,8 @@ advisory lock so two instances never migrate at once. Migrations run automatical
 - Versioned database: the recorded history must match this release (`Fingerprint` is the cumulative SHA-256 of baseline and all migrations
   up to that version, line endings normalized). A changed or missing version or a newer database stops the start.
 - Pending migrations: first a complete backup (database dump, key ring, manifest) through the backup owner into `Backup:Path` (`/data/backups`),
-  using `Backup:PgDumpPath`. If the backup cannot be made, nothing is migrated and Jularr does not start. With nothing pending no backup is made.
+  using `Backup:PgDumpPath` (dumped with `--compress=zstd:1`, about six times faster than the default compression and smaller; a `pg_dump` without zstd is
+  run again with its default). If the backup cannot be made, nothing is migrated and Jularr does not start. With nothing pending no backup is made.
   The backup's kind is `Update`; after the migrations are committed, older automatic and update backups beyond the Owner's keep limit are removed
   (manual ones stay). A failure there is logged as a warning and does not stop the start.
 - All pending migrations and their version entries run in one transaction in numeric order. A failure rolls everything back.
@@ -34,7 +43,7 @@ advisory lock so two instances never migrate at once. Migrations run automatical
 ## A failed update
 
 The failure is logged (critical) with the migration name and reason. Jularr then does not start the application: `DatabaseMaintenance`
-(Frontend) serves one page on the configured addresses that answers every request with 503 and the German text
+(Frontend, through the same `StartupStatusServer` that already answers during the update) serves one page on the configured addresses that answers every request with 503 and the German text
 "Datenbank-Update fehlgeschlagen ... siehe Log; die vorherige Version kann wieder gestartet werden" (`maintenance.databaseUpdate.*`). The process
 stays up instead of exiting, so a reverse proxy shows the page rather than a bad gateway and a restart policy does not repeat the backup and the
 failing update. Recover by starting the previous version (the database is unchanged) or a corrected one. Do not remove volumes.

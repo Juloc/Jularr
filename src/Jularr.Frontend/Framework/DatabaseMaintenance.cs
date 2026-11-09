@@ -5,28 +5,17 @@ using Jularr.Frontend.Localization;
 
 namespace Jularr.Frontend.Framework
 {
-    // What Jularr serves when the database update at its start failed: no application, no database, one page on the configured addresses that
-    // answers every request with 503 and names the migration. The update was rolled back, so the previous version can be started again. The
-    // process stays up (rather than exiting) so a reverse proxy shows this page instead of a bad gateway and a restart policy does not
+    // What Jularr serves when the database update at its start failed (StartupStatusServer, which also answers while the update runs): no
+    // application, no database, one page on the configured addresses that answers every request with 503 and names the migration. The update
+    // was rolled back, so the previous version can be started again. The process stays up (rather than exiting) so a reverse proxy shows this page instead of a bad gateway and a restart policy does not
     // repeat the backup and the failing update in a loop; fixing it means starting the previous or a corrected version.
     public static class DatabaseMaintenance
     {
         public static async Task RunAsync(string[] args, DatabaseUpgradeFailure failure, CancellationToken cancellationToken = default)
         {
-            var builder = WebApplication.CreateBuilder(args);
-            var app = builder.Build();
-            var page = Page(failure, new FrontendAssets(app.Environment));
-            app.UseStaticFiles();
-            app.Run(async context =>
-            {
-                context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
-                context.Response.Headers.RetryAfter = "120";
-                context.Response.Headers.CacheControl = "no-store";
-                context.Response.ContentType = "text/html; charset=utf-8";
-                await context.Response.WriteAsync(page);
-            });
-
-            await app.RunAsync(cancellationToken);
+            await using var server = await StartupStatusServer.StartAsync(args, cancellationToken);
+            server.Status.Fail(failure);
+            await server.WaitForShutdownAsync(cancellationToken);
         }
 
         // The page: the title and one line with the migration name, in German; the log holds the reason. It styles itself with the compiled
@@ -72,7 +61,7 @@ namespace Jularr.Frontend.Framework
         }
 
         // German as the catalog ships it, English when the catalog lacks the text.
-        private static string Text(string key) =>
+        internal static string Text(string key) =>
             UiCatalogs.Load().FirstOrDefault(catalog => catalog.Locale == "de")?.Texts.GetValueOrDefault(key).Text is { Length: > 0 } german
                 ? german
                 : UiResources.English.First(resource => resource.Key == key).EnglishText;
