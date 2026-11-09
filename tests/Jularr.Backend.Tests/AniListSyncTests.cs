@@ -229,6 +229,7 @@ namespace Jularr.Backend.Tests
             await using var host = await LibraryTests.CreateHostAsync(storage.Path, razor: true,
                 services: services => services.AddHttpClient<AniListClient>().ConfigurePrimaryHttpMessageHandler(() => anilist));
             await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" IN ('ProgressSync', 'AniList', 'Library')");
+            await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = FALSE WHERE \"Key\" = 'DiscoverCache'");
 
             var providerId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Providers\" WHERE \"Key\" = 'anilist'"))!;
             using var configured = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/providers/" + providerId + "/secret", new SaveProviderSecretDataV1(FakeAniList.Secret, FakeAniList.ClientId));
@@ -259,7 +260,7 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(2L, await host.ScalarAsync("SELECT count(*) FROM \"WorkExternalIdentities\" WHERE \"Namespace\" = 'anilist' AND \"Value\" IN ('7777', '8888')"));
             Assert.IsNotNull((await ReadEntriesAsync(host, "PLANNING")).Single().WorkId);
             Assert.AreEqual(0L, await host.ScalarAsync("""
-                SELECT count(*) FROM "WorkLibraryRelations" AS tie
+                SELECT count(*) FROM "WorkManagedRelations" AS tie
                     JOIN "WorkExternalIdentities" AS identity ON identity."WorkId" = tie."WorkId"
                 WHERE identity."Namespace" = 'anilist' AND identity."Value" IN ('7777', '8888')
                 """));

@@ -127,11 +127,11 @@ namespace Jularr.Backend.Tests
                 Assert.IsFalse(again.Success);
             }
 
-            // The Admin list shows titles with a tie to the library only; the System page counts catalog titles apart.
+            // The Admin list shows titles with a managed tie only: an AniList list entry (Work 7) protects a title from cleanup but is not one; the System page counts catalog titles apart.
             using var list = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/works?pageSize=100");
             Assert.AreEqual(HttpStatusCode.OK, list.StatusCode, await list.Content.ReadAsStringAsync());
             var listed = (await list.Content.ReadFromJsonAsync<PageResult<Jularr.Backend.Data.Admin.Media.V1.WorkListItemV1>>())!.Items.Select(item => item.Id).Order().ToArray();
-            CollectionAssert.AreEqual(new long[] { 1, 2, 3, 4, 5, 6, 7, 8, 35, 40 }, listed);
+            CollectionAssert.AreEqual(new long[] { 1, 2, 3, 4, 5, 6, 8, 35, 40 }, listed);
             using var system = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/system");
             var health = (await system.Content.ReadFromJsonAsync<SystemHealthV1>())!;
             Assert.AreEqual(10L, health.CatalogWorks, "Works 20 to 24, 31, 32, 33, 34 and 37 are catalog only.");

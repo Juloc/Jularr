@@ -46,7 +46,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                     FROM
                         "WorkListEntries" AS listed
                     WHERE
-                        EXISTS (SELECT 1 FROM "WorkLibraryRelations" AS tie WHERE tie."WorkId" = listed."Id")
+                        EXISTS (SELECT 1 FROM "WorkManagedRelations" AS tie WHERE tie."WorkId" = listed."Id")
                         AND (cardinality(@MediaTypeIds::smallint[]) + cardinality(@MediaSubtypeIds::smallint[]) = 0
                             OR listed."MediaSubtypeId" IS NULL AND listed."MediaTypeId" = ANY(@MediaTypeIds::smallint[])
                             OR listed."MediaSubtypeId" = ANY(@MediaSubtypeIds::smallint[]))
@@ -161,7 +161,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                     FROM
                         "WorkListEntries" AS listed
                     WHERE
-                        EXISTS (SELECT 1 FROM "WorkLibraryRelations" AS tie WHERE tie."WorkId" = listed."Id")
+                        EXISTS (SELECT 1 FROM "WorkManagedRelations" AS tie WHERE tie."WorkId" = listed."Id")
                         AND (cardinality(@MediaTypeIds::smallint[]) + cardinality(@MediaSubtypeIds::smallint[]) = 0
                             OR listed."MediaSubtypeId" IS NULL AND listed."MediaTypeId" = ANY(@MediaTypeIds::smallint[])
                             OR listed."MediaSubtypeId" = ANY(@MediaSubtypeIds::smallint[]))
