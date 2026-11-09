@@ -13,8 +13,11 @@ using Jularr.Backend.Service.Admin.Media.V1;
 using Jularr.Integrations.Data.AniList;
 using Jularr.Integrations.Data.Narou;
 using Jularr.Integrations.Data.OpenLibrary;
+using Jularr.Integrations.Logic.Igdb;
+using Jularr.Integrations.Logic.MusicBrainz;
 using Jularr.Integrations.Logic.Narou;
 using Jularr.Integrations.Logic.OpenLibrary;
+using Jularr.Integrations.Logic.Tmdb;
 using Microsoft.Extensions.Caching.Memory;
 
 namespace Jularr.Backend.Service.Core
@@ -96,12 +99,13 @@ namespace Jularr.Backend.Service.Core
                 var connection = await games.ConnectAsync(context, ct);
                 results.AddRange((await games.SearchAsync(connection, query, year, ct)).Select(result => new MetadataSearchResultV1(GameMetadata.Namespace,
                     result.Id.ToString(CultureInfo.InvariantCulture), result.Name, null, result.Year is >= 1950 and <= 2200 ? result.Year : null,
-                    TextLimit.Cut(string.Join(", ", result.Platforms.Select(platform => platform.Abbreviation ?? platform.Name)), 4000), null, TextLimit.Cut(string.Join(", ", result.Developers), 4000))));
+                    TextLimit.Cut(string.Join(", ", result.Platforms.Select(platform => platform.Abbreviation ?? platform.Name)), 4000), null, TextLimit.Cut(string.Join(", ", result.Developers), 4000),
+                    result.CoverImageId is { } cover ? IgdbClient.CoverUrl(cover) : null)));
             }
             else if (MusicMetadata.Handles(mediaType))
             {
                 results.AddRange((await music.SearchAsync(query, year, ct)).Select(result => new MetadataSearchResultV1(MusicMetadata.Namespace, result.Id,
-                    result.Title, null, result.Year is >= 1800 and <= 2200 ? result.Year : null, result.PrimaryType, null, result.Artist)));
+                    result.Title, null, result.Year is >= 1800 and <= 2200 ? result.Year : null, result.PrimaryType, null, result.Artist, MusicBrainzClient.CoverUrl(result.Id))));
             }
             else if (mediaType == MediaType.Series)
             {
@@ -113,7 +117,8 @@ namespace Jularr.Backend.Service.Core
                 var connection = await metadata.ConnectAsync(context, ct);
                 results.AddRange((await metadata.SearchAsync(connection, mediaType, query, year, ct)).Select(result =>
                     new MetadataSearchResultV1(WorkMetadata.Namespace(mediaType), result.Id.ToString(CultureInfo.InvariantCulture), TextLimit.Cut(result.Title, 500)!,
-                        TextLimit.Cut(result.OriginalTitle, 500), result.Year is >= 1800 and <= 2200 ? result.Year : null, TextLimit.Cut(result.Overview, 4000), null)));
+                        TextLimit.Cut(result.OriginalTitle, 500), result.Year is >= 1800 and <= 2200 ? result.Year : null, TextLimit.Cut(result.Overview, 4000), null, null,
+                        TmdbClient.PosterUrl(result.PosterPath))));
             }
 
             return await MarkKnownAsync(context, results, ct);
