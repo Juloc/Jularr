@@ -65,6 +65,17 @@ namespace Jularr.E2E.Tests
                 await RunJobAsync(page);
                 await WaitForWatchedAsync(page, expectedEpisodes: 1);
 
+                // An AniList card in Favorites has no posters, so its title uses the whole card and breaks only between words (two lines, never three), also in a longer language.
+                await page.SetViewportSizeAsync(375, 700);
+                await page.GotoAsync("/Favorites");
+                var title = page.Locator(".favorites-collection__info--wide strong").First;
+                await Assertions.Expect(title).ToBeVisibleAsync();
+                await title.EvaluateAsync("element => { element.textContent = 'AniList: Abgeschlossen'; }");
+                var box = await title.EvaluateAsync<double[]>("element => [element.getBoundingClientRect().height, parseFloat(getComputedStyle(element).fontSize), element.scrollWidth, element.clientWidth]");
+                Assert.IsTrue(box[0] <= box[1] * 3.3 && box[2] <= box[3] + 1, "The AniList card breaks its title inside a word: " + string.Join(", ", box));
+                await Evidence.SaveAsync(page, "favorites-anilist-card-375");
+                await page.SetViewportSizeAsync(1280, 720);
+
                 // Sending is the profile's choice. Episode 2 finished afterwards goes out, nothing else does.
                 await page.GotoAsync("/Settings");
                 await page.GetByRole(AriaRole.Switch, new() { Name = "Send my progress to AniList" }).CheckAsync(new() { Force = true });

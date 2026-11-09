@@ -126,14 +126,15 @@
     &__title { display: block; min-width: 0; color: var(--text); font-size: 14px; font-weight: 750; text-decoration: none; &:hover { color: var(--accent-text); } }
     &__meta { color: var(--muted); font-size: 12px; }
 
+    // The preference chips wrap onto more lines at every width instead of being cut off.
     &__prefs {
         display: flex;
+        flex-wrap: wrap;
         gap: 6px;
         min-width: 0;
         margin-top: 2px;
-        overflow: hidden;
 
-        .tag { flex: none; max-width: 100%; font-size: 11px; white-space: nowrap; }
+        .tag { flex: 0 1 auto; max-width: 100%; font-size: 11px; white-space: normal; }
     }
 
     &__status { grid-area: status; display: grid; gap: 4px; min-width: 0; }
@@ -211,10 +212,6 @@
         grid-template-areas: "poster info" "status status" "actions actions";
         padding: 10px 12px;
     }
-
-    // The preference chips wrap onto more lines instead of being cut off.
-    .request-row__prefs { flex-wrap: wrap; overflow: visible; }
-    .request-row__prefs .tag { flex: 0 1 auto; white-space: normal; }
 
     .request-row__status { padding: 10px 12px; border-radius: 12px; background: color-mix(in srgb, var(--accent-soft) 55%, var(--surface)); }
     .requests-list--cards { grid-template-columns: minmax(0, 1fr); }
