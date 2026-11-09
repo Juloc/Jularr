@@ -119,3 +119,9 @@
         > strong { flex: none; font-size: 12px; }
     }
 }
+
+// Where the tiles slide sideways (as KpiTile does up to 900px) the wide status word stays whole: the tiles are a little wider and their figure a little smaller.
+@media (max-width: 900px) {
+    .kpi-tile--card { .kpi-tile__value { font-size: 26px; letter-spacing: -.8px; } }
+    .kpi-tiles__row { grid-auto-columns: minmax(172px, 1fr); }
+}

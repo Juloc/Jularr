@@ -6,3 +6,13 @@
     --list-columns-medium: minmax(220px, 2.2fr) minmax(160px, 1.6fr) minmax(130px, 1.1fr) minmax(130px, 1fr) minmax(110px, .8fr);
     --list-columns-narrow: minmax(200px, 2fr) minmax(130px, 1.1fr) minmax(110px, .8fr);
 }
+
+// A phone card: the release name wraps where it has no spaces to break at, so the card never widens the page.
+@container list (max-width: 690px) {
+    .blocked-list .list-row__caption {
+        min-width: 0;
+
+        > span { min-width: 0; max-width: 100%; }
+        .truncated__text { white-space: normal; overflow-wrap: anywhere; }
+    }
+}
