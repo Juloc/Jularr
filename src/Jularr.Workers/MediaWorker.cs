@@ -40,9 +40,13 @@ namespace Jularr.Workers
             await Runner.RunAsync("catalogCleanup", (services, token) =>
                 services.GetRequiredService<CleanCatalogTitlesV1>().ExecuteAsync<UpdateResult>(new CoverParametersV1(), default, token), ct);
 
-            // Covers still named by a provider, a pass of twenty at a time with a short pause.
+            // Covers still named by a provider, a pass of twenty at a time with a short pause; then, a few at a time, the books no provider names a cover for take the one in their own file.
             await Runner.RunWhileBusyAsync("covers", async (services, token) =>
-                (await services.GetRequiredService<StoreCoversV1>().ExecuteAsync<UpdateResult>(new CoverParametersV1(), default, token)).Success, TimeSpan.FromSeconds(2), Time, ct);
+            {
+                var providers = (await services.GetRequiredService<StoreCoversV1>().ExecuteAsync<UpdateResult>(new CoverParametersV1(), default, token)).Success;
+                var files = (await services.GetRequiredService<StoreBookFileCoversV1>().ExecuteAsync<UpdateResult>(new CoverParametersV1(), default, token)).Success;
+                return providers || files;
+            }, TimeSpan.FromSeconds(2), Time, ct);
 
             // Stored covers in another format than the Owner's, a few images per pass and a pause between passes.
             await Runner.RunWhileBusyAsync("coverBackfill", async (services, token) =>

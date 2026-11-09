@@ -1,5 +1,6 @@
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Logic.Media;
+using Jularr.Backend.Data.Logic.Reading;
 using Jularr.Backend.Infrastructure.Sql;
 
 namespace Jularr.Backend.Logic.Media
@@ -141,6 +142,105 @@ namespace Jularr.Backend.Logic.Media
                     AND unit."Id" = @WorkUnitId
                     AND unit."WorkId" = @WorkId
                     AND unit."ImageUrl" = @SourceUrl;
+                """;
+            sql.Parameters.Add(data);
+            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+        }
+
+        // The Works of the library whose books carry a cover in their own file: books with a readable EPUB or comic archive and no poster at all, not tried within a week.
+        public static Task<IReadOnlyList<ReadingSourceData>> ReadFileCoverTargetsAsync(this LogicContext ctx, WorkCoverQueryData query, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    work."Id" AS "WorkId",
+                    work."CanonicalTitle" AS "Title",
+                    file."Id" AS "StoredFileId",
+                    file."RelativePath",
+                    file."SizeBytes",
+                    file."ModifiedAt",
+                    FALSE AS "IsMissing",
+                    root."RelativePath" AS "RootRelativePath",
+                    mount."Id" AS "StorageMountId",
+                    NULL::bigint AS "DocumentId",
+                    FALSE AS "IsCached"
+                FROM
+                    "Works" AS work
+                    JOIN LATERAL (
+                        SELECT
+                            candidate."Id",
+                            candidate."LibraryRootId",
+                            candidate."RelativePath",
+                            candidate."SizeBytes",
+                            candidate."ModifiedAt"
+                        FROM
+                            "MediaAssets" AS asset
+                            JOIN "ReadableStoredFiles" AS candidate ON candidate."MediaAssetId" = asset."Id"
+                        WHERE
+                            asset."WorkId" = work."Id"
+                            AND asset."MediaAssetTypeId" IN (3, 4)
+                            AND candidate."MissingSince" IS NULL
+                            AND NOT candidate."IsDerived"
+                            AND candidate."RelativePath" ~* '\.(epub|cbz)$'
+                        ORDER BY
+                            candidate."RelativePath",
+                            candidate."Id"
+                        LIMIT 1
+                    ) AS file ON TRUE
+                    JOIN "LibraryRoots" AS root ON root."Id" = file."LibraryRootId"
+                    JOIN "StorageMounts" AS mount ON mount."Id" = root."StorageMountId"
+                WHERE
+                    work."MediaTypeId" = 3
+                    AND NOT EXISTS (
+                        SELECT
+                            1
+                        FROM
+                            "WorkMetadataFacts" AS fact
+                        WHERE
+                            fact."WorkId" = work."Id"
+                            AND fact."FactKey" = 'Poster'
+                    )
+                    AND NOT EXISTS (
+                        SELECT
+                            1
+                        FROM
+                            "WorkCovers" AS cover
+                        WHERE
+                            cover."WorkId" = work."Id"
+                            AND cover."WorkUnitId" IS NULL
+                            AND cover."CoverKindId" = 1
+                            AND cover."FailedAt" > now() - interval '7 days'
+                    )
+                ORDER BY
+                    work."Id"
+                LIMIT @Limit;
+                """;
+            sql.Parameters.Add(query);
+            return ctx.ReadSql.ReadListAsync<ReadingSourceData>(sql, ct);
+        }
+
+        // The poster fact of a Work without one, given to the provider that names its kind of book (a manga's, a light novel's AniList, else Open Library), so that provider's next
+        // refresh replaces it; the address it carries is the marker that SaveWorkCoverAsync turns into the stored file's.
+        public static async Task SavePosterFromFileAsync(this LogicContext ctx, WorkCoverTargetData data, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                INSERT INTO
+                    "WorkMetadataFacts" ("WorkId", "FactKey", "UiLocaleId", "Value", "ProviderId")
+                SELECT
+                    work."Id",
+                    'Poster',
+                    NULL,
+                    @SourceUrl,
+                    provider."Id"
+                FROM
+                    "Works" AS work
+                    JOIN "Providers" AS provider ON provider."Key" = CASE WHEN work."MediaSubtypeId" IN (2, 3) THEN 'anilist' ELSE 'openlibrary' END
+                WHERE
+                    work."Id" = @WorkId
+                ON CONFLICT DO NOTHING;
                 """;
             sql.Parameters.Add(data);
             await ctx.ExecuteAsyncForAffectedRows(sql, ct);

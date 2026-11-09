@@ -1,9 +1,16 @@
+using System.IO.Compression;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Service;
+using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Logic.Media;
+using Jularr.Backend.Data.Logic.Reading;
 using Jularr.Backend.Data.System.Media.V1;
 using Jularr.Backend.Logic.Media;
+using Jularr.Backend.Logic.Reading;
+using Jularr.Backend.Logic.Storage;
 using Jularr.Backend.Service.Core;
+using Jularr.Integrations.Data.Nas;
+using Jularr.Integrations.Logic.Storage;
 
 namespace Jularr.Backend.Service.System.Media.V1
 {
@@ -38,6 +45,71 @@ namespace Jularr.Backend.Service.System.Media.V1
 
             await _covers.StoreAsync(Context, targets, CancellationToken);
             return new UpdateResult(targets.Count == PassSize);
+        }
+    }
+
+    // Gives the books of the library that no provider knows a cover from their own file: the cover of an EPUB, the first page of a comic archive. A few books per pass; true while more are
+    // waiting. A book without one, or whose storage is offline, rests a week; a provider that names a poster for it later replaces this one.
+    public sealed class StoreBookFileCoversV1 : SystemService<CoverParametersV1, NoData>
+    {
+        private const int PassSize = 5;
+        private readonly CoverStore _covers;
+        private readonly StorageAccess _storage;
+
+        internal StoreBookFileCoversV1(CoverStore covers, StorageAccess storage)
+        {
+            _covers = covers;
+            _storage = storage;
+        }
+
+        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
+        protected override ModuleRequirement GetInstanceModules(CoverParametersV1 parameters) => ModuleRequirement.All("Library");
+        protected override ServicePermission GetPermission(CoverParametersV1 parameters, Type resultType) => new("system.media");
+
+        protected override async Task<IServiceOutput> OnExecute()
+        {
+            if (!_covers.IsEnabled)
+            {
+                return new UpdateResult(false);
+            }
+
+            var books = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadFileCoverTargetsAsync(new WorkCoverQueryData(null, PassSize), ct), CancellationToken);
+            foreach (var book in books)
+            {
+                (byte[] Bytes, string ContentType)? cover = null;
+                try
+                {
+                    cover = await ReadCoverAsync(book);
+                }
+                catch (Exception exception) when (exception is NasMountException or IOException or UnauthorizedAccessException or InvalidDataException or ServiceUnavailableException)
+                {
+                    // A file that cannot be read now is tried again in a week.
+                }
+
+                if (cover is { } found)
+                {
+                    await _covers.StoreFileAsync(Context, book.WorkId, found.Bytes, found.ContentType, CancellationToken);
+                }
+                else
+                {
+                    await Context.ExecuteBatchAsync(async (ctx, ct) =>
+                    {
+                        await ctx.SaveWorkCoverFailureAsync(new WorkCoverTargetData(book.WorkId, CoverKind.Poster, null, CoverStore.FileSource), ct);
+                        return true;
+                    }, CancellationToken);
+                }
+            }
+
+            return new UpdateResult(books.Count == PassSize);
+        }
+
+        private async Task<(byte[] Bytes, string ContentType)?> ReadCoverAsync(ReadingSourceData book)
+        {
+            var mount = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadStorageMountAsync(book.StorageMountId, ct), CancellationToken);
+            await using var file = await _storage.Open(mount).OpenReadAsync(StoragePath.Combine(book.RootRelativePath, book.RelativePath), CancellationToken);
+            using var archive = new ZipArchive(file, ZipArchiveMode.Read, leaveOpen: true);
+            return book.RelativePath.EndsWith(".epub", StringComparison.OrdinalIgnoreCase) ? BookCoverLogic.FromEpub(archive) : BookCoverLogic.FromComic(archive);
         }
     }
 

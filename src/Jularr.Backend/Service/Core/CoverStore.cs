@@ -96,6 +96,36 @@ namespace Jularr.Backend.Service.Core
             return stored;
         }
 
+        // The marker a poster carries until it is kept: it came from the book's own file, not from a provider.
+        public const string FileSource = "jularr:book-file";
+
+        // A cover the book file itself carried: kept like a downloaded one and shown as the Work's poster, where no provider names one. The provider that later names a poster
+        // of its own replaces it; a Work that cannot be given one is not asked again for a week.
+        public async Task<bool> StoreFileAsync(LogicContext context, long workId, byte[] bytes, string contentType, CancellationToken ct)
+        {
+            var target = new WorkCoverTargetData(workId, CoverKind.Poster, null, FileSource);
+            if (!IsEnabled || bytes.Length == 0)
+            {
+                await context.ExecuteBatchAsync(async (ctx, token) =>
+                {
+                    await ctx.SaveWorkCoverFailureAsync(target, token);
+                    return true;
+                }, ct);
+                return false;
+            }
+
+            var format = EffectiveFormat((await context.ExecuteBatchAsync((ctx, token) => ctx.ReadCoverCacheSettingsAsync(token), ct)).FormatId);
+            var version = Convert.ToHexStringLower(SHA256.HashData(bytes))[..12];
+            await WriteAsync(target, bytes, contentType, format, ct);
+            var data = new WorkCoverStoredData(target, contentType, version, CoverPaths.Url(workId, CoverKind.Poster, null, version), format);
+            return await context.ExecuteBatchAsync(async (ctx, token) =>
+            {
+                await ctx.SavePosterFromFileAsync(target, token);
+                await ctx.SaveWorkCoverAsync(data, token);
+                return true;
+            }, ct);
+        }
+
         // The target downloaded and kept; no result when it cannot be fetched.
         private async Task<(WorkCoverTargetData Target, WorkCoverStoredData? Data)> FetchAsync(WorkCoverTargetData target, CoverFormat format, CancellationToken ct)
         {
