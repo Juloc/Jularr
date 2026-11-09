@@ -132,6 +132,99 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Continue_ARemovedTitle_LeavesTheRowKeepsItsProgressAndReturnsWithNewProgress()
+        {
+            using var storage = new LibraryTests.TemporaryDirectory();
+            await using var host = await LibraryTests.CreateHostAsync(storage.Path);
+            var (show, unit) = await CreateSeriesAsync(host);
+            await host.Fixture.RunSqlAsync($"""
+                DO $$
+                DECLARE mount bigint; root bigint; edition bigint; version bigint; asset bigint;
+                BEGIN
+                    INSERT INTO "StorageMounts" ("Name", "StorageProtocolTypeId", "SharePath", "IsReadOnly") VALUES ('Continue', 3, 'C:\continue', FALSE) RETURNING "Id" INTO mount;
+                    INSERT INTO "LibraryRoots" ("Name", "MediaTypeId", "StorageMountId", "RelativePath") VALUES ('Continue', 2, mount, 'series') RETURNING "Id" INTO root;
+                    INSERT INTO "WorkEditions" ("WorkId", "LanguageCode") VALUES ({show}, 'en') RETURNING "Id" INTO edition;
+                    INSERT INTO "WorkVersions" ("WorkId", "WorkEditionId") VALUES ({show}, edition) RETURNING "Id" INTO version;
+                    INSERT INTO "MediaAssets" ("WorkId", "WorkVersionId", "WorkUnitId", "MediaAssetTypeId") VALUES ({show}, version, {unit["1x2"]}, 1) RETURNING "Id" INTO asset;
+                    INSERT INTO "StoredFiles" ("LibraryRootId", "RelativePath", "SizeBytes", "ModifiedAt", "MediaAssetId", "LastSeenAt") VALUES (root, 'continue/e2.mkv', 1000, now(), asset, now());
+                    INSERT INTO "MediaProgress" ("ProfileId", "WorkId", "WorkUnitId", "ProgressPositionTypeId", "PositionMs", "DurationMs", "UpdatedAt")
+                    VALUES ({ProfileSql}, {show}, {unit["1x2"]}, 1, 500, 1000, now() - interval '1 hour');
+                END $$;
+                """);
+
+            async Task<ContinueItemV1?> ShelfAsync()
+            {
+                using var response = await host.SendAsync(HttpMethod.Get, "/api/v1/continue");
+                return (await response.Content.ReadFromJsonAsync<BaseDataList<ContinueItemV1>>())!.FirstOrDefault(item => item.WorkId == show);
+            }
+
+            // The row knows the episode it stands at and whether the title is a favorite.
+            var item = await ShelfAsync();
+            Assert.AreEqual((unit["1x2"], false), (item!.WorkUnitId, item.IsWatchlisted));
+            using var favorite = await host.SendAsync(HttpMethod.Put, "/api/v1/watchlist/" + show, new UpdateWatchlistDataV1(true));
+            Assert.AreEqual(HttpStatusCode.OK, favorite.StatusCode);
+            Assert.IsTrue((await ShelfAsync())!.IsWatchlisted);
+
+            // Removed: the row leaves at once, the progress stays, an unknown title is refused.
+            using var removed = await host.SendAsync(HttpMethod.Delete, "/api/v1/continue/" + show);
+            Assert.AreEqual(HttpStatusCode.OK, removed.StatusCode, await removed.Content.ReadAsStringAsync());
+            Assert.IsNull(await ShelfAsync());
+            Assert.AreEqual(1L, await CountAsync(host, "\"PositionMs\" = 500 AND NOT \"IsCompleted\""));
+            using var unknown = await host.SendAsync(HttpMethod.Delete, "/api/v1/continue/987654");
+            Assert.AreEqual(HttpStatusCode.NotFound, unknown.StatusCode);
+
+            // Watching again (any progress write) brings the title back.
+            await host.Fixture.RunSqlAsync("UPDATE \"MediaProgress\" SET \"PositionMs\" = 600, \"UpdatedAt\" = now() + interval '1 second'");
+            Assert.IsNotNull(await ShelfAsync());
+
+            // Marked watched or unwatched from the row, the episode leaves the row too.
+            await ChangeAsync(host, show, ProgressAction.Watched, unit["1x2"]);
+            Assert.IsNull(await ShelfAsync());
+            await ChangeAsync(host, show, ProgressAction.Unwatched, unit["1x2"]);
+            Assert.AreEqual(0L, await CountAsync(host, "\"WorkUnitId\" = " + unit["1x2"]));
+        }
+
+        [TestMethod]
+        public async Task Home_ContinueCard_OffersItsMenuAsFormsThatWorkWithoutScript()
+        {
+            using var storage = new LibraryTests.TemporaryDirectory();
+            await using var host = await LibraryTests.CreateHostAsync(storage.Path, razor: true);
+            var (show, unit) = await CreateSeriesAsync(host);
+            await host.Fixture.RunSqlAsync($"""
+                DO $$
+                DECLARE mount bigint; root bigint; edition bigint; version bigint; asset bigint;
+                BEGIN
+                    INSERT INTO "StorageMounts" ("Name", "StorageProtocolTypeId", "SharePath", "IsReadOnly") VALUES ('Menu', 3, 'C:\menu', FALSE) RETURNING "Id" INTO mount;
+                    INSERT INTO "LibraryRoots" ("Name", "MediaTypeId", "StorageMountId", "RelativePath") VALUES ('Menu', 2, mount, 'series') RETURNING "Id" INTO root;
+                    INSERT INTO "WorkEditions" ("WorkId", "LanguageCode") VALUES ({show}, 'en') RETURNING "Id" INTO edition;
+                    INSERT INTO "WorkVersions" ("WorkId", "WorkEditionId") VALUES ({show}, edition) RETURNING "Id" INTO version;
+                    INSERT INTO "MediaAssets" ("WorkId", "WorkVersionId", "WorkUnitId", "MediaAssetTypeId") VALUES ({show}, version, {unit["1x2"]}, 1) RETURNING "Id" INTO asset;
+                    INSERT INTO "StoredFiles" ("LibraryRootId", "RelativePath", "SizeBytes", "ModifiedAt", "MediaAssetId", "LastSeenAt") VALUES (root, 'menu/e2.mkv', 1000, now(), asset, now());
+                    INSERT INTO "MediaProgress" ("ProfileId", "WorkId", "WorkUnitId", "ProgressPositionTypeId", "PositionMs", "DurationMs") VALUES ({ProfileSql}, {show}, {unit["1x2"]}, 1, 500, 1000);
+                END $$;
+                """);
+
+            // The card carries the five entries; the episode it stands at goes into the watched and unwatched forms.
+            var html = await GetAsync(host, "/");
+            foreach (var kind in new[] { "remove", "watched", "unwatched", "favorite" })
+            {
+                StringAssert.Contains(html, "data-card-menu=\"" + kind + "\"");
+            }
+
+            StringAssert.Contains(html, "/Details/" + show + "?handler=HideContinue");
+            StringAssert.Contains(html, "name=\"unitId\" value=\"" + unit["1x2"] + "\"");
+            StringAssert.Contains(html, "Remove from Continue");
+            StringAssert.Contains(html, "Open details");
+
+            // Without script the form posts and returns to the page, and the row is gone.
+            using var removed = await host.SendAsync(HttpMethod.Post, "/Details/" + show + "?handler=HideContinue",
+                new Dictionary<string, string> { ["__RequestVerificationToken"] = LibraryTests.Token(html), ["returnUrl"] = "/" });
+            Assert.AreEqual(HttpStatusCode.Redirect, removed.StatusCode, await removed.Content.ReadAsStringAsync());
+            Assert.AreEqual("/", removed.Headers.Location?.OriginalString);
+            Assert.IsFalse((await GetAsync(host, "/")).Contains("data-card-menu=\"remove\"", StringComparison.Ordinal));
+        }
+
+        [TestMethod]
         public async Task Details_ShowsWatchedStateAndChangesItFromItsRows()
         {
             using var storage = new LibraryTests.TemporaryDirectory();

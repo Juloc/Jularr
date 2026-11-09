@@ -32,4 +32,20 @@ namespace Jularr.Backend.Service.User.Media.V1
             return new UpdateResult(true);
         }
     }
+
+    // A profile takes a title out of its continue rows; its progress stays and the title returns when it watches or reads it again.
+    [ServiceEndpoint("DELETE", "/api/v1/continue/{workId:long}")]
+    public sealed class HideContinueV1 : UserService<WorkParametersV1, NoData>
+    {
+        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Delete;
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
+        protected override ModuleRequirement GetInstanceModules(WorkParametersV1 parameters) => ModuleRequirement.All("Library");
+        protected override ServicePermission GetPermission(WorkParametersV1 parameters, Type resultType) => new("profile.media.read");
+
+        protected override async Task<IServiceOutput> OnDelete()
+        {
+            await Context.HideContinueAsync(new ProgressChangeData(Auth.ProfileId!.Value, Parameters.WorkId, null), CancellationToken);
+            return new UpdateResult(true);
+        }
+    }
 }
