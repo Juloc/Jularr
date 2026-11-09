@@ -122,7 +122,7 @@ namespace Jularr.Backend.Tests
                 INSERT INTO "WorkUnits" ("Id", "WorkId", "ParentWorkUnitId", "WorkUnitTypeId", "Number")
                     VALUES (22, 20, 21, 2, 1), (23, 20, 21, 2, 2), (24, 20, 21, 2, 3), (25, 20, 21, 2, 4), (26, 20, 21, 2, 5), (27, 20, 21, 2, 6);
                 INSERT INTO "WorkUnitExternalIdentities" ("WorkUnitId", "Namespace", "Value", "EpisodeOffset") VALUES (21, 'anilist', '5001', 0);
-                UPDATE "InstanceModules" SET "IsEnabled" = TRUE WHERE "Key" IN ('ProgressSync', 'AniList', 'Library');
+                UPDATE "InstanceModules" SET "IsEnabled" = TRUE WHERE "Key" IN ('ProgressSync', 'AniList', 'Library', 'DiscoverCache');
                 """);
 
             // Nothing is connected: no figures, no lists.
@@ -219,6 +219,60 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.Forbidden, hidden.StatusCode);
             using var hiddenWork = await host.SendAsync(HttpMethod.Get, "/api/v1/works/20/anilist");
             Assert.AreEqual(HttpStatusCode.Forbidden, hiddenWork.StatusCode);
+        }
+
+        [TestMethod]
+        public async Task Sync_CachesPlannedTitlesOnlyWhenInstanceCachingIsEnabled()
+        {
+            using var storage = new LibraryTests.TemporaryDirectory();
+            var anilist = new FakeAniList { IncludePlanned = true };
+            await using var host = await LibraryTests.CreateHostAsync(storage.Path, razor: true,
+                services: services => services.AddHttpClient<AniListClient>().ConfigurePrimaryHttpMessageHandler(() => anilist));
+            await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" IN ('ProgressSync', 'AniList', 'Library')");
+            await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = FALSE WHERE \"Key\" = 'DiscoverCache'");
+
+            var providerId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Providers\" WHERE \"Key\" = 'anilist'"))!;
+            using var configured = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/providers/" + providerId + "/secret", new SaveProviderSecretDataV1(FakeAniList.Secret, FakeAniList.ClientId));
+            Assert.AreEqual(HttpStatusCode.OK, configured.StatusCode, await configured.Content.ReadAsStringAsync());
+            using var connected = await host.SendAsync(HttpMethod.Post, Route, new ConnectAniListDataV1(FakeAniList.Code));
+            Assert.AreEqual(HttpStatusCode.OK, connected.StatusCode, await connected.Content.ReadAsStringAsync());
+
+            await using var scope = host.Services.CreateAsyncScope();
+            var sync = scope.ServiceProvider.GetRequiredService<SyncAniListV1>();
+
+            // Planned and current titles remain on the profile's list without creating any catalog or managed library Works.
+            Assert.IsTrue((await sync.ExecuteAsync<UpdateResult>(new AniListSyncParametersV1(), default)).Success);
+            Assert.AreEqual(5L, await host.ScalarAsync("SELECT count(*) FROM \"AniListEntries\" WHERE \"ProfileId\" = 101"));
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"WorkExternalIdentities\" WHERE \"Namespace\" = 'anilist' AND \"Value\" IN ('7777', '8888')"));
+            var planned = (await ReadEntriesAsync(host, "PLANNING")).Single();
+            Assert.AreEqual(8888, planned.MediaId);
+            Assert.IsNull(planned.WorkId);
+            Assert.IsFalse(planned.IsInLibrary);
+            using var favorites = await host.SendAsync(HttpMethod.Get, "/Favorites?anilist=planning");
+            var favoritesHtml = await favorites.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, favorites.StatusCode, favoritesHtml);
+            StringAssert.Contains(favoritesHtml, "Title 8888");
+            StringAssert.Contains(favoritesHtml, "/?q=Title%208888");
+
+            // Enabling the instance cache adds catalog Works, but not managed library or monitored titles.
+            await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'DiscoverCache'");
+            Assert.IsTrue((await sync.ExecuteAsync<UpdateResult>(new AniListSyncParametersV1(), default)).Success);
+            Assert.AreEqual(2L, await host.ScalarAsync("SELECT count(*) FROM \"WorkExternalIdentities\" WHERE \"Namespace\" = 'anilist' AND \"Value\" IN ('7777', '8888')"));
+            Assert.IsNotNull((await ReadEntriesAsync(host, "PLANNING")).Single().WorkId);
+            Assert.AreEqual(0L, await host.ScalarAsync("""
+                SELECT count(*) FROM "WorkManagedRelations" AS tie
+                    JOIN "WorkExternalIdentities" AS identity ON identity."WorkId" = tie."WorkId"
+                WHERE identity."Namespace" = 'anilist' AND identity."Value" IN ('7777', '8888')
+                """));
+            Assert.AreEqual(0L, await host.ScalarAsync("""
+                SELECT count(*) FROM "WantedItems" AS wanted
+                    JOIN "WorkExternalIdentities" AS identity ON identity."WorkId" = wanted."WorkId"
+                WHERE identity."Namespace" = 'anilist' AND identity."Value" IN ('7777', '8888')
+                """));
+            using var admin = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/works");
+            var adminBody = await admin.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, admin.StatusCode, adminBody);
+            Assert.IsFalse(adminBody.Contains("Title 8888", StringComparison.Ordinal));
         }
 
         [TestMethod]
@@ -463,10 +517,11 @@ namespace Jularr.Backend.Tests
             public const string Token = "fake-access-token-0123456789";
 
             private long _stamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - 3600;
-            private readonly Dictionary<int, (int Progress, int Volumes)> _state = new() { [900] = (2, 0), [901] = (1, 0), [902] = (3, 0), [903] = (10, 1) };
+            private readonly Dictionary<int, (int Progress, int Volumes)> _state = new() { [900] = (2, 0), [901] = (1, 0), [902] = (3, 0), [903] = (10, 1), [904] = (0, 0) };
 
             public FakeAniListMode Mode { get; set; }
             public int ViewerId { get; set; } = 31;
+            public bool IncludePlanned { get; set; }
             public int Calls { get; private set; }
             public int FailedWrites { get; private set; }
             public List<(int Id, int Progress, string Query)> Mutations { get; } = [];
@@ -511,6 +566,7 @@ namespace Jularr.Backend.Tests
                     var entries = anime
                         ? new[] { Entry(900, 5001, "CURRENT", false, 12, null), Entry(901, 5002, "COMPLETED", false, 1, null), Entry(902, 7777, "CURRENT", false, 24, null) }
                         : [Entry(903, 6001, "CURRENT", true, null, null)];
+                    if (anime && IncludePlanned) entries = [.. entries, Entry(904, 8888, "PLANNING", false, 12, null)];
                     return Json("{\"data\":{\"MediaListCollection\":{\"hasNextChunk\":false,\"lists\":[{\"entries\":[" + string.Join(',', entries) + "]},{\"entries\":[" + entries[0] + "]}]}}}");
                 }
 
