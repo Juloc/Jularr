@@ -27,7 +27,26 @@ namespace Jularr.Integrations.Logic.Translation
                 || bytes[0] == 192 && bytes[1] == 168 ? address : null;
         }
 
+        // A machine that accepts the connection and then never answers must not hold a translation for the client's 65 minutes (model downloads need them):
+        // a question (tags, running models) gets seconds, a translation minutes. The client sees the same TaskCanceledException as for its own timeout.
+        internal TimeSpan QuestionLimit { get; init; } = TimeSpan.FromSeconds(15);
+        internal TimeSpan GenerateLimit { get; init; } = TimeSpan.FromMinutes(8);
+
         private async Task<JsonDocument> JsonAsync(Uri server, string path, object? input, CancellationToken ct)
+        {
+            using var limit = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            limit.CancelAfter(input is null ? QuestionLimit : GenerateLimit);
+            try
+            {
+                return await JsonLimitedAsync(server, path, input, limit.Token);
+            }
+            catch (OperationCanceledException) when (limit.IsCancellationRequested && !ct.IsCancellationRequested)
+            {
+                throw new TaskCanceledException("Ollama did not answer in time: " + path);
+            }
+        }
+
+        private async Task<JsonDocument> JsonLimitedAsync(Uri server, string path, object? input, CancellationToken ct)
         {
             using var request = new HttpRequestMessage(input is null ? HttpMethod.Get : HttpMethod.Post, new Uri(server, path));
             if (input is not null) request.Content = JsonContent.Create(input);
