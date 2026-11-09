@@ -27,7 +27,7 @@ namespace Jularr.Backend.Tests
             CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("en-US");
             try
             {
-                var item = new ContinueItemV1(1, 2, type, null, "Title", 2023, null, unit, number, parent, position, duration, progression, asset);
+                var item = new ContinueItemV1(1, 2, type, null, "Title", 2023, null, unit, number, parent, position, duration, progression, asset, null, false);
                 return ContinueDetail.Format(key => Texts[key], item);
             }
             finally

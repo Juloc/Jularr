@@ -421,7 +421,8 @@ namespace Jularr.Frontend.Pages.User.Discover
             var card = new MediaCard(assets, item.Title, "/Details/" + item.WorkId.ToString(CultureInfo.InvariantCulture), item.PosterUrl)
                 .Facts(item.ReleaseYear, MediaTypeLabel.Key(item.MediaTypeId, item.MediaSubtypeId), null).Resume(ContinueDetail.Format(key => texts[key], item))
                 .Action("media.continue", (readable ? "/Read/" : "/Player/") + item.MediaAssetId.ToString(CultureInfo.InvariantCulture))
-                .Bookmark(new MediaBookmark(assets, item.WorkId)).HoverPreview(MediaPreviewAddress.Work(item.WorkId));
+                .Bookmark(new MediaBookmark(assets, item.WorkId)).HoverPreview(MediaPreviewAddress.Work(item.WorkId))
+                .Menu(new ContinueMenu(assets, item.WorkId, item.WorkUnitId, item.IsWatchlisted, item.MediaAssetTypeId, Csrf, Request.Path + Request.QueryString));
             return readable ? card.ContinueReading(item.Progression) : card.Continue(item.PositionMs, item.DurationMs);
         })]);
 

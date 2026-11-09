@@ -25,7 +25,7 @@ function mounted(desktop = false) {
     runInNewContext(script, {
         document,
         exports,
-        require: () => ({ attachCardPreview() {} }),
+        require: () => ({ attachCardPreview() {}, attachCardMenus() {} }),
         window: { location: { origin: 'http://localhost' } },
         Element,
         HTMLElement: Element,

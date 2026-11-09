@@ -30,6 +30,7 @@ namespace Jularr.Frontend.Framework
         private IUiComponent? _bookmark;
         private IUiComponent? _label;
         private IUiComponent? _select;
+        private IUiComponent? _menu;
 
         // A title of the profile's library, favorites or collections with everything the Backend knows of it.
         public static MediaCard For(FrontendAssets assets, LibraryItemV1 item)
@@ -115,6 +116,13 @@ namespace Jularr.Frontend.Framework
             return this;
         }
 
+        // The three dots beside the title: a menu of what can be done with the title from the card.
+        public MediaCard Menu(IUiComponent menu)
+        {
+            _menu = menu;
+            return this;
+        }
+
         // A short label over the cover, bottom left.
         public MediaCard Label(IUiComponent label)
         {
@@ -196,7 +204,7 @@ namespace Jularr.Frontend.Framework
             if (info is not null) details.Add(info);
             details.Add(new Span().Class("media-card__tip").Attribute("role", "presentation").Attribute("aria-hidden", "true").Attribute("hidden", "hidden"));
 
-            var card = new Div(surface, new Div([.. details]).Class("media-card__details")).Class(_isResume ? "media-card media-card--resume" : "media-card").Attribute("data-list-key", href);
+            var card = new Div([surface, new Div([.. details]).Class("media-card__details"), .. _menu is null ? Array.Empty<IUiComponent>() : [new Div(_menu).Class("media-card__menu")]]).Class((_isResume ? "media-card media-card--resume" : "media-card") + (_menu is not null ? " media-card--menu" : "")).Attribute("data-list-key", href);
             if (_hoverPreview is not null) card.Attribute("data-preview-src", _hoverPreview);
             card.WriteTo(writer, encoder, texts);
         }

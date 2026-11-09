@@ -1,4 +1,5 @@
 import { attachCardPreview } from './CardPreview';
+import { attachCardMenus } from './CardMenu';
 import { visit } from '../../Modules/Navigation/PageSwap';
 
 let initialized = false;
@@ -83,6 +84,8 @@ export function initializeCards(): void {
     if (initialized) return;
     initialized = true;
 
+    attachCardMenus();
+
     // The delayed hover over a cover (or a card that lingers on a touch device): description or trailer, on every page with cards.
     const hovers = (): boolean => matchMedia('(hover: hover) and (pointer: fine)').matches;
     preview = attachCardPreview({
@@ -133,6 +136,8 @@ export function initializeCards(): void {
     document.addEventListener('keydown', event => {
         if (event.key !== 'Escape' || !(event.target instanceof Element)) return;
         hideTip();
+        // The card's menu keeps the focus on its button (CardMenu.ts).
+        if (event.target.closest('.media-card__menu')) return;
         const card = event.target.closest<HTMLElement>('[data-media-card]');
         if (!card) return;
         delete card.dataset.open;

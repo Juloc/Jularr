@@ -209,6 +209,8 @@ namespace Jularr.Backend.Service.User.Library.V1
                         progress."ProfileId" = @ProfileId
                         AND NOT progress."IsCompleted"
                         AND (progress."PositionMs" > 0 OR progress."Locator" IS NOT NULL)
+                        -- A title the profile took out of the row returns with its next progress.
+                        AND (progress."ContinueHiddenAt" IS NULL OR progress."UpdatedAt" > progress."ContinueHiddenAt")
                 ), startedWorks AS MATERIALIZED (
                     SELECT
                         visible."WorkId",
@@ -286,7 +288,9 @@ namespace Jularr.Backend.Service.User.Library.V1
                     coalesce(progress."PositionMs", 0) AS "PositionMs",
                     progress."DurationMs",
                     progress."Progression",
-                    progress."MediaAssetTypeId"
+                    progress."MediaAssetTypeId",
+                    progress."WorkUnitId",
+                    EXISTS (SELECT 1 FROM "WatchlistEntries" AS entry WHERE entry."ProfileId" = @ProfileId AND entry."WorkId" = progress."WorkId") AS "IsWatchlisted"
                 FROM
                     playableStarted AS progress
                     JOIN "Works" AS work ON work."Id" = progress."WorkId"

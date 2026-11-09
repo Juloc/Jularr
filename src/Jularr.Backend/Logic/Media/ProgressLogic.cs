@@ -149,6 +149,25 @@ namespace Jularr.Backend.Logic.Media
             await ctx.ExecuteAsyncForAffectedRows(sql, ct);
         }
 
+        // The title leaves the profile's continue rows; its progress is kept, and the next progress write brings it back.
+        public static async Task HideContinueAsync(this LogicContext ctx, ProgressChangeData data, CancellationToken ct)
+        {
+            await ctx.RequireProgressTargetAsync(data, ct);
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                UPDATE
+                    "MediaProgress" AS progress
+                SET
+                    "ContinueHiddenAt" = now()
+                WHERE
+                    progress."ProfileId" = @ProfileId
+                    AND progress."WorkId" = @WorkId;
+                """;
+            sql.Parameters.Add(data);
+            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+        }
+
         // Only a Work the profile may open, and a unit of that Work.
         private static async Task RequireProgressTargetAsync(this LogicContext ctx, ProgressChangeData data, CancellationToken ct)
         {

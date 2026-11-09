@@ -358,8 +358,10 @@ namespace Jularr.Backend.Data.User.Discover.V1
     public sealed class ContinueItemV1 : BaseResponse
     {
         public ContinueItemV1(long workId, long mediaAssetId, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string title, int? releaseYear, string? posterUrl, WorkUnitType? workUnitTypeId,
-            decimal? unitNumber, decimal? parentUnitNumber, long positionMs, long? durationMs, decimal? progression, MediaAssetType mediaAssetTypeId)
+            decimal? unitNumber, decimal? parentUnitNumber, long positionMs, long? durationMs, decimal? progression, MediaAssetType mediaAssetTypeId, long? workUnitId, bool isWatchlisted)
         {
+            WorkUnitId = workUnitId;
+            IsWatchlisted = isWatchlisted;
             MediaSubtypeId = mediaSubtypeId;
             ReleaseYear = releaseYear;
             Progression = progression;
@@ -419,5 +421,12 @@ namespace Jularr.Backend.Data.User.Discover.V1
         // Books continue in the reader.
         [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.MediaAssetTypeId))]
         public MediaAssetType MediaAssetTypeId { get; }
+
+        // The episode, volume or track the profile stands at; none for a film or a book that is one piece.
+        [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.WorkUnitId), false)]
+        public long? WorkUnitId { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.IsWatchlisted))]
+        public bool IsWatchlisted { get; }
     }
 }

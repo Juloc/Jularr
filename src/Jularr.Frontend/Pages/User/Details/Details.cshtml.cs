@@ -35,7 +35,7 @@ namespace Jularr.Frontend.Pages.User.Details
         ReadUiLocalesV1 locales, ReadWorkPlatformsV1 readPlatforms, ReadRequestProfilesV1 readRequestProfiles, ReadWorkCollectionsV1 readCollections, AddCollectionWorkV1 addToCollection,
         RemoveCollectionWorkV1 removeFromCollection, ReadWorkSeasonsV1 readSeasons, ReadWorkEpisodesV1 readEpisodes, ReadWorkCreditsV1 readCredits,
         ReadWorkRecommendationsV1 readRecommendations, ReadWorkRelationsV1 readRelations, AdminServices.CreateWorkRelationV1 createRelation, AdminServices.DeleteWorkRelationV1 deleteRelation, SuggestDiscoverV1 suggest,
-        UpdateWorkProgressV1 updateProgress, ReadWorkAniListV1 readAniList, WithdrawRequestV1 withdraw, ReadAuthenticationV1 authentication, ReadProfileV1 readProfile, IAntiforgery antiforgery, FrontendAssets assets, UiText texts) : JularrPage
+        UpdateWorkProgressV1 updateProgress, HideContinueV1 hideContinue, ReadWorkAniListV1 readAniList, WithdrawRequestV1 withdraw, ReadAuthenticationV1 authentication, ReadProfileV1 readProfile, IAntiforgery antiforgery, FrontendAssets assets, UiText texts) : JularrPage
     {
         private WorkAniListV1? _aniList;
         private IReadOnlyList<DiscoverItemV1> _recommendations = [];
@@ -216,6 +216,7 @@ namespace Jularr.Frontend.Pages.User.Details
         public async Task<IActionResult> OnPostAsync([BindRequired] bool isWatchlisted, string? returnUrl = null)
         {
             await update.ExecuteAsync<UpdateResult>(new WorkParametersV1(Id), new UpdateWatchlistDataV1(isWatchlisted), HttpContext.RequestAborted);
+            if (IsBackground) return new NoContentResult();
             if (Url.IsLocalUrl(returnUrl)) return LocalRedirect(returnUrl);
             return RedirectToPage("/User/Details/Details", new { id = Id });
         }
@@ -223,6 +224,7 @@ namespace Jularr.Frontend.Pages.User.Details
         public async Task<IActionResult> OnPostProgressAsync([BindRequired] ProgressAction action, long? unitId, string? playHref, string? returnUrl)
         {
             await updateProgress.ExecuteAsync<UpdateResult>(new WorkParametersV1(Id), new UpdateWorkProgressDataV1(action, unitId), HttpContext.RequestAborted);
+            if (IsBackground) return new NoContentResult();
 
             // Starting over opens the player or the reader at the beginning.
             if (playHref is not null && Url.IsLocalUrl(playHref) && (playHref.StartsWith("/Player/", StringComparison.Ordinal) || playHref.StartsWith("/Read/", StringComparison.Ordinal)))
@@ -233,6 +235,17 @@ namespace Jularr.Frontend.Pages.User.Details
             if (Url.IsLocalUrl(returnUrl)) return LocalRedirect(returnUrl);
             return RedirectToPage("/User/Details/Details", new { id = Id });
         }
+
+        // The card menu of a continue row takes the title out of the row; its progress stays.
+        public async Task<IActionResult> OnPostHideContinueAsync(string? returnUrl)
+        {
+            await hideContinue.ExecuteAsync<UpdateResult>(new WorkParametersV1(Id), default, HttpContext.RequestAborted);
+            if (IsBackground) return new NoContentResult();
+            return Url.IsLocalUrl(returnUrl) ? LocalRedirect(returnUrl) : RedirectToPage("/User/Details/Details", new { id = Id });
+        }
+
+        // A form the page script sends in the background answers without a redirect.
+        private bool IsBackground => Request.Headers["X-Requested-With"] == "fetch";
 
         public async Task<IActionResult> OnPostRequestAsync([BindRequired] long uiLocaleId, long? gamePlatformId, long? acquisitionProfileId)
         {

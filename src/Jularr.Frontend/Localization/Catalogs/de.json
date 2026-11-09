@@ -4698,6 +4698,22 @@
    "Details",
    "Details"
   ],
+  "media.openDetails": [
+   "Open details",
+   "Details öffnen"
+  ],
+  "media.cardMenu": [
+   "More actions for this title",
+   "Weitere Aktionen für diesen Titel"
+  ],
+  "continue.remove": [
+   "Remove from Continue",
+   "Aus Fortsetzen entfernen"
+  ],
+  "continue.failed": [
+   "That did not work. Try again.",
+   "Das hat nicht geklappt. Bitte noch einmal versuchen."
+  ],
   "search.global": [
    "Search movies and series",
    "Filme und Serien suchen"
