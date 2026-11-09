@@ -49,6 +49,13 @@ export function codexBar(reader: HTMLElement, view: CodexView): void {
         return view.list.filter((block, index) => block.trim() && !view.translated(index)).length;
     }
 
+    // The mood of the bar: its icon and tint, and a pulse while Codex works.
+    const mood = (tone: "accent" | "success" | "warning" | "danger", busy = false) => {
+        bar.dataset.tone = tone;
+        if (busy) bar.dataset.busy = "true";
+        else delete bar.dataset.busy;
+    };
+
     const show = (...visible: (HTMLButtonElement | null | undefined)[]) =>
         [start, next, stop, retry].forEach(item => { if (item) item.hidden = !visible.includes(item); });
 
@@ -57,6 +64,7 @@ export function codexBar(reader: HTMLElement, view: CodexView): void {
         if (bar!.dataset.problem) {
             const problem = bar!.dataset.problem;
             say(problem === "limit" ? "limit" : "unavailable");
+            mood(problem === "limit" ? "warning" : "danger");
             show(retry);
             return;
         }
@@ -64,25 +72,29 @@ export function codexBar(reader: HTMLElement, view: CodexView): void {
         const complete = missing() === 0;
         if (line) text.textContent = line;
         else say(complete ? "chapterDone" : "idle");
+        mood(complete ? "success" : "accent");
         show(complete ? hasNext ? next : undefined : start);
     }
 
     function failure(result: ChapterResult) {
         say(Problems[result.problem ?? "failed"]);
+        mood(result.problem === "limit" || result.problem === "busy" ? "warning" : "danger");
         show(retry);
     }
 
     function finish(result: ChapterResult, ownChapter: boolean) {
         running = false;
         if (result.state === "error") return failure(result);
-        if (result.state === "stopped") return ownChapter ? rest(texts["reader.codex.stopped"]) : (say("stopped"), show(hasNext ? next : undefined));
+        if (result.state === "stopped") return ownChapter ? rest(texts["reader.codex.stopped"]) : (say("stopped"), mood("accent"), show(hasNext ? next : undefined));
         if (!ownChapter) {
             say(result.failed.length > 0 ? "skipped" : "nextDone", result.failed.length);
+            mood(result.failed.length > 0 ? "warning" : "success");
             show(undefined);
             return;
         }
         if (result.failed.length > 0) {
             say("skipped", result.failed.length);
+            mood("warning");
             show(hasNext ? next : undefined);
         } else rest();
     }
@@ -94,6 +106,7 @@ export function codexBar(reader: HTMLElement, view: CodexView): void {
         stopping = false;
         last = own;
         show(stop);
+        mood("accent", true);
         say(own ? "runningStart" : "runningNextStart");
         const base = own ? reader.dataset.localTranslationUrl! : `${sectionsUrl}${section + 1}/local-translations/`;
         const url = `${base}${encodeURIComponent(view.target)}/${encodeURIComponent(view.model)}`;
@@ -133,7 +146,8 @@ export function codexBar(reader: HTMLElement, view: CodexView): void {
                 }
             },
             progress: ({ seconds, busy }) => {
-                if (busy) return say("busy");
+                if (busy) return (mood("warning", true), say("busy"));
+                mood("accent", true);
                 if (own) return estimate();
                 if (seconds === undefined) return say("runningNextStart");
                 const minutes = minutesLeft(seconds);

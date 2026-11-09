@@ -59,7 +59,7 @@ test('player planning network failure displays the localized status', async () =
     const code = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText;
     const skip = {};
     runInNewContext(ts.transpileModule(readFileSync(new URL('../Modules/Player/Skip.ts', import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText, { exports: skip });
-    const status = { hidden: true, textContent: '' };
+    const status = { hidden: true, textContent: '', dataset: {} };
     let requests = 0;
     const player = {
         dataset: { startUrl: '/start', antiforgery: 'test' },

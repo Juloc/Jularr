@@ -128,7 +128,7 @@ export function smartPages(reader: HTMLElement): SmartPages | undefined {
         } catch {
             if (current !== number) return;
             const rescued = !!browser && await stepIn(number);
-            if (current === number) say(rescued ? undefined : reader.dataset.translationFailedLabel);
+            if (current === number) say(rescued ? undefined : reader.dataset.translationFailedLabel, !rescued);
         } finally {
             running.delete(number);
         }
@@ -141,10 +141,12 @@ export function smartPages(reader: HTMLElement): SmartPages | undefined {
         show(page.blocks[index], text);
     }
 
-    function say(text: string | undefined): void {
+    function say(text: string | undefined, failed = false): void {
         if (!status) return;
         status.hidden = text === undefined;
         status.textContent = text ?? '';
+        if (failed) status.dataset.tone = 'danger';
+        else delete status.dataset.tone;
     }
 
     // The translation takes the look of the block's main text; text flowing around a picture is shared out over its boxes by their share of the original.
@@ -312,7 +314,7 @@ export function smartPages(reader: HTMLElement): SmartPages | undefined {
             location.reload();
         } catch {
             choices.forEach(choice => choice.disabled = false);
-            say(reader.dataset.translationFailedLabel);
+            say(reader.dataset.translationFailedLabel, true);
         }
     }));
 

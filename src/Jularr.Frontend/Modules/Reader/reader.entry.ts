@@ -220,6 +220,7 @@ function initializeText(reader: HTMLElement, address: URL): void {
         const feedback = reader.querySelector<HTMLElement>('[data-role=translation-status]');
         if (feedback) {
             feedback.textContent = reader.dataset.languageSavingLabel ?? '';
+            delete feedback.dataset.tone;
             feedback.hidden = false;
         }
         try {
@@ -238,6 +239,7 @@ function initializeText(reader: HTMLElement, address: URL): void {
         } catch {
             if (feedback) {
                 feedback.textContent = reader.dataset.translationFailedLabel ?? '';
+                feedback.dataset.tone = 'danger';
                 feedback.hidden = false;
             }
         } finally {

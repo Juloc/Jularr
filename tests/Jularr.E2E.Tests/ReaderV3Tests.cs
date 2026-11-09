@@ -509,7 +509,7 @@ namespace Jularr.E2E.Tests
                 await OpenReaderAsync(page, width, 812);
                 var box = await page.EvaluateAsync<JsonElement>("""
                     () => {
-                        const status = document.querySelector('.reader__note[data-role=translation-status]');
+                        const status = document.querySelector('.reader__notice--float[data-role=translation-status]');
                         status.hidden = false;
                         status.textContent = 'Translating 0 %';
                         const note = status.getBoundingClientRect(), footer = document.querySelector('.reader__footer').getBoundingClientRect(), reader = document.querySelector('.reader').getBoundingClientRect();
@@ -520,6 +520,21 @@ namespace Jularr.E2E.Tests
                 Assert.IsTrue(box.GetProperty("left").GetDouble() >= box.GetProperty("readerLeft").GetDouble() && box.GetProperty("right").GetDouble() <= box.GetProperty("readerRight").GetDouble(), $"{width}: the status stays inside the window.");
                 Assert.AreEqual((box.GetProperty("left").GetDouble() + box.GetProperty("right").GetDouble()) / 2, (box.GetProperty("readerLeft").GetDouble() + box.GetProperty("readerRight").GetDouble()) / 2, 2, $"{width}: the status is centered.");
                 await Evidence.SaveAsync(page, "reader-translation-status-" + width);
+
+                // A failure takes the danger tint and loses its working ring.
+                var failed = await page.EvaluateAsync<string[]>("""
+                    () => {
+                        const status = document.querySelector('.reader__notice--float[data-role=translation-status]');
+                        const working = getComputedStyle(status, '::before').display;
+                        status.dataset.tone = 'danger';
+                        status.textContent = 'Translation failed';
+                        return [working, getComputedStyle(status, '::before').display, getComputedStyle(status).backgroundColor, getComputedStyle(document.querySelector('.reader')).backgroundColor];
+                    }
+                    """);
+                Assert.AreNotEqual("none", failed[0], $"{width}: the working notice shows its ring.");
+                Assert.AreEqual("none", failed[1], $"{width}: the failure notice shows no ring.");
+                Assert.AreNotEqual(failed[3], failed[2], $"{width}: the failure notice has its own tint.");
+                await Evidence.SaveAsync(page, "reader-translation-failed-" + width);
             }
         }
 
