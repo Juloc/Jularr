@@ -83,13 +83,17 @@ namespace Jularr.Backend.Data.Admin.Translation.V1
         public long FreeBytes { get; } = freeBytes;
     }
 
-    // One machine of the order as it answered just now: its address, whether it answered, and its installed and loaded models.
-    public sealed class LocalTranslationMachineV1(string address, bool reachable, string[] installed, string[] running)
+    // One machine of the order as it answered just now: its address, whether it answered, and its installed and loaded models. RestingUntil is set while it rests
+    // after a failure (it is not asked meanwhile); LastError is the reason of its last failure since the start, as a key (timeout, unreachable, invalid_answer) with its time.
+    public sealed class LocalTranslationMachineV1(string address, bool reachable, string[] installed, string[] running, DateTime? restingUntil = null, string? lastError = null, DateTime? lastErrorAt = null)
     {
         public string Address { get; } = address;
         public bool Reachable { get; } = reachable;
         public string[] Installed { get; } = installed;
         public string[] Running { get; } = running;
+        public DateTime? RestingUntil { get; } = restingUntil;
+        public string? LastError { get; } = lastError;
+        public DateTime? LastErrorAt { get; } = lastErrorAt;
     }
 
     // Installed and Running are those of the machine that translates now (the first in the order that answers); Machines lists every one.

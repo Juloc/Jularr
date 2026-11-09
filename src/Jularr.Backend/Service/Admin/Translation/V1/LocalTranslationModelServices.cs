@@ -63,18 +63,28 @@ namespace Jularr.Backend.Service.Admin.Translation.V1
             return model is null ? [] : [TranslationProviders.Id(CodexTranslationProvider.ProviderKey, model)];
         }
 
+        // A machine that rests is not asked again before its rest is over. A question that fails here only reports its reason; reading the page never makes a machine rest.
         private async Task<LocalTranslationMachineV1> StatusAsync(Uri server)
         {
+            var before = _machines.StateOf(server);
+            if (before.RestingUntil is { } resting)
+            {
+                return new LocalTranslationMachineV1(server.ToString(), false, [], [], resting.UtcDateTime, before.Reason, before.FailedAt?.UtcDateTime);
+            }
+
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(CancellationToken);
-            timeout.CancelAfter(TimeSpan.FromSeconds(5));
+            timeout.CancelAfter(TimeSpan.FromSeconds(3));
             try
             {
-                return new LocalTranslationMachineV1(server.ToString(), true, await _models.InstalledAsync(server, timeout.Token), await _models.RunningAsync(server, timeout.Token));
+                var installed = _models.InstalledAsync(server, timeout.Token);
+                var running = _models.RunningAsync(server, timeout.Token);
+                await Task.WhenAll(installed, running);
+                return new LocalTranslationMachineV1(server.ToString(), true, await installed, await running, null, before.Reason, before.FailedAt?.UtcDateTime);
             }
             catch (Exception exception) when (exception is HttpRequestException or JsonException or InvalidDataException
                 || exception is OperationCanceledException && !CancellationToken.IsCancellationRequested)
             {
-                return new LocalTranslationMachineV1(server.ToString(), false, [], []);
+                return new LocalTranslationMachineV1(server.ToString(), false, [], [], null, LocalTranslationMachines.ReasonOf(exception), DateTime.UtcNow);
             }
         }
     }

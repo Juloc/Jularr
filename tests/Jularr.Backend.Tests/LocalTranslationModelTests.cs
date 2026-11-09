@@ -64,6 +64,30 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual("translategemma:12b", (await machines.ChooseAsync(["http://10.0.0.2:11434"], default))?.Model);
         }
 
+        [TestMethod]
+        public void Machines_AFailure_IsRemembered_WithItsReason_AndRestsForAMinute()
+        {
+            var clock = new Clock();
+            using var http = new HttpClient(new Machines());
+            var machines = new LocalTranslationMachines(new OllamaLocalModels(http), Options.Create(new LocalTranslationOptions()), clock);
+            var server = new Uri("http://192.168.1.20:11434/");
+
+            Assert.AreEqual((null, null, null), machines.StateOf(server));
+            machines.Fail(server, LocalTranslationMachines.ReasonOf(new OperationCanceledException()));
+            var failed = machines.StateOf(server);
+            Assert.AreEqual(clock.Now + TimeSpan.FromMinutes(1), failed.RestingUntil);
+            Assert.AreEqual("timeout", failed.Reason);
+            Assert.AreEqual(clock.Now, failed.FailedAt);
+
+            // After its rest the machine no longer rests, but the last error stays.
+            clock.Now += TimeSpan.FromMinutes(2);
+            var after = machines.StateOf(server);
+            Assert.IsNull(after.RestingUntil);
+            Assert.AreEqual("timeout", after.Reason);
+            Assert.AreEqual("unreachable", LocalTranslationMachines.ReasonOf(new HttpRequestException()));
+            Assert.AreEqual("invalid_answer", LocalTranslationMachines.ReasonOf(new InvalidDataException()));
+        }
+
         private sealed class Clock : TimeProvider
         {
             public DateTimeOffset Now { get; set; } = new(2026, 10, 30, 12, 0, 0, TimeSpan.Zero);
