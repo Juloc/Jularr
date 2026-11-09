@@ -63,6 +63,13 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual("Example Studio", result.Author);
             Assert.AreEqual(2017, result.ReleaseYear);
 
+            // A hit shows its cover in the list, before anybody opens it: Discover's search keeps IGDB's address as the title's image.
+            Assert.AreEqual("https://images.igdb.com/igdb/image/upload/t_cover_big/co1abc.jpg", result.PosterUrl);
+            using var catalog = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/search", new SearchDiscoverCatalogDataV1(MediaType.Game, "Example Quest"));
+            Assert.AreEqual(HttpStatusCode.OK, catalog.StatusCode, await catalog.Content.ReadAsStringAsync());
+            Assert.AreEqual("https://images.igdb.com/igdb/image/upload/t_cover_big/co1abc.jpg",
+                (await catalog.Content.ReadFromJsonAsync<BaseDataList<DiscoverCatalogItemV1>>())!.Single().PosterUrl);
+
             // Import keeps the platforms as shared identities; a repeat changes nothing.
             for (var attempt = 0; attempt < 2; attempt++)
             {
