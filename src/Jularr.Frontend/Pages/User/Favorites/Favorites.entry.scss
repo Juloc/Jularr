@@ -68,6 +68,9 @@
         small { color: var(--muted); font-size: 11px; }
     }
 
+    // An AniList tile has no posters beside its text, so the text may use the whole tile and a word is never broken.
+    &__info--wide { max-width: 100%; strong { overflow-wrap: break-word; } }
+
     &__card--current &__info small { color: inherit; }
 
     &__posters {

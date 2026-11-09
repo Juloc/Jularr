@@ -38,18 +38,25 @@ namespace Jularr.E2E.Tests
                 var rows = page.Locator(".request-row");
                 await Assertions.Expect(rows).ToHaveCountAsync(12);
 
-                // Every preference chip lies inside its row, none is cut off.
-                var chips = await rows.EvaluateAllAsync<bool[]>("""
-                    rows => rows.flatMap(row => {
-                        const box = row.getBoundingClientRect();
-                        return [...row.querySelectorAll('.request-row__prefs .tag')].map(tag => {
-                            const chip = tag.getBoundingClientRect();
-                            return chip.left >= box.left - 0.5 && chip.right <= box.right + 0.5 && tag.scrollWidth <= tag.clientWidth + 1;
-                        });
-                    })
+                // Every preference chip lies inside its row, none is cut off, at a phone's width and at a laptop's with the sidebar.
+                await AssertChipsInsideAsync(rows, 375);
+                await page.SetViewportSizeAsync(1024, 700);
+                await page.GotoAsync("/Requests?state=All&type=movies");
+                await AssertChipsInsideAsync(rows, 1024);
+
+                // The long "read translated" chip of a book request wraps inside its row as well.
+                await rows.First.Locator(".request-row__prefs").EvaluateAsync("""
+                    prefs => {
+                        const tag = prefs.querySelector('.tag').cloneNode(true);
+                        tag.textContent = 'Not published in it; read translated, a long hint to prove the chip wraps';
+                        prefs.append(tag);
+                    }
                     """);
-                Assert.IsTrue(chips.Length >= 24, "Each request shows its language and quality chip.");
-                Assert.IsTrue(chips.All(inside => inside), "A preference chip is cut off at 375 px.");
+                var longInside = await rows.First.EvaluateAsync<bool>("row => { const box = row.getBoundingClientRect(); return [...row.querySelectorAll('.request-row__prefs .tag')].every(tag => tag.getBoundingClientRect().right <= box.right + 0.5 && tag.scrollWidth <= tag.clientWidth + 1); }");
+                Assert.IsTrue(longInside, "A long preference chip is cut off at 1024 px.");
+                await Evidence.SaveAsync(page, "requests-1024");
+                await page.SetViewportSizeAsync(375, 700);
+                await page.GotoAsync("/Requests?state=All&type=movies");
 
                 // The tabs have the first line; the tools do not overlap them and stay at the right edge.
                 var bar = await page.EvaluateAsync<double[]>("""
@@ -86,6 +93,21 @@ namespace Jularr.E2E.Tests
                 await Evidence.SaveAsync(page, "requests-phone-failed");
                 throw;
             }
+        }
+
+        private static async Task AssertChipsInsideAsync(ILocator rows, int width)
+        {
+            var chips = await rows.EvaluateAllAsync<bool[]>("""
+                rows => rows.flatMap(row => {
+                    const box = row.getBoundingClientRect();
+                    return [...row.querySelectorAll('.request-row__prefs .tag')].map(tag => {
+                        const chip = tag.getBoundingClientRect();
+                        return chip.left >= box.left - 0.5 && chip.right <= box.right + 0.5 && tag.scrollWidth <= tag.clientWidth + 1;
+                    });
+                })
+                """);
+            Assert.IsTrue(chips.Length >= 24, "Each request shows its language and quality chip.");
+            Assert.IsTrue(chips.All(inside => inside), $"A preference chip is cut off at {width} px.");
         }
 
         private static async Task AssertPageStaysAsync(IPage page)

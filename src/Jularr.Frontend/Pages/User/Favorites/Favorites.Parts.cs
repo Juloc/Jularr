@@ -139,7 +139,7 @@ namespace Jularr.Frontend.Pages.User.Favorites
         {
             var selected = ValidAniList == status;
             var info = new Span(new Icon("anilist", assets, 16), new Strong(new Text("favorites.anilist." + status)), new Small(new ValueText(string.Format(CultureInfo.CurrentCulture, texts["favorites.titles"], count))))
-                .Class("favorites-collection__info");
+                .Class("favorites-collection__info favorites-collection__info--wide");
             var link = new A(info).Class(selected ? "favorites-collection__card favorites-collection__card--current" : "favorites-collection__card")
                 .Attribute("href", Address(Current with { Collection = null, Page = 1, AniList = status.ToLowerInvariant() }));
             if (selected) link.Attribute("aria-current", "true");
