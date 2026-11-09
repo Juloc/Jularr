@@ -177,12 +177,17 @@ namespace Jularr.E2E.Tests
                 await Assertions.Expect(bar.Locator("[data-codex=stop]")).ToBeVisibleAsync();
                 await Assertions.Expect(page.Locator("[data-role=content]")).ToContainTextAsync("Codex gpt-one:", new() { Timeout = 60_000 });
                 await Assertions.Expect(bar.Locator("[data-role=codex-text]")).ToContainTextAsync("Translating the chapter with Codex");
+                await Assertions.Expect(bar).ToHaveAttributeAsync("data-busy", "true");
+                await Assertions.Expect(bar.Locator(".reader__codex-icon--accent")).ToBeVisibleAsync();
                 Assert.IsTrue(asked() >= 1);
                 await Evidence.SaveAsync(page, "reader-codex-live-desktop");
                 await Assertions.Expect(bar.Locator("[data-role=codex-text]")).ToContainTextAsync("This chapter is translated.", new() { Timeout = 120_000 });
                 Assert.IsTrue(asked() >= 3, "A chapter of 320 blocks needs several requests.");
                 await Assertions.Expect(bar.Locator("[data-codex=next]")).ToBeVisibleAsync();
                 await Assertions.Expect(bar.Locator("[data-codex=start]")).ToBeHiddenAsync();
+                await Assertions.Expect(bar).ToHaveAttributeAsync("data-tone", "success");
+                await Assertions.Expect(bar.Locator(".reader__codex-icon--success")).ToBeVisibleAsync();
+                await Assertions.Expect(bar.Locator(".reader__codex-icon--accent")).ToBeHiddenAsync();
                 var text = await page.Locator("[data-role=content]").InnerTextAsync();
                 Assert.IsFalse(System.Text.RegularExpressions.Regex.IsMatch(text, "(^|\n)Paragraph \\d+"), "Every paragraph is translated: " + text);
                 Assert.IsTrue(text.Contains("Codex gpt-one: Paragraph 320", StringComparison.Ordinal), text);
@@ -256,6 +261,8 @@ namespace Jularr.E2E.Tests
                 await Assertions.Expect(line).ToContainTextAsync("Codex could not translate a part of the chapter", new() { Timeout = 60_000 });
                 await Assertions.Expect(bar.Locator("[data-codex=retry]")).ToBeVisibleAsync();
                 await Assertions.Expect(line).Not.ToContainTextAsync("unavailable");
+                await Assertions.Expect(bar).ToHaveAttributeAsync("data-tone", "danger");
+                await Assertions.Expect(bar.Locator(".reader__codex-icon--danger")).ToBeVisibleAsync();
                 await Assertions.Expect(page.Locator("[data-role=content]")).ToContainTextAsync("Codex gpt-one:");
                 var finished = await page.Locator("[data-role=content]").InnerTextAsync();
                 await Evidence.SaveAsync(page, "reader-codex-error-desktop");
@@ -272,9 +279,13 @@ namespace Jularr.E2E.Tests
                 File.WriteAllText(Path.Combine(home, "limit"), "");
                 await bar.Locator("[data-codex=next]").ClickAsync();
                 await Assertions.Expect(line).ToContainTextAsync("usage limit", new() { Timeout = 60_000 });
+                await Assertions.Expect(bar).ToHaveAttributeAsync("data-tone", "warning");
                 await Assertions.Expect(bar.Locator("[data-codex=retry]")).ToBeVisibleAsync();
                 await Evidence.SaveAsync(page, "reader-codex-limit-desktop");
                 await page.SetViewportSizeAsync(375, 812);
+                await page.WaitForTimeoutAsync(400);
+                await Assertions.Expect(bar).ToBeVisibleAsync();
+                Assert.IsTrue(await page.EvaluateAsync<bool>("() => document.documentElement.scrollWidth <= window.innerWidth + 1"), "The Codex bar makes the page wider than the phone.");
                 await Evidence.SaveAsync(page, "reader-codex-limit-phone");
             }
             finally

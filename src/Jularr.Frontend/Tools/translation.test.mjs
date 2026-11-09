@@ -286,7 +286,7 @@ function slowServerReader({ route, count = 5, ahead, held = false }) {
     const localExports = {};
     runInNewContext(script, { exports: localExports, fetch: fetchStub, Date: { now: () => clock }, ...lifetime });
     const content = { querySelectorAll: () => blocks, innerText: 'English original text' };
-    const status = { hidden: true, textContent: '' };
+    const status = { hidden: true, textContent: '', dataset: {} };
     const reader = { dataset, querySelector: selector => selector === '[data-role=translation-status]' ? status : null };
     const { choose } = localExports.translator(reader, content, () => fakeWorker, ahead && (() => ahead(blocks)));
     return { choose, blocks, calls, dataset, status, release, given: fakeWorker.given };
@@ -315,6 +315,7 @@ test('a language Mozilla has no models for is left to the server, and the reader
     assert.equal(calls.filter(call => call.startsWith('POST /local/')).length, 5);
     assert.equal(calls.filter(call => call === 'GET /route/en/de').length, 1, 'the route is asked for once');
     assert.equal(status.textContent, '', 'the progress label is gone when the server is done');
+    assert.equal(status.dataset.tone, undefined, 'the working notice has no failure tone');
 });
 
 test('Mozilla\'s window is the page in view and the three pages after it; a scrolled text counts its screen as a page', () => {

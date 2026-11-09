@@ -494,6 +494,50 @@ namespace Jularr.E2E.Tests
             }
         }
 
+        [TestMethod]
+        [Timeout(300_000)]
+        public async Task TranslationStatus_IsAPillAboveTheBottomBar_AtEveryWidth()
+        {
+            using var folders = new Folders("Books");
+            WriteReaderEpub(Path.Combine(folders.Library, "Books", "reader-v3.epub"), "The Midnight Archive", "Local fixture", 2, 36);
+            await using var jularr = await JularrInstance.StartAsync(new Dictionary<string, string> { ["Storage:LocalPaths:0"] = folders.Library, ["HTTPS_PROXY"] = "http://127.0.0.1:9" });
+            await using var session = await BrowserSession.StartAsync(jularr);
+            var page = session.Page;
+            await ReadingPathTests.AddBookAsync(page, folders, "The Midnight Archive");
+            foreach (var width in new[] { 1440, 768, 375 })
+            {
+                await OpenReaderAsync(page, width, 812);
+                var box = await page.EvaluateAsync<JsonElement>("""
+                    () => {
+                        const status = document.querySelector('.reader__notice--float[data-role=translation-status]');
+                        status.hidden = false;
+                        status.textContent = 'Translating 0 %';
+                        const note = status.getBoundingClientRect(), footer = document.querySelector('.reader__footer').getBoundingClientRect(), reader = document.querySelector('.reader').getBoundingClientRect();
+                        return { left: note.left, right: note.right, bottom: note.bottom, top: note.top, footerTop: footer.top, readerLeft: reader.left, readerRight: reader.right, background: getComputedStyle(status).backgroundColor };
+                    }
+                    """);
+                Assert.IsTrue(box.GetProperty("bottom").GetDouble() <= box.GetProperty("footerTop").GetDouble(), $"{width}: the status sits above the bottom bar.");
+                Assert.IsTrue(box.GetProperty("left").GetDouble() >= box.GetProperty("readerLeft").GetDouble() && box.GetProperty("right").GetDouble() <= box.GetProperty("readerRight").GetDouble(), $"{width}: the status stays inside the window.");
+                Assert.AreEqual((box.GetProperty("left").GetDouble() + box.GetProperty("right").GetDouble()) / 2, (box.GetProperty("readerLeft").GetDouble() + box.GetProperty("readerRight").GetDouble()) / 2, 2, $"{width}: the status is centered.");
+                await Evidence.SaveAsync(page, "reader-translation-status-" + width);
+
+                // A failure takes the danger tint and loses its working ring.
+                var failed = await page.EvaluateAsync<string[]>("""
+                    () => {
+                        const status = document.querySelector('.reader__notice--float[data-role=translation-status]');
+                        const working = getComputedStyle(status, '::before').display;
+                        status.dataset.tone = 'danger';
+                        status.textContent = 'Translation failed';
+                        return [working, getComputedStyle(status, '::before').display, getComputedStyle(status).backgroundColor, getComputedStyle(document.querySelector('.reader')).backgroundColor];
+                    }
+                    """);
+                Assert.AreNotEqual("none", failed[0], $"{width}: the working notice shows its ring.");
+                Assert.AreEqual("none", failed[1], $"{width}: the failure notice shows no ring.");
+                Assert.AreNotEqual(failed[3], failed[2], $"{width}: the failure notice has its own tint.");
+                await Evidence.SaveAsync(page, "reader-translation-failed-" + width);
+            }
+        }
+
         private static async Task OpenReaderAsync(IPage page, int width, int height)
         {
             await page.SetViewportSizeAsync(width, height);

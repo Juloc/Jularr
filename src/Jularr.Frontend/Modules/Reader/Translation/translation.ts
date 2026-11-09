@@ -304,10 +304,13 @@ export function translator(reader: HTMLElement, content: HTMLElement, createWork
     // The server's text in view: the model each block's text is from, and the blocks re-translated here, which the default model's work never overwrites.
     let shown: { result: string[]; bridge: boolean[]; models: (string | null)[]; chosen: Set<number> } | undefined;
 
-    function say(text: string | undefined) {
+    // The notice works (a ring) until a failure names itself (the danger tone).
+    function say(text: string | undefined, failed = false) {
         if (!status) return;
         status.hidden = text === undefined;
         status.textContent = text ?? "";
+        if (failed) status.dataset.tone = "danger";
+        else delete status.dataset.tone;
     }
 
     // The blocks marked as another model's text.
@@ -521,7 +524,7 @@ export function translator(reader: HTMLElement, content: HTMLElement, createWork
                     reader.dataset.translationEngine = 'gemma';
                 }
             }
-            if (current === target && generation === revision) { emergency = undefined; reader.dataset.translationState = 'failed'; restore(); say(reader.dataset.translationFailedLabel); }
+            if (current === target && generation === revision) { emergency = undefined; reader.dataset.translationState = 'failed'; restore(); say(reader.dataset.translationFailedLabel, true); }
         }
     }
 

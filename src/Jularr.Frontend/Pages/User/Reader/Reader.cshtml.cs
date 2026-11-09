@@ -169,7 +169,7 @@ namespace Jularr.Frontend.Pages.User.Reader
             var settings = Settings(false, _source?.HasPdf == true);
             // Without a configured language the panel says so and leads to where the profile sets it.
             var languages = _languages.Length == 0
-                ? new Div(new P(new Text(NoLanguageKey))).Class("reader__panel")
+                ? new Div(new P(new Text(NoLanguageKey)).Class("reader__notice")).Class("reader__panel")
                     .Attribute("data-panel", "language").Attribute("hidden", "hidden").Attribute("aria-label", texts["reader.language"])
                 : new Div([.. new[] { "original" }.Concat(_languages).Select(code => new Button(new ValueText(LanguageName(code))).Class("button")
                     .Attribute("data-language-choice", code).Attribute("aria-pressed", code == Chosen(document) ? "true" : "false")),
@@ -215,7 +215,7 @@ namespace Jularr.Frontend.Pages.User.Reader
                 Popover(),
                 FigureViewer(),
                 new P(new Text("progress.saveFailed")).Attribute("data-role", "save-error").Attribute("role", "status").Attribute("hidden", "hidden"),
-                new P().Class("reader__note").Attribute("data-role", "translation-status").Attribute("role", "status").Attribute("hidden", "hidden")
+                new P().Class("reader__notice reader__notice--float").Attribute("data-role", "translation-status").Attribute("role", "status").Attribute("hidden", "hidden")
             ).Class("reader")
                 .Attribute("data-progress-url", "/api/v1/reading/assets/" + asset + "/progress")
                 .Attribute("data-antiforgery", antiforgery.GetAndStoreTokens(HttpContext).RequestToken ?? "")
@@ -312,11 +312,11 @@ namespace Jularr.Frontend.Pages.User.Reader
             }
             if (!document.IsCached)
             {
-                page.Content.Add(new P(new Text("reader.notCached")).Class("reader__note").Attribute("role", "status"));
+                page.Content.Add(new P(new Text("reader.notCached")).Class("reader__notice reader__notice--docked").Attribute("role", "status"));
             }
             else if (SmartNote() is { } note)
             {
-                page.Content.Add(new P(new Text(note)).Class("reader__note").Attribute("role", "status"));
+                page.Content.Add(new P(new Text(note)).Class("reader__notice reader__notice--docked").Attribute("role", "status"));
             }
         }
 
@@ -417,7 +417,13 @@ namespace Jularr.Frontend.Pages.User.Reader
                 "reader.codex.notConnected", "reader.codex.unavailable", "reader.codex.busy", "reader.codex.error", "reader.codex.time.minute", "reader.codex.time.minutes"
             ];
             var hasNext = index + 1 < document.SectionCount;
+            // One icon per mood, the script shows the one that fits (data-tone): working or at rest, done, a part skipped or a wait, a problem.
             var bar = new Div(
+                    new Div(
+                        new Span(new Icon("spark", assets)).Class("reader__codex-icon reader__codex-icon--accent"),
+                        new Span(new Icon("check", assets)).Class("reader__codex-icon reader__codex-icon--success"),
+                        new Span(new Icon("clock", assets)).Class("reader__codex-icon reader__codex-icon--warning"),
+                        new Span(new Icon("alert", assets)).Class("reader__codex-icon reader__codex-icon--danger")).Class("reader__codex-mood").Attribute("aria-hidden", "true"),
                     new P(new Text(key)).Class("reader__codex-text").Attribute("data-role", "codex-text").Attribute("role", "status"),
                     new Div(
                         new Button(new Text("reader.codex.start")).Primary().Attribute("type", "button").Attribute("data-codex", "start"),
@@ -462,10 +468,10 @@ namespace Jularr.Frontend.Pages.User.Reader
 
         // The languages the book can be read in; the choice is kept for the profile.
         private IUiComponent Languages(ReadingDocumentV1 document) => _languages.Length == 0
-            ? new Div(new P(new Text(NoLanguageKey))).Class("reader__panel").Attribute("data-panel", "language").Attribute("hidden", "hidden").Attribute("aria-label", texts["reader.language"])
+            ? new Div(new P(new Text(NoLanguageKey)).Class("reader__notice")).Class("reader__panel").Attribute("data-panel", "language").Attribute("hidden", "hidden").Attribute("aria-label", texts["reader.language"])
             : new Div([.. new[] { "original" }.Concat(_languages).Select(code => new Button(new ValueText(LanguageName(code))).Class("button")
                 .Attribute("data-language-choice", code).Attribute("aria-pressed", code == Chosen(document) ? "true" : "false")),
-                new P().Attribute("data-role", "translation-status").Attribute("role", "status").Attribute("hidden", "hidden")])
+                new P().Class("reader__notice").Attribute("data-role", "translation-status").Attribute("role", "status").Attribute("hidden", "hidden")])
                 .Class("reader__panel reader__choices").Attribute("data-panel", "language").Attribute("hidden", "hidden").Attribute("aria-label", texts["reader.language"]);
 
         private string RecognitionText(ReadingStateV1 state) => string.Format(CultureInfo.InvariantCulture, texts["reader.recognition.progress"], state.RecognizedPages, state.RecognitionPages);

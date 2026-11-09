@@ -217,7 +217,21 @@
     &__zoom { position: absolute; right: 12px; bottom: 12px; z-index: 3; display: flex; gap: 4px; padding: 4px; border: 1px solid var(--accent-line); border-radius: var(--radius-panel, 24px); background: var(--surface); }
     &__notices { position: absolute; z-index: 5; top: calc(var(--reader-header-height, 72px) + 8px); left: 50%; display: grid; justify-items: center; gap: 8px; max-width: calc(100% - 24px); transform: translateX(-50%); pointer-events: none; }
     &__notices > * { pointer-events: auto; }
-    &__notice, &__offer { margin: 0; padding: 6px 12px; border: 1px solid var(--accent-line); border-radius: var(--radius-panel, 24px); background: var(--surface); color: var(--muted); font-size: 12px; &[hidden] { display: none; } }
+    // One look for every notice of the Reader, the translation's among them: a quiet card on the surface with the accent's own line.
+    &__notice, &__offer { margin: 0; padding: 6px 12px; border: 1px solid var(--accent-line); border-radius: var(--radius-panel, 24px); background: var(--surface); color: var(--muted); font-size: var(--text-body, 12px); &[hidden] { display: none; } }
+    // The translation's progress and its failure float above the bottom bar, centered; the page stays readable and nothing shifts.
+    &__notice--float { position: absolute; z-index: 3; inset-inline: 12px; bottom: calc(64px + env(safe-area-inset-bottom)); width: fit-content; max-width: calc(100% - 24px); margin-inline: auto; color: var(--text); box-shadow: var(--shadow-overlay); text-align: center; pointer-events: none; }
+    // The notices that stand below the reader take the same inset as the Codex bar.
+    &__notice--docked { margin: 8px max(12px, env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)); border-radius: var(--radius-panel, 24px); }
+    // While the translation works the notice shows a ring; a failure shows none and takes the danger tint.
+    &__notice[data-role=translation-status] { display: flex; align-items: center; justify-content: center; gap: 8px; &[hidden] { display: none; }
+        &::before { content: ""; flex: none; width: 12px; height: 12px; border: 2px solid var(--accent-soft); border-top-color: var(--accent); border-radius: 50%; animation: reader-notice-spin 1s linear infinite; }
+        &[data-tone=danger] { border-color: transparent; background: var(--danger-soft); color: var(--danger); &::before { display: none; } }
+    }
+    // Inside a panel a notice is plain text, not a box in a box.
+    &__panel &__notice { padding: 2px; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+    // The engine named in the language panel: a caption, not a box.
+    &__panel [data-translation-provider] { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: var(--text-small, 10px); &::before { content: ""; flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); } }
     &__offer { display: flex; align-items: center; gap: 8px; color: var(--text); p { margin: 0; } }
     &__panel:is([data-current-group=text],[data-current-group=paper]) { width: min(340px, calc(100% - 24px)); }
     & &__more, &__panel[data-panel=language], &__panel[data-panel=timer] { width: min(260px, calc(100% - 24px)); }
@@ -288,19 +302,32 @@
     }
 }
 
-// While no local model translates, Codex translates a chapter on a button press: its bar sits under the reader and says what is translated and what runs.
+// While no local model translates, Codex translates a chapter on a button press: its bar sits under the reader like the other notices, says what is translated and what runs,
+// and wears the mood's icon and tint (data-tone: working or at rest, done, a part skipped or a wait, a problem).
 .reader__codex {
     display: flex;
     flex: 0 0 auto;
     flex-wrap: wrap;
     align-items: center;
-    gap: 8px 16px;
-    padding: 8px 16px;
-    border-top: 1px solid var(--border);
+    gap: 8px 12px;
+    margin: 8px max(12px, env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+    padding: 6px 6px 6px 8px;
+    border: 1px solid var(--accent-line);
+    border-radius: var(--radius-panel, 24px);
     background: var(--surface);
     color: var(--text);
-    font-size: 13px;
+    font-size: var(--text-body, 12px);
     &[hidden] { display: none; }
-    &-text { flex: 1 1 240px; margin: 0; min-width: 0; overflow-wrap: anywhere; }
+    &-mood { display: inline-grid; flex: none; }
+    &-icon { display: none; place-items: center; width: 30px; height: 30px; border-radius: var(--radius-small, 10px); background: var(--accent-soft); color: var(--accent-text); .ui-icon { width: 15px; height: 15px; } }
+    &:not([data-tone]) &-icon--accent, &[data-tone=accent] &-icon--accent, &[data-tone=success] &-icon--success, &[data-tone=warning] &-icon--warning, &[data-tone=danger] &-icon--danger { display: inline-grid; }
+    &-icon--success { background: var(--success-soft); color: var(--success); }
+    &-icon--warning { background: var(--warning-soft); color: var(--warning); }
+    &-icon--danger { background: var(--danger-soft); color: var(--danger); }
+    &[data-busy] &-icon .ui-icon { animation: reader-notice-pulse 1.4s ease-in-out infinite; }
+    &-text { flex: 1 1 200px; margin: 0; min-width: 0; overflow-wrap: anywhere; }
     &-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-inline-start: auto; > [hidden] { display: none; } }
 }
+
+@keyframes reader-notice-spin { to { transform: rotate(360deg); } }
+@keyframes reader-notice-pulse { 50% { opacity: .4; } }
