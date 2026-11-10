@@ -19,12 +19,13 @@ and, as class totals, in [`tests/ci-durations.json`](../tests/ci-durations.json)
 | `Image / minimal-compose` | Docker/Compose/packaging or database schema changed | Yes, including source changes | Build the shipped container and start the supplied Compose stack |
 | `Backend Full` (`smoke`, `backend (n/4)`, `e2e (n/4)`, `gate`) | Only as opted-in reusable `Backend / full-regression` job | Every push to `main` | Entire backend and browser suite, real FFmpeg, JPEG XL and backup-tool regression |
 | `Documentation / links-and-status` | Docs or checker/workflow changed | Yes, matching paths | Verify authoritative relative links and historical/snapshot status labels |
+| `CI retry / retry` | After a failed `Backend` run | After a failed `Backend Full` run | Re-run once when only the infrastructure failed (see below) |
 
 PR checks are scoped to PRs targeting `main` or `dev`; ordinary feature-branch pushes do not start Actions. Draft PRs retain the lightweight `Backend / test` and authorship checks, while builds, browser smoke, image smoke and full regression wait until `ready_for_review`. Pure frontend/E2E changes no longer run the backend compilation; dedicated frontend/browser jobs cover those areas. `Backend Full` is a reusable job within `Backend` for opt-in PRs, so ordinary PRs create no separate skipped full workflow run.
 
 The `Release` workflow runs only for a `v*` tag (or by hand as a dry run) and is described in [RELEASE.md](RELEASE.md). TV builds, TV tests and TV lint run only if TV code or its shared Android dependencies changed since the last signed TV APK. [Android TV CI](../.github/workflows/android.yml) and [Android Mobile CI](../.github/workflows/android-mobile.yml) are separately path-filtered; server-only changes do not start either.
 
-## Backend Full: fast and fail-fast
+## Backend Full: fast, every shard to its end
 
 No job is meant to run longer than about 10 minutes. The run is a graph, not one long job:
 
@@ -43,8 +44,18 @@ smoke (build once + critical tests + frontend tests, ~5 min)
   (cached), `ldd` checks that the runner image already has its system libraries (it ships Chrome), and
   only a missing library takes the slow apt route (hardened, three timed attempts). Plain apt at job
   time stalled the browser shards for ten minutes on slow mirrors.
-- The shards are one matrix with `fail-fast: true`: the first failing shard cancels all others,
-  and a newer push to the same branch or PR cancels the whole older run (`concurrency`).
+- The shards are one matrix with `fail-fast: false`: a failing shard does not cancel the others, so
+  one run reports every failing shard (a red run costs some more runner minutes). A newer push to the
+  same branch or PR still cancels the whole older run (`concurrency`). The PR gate's shards do the same.
+- Every `dotnet test` call (smoke, shards, real-tool tests, PR gate, Browser Smoke) runs with
+  `--blame-hang-timeout 5m --blame-hang-dump-type mini --blame-crash --blame-crash-dump-type mini`
+  (`DOTNET_TEST_BLAME`): a test still running after 5 minutes (the slowest pass in about 110 s) is dumped
+  and killed instead of running into the job timeout, and a crashed test host leaves a dump. On failure the
+  `blame-*` artifact (2 days) holds `Sequence_*.xml`, which names the test that was running
+  (`Completed="False"`), and the `*.dmp` files.
+- All workflows run on `ubuntu-24.04`, not the moving `ubuntu-latest` label (it moved to Ubuntu 26.04 at the end of
+  October 2026).
+  Change the image in every workflow together and verify the normal gates.
 - `gate` needs `smoke` and all shards and is the one conclusion of the run (the release guard
   reads the workflow conclusion of `Backend Full`; it is not required on every PR).
 - Runner capacity: at most 8 jobs run at the same time (1 smoke, then 8 shards, then the
@@ -56,6 +67,10 @@ smoke (build once + critical tests + frontend tests, ~5 min)
   fails when a list is incomplete. Backend shard 4 also runs the three real-tool tests (FFmpeg,
   cjxl) and is planned lighter (`--reserve 4=150`). Every backend and browser shard and the PR gate install
   `djvulibre-bin` and set `JULARR_TEST_DJVULIBRE=/usr/bin`, so the DjVu tests draw with the real ddjvu.
+- FFmpeg (browser shards and backend shard 4) is one pinned jellyfin-ffmpeg 7 portable build, the line the
+  image installs (`jellyfin-ffmpeg7`), not a moving "latest" build. Every job checks the cached archive with
+  `sha256sum -c` (visible in the log); the cache key is `jellyfin-ffmpeg-<version>`. To update, change version,
+  sha256 (the release asset's digest) and cache key together in `.github/actions/install-tools`.
 - The PR gate (`Backend`) uses the same build and shard script: `prepare` runs the smoke methods and the
   selection, `backend (1/2)` and `backend (2/2)` split the selected classes, `test` is the required check.
 
@@ -83,6 +98,29 @@ python3 scripts/ci-shard-tests.py refresh timings
 ```
 
 Do this when shards drift apart (compare the job times) or after many new tests; commit the file.
+
+## CI retry: infrastructure failures only
+
+`CI retry` (`.github/workflows/ci-retry.yml`) runs when a `Backend` or `Backend Full` run completes
+(on every completion; it skips at once unless attempt 1 failed). `scripts/ci-classify-failure.py`
+reads the run's jobs and decides:
+
+- whole run again: GitHub created no job, or every created job passed and the run is still red
+  (for example `gate` never appeared);
+- failed jobs again: every failed job broke in a set-up step from the script's allowlist (runner set-up,
+  service containers, `actions/*` steps, the repository's set-up actions such as `install-tools` and
+  `restore-build`, Chromium, artifact uploads) or outside its steps (runner lost, job never started);
+- nothing: a test, compile or check step failed or was cut off (also in a cancelled job; a timed-out job can
+  look cancelled), only cancelled jobs remain, attempt 2 or later, a newer run of the same branch exists
+  (re-running would cancel it through `concurrency`), or another workflow. A cancelled job is never the reason.
+
+Every run is re-run at most once, test failures never. The job summary names the decision and the reason.
+The job has `actions: write` (re-run) and `checks: read` (annotations tell a lost runner from a timeout)
+and checks out only the script from `main`. To classify a run by hand, start `CI retry` with its
+`run_id`; `dry_run` (the default) only reports. Locally (read-only, `gh` signed in):
+`python3 scripts/ci-classify-failure.py decide --repo Juloc/Jularr --run-id <id>`. Renaming or adding a
+set-up step in `backend.yml` / `backend-pr.yml` means updating the allowlist; the self-check runs in
+`smoke` and `prepare`.
 
 ## Full validation before a release
 

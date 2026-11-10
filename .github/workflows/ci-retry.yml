@@ -1,0 +1,73 @@
+name: CI retry
+
+# Starts a failed Backend or Backend Full run once more when only the infrastructure failed: GitHub created
+# no job or lost one, or a job broke in a set-up step (runner, checkout, toolchain, tool download, shared build).
+# A failed test, compile or check step is never re-run, nor is attempt 2 or later. scripts/ci-classify-failure.py
+# decides; the job summary names the decision and the reason. Details: docs/CI.md.
+on:
+  workflow_run:
+    workflows: [Backend, Backend Full]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: ID of the failed Backend or Backend Full run
+        required: true
+        type: string
+      dry_run:
+        description: Only classify and report; re-run nothing
+        type: boolean
+        default: true
+
+run-name: CI retry for run ${{ github.event.workflow_run.id || inputs.run_id }}
+
+permissions: {}
+
+# One decision per watched run at a time; a second trigger then sees attempt 2 and stops.
+concurrency:
+  group: ci-retry-${{ github.event.workflow_run.id || inputs.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  retry:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'failure' && github.event.workflow_run.run_attempt == 1)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      actions: write  # read the run and its jobs, start the re-run
+      checks: read    # job annotations tell a lost runner from a timed-out test
+      contents: read  # check out the classifier
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RUN_ID: ${{ github.event.workflow_run.id || inputs.run_id }}
+    steps:
+      # Always the classifier of main, never code of the branch or PR that failed.
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          sparse-checkout: scripts/ci-classify-failure.py
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      - name: Classify the failure
+        id: classify
+        run: python3 scripts/ci-classify-failure.py decide --repo "${GH_REPO}" --run-id "${RUN_ID}"
+      - name: Re-run the failed jobs or the whole run
+        if: steps.classify.outputs.decision != 'none'
+        env:
+          DECISION: ${{ steps.classify.outputs.decision }}
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && 'true' || 'false' }}
+        run: |
+          set -euo pipefail
+          if [[ "${DRY_RUN}" == "true" ]]; then
+            echo "Dry run: run ${RUN_ID} was not re-run (decision ${DECISION})." | tee -a "${GITHUB_STEP_SUMMARY}"
+            exit 0
+          fi
+          if [[ "${DECISION}" == "failed" ]]; then
+            gh run rerun "${RUN_ID}" --failed
+          else
+            gh run rerun "${RUN_ID}"
+          fi
+          echo "Started attempt 2 of run ${RUN_ID} (${DECISION})." | tee -a "${GITHUB_STEP_SUMMARY}"

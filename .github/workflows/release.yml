@@ -27,7 +27,7 @@ env:
 
 jobs:
   guard:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       contents: read
@@ -124,7 +124,7 @@ jobs:
 
   image:
     needs: guard
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     permissions:
       contents: read
@@ -186,7 +186,7 @@ jobs:
   release:
     needs: [guard, image]
     if: needs.guard.outputs.dry_run != 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
       contents: write
