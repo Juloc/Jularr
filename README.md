@@ -12,10 +12,8 @@ Die bestehenden Host-Registrierungen bleiben unverändert. SMB-Freigaben
 erreicht Jularr selbst oder Docker bindet sie als Volume ein, NFS immer als Volume;
 dazu Synology API und per Docker Compose freigegebene Pfade. Konfiguration erfolgt über Services und Frontend.
 
-Regeln: [AGENTS.md](AGENTS.md), [Konventionen](docs/CONVENTIONS.md), [Dokumentationsregeln](docs/DOCUMENTATION_POLICY.md).
-Code-Navigation: [CODEMAP.md](docs/CODEMAP.md), alle Dokumente: [INDEX](docs/INDEX.md). Offene Arbeit steht in GitHub-Issues und PRs; alte Pläne liegen in `docs/archive/`.
-Instanz-Einrichtung: [aktueller Setup-Ablauf](docs/INSTANCE_SETUP.md).
-Lokale Vorschau auf D: [Testserver und Aktualisierung](docs/LOCAL_PREVIEW.md).
+Regeln: [AGENTS.md](AGENTS.md); Bauen, Testen, Migrationen und Release: [Entwicklung](docs/DEVELOPMENT.md).
+Offene Arbeit steht in GitHub-Issues und PRs.
 
 ## Reader und Vorlesen
 
@@ -23,7 +21,6 @@ Der Reader nutzt standardmäßig Gerätestimmen. Optionale neuronale Stimmen lau
 lokal im Browser: Der Owner aktiviert ein Modell in der Modulverwaltung; auf dem
 Gerät wird es ausdrücklich installiert, die Stimmwahl im Profil gespeichert.
 Keine automatische Modellinstallation und keine serverseitige Sprachsynthese.
-[Verhalten, Prüfungen und offene Anschlüsse](docs/SPEECH.md),
 [Lizenzumfang des Browser-Clients](src/Jularr.Frontend/BROWSER-LICENSE.md).
 
 ### Optionale TranslateGemma-Übersetzung
@@ -187,7 +184,7 @@ durch restriktive Dateirechte und gegebenenfalls Volume-Verschlüsselung schütz
 Verzeichnis enthält vertrauliches Schlüsselmaterial. Schlüssel und DB müssen Updates überleben.
 Cookies und Provider-Secrets aus dem bisherigen pfadabhängigen Schutzkontext müssen beim
 einmaligen Wechsel neu ausgestellt beziehungsweise neu hinterlegt werden.
-Keine Migration; nur eine leere Datenbank erhält beim Start die [Baselines](database/README.md).
+Keine Migration; nur eine leere Datenbank erhält beim Start die Baselines.
 
 Razor ruft per DI dieselben Services direkt auf, beispielsweise
 `await login.ExecuteAsync<LoginResultV1>(new LoginDataV1(email, password))`.
@@ -258,7 +255,7 @@ User `ReadInstanceCapabilitiesV1` liefert die verfügbaren Funktionen; Public
 Shell/Login verwenden den Namen, bei eigener Benennung mit „by Jularr“.
 Die aktive Profilsprache hat Vorrang vor dem Instanzdefault; exakte Sprache,
 Elternsprache und Englisch werden vom gemeinsamen Backend-Katalog aufgelöst.
-Der [Setup Wizard](docs/INSTANCE_SETUP.md) bündelt Owner und Sprache, Module, Bibliotheken sowie Quellen und Abschluss in vier Schritten.
+Der Setup Wizard bündelt Owner und Sprache, Module, Bibliotheken sowie Quellen und Abschluss in vier Schritten.
 
 `/Admin/Works` legt kanonische Works manuell an; `/Admin/Works/{id}` bearbeitet
 den Titel mit Versionsprüfung und erhält weitere Titelquellen. `/Details/{id}`
@@ -288,10 +285,7 @@ der Verbindung und werden über einen sicheren Ordner-Browser gewählt. Scans la
 im Hintergrund-Worker, automatisch nach dem in `/Admin/Instance` eingestellten Intervall (Standard 24 Stunden, 0 aus; schlafende NAS bleiben unberührt), `/Admin/Library` zeigt Inventar und Zuordnung, `/Admin/Activity` die Scans, die
 Detailseite die gespeicherte Verfügbarkeit. Dafür sind die frischen
 [Storage-](database/Storage.sql) und [Library-Baselines](database/Library.sql)
-erforderlich; ffprobe analysiert die Streams, fpcalc mit einem AcoustID-Schlüssel erkennt Musik per Fingerabdruck. Deployment, Rechte und
-offene Integration stehen in [Storage Runtime](docs/STORAGE_RUNTIME.md).
-Den tatsächlichen Umfang gegenüber dem Originalmodell zeigt der
-[Schema-Abgleich](docs/SCHEMA_SNAPSHOT_ALIGNMENT.md).
+erforderlich; ffprobe analysiert die Streams, fpcalc mit einem AcoustID-Schlüssel erkennt Musik per Fingerabdruck.
 
 Medienmodule/Profilsichtbarkeit, Metadatensprachregeln, Dateien/Cover, Monitoring,
 Arr und Player sind damit noch nicht fertig. Bestehende Datenbanken werden nicht
@@ -478,7 +472,6 @@ legt die Namen von Film- und Folgendateien mit Sonarr-artigen Platzhaltern fest.
 DSM-Zertifikat vertraut Jularr erst, nachdem der Owner seinen Fingerabdruck auf der Speicher-Seite bestätigt hat.
 Fehlende Untertitel der gewünschten Sprachen (Modul „Untertitel“, standardmäßig aus) holt Jularr von Anbietern, die wie
 Indexer verwaltet werden (OpenSubtitles.com, SubDL), und legt sie als `<Video>.<Sprache>.srt` neben das Video.
-Ihre historischen Verträge stehen in [BACKEND_NEXT](docs/archive/BACKEND_NEXT.md).
 Razor-Integrationstests verwenden ausschließlich isoliertes PostgreSQL
 und verlangen vorher `npm run build` im Frontend für die echten Asset-Manifeste.
 
@@ -497,10 +490,9 @@ Der Update-Pfad verwendet eine versionierte
 Schemahistorie: das Schema ist eingefroren, Änderungen sind nummerierte Migrationen
 (`database/migrations`). Neue Migrationen laufen beim Start automatisch, nach einem
 automatischen Backup (Datenbank und Schlüssel); ohne Backup oder bei einer fehlgeschlagenen
-Migration wird alles zurückgerollt, Jularr startet nicht und zeigt eine Wartungsseite. Ablauf und
-[Datenbank-Migrationen](docs/DATABASE_MIGRATIONS.md).
+Migration wird alles zurückgerollt, Jularr startet nicht und zeigt eine Wartungsseite.
 Ein Release ist ein Git-Tag `vX.Y.Z`; der Workflow baut das Image und veröffentlicht `ghcr.io/juloc/jularr:X.Y.Z`
-(und `latest`): [Release](docs/RELEASE.md).
+(und `latest`). Ablauf von Migration und Release: [Entwicklung](docs/DEVELOPMENT.md).
 
 Backups (`/Admin/Backup`) sichern die Datenbank mit `pg_dump` samt
 Schlüsselbund in `DataPath/backups` (abweichend `Backup:Path`); automatisch im

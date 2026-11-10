@@ -6,6 +6,19 @@ whitespace/line endings normalized), not replaced by a blanket
 "non-commercial" statement. Model weights are separate opt-in inputs and keep
 their own catalog terms; none is copied into this directory.
 
+## License decision
+
+The Owner approved a GPLv3-compatible browser client on 20 October 2026,
+including commercial reuse under GPL, without a blanket Server/project relicense
+([browser-client grant](../../../BROWSER-LICENSE.md)).
+Models/datasets and separately supplied optional cores retain their own terms;
+this does not override their non-commercial restrictions.
+The Reader/settings link a readable complete notice bundle, built with a source
+commit URL. Dirty/unversioned previews are marked development-only. Builds from a
+source archive may specify `JULARR_BROWSER_SOURCE_REVISION`; it cannot hide a dirty
+Git checkout or disagree with its revision. Redistributors must keep matching
+sources available, including all engine/build inputs, not just offer dead links.
+
 ## Pinned sources
 
 - [sherpa-onnx 1.13.8, 11afbd009a7f8c08f4bcf2fc1b265d0df4670fbf](https://github.com/k2-fsa/sherpa-onnx/tree/11afbd009a7f8c08f4bcf2fc1b265d0df4670fbf), Apache-2.0. Its CMake files pin and hash the transitive sources, including kaldi-native-fbank 1.22.3, kaldi-decoder 0.3.0, simple-sentencepiece 0.7 and nlohmann/json 3.12.0.

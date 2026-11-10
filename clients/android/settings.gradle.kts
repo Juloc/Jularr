@@ -34,8 +34,7 @@ include(
 // The sherpa-onnx offline-neural TTS runtime is not published to Maven Central (see
 // k2-fsa/sherpa-onnx#3981), only as a manually downloaded AAR release asset. This module
 // stays out of the default build (and CI, which has no AAR) so nothing else is affected;
-// opt in locally with -PjularrNeuralTtsEnabled=true after following the manual step in
-// docs/TTS.md.
+// opt in locally with -PjularrNeuralTtsEnabled=true after following the manual step.
 val neuralTtsEnabled = providers.gradleProperty("jularrNeuralTtsEnabled")
     .getOrElse("false")
     .toBoolean()

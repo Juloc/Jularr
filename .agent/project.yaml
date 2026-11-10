@@ -6,8 +6,8 @@ validation:
   - dotnet test Jularr.sln --no-build
 protectedPaths:
   - AGENTS.md
-  - docs/CONVENTIONS.md
+  - docs/DEVELOPMENT.md
   - .agent/project.yaml
 notes:
   - "The validation list is the release / explicit-full-validation gate, not ordinary slice completion."
-  - "Working rules live in AGENTS.md and docs/CONVENTIONS.md; navigation is in docs/CODEMAP.md."
+  - "Working rules live in AGENTS.md; commands and code rules in docs/DEVELOPMENT.md."

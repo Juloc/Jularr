@@ -35,7 +35,7 @@ data class TtsUiState(
  * a speech request with the shared [SpeechPreferenceResolver] against the device
  * provider's discovered voices and the profile's synced [TtsPreferences], then drives a
  * [TtsSession]. Spoken text is only ever handed to the local TTS engine: never persisted,
- * never sent to the server (docs/TTS.md).
+ * never sent to the server.
  */
 class TtsCoordinator(
     context: Context,

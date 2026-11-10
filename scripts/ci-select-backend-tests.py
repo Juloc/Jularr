@@ -29,7 +29,7 @@ BOOT_METHODS = ("SetupTests.Razor_FirstOwner_ValidatesRollsBackAndSignsIn",
 
 # A path may belong to several areas (e.g. downloads + storage). The mappings
 # are deliberately plain to make changes auditable in code review. Keep them
-# aligned with tests/Jularr.Backend.Tests and docs/CODEMAP.md.
+# aligned with tests/Jularr.Backend.Tests.
 AREAS = (
     (("acquisition", "download", "wanted", "newznab", "sabnzbd", "sonarr",
       "radarr", "lidarr", "readarr", "usenet", "torrent", "arrplus"),
