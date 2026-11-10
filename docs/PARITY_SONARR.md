@@ -2,7 +2,7 @@
 
 Owner decisions of 19 October 2026, row by row. **Same**: Jularr already does it.
 **Differently**: Jularr solves it its own way. **Wanted**: to be built. **Later**: wanted, not yet scheduled.
-**Not**: deliberately left out. Build state is tracked in the [feature matrix](FEATURE_MATRIX.md).
+**Not**: deliberately left out. Build state: GitHub issues.
 
 ## Wanted
 

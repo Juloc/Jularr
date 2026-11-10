@@ -2,7 +2,7 @@
 
 Owner decisions of 19 October 2026. Jularr manages its indexers itself and takes Prowlarr over once (import only).
 Indexer settings follow the [Sonarr decisions](PARITY_SONARR.md); notifications, system and access as decided there.
-Build state is tracked in the [feature matrix](FEATURE_MATRIX.md).
+Build state: GitHub issues.
 
 ## Same
 

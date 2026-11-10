@@ -3,7 +3,7 @@
 Owner decisions of 19 October 2026. Whatever Radarr shares with Sonarr follows the
 [Sonarr decisions](PARITY_SONARR.md) for films too: library views, filters, mass editor, one management page
 per film, wanted lists, activity, search, test parsing, extra files, naming, webhook, system and access.
-Only what Radarr adds or does otherwise is listed here. Build state is tracked in the [feature matrix](FEATURE_MATRIX.md).
+Only what Radarr adds or does otherwise is listed here. Build state: GitHub issues.
 
 ## Wanted
 

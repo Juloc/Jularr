@@ -1,26 +1,35 @@
-# Documentation authority
+# Documentation policy
 
-Status: **active**. This page identifies the owner of each kind of information; it does not approve any implementation.
+Status: **active**. Where information belongs and how large documents may get. `node scripts/verify-documentation.mjs` checks the limits in CI.
 
-| Question | Primary authority |
+## Where things belong
+
+| Question | Owner |
 | --- | --- |
-| What currently works? | `main` implementation and focused tests; an unmerged PR is not deployed behavior |
-| What should work? | Latest explicit Owner-approved feature decision, specification and acceptance criteria |
-| Where is it implemented? | [CODEMAP](CODEMAP.md), then the current owning source and tests |
-| How is code structured? | [AGENTS](../AGENTS.md), [Backend conventions](CONVENTIONS.md) and [Frontend conventions](FRONTEND_CONVENTIONS.md) |
-| What is the shared UI behavior? | [Frontend UX decisions](FRONTEND_UX.md), subject to newer explicit feature decisions |
-| Where is open work? | GitHub issues and PRs, not a dated rollout plan |
+| What works now? | `main` code and its tests; an unmerged PR is not deployed behaviour |
+| What should work? | The owner's latest explicit decision: an area file's Decisions, [Frontend UX](FRONTEND_UX.md), a spec or the issue |
+| Where is it implemented? | [CODEMAP](CODEMAP.md), then `docs/areas/<area>.md`, then the code it names |
+| How is code written? | [Conventions](CONVENTIONS.md) and [Frontend conventions](FRONTEND_CONVENTIONS.md) |
+| Where is open work? | GitHub issues and PRs |
 
-Implementation reality and approved desired behavior are different. An explicit later Owner decision may supersede an older design but does not make unmerged code available on `main`. Record both states and link the issue or PR if they differ.
+- `AGENTS.md`: working rules only. [INDEX](INDEX.md): one line per document.
+- CODEMAPs: one line per area (code paths, focused tests, link); never behaviour prose.
+- Area files (`docs/areas/<area>.md`): the area's decisions and behaviour in Decisions, Backend, Frontend and Tests sections.
+  Update them in the same change as the code. A new area gets a CODEMAP line.
+- Specs (`docs/*.md`): only for approved larger features whose behaviour the code does not show; name their status near the top.
+- `README.md` describes startup and current capabilities; it is not a rules document.
+- History (old plans, snapshots, migration traces) lives in `docs/archive/` with `Status: **historical**` or `**snapshot**`.
+  It grants no permission and claims no current state; `.rgignore` keeps it out of searches.
+- When behaviour changes, change its one owner and delete what became wrong; Git keeps the history.
+  Rules carry no dates or issue numbers.
 
-## Lifecycle
+## Limits
 
-- **Active** rules/specs govern new changes within their scope and must be updated when the corresponding behavior changes.
-- **Historical** plans and legacy inventories are preserved as recovery evidence only. They grant no implementation permission or completion claim.
-- **Snapshot** test matrices are valid only for the date/revision they describe. Do not repeat their cells as current `main` status.
-
-[Alpha-90 recovery](ALPHA90_RECOVERY_PLAN.md), [backend slices](BACKEND_NEXT.md), [completion packages](COMPLETION_PLAN.md) and the [feature matrix](FEATURE_MATRIX.md) are historical/snapshot references. They are not the current backlog.
-
-Keep AGENTS short, CODEMAPs as owner/file/test navigation, README as present-tense usage information, and behavior requirements in one canonical feature spec. Before removing an old plan or legacy implementation, map each approved capability to tested `main` behavior or an open linked issue, as required by AGENTS. Do not delete untracked requirements.
-
-Run `node scripts/verify-documentation.mjs` after changes to active documentation. The checker validates links and known stale-status assertions, but cannot replace code/spec review.
+- `AGENTS.md` at most 120 lines, [INDEX](INDEX.md) at most 60 lines, each CODEMAP at most 80 lines.
+- Area files at most 250 lines and 24 KB; split an area that grows past that and add its CODEMAP line.
+- Other active documents at most 40 KB (exceptions with their own cap are listed in the checker).
+- Lines at most 160 characters in AGENTS, INDEX, both CODEMAPs, area files, the conventions, Frontend UX and this file (table rows excepted).
+  Write one sentence per line; continuation lines of a bullet are indented by two spaces.
+- Local links and code paths (`src/…`, `tests/…`, `database/…`, `scripts/…`, `docs/…`, `Jularr.<Project>/…`) must exist;
+  in CODEMAPs every path in backticks must exist.
+- No near-duplicate sentences across active documents: write it once and link to it.

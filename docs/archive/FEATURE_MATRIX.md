@@ -1,6 +1,6 @@
 # Historical feature verification matrix
 
-Status: **snapshot** of the 14 October 2026 recovery mandate and later recorded tests. Rows below are not live `main` status. Recheck owners, test names and gaps against current code and GitHub issues; [completion packages](COMPLETION_PLAN.md) are historical. See [documentation authority](DOCUMENTATION_POLICY.md).
+Status: **snapshot** of the 14 October 2026 recovery mandate and later recorded tests. Rows below are not live `main` status. Recheck owners, test names and gaps against current code and GitHub issues; [completion packages](COMPLETION_PLAN.md) are historical. See [documentation authority](../DOCUMENTATION_POLICY.md).
 
 Status, strictly: **planned** (documented or absent), **implemented** (code without a focused
 test), **tested** (Backend or Frontend tests assert it), **e2e** (a Playwright test drives it
@@ -25,7 +25,7 @@ through the UI). A row is done only at e2e. Tests name classes in `tests/Jularr.
 | Failure cases: subtitles and audio tracks, a file the browser cannot play | e2e | as above | TracksTests | – | Each case ends in a visible, recoverable state without data loss |
 | Failure case: missing metadata | tested | as above | LibraryTests, AcquisitionTests | Browser scenario | Each case ends in a visible, recoverable state without data loss |
 
-The path tests run against [fake services](../tests/Jularr.E2E.Tests/FakeServices.cs) (TMDB, MusicBrainz, Open Library, AniList, Newznab, SABnzbd) the started host reaches through the `Providers` addresses; files are generated (WebM and FLAC by FFmpeg, EPUB and CBZ in code). Still needed: a NNTP fake for the native downloader and a browser scenario for missing metadata.
+The path tests run against [fake services](../../tests/Jularr.E2E.Tests/FakeServices.cs) (TMDB, MusicBrainz, Open Library, AniList, Newznab, SABnzbd) the started host reaches through the `Providers` addresses; files are generated (WebM and FLAC by FFmpeg, EPUB and CBZ in code). Still needed: a NNTP fake for the native downloader and a browser scenario for missing metadata.
 
 ## Arr+ core
 
@@ -53,7 +53,7 @@ The path tests run against [fake services](../tests/Jularr.E2E.Tests/FakeService
 
 ## Radarr, Sonarr, Lidarr, Readarr, Bazarr
 
-What each *arr has and what Jularr keeps, does differently, adds later or leaves out: [Sonarr](PARITY_SONARR.md), [Radarr](PARITY_RADARR.md), [Lidarr](PARITY_LIDARR.md), [Readarr](PARITY_READARR.md), [Prowlarr](PARITY_PROWLARR.md), [Bazarr](PARITY_BAZARR.md), [Seerr](PARITY_SEERR.md).
+What each *arr has and what Jularr keeps, does differently, adds later or leaves out: [Sonarr](../PARITY_SONARR.md), [Radarr](../PARITY_RADARR.md), [Lidarr](../PARITY_LIDARR.md), [Readarr](../PARITY_READARR.md), [Prowlarr](../PARITY_PROWLARR.md), [Bazarr](../PARITY_BAZARR.md), [Seerr](../PARITY_SEERR.md).
 
 | Function | Status | Owner | Tests | Missing |
 | --- | --- | --- | --- | --- |
@@ -62,7 +62,7 @@ What each *arr has and what Jularr keeps, does differently, adds later or leaves
 | Music: MusicBrainz, Cover Art Archive, albums, tracks, FLAC/ALAC/MP3/AAC, album playback | tested | `MusicBrainzClient`, `MusicReleaseJudge` | MusicTests | Artists, discographies and their monitoring, editions/media, secondary types, multi-format, tag read/write, retag preview, duplicates (#1022) |
 | Books, manga, light novels: sources, Newznab, import, reader (EPUB, PDF, MOBI, AZW, AZW3, FB2, TXT, RTF, DOCX, DjVu, comics) | tested | Book/Manga judges, sources, `LibraryFileTypes`, `BookConversion`, `DjvuTools` | BookTests, BookFormatTests, DjvuTests, MangaTests, SourceTests, ReadingTests | Author and series entities and monitoring, editions, format upgrades, chapter releases, HUFF/CDIC-compressed Kindle books, text search in DjVu |
 | Translated books: server translation (TranslateGemma, Codex) per block and model, translated EPUB once every section is translated, admin list of translated works per language and model | tested | `LocalReadingPaths`, `ReadReadingEbookV1`, `ReadTranslatedBooksV1` | BookTranslationTests, LocalReadingTranslationIntegrationTests, ReaderTranslationTests | A colophon in the reader's language (it is English) |
-| Audiobooks as their own media type ([Readarr parity](PARITY_READARR.md)) | planned | Media types | – | Type, library/discover view, audio playback with chapters, tags, narrator |
+| Audiobooks as their own media type ([Readarr parity](../PARITY_READARR.md)) | planned | Media types | – | Type, library/discover view, audio playback with chapters, tags, narrator |
 | Subtitles: detection, wanted languages, automatic fetch, manual search and choice, OpenSubtitles, SubDL | tested | `SubtitleServices` | SubtitleTests, PlaybackTests | Status and history page, forced flags, quotas, further providers; a browser test needs an HTTPS subtitle fake |
 
 ## Prowlarr and Seerr

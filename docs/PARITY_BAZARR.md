@@ -2,7 +2,7 @@
 
 Owner decisions of 19 October 2026. Subtitles are Jularr's `Subtitles` module; series and films come from the
 library itself, so Bazarr's Sonarr/Radarr sync falls away. Notifications, system and access as decided for
-[Sonarr](PARITY_SONARR.md). Build state is tracked in the [feature matrix](FEATURE_MATRIX.md).
+[Sonarr](PARITY_SONARR.md). Build state: GitHub issues.
 
 ## Same
 

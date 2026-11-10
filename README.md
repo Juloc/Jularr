@@ -12,8 +12,8 @@ Die bestehenden Host-Registrierungen bleiben unverändert. SMB-Freigaben
 erreicht Jularr selbst oder Docker bindet sie als Volume ein, NFS immer als Volume;
 dazu Synology API und per Docker Compose freigegebene Pfade. Konfiguration erfolgt über Services und Frontend.
 
-Regeln: [AGENTS.md](AGENTS.md), [Konventionen](docs/CONVENTIONS.md), [Dokumentationsstatus](docs/DOCUMENTATION_POLICY.md).
-Code-Navigation: [CODEMAP.md](docs/CODEMAP.md). Offene Arbeit steht in GitHub-Issues und PRs; [Backend-Slices](docs/BACKEND_NEXT.md) sind historische Referenzen.
+Regeln: [AGENTS.md](AGENTS.md), [Konventionen](docs/CONVENTIONS.md), [Dokumentationsregeln](docs/DOCUMENTATION_POLICY.md).
+Code-Navigation: [CODEMAP.md](docs/CODEMAP.md), alle Dokumente: [INDEX](docs/INDEX.md). Offene Arbeit steht in GitHub-Issues und PRs; alte Pläne liegen in `docs/archive/`.
 Instanz-Einrichtung: [aktueller Setup-Ablauf](docs/INSTANCE_SETUP.md).
 Lokale Vorschau auf D: [Testserver und Aktualisierung](docs/LOCAL_PREVIEW.md).
 
@@ -478,7 +478,7 @@ legt die Namen von Film- und Folgendateien mit Sonarr-artigen Platzhaltern fest.
 DSM-Zertifikat vertraut Jularr erst, nachdem der Owner seinen Fingerabdruck auf der Speicher-Seite bestätigt hat.
 Fehlende Untertitel der gewünschten Sprachen (Modul „Untertitel“, standardmäßig aus) holt Jularr von Anbietern, die wie
 Indexer verwaltet werden (OpenSubtitles.com, SubDL), und legt sie als `<Video>.<Sprache>.srt` neben das Video.
-Ihre Verträge stehen in [BACKEND_NEXT](docs/BACKEND_NEXT.md).
+Ihre historischen Verträge stehen in [BACKEND_NEXT](docs/archive/BACKEND_NEXT.md).
 Razor-Integrationstests verwenden ausschließlich isoliertes PostgreSQL
 und verlangen vorher `npm run build` im Frontend für die echten Asset-Manifeste.
 

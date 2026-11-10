@@ -1,9 +1,9 @@
 # Historical backend slices
 
-Status: **historical** architecture and progress reference, not the current implementation order or approval for new work. See [documentation authority](DOCUMENTATION_POLICY.md), current code and approved issues/PRs.
+Status: **historical** architecture and progress reference, not the current implementation order or approval for new work. See [documentation authority](../DOCUMENTATION_POLICY.md), current code and approved issues/PRs.
 
-Original recovery grouping. Follow [conventions](CONVENTIONS.md);
-current owners and actual implementation are in [CODEMAP](CODEMAP.md).
+Original recovery grouping. Follow [conventions](../CONVENTIONS.md);
+current owners and actual implementation are in [CODEMAP](../CODEMAP.md).
 The [original table snapshot](https://github.com/Juloc/Jularr/blob/docs/sql-cutoff-schema-json-20261011/docs/SQL_CUTOFF_ORIGINAL_TABLES.json)
 defines the agreed media structure, not the legacy code layout. Complete missing
 column definitions within those contracts; do not restart architecture planning.
@@ -24,7 +24,7 @@ isolated PostgreSQL tests and updated navigation in one reviewable change.
 External I/O stays outside long database transactions; final mutations revalidate
 and commit together. No unapproved legacy database migration or changes to
 an active Owner database. Supported release upgrades use the single
-[backup-first schema owner](DATABASE_MIGRATIONS.md).
+[backup-first schema owner](../DATABASE_MIGRATIONS.md).
 
 ## Boundaries already decided
 
@@ -58,7 +58,7 @@ an active Owner database. Supported release upgrades use the single
 - Retro games play in EmulatorJS 4.2.3 (GPL-3.0), approved by the owner on
   13 October 2026 with all its cores (Jularr is non-commercial, so non-commercial
   core licenses such as snes9x apply), self-hosted and pinned by npm integrity in
-  [emulator-assets.mjs](../src/Jularr.Frontend/Tools/emulator-assets.mjs). Only the
+  [emulator-assets.mjs](../../src/Jularr.Frontend/Tools/emulator-assets.mjs). Only the
   browser files of the loader and 13 cores are kept; the npm packages themselves
   would pull every core and the EmulatorJS server tooling.
 - Owner decisions of 12 October 2026: the Owner sets per NAS connection whether
@@ -86,7 +86,7 @@ an active Owner database. Supported release upgrades use the single
   through EmulatorJS (all cores, see the 13 October decision below), other platforms are downloads.
   E2E uses Playwright against a Compose test stack. Setup step 2 offers a new instance or
   a Jularr backup restore; legacy migrations require separate approval, while
-  supported release upgrades follow [the versioned startup contract](DATABASE_MIGRATIONS.md); the AI step waits
+  supported release upgrades follow [the versioned startup contract](../DATABASE_MIGRATIONS.md); the AI step waits
   for its own package.
 - Owner decisions of 14 October 2026: order is the running Arr+ packages, then Playwright
   browser and end-to-end tests (agents check important changes with them), then K24 and
@@ -216,7 +216,7 @@ the desired progress/resume/history behavior, not copied from the buggy legacy
 implementation. Library's physical scanning/import integration still needs its
 focused import contract. Connections, library paths, background scans, inventory,
 manual identification and stored availability are implemented; see
-[Storage runtime](STORAGE_RUNTIME.md).
+[Storage runtime](../STORAGE_RUNTIME.md).
 
 1. Additional versions per Work (owner decision 13 Oct): by default one version and one quality profile per Work, as in Sonarr; an advanced switch, off by default, will let a request that an existing version does not satisfy (other language or quality) add as many versions as needed.
 2. Exact instance/profile preference catalogs; complete the agreed media/storage columns.

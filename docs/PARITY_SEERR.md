@@ -2,8 +2,7 @@
 
 Owner decisions of 19 October 2026 for Seerr (Overseerr and Jellyseerr). Jularr is its own request and Discover
 front end; Radarr/Sonarr server settings fall away. Editions and languages follow the
-[general rule](PARITY_SONARR.md#editions-and-languages-all-media-types). Build state is tracked in the
-[feature matrix](FEATURE_MATRIX.md).
+[general rule](PARITY_SONARR.md#editions-and-languages-all-media-types). Build state: GitHub issues.
 
 ## Same
 

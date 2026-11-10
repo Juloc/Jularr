@@ -1,6 +1,6 @@
 # Historical clean-start completion packages
 
-Status: **historical** acceptance-criteria inventory, not a current delivery schedule, implementation status or new-work approval. Preserve requirements until reconciled with `main` and tracked issues. See [documentation authority](DOCUMENTATION_POLICY.md).
+Status: **historical** acceptance-criteria inventory, not a current delivery schedule, implementation status or new-work approval. Preserve requirements until reconciled with `main` and tracked issues. See [documentation authority](../DOCUMENTATION_POLICY.md).
 
 | # | Package | Acceptance |
 | --- | --- | --- |

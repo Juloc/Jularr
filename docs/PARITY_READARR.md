@@ -4,8 +4,7 @@ Owner decisions of 19 October 2026. Readarr is retired; this records what a swit
 shares with Sonarr follows the [Sonarr decisions](PARITY_SONARR.md) for books too: library views, filters, mass
 editor, one management page per author, wanted lists, activity, search, manual import including unmapped files,
 naming, webhook, system and access. Editions and languages follow the
-[general rule](PARITY_SONARR.md#editions-and-languages-all-media-types). Build state is tracked in the
-[feature matrix](FEATURE_MATRIX.md).
+[general rule](PARITY_SONARR.md#editions-and-languages-all-media-types). Build state: GitHub issues.
 
 ## Wanted
 

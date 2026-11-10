@@ -2,7 +2,7 @@
 
 > Later owner decisions in [BACKEND_NEXT](BACKEND_NEXT.md) take precedence: the first Owner is created in Setup without installation proof, Prowlarr/Sonarr/Radarr are one-time takeover sources only, Wake-on-LAN is an Owner setting, Games use the unified Arr+ and conversions use HLS with hls.js.
 
-Status: **historical** feature/technical dependency snapshot from 12 October 2026. Not current `main` implementation status, delivery schedule or authorization for coding/migration/database resets. Its old file counts, wizard length, branch paths and gaps are dated. See [documentation authority](DOCUMENTATION_POLICY.md), current code and approved issues/PRs.
+Status: **historical** feature/technical dependency snapshot from 12 October 2026. Not current `main` implementation status, delivery schedule or authorization for coding/migration/database resets. Its old file counts, wizard length, branch paths and gaps are dated. See [documentation authority](../DOCUMENTATION_POLICY.md), current code and approved issues/PRs.
 
 ## 0. Evidence and source hierarchy
 

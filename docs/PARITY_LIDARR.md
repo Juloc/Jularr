@@ -6,7 +6,7 @@ management page per artist, wanted lists, activity, search, test parsing, extra 
 access. Editions follow the [general rule](PARITY_SONARR.md#editions-and-languages-all-media-types).
 Earlier music decisions (15 October): tags through TagLibSharp, AcoustID as an optional module, transcoding only
 what a device cannot play, Lidarr metadata profiles taken over as monitoring rules of the Jularr profile.
-Build state is tracked in the [feature matrix](FEATURE_MATRIX.md).
+Build state: GitHub issues.
 
 ## Wanted
 

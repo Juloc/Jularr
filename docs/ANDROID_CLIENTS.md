@@ -156,7 +156,7 @@ GET    /api/client/v1/me/playback-history
 DELETE /api/client/v1/me/playback-history
 ```
 
-The server is the only durable owner of resume position, watched state, autoplay preference and history; clients must not keep a second durable progress store. Clients should resume from `resumePositionMs` (zero means start from the beginning), send bounded checkpoints (for example every 15 seconds while playing plus pause/stop/end) and use `/flow` instead of computing next/previous episodes locally. The semantics are described in [PLAYBACK.md](PLAYBACK.md#playback-continuity).
+The server is the only durable owner of resume position, watched state, autoplay preference and history; clients must not keep a second durable progress store. Clients should resume from `resumePositionMs` (zero means start from the beginning), send bounded checkpoints (for example every 15 seconds while playing plus pause/stop/end) and use `/flow` instead of computing next/previous episodes locally. The semantics are described in PLAYBACK.md (removed from the repository; see Git history).
 
 Watchlist endpoint (additive v1, advertised by `watchlist`; #533):
 
@@ -190,7 +190,7 @@ Player controls and preferences (additive v1, advertised by `playbackPreferences
 - `/episodes/{id}/player` adds `defaults` (server-resolved `audioTrackId`, `subtitleMode` = `off|learning|embedded`, `subtitleTrackId`, `playbackSpeed`, `preferences`) and `controls` (`playbackSpeeds`, `qualityCaps`). Clients start with these values instead of re-deciding them; later changes are session-only unless the user saves them as defaults.
 - Track ids are the canonical `stream:{index}`. `audioTrackId` on `/hls` and `/fallback` keeps the selected audio across a fallback restart; `/subtitle-tracks/{trackId}/cues` returns plain cues of an embedded text subtitle so a playback subtitle survives fallbacks that drop container subtitles. The interactive learning subtitle stays the separate `/cues` model.
 - `quality` (`auto`, `1080p`, `720p`, `low`) is a device-local cap. The server applies it only to a stream it must encode anyway or when the media inventory proves the source is taller; direct play and Device-mode remuxes are never converted because of it.
-- Playback mode, quality cap and decoder capability are device-local; do not store them on the server. The ownership table is in [PLAYBACK.md](PLAYBACK.md#player-controls).
+- Playback mode, quality cap and decoder capability are device-local; do not store them on the server. The ownership table is in PLAYBACK.md (removed from the repository; see Git history).
 
 Bounded offline playback endpoints (additive v1, advertised by `offlineDownloads`; see §8.2):
 
@@ -200,7 +200,7 @@ GET  /api/client/v1/offline/media/{mediaFileId}/content      original bytes, HTT
 POST /api/client/v1/offline/progress                         { items: [{ episodeId, positionMs, durationMs, completed }] }
 ```
 
-Offline Book/Novel library endpoints (additive v1, advertised by `offlineLibrary`; see §8.3 and [OFFLINE_LIBRARY.md](OFFLINE_LIBRARY.md)):
+Offline Book/Novel library endpoints (additive v1, advertised by `offlineLibrary`; see §8.3 and OFFLINE_LIBRARY.md (removed from the repository; see Git history)):
 
 ```text
 GET  /api/client/v1/offline-library/works/{workId}/manifest      versioned manifest, per-chapter hash
@@ -209,7 +209,7 @@ GET  /api/client/v1/offline-library/assets/{volumeId}/{asset}    content-address
 POST /api/client/v1/offline-library/sync                         batched progress + bookmark reconciliation
 ```
 
-Smart offline prefetch (additive v1, #415; details in [OFFLINE_LIBRARY.md](OFFLINE_LIBRARY.md)). The server owns the per-profile policy and the next-up selection; the client reports its inventory and executes the plan with the download endpoints above:
+Smart offline prefetch (additive v1, #415; details in OFFLINE_LIBRARY.md (removed from the repository; see Git history)). The server owns the per-profile policy and the next-up selection; the client reports its inventory and executes the plan with the download endpoints above:
 
 ```text
 GET  /api/client/v1/offline/prefetch/policy   { enabled, capBytes, includeEpisodes, includeChapters, episodesAhead, chaptersAhead, allowMetered }
@@ -274,7 +274,7 @@ A client with an incompatible API version stops with a clear **server/app update
 - selected/default audio/subtitle preferences
 - cue endpoint for the active learning subtitle
 - active playback-session information when applicable
-- canonical skip-segment markers and the seek-preview (trickplay) descriptor, see [MEDIA_SEGMENTS.md](MEDIA_SEGMENTS.md#client-descriptor)
+- canonical skip-segment markers and the seek-preview (trickplay) descriptor, see MEDIA_SEGMENTS.md (removed from the repository; see Git history)
 
 Never expose host filesystem paths to clients.
 
@@ -586,7 +586,7 @@ Phone implementation (`app-mobile`, package `mobile.offline`; TV is out of scope
 Bounded offline reading of the user's own Book/Novel library, on the same
 canonical `/api/client/v1/offline-library/**` contract the PWA download
 manager already uses (part 1, PR #359; full contract in
-[OFFLINE_LIBRARY.md](OFFLINE_LIBRARY.md)), advertised by the `offlineLibrary`
+OFFLINE_LIBRARY.md (removed from the repository; see Git history)), advertised by the `offlineLibrary`
 capability. Implementation lives in `app-mobile`, package
 `mobile.offline.library` — deliberately separate from `mobile.offline` (§8.2)
 so the two download engines stay independently reviewable, even though the
@@ -865,7 +865,7 @@ Contract versions (the number in `GET /capabilities`; the route prefix stays `/a
 
 Additive extensions that keep version `2`: `PUT /stream-sessions/{id}/telemetry` with its answer (`advice`, `reason`, `transcodeSpeed`, `transcodeFps`), the `playbackTelemetry` feature flag, the optional `plan.buffer` object and the `Retry-After` header of playback refusals (see 5.0). A client that ignores them keeps working unchanged.
 
-Additive extensions of contract version 2 (Instant Play, `docs/mockups/instant-play/SPEC.md`; clients read `features.playbackEnabled` and `features.playbackIntents` from `GET /capabilities`):
+Additive extensions of contract version 2 (Instant Play, the Instant Play mockup spec (not in the repository); clients read `features.playbackEnabled` and `features.playbackIntents` from `GET /capabilities`):
 
 - `POST /video/playback-intents` with `{ "target": { "workId": "…", "workEpisodeId": "…" | null } }` starts an explicit playback intent. A Movie targets its Work; a Series targets one episode, or no episode for its next required episode (no history: the first aired episode; resumable episode: that one; completed through N: the next after N). The answer is `{ "outcome", "target", "requestId", "acquisition" }` with `outcome` one of `play_now` (open the player for `target`), `acquiring` (an approved request is getting `target`, created or already active), `awaiting_approval` (an equivalent request waits for approval and is not bypassed), `request_required` (the profile may not acquire instantly: show the Request action) , `limit_reached` (the profile already waits for three titles it started; wait for one) or `not_available`. A missing unit is acquired only when the profile may request and is auto-approved, acquisition is ready and the instance plays; it uses the one canonical request with the smallest scope (a Movie, or exactly the target episode; never the whole Series or future monitoring) and an equivalent open request is reused, never duplicated. Idempotent: a repeat or a concurrent intent attaches to the same request. A card tap never sends an intent; there is no server "stop waiting": a client stops polling, and the request is cancelled only through the normal Request action. `404 video_target_not_found` for an unknown or hidden target, an episode that is not one of the Work, or a Work that is not a Movie or Series. Rate limited per account (authentication runs before the limiter, so the partition is the account, not the address); a body over 1 KiB is refused with 413 before it is read. An Admin who unchecked an episode or turned monitoring off is not overridden: such a target is `not_available`.
 - `GET /requests/{requestId}?workEpisodeId=…` reads the consumer projection of a request for one unit: `{ "requestId", "target", "acquisition": { "state", "mediaUnit", "progressPercent", "isMonitoring" } }`. `state` is `waiting_for_approval`, `looking_for_media`, `getting_media`, `preparing`, `ready_to_watch`, `available`, `monitoring_future_releases`, `not_available_yet`, `not_available` (the request ended with nothing playable), `needs_attention` or `rejected`; `mediaUnit` (`episode`, `movie`, `media`) names what `getting_media` is getting; `progressPercent` is present only while the transfer reports a trustworthy total, never estimated; `isMonitoring` coexists with `ready_to_watch` and `available`. `starting_playback` is a client-side transient shown after `ready_to_watch` on an instance that plays. The projection never carries provider, release, score, download-client, job, path or error details. `404 request_not_found` unless the profile made the request, manages requests or may request that media type, and for a hidden media type. It stays available on a manager-only instance.
