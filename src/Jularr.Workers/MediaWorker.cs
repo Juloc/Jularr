@@ -30,11 +30,11 @@ namespace Jularr.Workers
 
             // Titles without description and cover, three at a time with a pause for the provider.
             await Runner.RunWhileBusyAsync("metadataFill", async (services, token) =>
-                (await services.GetRequiredService<FillWorkMetadataV1>().ExecuteAsync<UpdateResult>(new CoverParametersV1(), default, token)).Success, TimeSpan.FromSeconds(5), Time, ct);
+                (await services.GetRequiredService<FillWorkMetadataV1>().ExecuteAsync<UpdateResult>(new CoverParametersV1(), default, token)).Success, TimeSpan.FromSeconds(5), ct);
 
             // Titles with files and no target get a paused one, so every title page offers the same buttons.
             await Runner.RunWhileBusyAsync("wantedTargets", async (services, token) =>
-                (await services.GetRequiredService<EnsureWantedTargetsV1>().ExecuteAsync<UpdateResult>(new CoverParametersV1(), default, token)).Success, TimeSpan.FromSeconds(2), Time, ct);
+                (await services.GetRequiredService<EnsureWantedTargetsV1>().ExecuteAsync<UpdateResult>(new CoverParametersV1(), default, token)).Success, TimeSpan.FromSeconds(2), ct);
 
             // Catalog titles nobody uses lose their details, then their rows; once a day.
             await Runner.RunAsync("catalogCleanup", (services, token) =>
@@ -46,11 +46,11 @@ namespace Jularr.Workers
                 var providers = (await services.GetRequiredService<StoreCoversV1>().ExecuteAsync<UpdateResult>(new CoverParametersV1(), default, token)).Success;
                 var files = (await services.GetRequiredService<StoreBookFileCoversV1>().ExecuteAsync<UpdateResult>(new CoverParametersV1(), default, token)).Success;
                 return providers || files;
-            }, TimeSpan.FromSeconds(2), Time, ct);
+            }, TimeSpan.FromSeconds(2), ct);
 
             // Stored covers in another format than the Owner's, a few images per pass and a pause between passes.
             await Runner.RunWhileBusyAsync("coverBackfill", async (services, token) =>
-                (await services.GetRequiredService<ConvertCoversV1>().ExecuteAsync<UpdateResult>(new CoverParametersV1(), default, token)).Success, TimeSpan.FromSeconds(3), Time, ct);
+                (await services.GetRequiredService<ConvertCoversV1>().ExecuteAsync<UpdateResult>(new CoverParametersV1(), default, token)).Success, TimeSpan.FromSeconds(3), ct);
         }
     }
 }

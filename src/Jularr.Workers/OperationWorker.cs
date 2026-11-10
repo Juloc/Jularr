@@ -59,13 +59,21 @@ namespace Jularr.Workers
         {
             while (!ct.IsCancellationRequested)
             {
-                var result = await runner.RunWhileBusyAsync(job, (services, token) => RunNextAsync(services, logger, operationType, token), TimeSpan.Zero, time, ct);
+                var busy = false;
+                var result = await runner.RunWhileBusyAsync(job, async (services, token) => busy = await RunNextAsync(services, logger, operationType, token, ct), TimeSpan.Zero, ct);
+
+                // A pass kept at its limit while operations still wait goes on at once.
+                if (busy && result == WorkerJobResultType.Succeeded)
+                {
+                    continue;
+                }
+
                 await signal.WaitAsync(result == WorkerJobResultType.Failed ? RetryInterval : SafetyTick, time, ct);
             }
         }
 
-        // Claims the oldest queued operation of the lane's kind and runs it; false when none waits.
-        internal static async Task<bool> RunNextAsync(IServiceProvider services, ILogger logger, OperationType operationType, CancellationToken ct)
+        // Claims the oldest queued operation of the lane's kind and runs it; false when none waits. The round's token stops it at its time limit, stopping at shutdown.
+        internal static async Task<bool> RunNextAsync(IServiceProvider services, ILogger logger, OperationType operationType, CancellationToken ct, CancellationToken stopping)
         {
             var claimed = await services.GetRequiredService<ClaimOperationV1>().ExecuteAsync<ClaimOperationResultV1>(new ClaimOperationParametersV1(operationType), default, ct);
             if (claimed.OperationId is not { } operationId)
@@ -102,6 +110,12 @@ namespace Jularr.Workers
                 logger.LogWarning(exception, "Operation {OperationId} failed.", operationId);
                 await services.GetRequiredService<FailOperationV1>().ExecuteAsync<UpdateResult>(new OperationParametersV1(operationId),
                     new FailOperationDataV1(ServiceError.FromException(exception).Code), ct);
+            }
+            catch (Exception) when (!stopping.IsCancellationRequested)
+            {
+                // Stopped at the time limit: the operation says so instead of running until a restart, and the job fails with it.
+                await services.GetRequiredService<FailOperationV1>().ExecuteAsync<UpdateResult>(new OperationParametersV1(operationId), new FailOperationDataV1("job_round_timeout"), stopping);
+                throw;
             }
 
             return true;

@@ -8,8 +8,9 @@ namespace Jularr.Backend.Service.Core
 {
     /// <summary>
     /// A server-side translator. Reader blocks, the book job and subtitles reach it only through <see cref="TranslationProviders"/>, by a model id
-    /// "<c>&lt;Key&gt;:&lt;model&gt;</c>". A provider registers once as <c>ITranslationProvider</c> in <c>ServiceApi</c>. A machine that fails throws
-    /// <see cref="HttpRequestException"/>, <see cref="System.Text.Json.JsonException"/>, <see cref="InvalidDataException"/> or a
+    /// "<c>&lt;Key&gt;:&lt;model&gt;</c>". A provider registers once as <c>ITranslationProvider</c> in <c>ServiceApi</c>. Reads (pages, the Reader) use only
+    /// what its last <see cref="CheckAsync"/> found (<see cref="Choose"/>, <see cref="Available"/>); a translation about to run uses <see cref="ChooseAsync"/>.
+    /// A machine that fails throws <see cref="HttpRequestException"/>, <see cref="System.Text.Json.JsonException"/>, <see cref="InvalidDataException"/> or a
     /// <see cref="TaskCanceledException"/> without the caller's cancellation; the caller then calls <see cref="Fail"/> and chooses again.
     /// </summary>
     internal interface ITranslationProvider
@@ -23,11 +24,17 @@ namespace Jularr.Backend.Service.Core
         // Only an administrator may choose its models in the Reader (the Owner's default model translates for everyone).
         bool IsAdminOnly { get; }
 
-        // The models a machine translates with now, without the provider part; asking is metadata work and bounded in time.
-        Task<IReadOnlyList<string>> AvailableAsync(TranslationSetupV1 setup, CancellationToken ct);
+        // Asks the provider's machines how they are now and keeps their answers; bounded in time and never part of a page read.
+        Task CheckAsync(TranslationSetupV1 setup, CancellationToken ct) => Task.CompletedTask;
 
-        // The machine that translates now with this model, or with the provider's preferred installed one when no model is named (null when the
-        // provider only translates when asked by name); null when none answers.
+        // The models a machine translates with by the last check, without the provider part.
+        IReadOnlyList<string> Available(TranslationSetupV1 setup);
+
+        // The machine that translates with this model by the last check, or with the provider's preferred installed one when no model is named (null
+        // when the provider only translates when asked by name); null when none answered.
+        TranslationMachine? Choose(TranslationSetupV1 setup, string? model);
+
+        // The same for a translation about to run, which may first ask what was never asked.
         Task<TranslationMachine?> ChooseAsync(TranslationSetupV1 setup, string? model, CancellationToken ct);
 
         // The version of the model on that machine: a translation counts as current only while its digest matches.
@@ -78,8 +85,23 @@ namespace Jularr.Backend.Service.Core
             return provider is not null && provider.Models.Contains(model, StringComparer.Ordinal) ? (provider, model) : null;
         }
 
-        // The machine that translates now with the named model; without one the Owner's default model, and without that the first provider's
+        // Every provider asks its machines how they are now (the translationMachines job, Check now on the translation page).
+        public async Task CheckAsync(TranslationSetupV1 setup, CancellationToken ct) => await Task.WhenAll(_providers.Select(provider => provider.CheckAsync(setup, ct)));
+
+        // The machine that translates with the named model by the last check; without one the Owner's default model, and without that the first provider's
         // preferred installed model. A named or default model that no machine has gives none: nothing switches to another model by itself.
+        public TranslationMachine? Choose(TranslationSetupV1 setup, string? id = null)
+        {
+            var wanted = id ?? setup.Model;
+            if (wanted is not null)
+                return Find(wanted) is var (provider, model) ? provider.Choose(setup, model) : null;
+
+            foreach (var provider in _providers)
+                if (provider.Choose(setup, null) is { } machine) return machine;
+            return null;
+        }
+
+        // The same for a translation about to run.
         public async Task<TranslationMachine?> ChooseAsync(TranslationSetupV1 setup, CancellationToken ct, string? id = null)
         {
             var wanted = id ?? setup.Model;
@@ -91,22 +113,22 @@ namespace Jularr.Backend.Service.Core
             return null;
         }
 
-        // What translates a book for every reader by default: the machine above, never an admin-only provider's model (Codex translates only on a button press,
-        // never by itself); Away when nothing translates because a provider set up with machines has none answering.
-        public async Task<(TranslationMachine? Machine, bool Away)> ChooseForAsync(TranslationSetupV1 setup, CancellationToken ct)
+        // What translates a book for every reader by default, by the last check: the machine above, never an admin-only provider's model (Codex translates only
+        // on a button press, never by itself); Away when nothing translates because a provider set up with machines has none answering.
+        public (TranslationMachine? Machine, bool Away) ChooseFor(TranslationSetupV1 setup)
         {
-            if (await ChooseAsync(setup, ct) is { Provider.IsAdminOnly: false } machine) return (machine, false);
+            if (Choose(setup) is { Provider.IsAdminOnly: false } machine) return (machine, false);
             return (null, _providers.Any(provider => provider.IsAway(setup)));
         }
 
-        // The model a holder of the admin-only right translates a chapter with when pressing the button, with what keeps it from doing so now (a limit reached);
-        // null for anyone else, where no provider translates in several requests, and while the provider is not connected (nothing is set up to offer).
-        public async Task<(string Id, string? Problem)?> OfferAsync(TranslationSetupV1 setup, ServiceCaller caller, CancellationToken ct)
+        // The model a holder of the admin-only right translates a chapter with when pressing the button, with what keeps it from doing so now (a limit reached),
+        // by the provider's last check; null for anyone else, where no provider translates in several requests, and while the provider is not connected.
+        public (string Id, string? Problem)? Offer(TranslationSetupV1 setup, ServiceCaller caller)
         {
             if (!MayUseAdminOnly(caller)) return null;
             foreach (var provider in _providers.OfType<IBatchTranslationProvider>().Where(provider => provider.IsAdminOnly))
             {
-                var (model, problem) = await provider.OfferAsync(setup, ct);
+                var (model, problem) = provider.Offer(setup);
                 if (problem == "not_connected") continue;
                 if (model is not null || problem is not null) return (model is null ? "" : Id(provider.Key, model), problem);
             }
@@ -126,9 +148,9 @@ namespace Jularr.Backend.Service.Core
         public bool MayChoose(string id, TranslationSetupV1 setup, ServiceCaller caller) =>
             Find(id) is var (provider, _) && (!provider.IsAdminOnly || string.Equals(id, setup.Model, StringComparison.Ordinal) || MayUseAdminOnly(caller));
 
-        // The models the caller may choose now, in the providers' order; an admin-only provider is not even asked for anyone else. Passages: the
+        // The models the caller may choose now by the last check, in the providers' order; an admin-only provider is not even asked for anyone else. Passages: the
         // provider translates a chapter in whole-passage requests (RetranslateLocalReadingSectionV1, the admin-only right), not block by block.
-        public async Task<ReaderTranslationModelV1[]> AvailableAsync(TranslationSetupV1 setup, ServiceCaller caller, CancellationToken ct)
+        public ReaderTranslationModelV1[] Available(TranslationSetupV1 setup, ServiceCaller caller)
         {
             var admin = MayUseAdminOnly(caller);
             var models = new List<ReaderTranslationModelV1>();
@@ -136,7 +158,7 @@ namespace Jularr.Backend.Service.Core
             {
                 if (provider.IsAdminOnly && !admin) continue;
                 var passages = admin && provider is IBatchTranslationProvider;
-                models.AddRange((await provider.AvailableAsync(setup, ct)).Select(model => new ReaderTranslationModelV1(Id(provider.Key, model), passages)));
+                models.AddRange(provider.Available(setup).Select(model => new ReaderTranslationModelV1(Id(provider.Key, model), passages)));
             }
             return [.. models.DistinctBy(model => model.Id, StringComparer.Ordinal)];
         }
@@ -151,16 +173,21 @@ namespace Jularr.Backend.Service.Core
         public IReadOnlyList<string> Models => OllamaLocalModels.Candidates;
         public bool IsAdminOnly => false;
 
+        public Task CheckAsync(TranslationSetupV1 setup, CancellationToken ct) => machines.CheckAsync(setup.Machines, ct);
+
+        public TranslationMachine? Choose(TranslationSetupV1 setup, string? model) =>
+            machines.Choose(setup.Machines, model) is var (server, chosen) ? new TranslationMachine(this, chosen, server) : null;
+
         public async Task<TranslationMachine?> ChooseAsync(TranslationSetupV1 setup, string? model, CancellationToken ct) =>
             await machines.ChooseAsync(setup.Machines, ct, model) is var (server, chosen) ? new TranslationMachine(this, chosen, server) : null;
 
-        public async Task<IReadOnlyList<string>> AvailableAsync(TranslationSetupV1 setup, CancellationToken ct)
+        public IReadOnlyList<string> Available(TranslationSetupV1 setup)
         {
-            var installed = await machines.InstalledAsync(setup.Machines, ct);
+            var installed = machines.Installed(setup.Machines);
             return [.. OllamaLocalModels.Candidates.Where(model => installed.Contains(model, StringComparer.Ordinal))];
         }
 
-        public Task<string> DigestAsync(TranslationMachine machine, CancellationToken ct) => models.DigestAsync(machine.Address, machine.Model, ct);
+        public Task<string> DigestAsync(TranslationMachine machine, CancellationToken ct) => Task.FromResult(machines.Digest(machine.Address, machine.Model));
 
         public Task<string?> TranslateBlockAsync(TranslationMachine machine, string source, string target, string text, string? context, CancellationToken ct) =>
             models.TranslateBlockAsync(machine.Address, machine.Model, source, target, text, context, ct);
@@ -170,6 +197,6 @@ namespace Jularr.Backend.Service.Core
 
         public void Fail(TranslationMachine machine) => machines.Fail(machine.Address);
 
-        public bool IsAway(TranslationSetupV1 setup) => machines.AllResting(setup.Machines);
+        public bool IsAway(TranslationSetupV1 setup) => machines.AllAway(setup.Machines);
     }
 }

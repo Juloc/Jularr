@@ -29,7 +29,6 @@ namespace Jularr.Backend.Service.Core
         private DateTimeOffset _catalogAt;
         private DateTimeOffset _catalogFailedAt;
         private string[] _knownModels = [];
-        private bool _warming;
         private bool _connected;
         private DateTimeOffset _connectedAt;
         private DateOnly _usageDay;
@@ -115,29 +114,27 @@ namespace Jularr.Backend.Service.Core
             }
         }
 
-        // Asks for the models in the background when the list is empty or old, so a model id the Owner saved is known to the translation without a page visit.
-        internal void WarmModels()
+        // Asks for the models when the list is empty or old, so a model id the Owner saved is known to the translation without a page visit.
+        internal async Task WarmModelsAsync(CancellationToken ct)
         {
             lock (_gate)
             {
-                if (_warming || _knownModels.Length > 0 && DateTimeOffset.UtcNow - _catalogAt < TimeSpan.FromMinutes(10)) return;
-                _warming = true;
+                if (_knownModels.Length > 0 && DateTimeOffset.UtcNow - _catalogAt < TimeSpan.FromMinutes(10)) return;
             }
 
-            _ = Task.Run(async () =>
+            await ReadCatalogAsync(ct);
+        }
+
+        // Whether a sign-in was stored when the CLI was last asked; false before the first question. Pages and the Reader read only this.
+        internal bool IsConnected
+        {
+            get
             {
-                try
+                lock (_gate)
                 {
-                    await ReadCatalogAsync(default);
+                    return _connected;
                 }
-                finally
-                {
-                    lock (_gate)
-                    {
-                        _warming = false;
-                    }
-                }
-            });
+            }
         }
 
         // Whether a sign-in is stored; asked from the CLI at most every thirty seconds.

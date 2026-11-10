@@ -2,6 +2,7 @@ using Jularr.Backend.Data.Admin.Media.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Logic.Media;
 using Jularr.Backend.Infrastructure.Sql;
+using Jularr.Backend.Logic.Reading;
 
 namespace Jularr.Backend.Logic.Media
 {
@@ -56,6 +57,9 @@ namespace Jularr.Backend.Logic.Media
 
         public static async Task DeleteWorkAsync(this LogicContext ctx, WorkDeletionData data, CancellationToken ct)
         {
+            // Translations being written into the title's books land first.
+            await ctx.LockWorkReadingDocumentsAsync(new WorkIdData(data.WorkId), ct);
+
             // The exclusion keeps every provider identity of the title, so no list or request brings it back.
             var sql = new SqlStatement();
             sql.Statement =

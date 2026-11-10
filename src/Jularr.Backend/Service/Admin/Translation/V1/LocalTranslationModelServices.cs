@@ -11,21 +11,19 @@ using Microsoft.Extensions.Options;
 
 namespace Jularr.Backend.Service.Admin.Translation.V1
 {
-    // Every machine of the order as it answers now; the first that answers with a model is the one that translates.
+    // Every machine of the order as its last check found it; the first that answered with a model is the one that translates. Reading the page asks no machine
+    // and starts no Codex CLI: the translationMachines job checks every thirty seconds, Check now (CheckTranslationMachinesV1) at once.
     [ServiceEndpoint("GET", "/api/v1/admin/translation/models")]
     public sealed class ReadLocalTranslationModelsV1 : AdminService<LocalTranslationModelsParametersV1>
     {
-        private readonly OllamaLocalModels _models;
         private readonly LocalTranslationOptions _options;
         private readonly LocalTranslationDownloads _downloads;
         private readonly LocalTranslationMachines _machines;
         private readonly CodexConnection _codex;
 
-        internal ReadLocalTranslationModelsV1(OllamaLocalModels models, IOptions<LocalTranslationOptions> options, LocalTranslationDownloads downloads,
-            LocalTranslationMachines machines, CodexConnection codex)
+        internal ReadLocalTranslationModelsV1(IOptions<LocalTranslationOptions> options, LocalTranslationDownloads downloads, LocalTranslationMachines machines, CodexConnection codex)
         {
             _codex = codex;
-            _models = models;
             _options = options.Value;
             _downloads = downloads;
             _machines = machines;
@@ -44,7 +42,7 @@ namespace Jularr.Backend.Service.Admin.Translation.V1
             var codexChoices = await CodexChoicesAsync();
             if (order.Length == 0) return new LocalTranslationModelsV1(false, OllamaLocalModels.Candidates, [], [], "Configure a local Ollama endpoint.",
                 freeBytes, progress.Model, progress.State, progress.Progress, [], progress.Machine, setup.Model, codexChoices);
-            var machines = await Task.WhenAll(order.Select(StatusAsync));
+            var machines = order.Select(Status).ToArray();
             var active = machines.FirstOrDefault(machine => machine.Reachable && machine.Installed.Any(OllamaLocalModels.Supported))
                 ?? machines.FirstOrDefault(machine => machine.Reachable);
             // The default model can be any approved model a machine that answers has installed.
@@ -55,37 +53,47 @@ namespace Jularr.Backend.Service.Admin.Translation.V1
                 freeBytes, progress.Model, progress.State, progress.Progress, machines, progress.Machine, setup.Model, choices);
         }
 
-        // The Owner's ChatGPT account as a choice: only the model chosen on the AI page, and only while Codex is connected.
+        // The Owner's ChatGPT account as a choice: only the model chosen on the AI page, and only while Codex was connected at the last check.
         private async Task<string[]> CodexChoicesAsync()
         {
-            if (!await _codex.IsConnectedAsync(CancellationToken)) return [];
+            if (!_codex.IsConnected) return [];
             var model = (await CodexSettings.ReadAsync(Context, CancellationToken)).Model ?? _codex.KnownModels.FirstOrDefault();
             return model is null ? [] : [TranslationProviders.Id(CodexTranslationProvider.ProviderKey, model)];
         }
 
-        // A machine that rests is not asked again before its rest is over. A question that fails here only reports its reason; reading the page never makes a machine rest.
-        private async Task<LocalTranslationMachineV1> StatusAsync(Uri server)
+        // A machine as its last check found it; one that rests after a failed block counts as not reachable until its rest is over, one never checked yet
+        // answers nothing.
+        private LocalTranslationMachineV1 Status(Uri server)
         {
-            var before = _machines.StateOf(server);
-            if (before.RestingUntil is { } resting)
-            {
-                return new LocalTranslationMachineV1(server.ToString(), false, [], [], resting.UtcDateTime, before.Reason, before.FailedAt?.UtcDateTime);
-            }
+            var state = _machines.StateOf(server);
+            var check = _machines.CheckOf(server);
+            var reachable = check?.Installed is not null && state.RestingUntil is null;
+            return new LocalTranslationMachineV1(server.ToString(), reachable, reachable ? [.. check!.Installed!.Keys] : [], reachable ? check!.Running : [], state.RestingUntil?.UtcDateTime,
+                state.Reason, state.FailedAt?.UtcDateTime, check?.CheckedAt.UtcDateTime);
+        }
+    }
 
-            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(CancellationToken);
-            timeout.CancelAfter(TimeSpan.FromSeconds(3));
-            try
-            {
-                var installed = _models.InstalledAsync(server, timeout.Token);
-                var running = _models.RunningAsync(server, timeout.Token);
-                await Task.WhenAll(installed, running);
-                return new LocalTranslationMachineV1(server.ToString(), true, await installed, await running, null, before.Reason, before.FailedAt?.UtcDateTime);
-            }
-            catch (Exception exception) when (exception is HttpRequestException or JsonException or InvalidDataException
-                || exception is OperationCanceledException && !CancellationToken.IsCancellationRequested)
-            {
-                return new LocalTranslationMachineV1(server.ToString(), false, [], [], null, LocalTranslationMachines.ReasonOf(exception), DateTime.UtcNow);
-            }
+    // Check now: every machine of the order (and Codex) is asked how it is at once, outside any transaction and within a few seconds; the page then shows it.
+    [ServiceEndpoint("POST", "/api/v1/admin/translation/machines/check")]
+    public sealed class CheckTranslationMachinesV1 : AdminService<LocalTranslationModelsParametersV1, NoData>
+    {
+        private readonly TranslationProviders _providers;
+
+        internal CheckTranslationMachinesV1(TranslationProviders providers)
+        {
+            _providers = providers;
+        }
+
+        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
+        protected override ModuleRequirement GetInstanceModules(LocalTranslationModelsParametersV1 parameters) => ModuleRequirement.All("Translation");
+        protected override ServicePermission GetPermission(LocalTranslationModelsParametersV1 parameters, Type resultType) => new("instance.settings.update");
+
+        protected override async Task<IServiceOutput> OnExecute()
+        {
+            var setup = await Context.ExecuteBatchAsync(TranslationProviders.SetupAsync, CancellationToken);
+            await _providers.CheckAsync(setup, CancellationToken);
+            return new UpdateResult(true);
         }
     }
 
@@ -125,10 +133,18 @@ namespace Jularr.Backend.Service.Admin.Translation.V1
         }
     }
 
-    // The Owner's order of Ollama machines: private network addresses only, at most eight; empty leaves the configured endpoint alone.
+    // The Owner's order of Ollama machines: private network addresses only, at most eight; empty leaves the configured endpoint alone. The new order is checked
+    // right after it is saved.
     [ServiceEndpoint("PUT", "/api/v1/admin/translation/machines")]
     public sealed class SaveTranslationMachinesV1 : AdminService<LocalTranslationModelsParametersV1, TranslationMachinesDataV1>
     {
+        private readonly WorkerJobs _jobs;
+
+        internal SaveTranslationMachinesV1(WorkerJobs jobs)
+        {
+            _jobs = jobs;
+        }
+
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Update;
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
         protected override ModuleRequirement GetInstanceModules(LocalTranslationModelsParametersV1 parameters) => ModuleRequirement.All("Translation");
@@ -154,6 +170,8 @@ namespace Jularr.Backend.Service.Admin.Translation.V1
             await Context.ExecuteAsyncForAffectedRows(sql, CancellationToken);
             return new UpdateResult(true);
         }
+
+        protected override void OnCommitted() => _jobs.RequestRun("translationMachines");
     }
 
     // The free space of Ollama's model volume, which only the Owner can know: model downloads are offered up to it; 0 leaves the configured value.
@@ -210,13 +228,13 @@ namespace Jularr.Backend.Service.Admin.Translation.V1
     {
         private readonly OllamaLocalModels _models;
         private readonly LocalTranslationMachines _machines;
-        private readonly LocalTranslationGate _gate;
+        private readonly TranslationLanes _lanes;
 
-        internal BenchmarkLocalTranslationModelV1(OllamaLocalModels models, LocalTranslationMachines machines, LocalTranslationGate gate)
+        internal BenchmarkLocalTranslationModelV1(OllamaLocalModels models, LocalTranslationMachines machines, TranslationLanes lanes)
         {
             _models = models;
             _machines = machines;
-            _gate = gate;
+            _lanes = lanes;
         }
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
@@ -231,7 +249,7 @@ namespace Jularr.Backend.Service.Admin.Translation.V1
             var setup = await Context.ExecuteBatchAsync(TranslationProviders.SetupAsync, CancellationToken);
             var server = (await _machines.ChooseAsync(setup.Machines, CancellationToken, Parameters.Model))?.Server
                 ?? throw new ServiceUnavailableException("translation_local_not_installed");
-            if (!await _gate.HeavyWork.WaitAsync(TimeSpan.Zero, CancellationToken)) throw new ServiceUnavailableException("translation_local_busy");
+            using var lane = await _lanes.TryEnterAsync(OllamaTranslationProvider.ProviderKey, TimeSpan.Zero, CancellationToken) ?? throw new ServiceUnavailableException("translation_local_busy");
             try
             {
                 var samples = new (string Source, string Target, string Text)[]
@@ -255,10 +273,6 @@ namespace Jularr.Backend.Service.Admin.Translation.V1
             catch (Exception exception) when (exception is HttpRequestException or InvalidDataException or JsonException)
             {
                 throw new ServiceUnavailableException("translation_local_unavailable", exception);
-            }
-            finally
-            {
-                _gate.HeavyWork.Release();
             }
         }
     }

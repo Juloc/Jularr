@@ -26,6 +26,7 @@ namespace Jularr.E2E.Tests
             {
                 await ReadingPathTests.AddBookAsync(page, folders, "Translated Export");
                 await jularr.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'Translation'");
+                await ReaderTranslationTests.CheckMachinesAsync(page);
 
                 // The book is prepared by opening it once, and its reader wants it in German.
                 var opened = await page.GotoAsync("/Read/1");

@@ -4,10 +4,12 @@ using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Library;
 using Jularr.Backend.Data.Enums.Service;
 using Jularr.Backend.Data.Logic.Acquisition;
+using Jularr.Backend.Data.Logic.Reading;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Acquisition;
 using Jularr.Backend.Logic.Library;
 using Jularr.Backend.Logic.Media;
+using Jularr.Backend.Logic.Reading;
 using Jularr.Backend.Service.Admin.Acquisition.V1;
 using Jularr.Backend.Service.Admin.Activity.V1;
 using Jularr.Backend.Service.Core;
@@ -119,9 +121,10 @@ namespace Jularr.Backend.Service.Admin.Media.V1
 
         protected override async Task<IServiceOutput> OnDelete()
         {
-            // Every model's translation of the language goes, so the person confirms it first.
+            // Every model's translation of the language goes, so the person confirms it first; a translation being written lands before.
             if (!Data.Confirmed) throw new DataValidationException(nameof(Data.Confirmed), "required");
 
+            await Context.LockReadingDocumentAsync(new ReadingDocumentIdData(Parameters.DocumentId), CancellationToken);
             var sql = new SqlStatement();
             sql.Statement =
                 """
@@ -138,6 +141,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                 throw new KeyNotFoundException("The translation was not found.");
             }
 
+            await Context.RecountBookTranslationProgressAsync(new BookTranslationRecountData([Parameters.DocumentId], Parameters.Language), CancellationToken);
             return new UpdateResult(true);
         }
     }
