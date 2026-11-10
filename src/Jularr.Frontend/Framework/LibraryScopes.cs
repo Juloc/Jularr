@@ -18,17 +18,20 @@ namespace Jularr.Frontend.Framework
 
         public static LibraryScope Find(string? slug) => All.FirstOrDefault(scope => scope.Slug == slug) ?? All[0];
 
-        public static IEnumerable<LibraryScope> Listed(IReadOnlyList<ProfileMediaV1> media) =>
-            All.Where(scope => scope.Slug == "all" || media.Any(item => !item.IsHidden && item.Key == (scope.Subtype?.ToString() ?? scope.Type?.ToString())));
+        // The types the profile lists, narrowed to the active mode when there is one.
+        public static IEnumerable<LibraryScope> Listed(IReadOnlyList<ProfileMediaV1> media, UserMode? mode = null) =>
+            All.Where(scope => scope.Slug == "all" || (mode is null || mode.Slugs.Contains(scope.Slug)) && media.Any(item => !item.IsHidden && item.Key == (scope.Subtype?.ToString() ?? scope.Type?.ToString())));
     }
 
     public sealed record LibraryScope(string Slug, MediaType? Type, MediaSubtype? Subtype);
 
     // The media types of an address (`type=a,b` or repeated) against the types listed (the profile's, or every type in the administration): which are chosen,
     // whether that is all of them, and the type and subtype filters a list read takes. Before the listed types are known every slug of the address counts as chosen.
-    public sealed class ScopeSelection(IEnumerable<string> requested, IReadOnlyList<LibraryScope>? listed)
+    public sealed class ScopeSelection(IEnumerable<string> requested, IReadOnlyList<LibraryScope>? listed, bool narrowed = false)
     {
-        public ScopeSelection(IEnumerable<string> requested, IReadOnlyList<ProfileMediaV1>? media) : this(requested, media is null ? null : LibraryScopes.Listed(media).Where(scope => scope.Slug != "all").ToList())
+        // A mode narrows the list: its types are then always filtered, also when all of them are chosen.
+        public ScopeSelection(IEnumerable<string> requested, IReadOnlyList<ProfileMediaV1>? media, UserMode? mode = null)
+            : this(requested, media is null ? null : LibraryScopes.Listed(media, mode).Where(scope => scope.Slug != "all").ToList(), mode is not null)
         {
         }
 
@@ -48,7 +51,7 @@ namespace Jularr.Frontend.Framework
         public IReadOnlyList<string> ChosenSlugs => [.. Chosen.Select(scope => scope.Slug)];
 
         // A type lists its titles without subtype and a subtype lists that subtype across types; all types need no filter.
-        public (MediaType[] Types, MediaSubtype[] Subtypes) Filter() => IsAll ? ([], [])
+        public (MediaType[] Types, MediaSubtype[] Subtypes) Filter() => IsAll && !narrowed ? ([], [])
             : ([.. Chosen.Where(scope => scope.Subtype is null && scope.Type is not null).Select(scope => scope.Type!.Value)], [.. Chosen.Where(scope => scope.Subtype is not null).Select(scope => scope.Subtype!.Value)]);
 
         // The address value of some types: none for all of them (once the profile's types are known).

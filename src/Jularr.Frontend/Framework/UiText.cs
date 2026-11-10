@@ -34,6 +34,10 @@ namespace Jularr.Frontend.Framework
         public bool IsAuthenticated { get; private set; }
         public string? ProfileName { get; private set; }
 
+        // The active mode of the user area (Framework/UserModes.cs) and whether this request searches every mode.
+        public UserMode Mode { get; private set; } = UserModes.Default;
+        public bool SearchesAllModes { get; private set; }
+
         // Whether the profile lets a card that lingers on a touch device play its preview by itself.
         public bool AutoplayPreviews { get; private set; } = true;
 
@@ -74,6 +78,8 @@ namespace Jularr.Frontend.Framework
             if (authentication.IsAuthenticated)
             {
                 IsAuthenticated = true;
+                Mode = UserModes.Resolve(context, authentication.ProfileId);
+                SearchesAllModes = context.Request.Query["scope"] == "all";
                 _capabilities = await capabilitiesService.ExecuteAsync<InstanceCapabilitiesDetailsV1>(new ReadInstanceCapabilitiesParametersV1(), token);
                 if (authentication.ProfileId is { } profileId && this.CanReadOwnProfile())
                 {

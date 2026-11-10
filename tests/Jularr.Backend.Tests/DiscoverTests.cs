@@ -1023,7 +1023,7 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(await invalid.Content.ReadAsStringAsync(), "class=\"ui-page-error\"");
             Assert.AreEqual(1, System.Text.RegularExpressions.Regex.Matches(await invalid.Content.ReadAsStringAsync(), "role=\"alert\"").Count);
             // A search of several types shows a row per type, the type with the best match first, each with See all for that type alone.
-            using var search = await host.SendAsync(HttpMethod.Get, "/?type=movies,series&q=Matrix");
+            using var search = await host.SendAsync(HttpMethod.Get, "/?q=Matrix");
             html = await search.Content.ReadAsStringAsync();
             StringAssert.Contains(html, "The Matrix Show");
             StringAssert.Contains(html, "href=\"/?type=series&amp;q=Matrix\"");
@@ -1472,10 +1472,20 @@ namespace Jularr.Backend.Tests
 
         private static async Task<string> PageAsync(Host host, string path)
         {
-            using var page = await host.SendAsync(HttpMethod.Get, path);
-            var html = await page.Content.ReadAsStringAsync();
-            Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
-            return html;
+            // The address of a mode's page shows in its shortest form: one redirect is followed.
+            var page = await host.SendAsync(HttpMethod.Get, path);
+            if (page.StatusCode == HttpStatusCode.Redirect && page.Headers.Location is { } shorter)
+            {
+                page.Dispose();
+                page = await host.SendAsync(HttpMethod.Get, shorter.OriginalString);
+            }
+
+            using (page)
+            {
+                var html = await page.Content.ReadAsStringAsync();
+                Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
+                return html;
+            }
         }
 
         private static async Task FillAsync(Host host)
@@ -1602,8 +1612,8 @@ namespace Jularr.Backend.Tests
             Assert.IsFalse(html.Contains("id=\"discover-recommendations\"", StringComparison.Ordinal), "Filtered titles replace the shelves.");
 
             // Several types share genre and year only; a choice no chosen type offers is dropped from the address.
-            using var shared = await host.SendAsync(HttpMethod.Get, "/?type=anime,movies&genre=Mecha&season=2");
-            Assert.AreEqual("/?type=movies,anime", shared.Headers.Location?.OriginalString ?? "", "Mecha is no film genre and films have no seasons.");
+            using var shared = await host.SendAsync(HttpMethod.Get, "/?type=movies&genre=Mecha&season=2");
+            Assert.AreEqual("/?type=movies", shared.Headers.Location?.OriginalString ?? "", "Mecha is no film genre and films have no seasons.");
         }
 
         private static async Task<Host> CreateHostAsync(bool razor = false, FakeTmdb? fake = null, FakeAniList? anime = null, FakeTvdb? tvdb = null)

@@ -168,10 +168,10 @@ namespace Jularr.Backend.Tests
             var movies = await browser.GetStringAsync("/Requests?type=movies&state=Active");
             StringAssert.Contains(movies, "&lt;Work&gt;");
             Assert.IsFalse(movies.Contains(">Book<", StringComparison.Ordinal));
-            var both = await browser.GetStringAsync("/Requests?type=movies,books&state=All");
-            StringAssert.Contains(both, "&lt;Work&gt;");
-            StringAssert.Contains(both, "Book");
-            var available = await browser.GetStringAsync("/Requests?state=Available");
+            // Books are another mode: their requests show there.
+            var books = await browser.GetStringAsync("/Requests?type=books&state=All");
+            StringAssert.Contains(books, "Book");
+            var available = await browser.GetStringAsync("/Requests?type=books&state=Available");
             Assert.IsFalse(available.Contains("&lt;Work&gt;", StringComparison.Ordinal));
             StringAssert.Contains(available, "Book");
 

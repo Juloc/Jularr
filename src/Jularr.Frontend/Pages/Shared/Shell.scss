@@ -128,6 +128,35 @@
         &:focus-visible { outline: none; }
     }
 
+    // The chip at the end of the field names the mode the search stays in; checked (a checkbox of the form) it says Everywhere and searches every mode.
+    .search-box { display: flex; align-items: center; gap: 8px; }
+    .search-box__input { flex: 1; min-width: 0; }
+    &__scope {
+        position: relative;
+        display: inline-flex;
+        flex: none;
+        align-items: center;
+        gap: 5px;
+        height: 28px;
+        padding: 0 10px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: var(--surface);
+        color: var(--muted);
+        font-size: var(--text-small);
+        font-weight: 700;
+        cursor: pointer;
+        white-space: nowrap;
+
+        input { position: absolute; inset: 0; margin: 0; opacity: 0; cursor: pointer; }
+        &-mode { display: inline-flex; align-items: center; gap: 5px; }
+        &-all { display: none; }
+        &:has(input:checked) { border-color: var(--accent-line); background: var(--accent-soft); color: var(--accent-text); }
+        &:has(input:checked) &-mode { display: none; }
+        &:has(input:checked) &-all { display: inline; }
+        &:has(input:focus-visible) { outline: 2px solid var(--focus); outline-offset: 2px; }
+    }
+
     // Above the base button's display; the phone's open search shows it.
     .app-header &__close { display: none; }
 
@@ -315,6 +344,52 @@ html[data-mode="dark"] .theme-toggle { & > .theme-toggle__moon { display: none; 
     letter-spacing: -.8px;
     white-space: nowrap;
 }
+// The mode switch under the brand: the active mode with an arrow; the list of the modes opens in the sidebar's flow.
+.mode-switch {
+    flex: none;
+    padding: 13px 13px 0;
+
+    &__button {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-height: 43px;
+        padding: 0 12px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius-control);
+        background: var(--surface);
+        color: var(--text);
+        cursor: pointer;
+        font-size: var(--text-body);
+        font-weight: 740;
+        list-style: none;
+
+        &::-webkit-details-marker { display: none; }
+        &:hover { background: var(--surface-hover); }
+        &:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+    }
+    &__icon { display: inline-grid; flex: none; place-items: center; color: var(--accent-text); }
+    &__label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    &__chevron { display: inline-grid; flex: none; color: var(--muted); transition: transform var(--transition); }
+    &[open] &__chevron { transform: rotate(180deg); }
+    &__list { display: grid; gap: 3px; padding: 6px 0 2px; }
+    &__item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-height: 40px;
+        padding: 0 12px;
+        border-radius: var(--radius-control);
+        color: var(--text);
+        font-size: var(--text-body);
+        font-weight: 640;
+        text-decoration: none;
+
+        &:hover { background: var(--surface-hover); }
+        &.is-active { background: var(--accent-soft); color: var(--accent-text); }
+        &:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+    }
+}
 .sidebar-navigation { display: grid; gap: 5px; padding: 21px 13px; }
 .sidebar-secondary { margin-top: auto; }
 
@@ -484,6 +559,11 @@ html[data-skin="original"] .sidebar-secondary {
     .sidebar-brand .shell-brand__name, .sidebar-brand .shell-brand__attribution, .nav-eyebrow, .nav-link > span { display: none; }
     .sidebar-navigation { padding: 20px 8px; }
     .nav-eyebrow + .sidebar-navigation { padding-top: 20px; }
+    // The mode switch keeps its icons only; the active mode's button opens the list of icons.
+    .mode-switch { padding: 12px 8px 0; }
+    .mode-switch__button { justify-content: center; padding: 0; }
+    .mode-switch__label, .mode-switch__chevron { display: none; }
+    .mode-switch__item { justify-content: center; padding: 0; }
     .nav-link { justify-content: center; padding: 0; }
     .nav-link > .ui-icon { width: 21px; height: 21px; }
 
@@ -557,8 +637,10 @@ html[data-skin="original"] .sidebar-secondary {
 
         &__icon { width: 100%; height: 100%; }
 
-        // Hidden but focusable, so the icon's label can open it.
+        // Hidden but focusable, so the icon's label can open it; the mode chip waits until the field is open.
+        .app-search__scope { display: none; }
         .search-box {
+            display: block;
             flex: none;
             width: 1px;
             height: 1px;
@@ -581,7 +663,8 @@ html[data-skin="original"] .sidebar-secondary {
 
             .app-search__close { display: inline-grid; }
             .app-search__icon { width: auto; height: auto; }
-            .search-box { flex: 1; width: auto; height: auto; margin: 0; overflow: visible; clip-path: none; }
+            .search-box { display: flex; flex: 1; width: auto; height: auto; margin: 0; overflow: visible; clip-path: none; }
+            .app-search__scope { display: inline-flex; }
 
             // The suggestions fill the screen below it.
             .app-search__popup { top: 100%; left: 0; width: 100%; height: calc(100dvh - 100%); max-height: none; border-width: 1px 0 0; border-radius: 0; transform: none; }

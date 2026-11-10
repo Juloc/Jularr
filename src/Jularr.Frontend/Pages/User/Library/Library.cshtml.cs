@@ -60,7 +60,7 @@ namespace Jularr.Frontend.Pages.User.Library
         private sealed record State(IReadOnlyList<string> Types, string? Query, LibrarySortType Sort, string? Year, int Page,
             LibraryAvailabilityType[] Availability, ProgressStateType? Progress, string[] Genres, string[] Audio, string[] Subtitles, decimal? Rating);
 
-        private ScopeSelection Scopes => _scopes ??= new ScopeSelection(Types, _media);
+        private ScopeSelection Scopes => _scopes ??= new ScopeSelection(Types, _media, texts.Mode);
         private string? ValidYear => YearChoice.Valid(Year);
         private static string[] Values(string[] values) => [.. values.SelectMany(value => value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)).Distinct()];
         private LibraryAvailabilityType[] Available => Values(Availability)
