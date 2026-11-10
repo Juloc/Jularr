@@ -1,6 +1,6 @@
 // Not for ordinary work: node scripts/freeze-baseline.mjs
 // Rewrites database/baseline.sha256, the hash of the frozen baseline (schema version 1). The baseline never changes:
-// schema changes are new numbered migrations (database/migrations/NNNN_short_name.sql, docs/DATABASE_MIGRATIONS.md) and the guard test
+// schema changes are new numbered migrations (database/migrations/NNNN_short_name.sql, docs/DEVELOPMENT.md) and the guard test
 // DatabaseBaselineTests.Baseline_MatchesTheFrozenHash fails on any other edit. The hash is the one DatabaseBaseline.Fingerprint(1) computes.
 import { createHash } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";

@@ -1,11 +1,11 @@
 package de.juloc.jularr.core.tts
 
 /**
- * Offline-neural TTS provider contract (sherpa-onnx today; docs/TTS.md Phase 3). A real
+ * Offline-neural TTS provider contract (sherpa-onnx today). A real
  * binding lives in the optional `core-tts-sherpa` module, which depends on a manually
  * downloaded sherpa-onnx AAR (it is not published to Maven Central as of this writing —
  * see k2-fsa/sherpa-onnx#3981) and is only included in the Gradle build when the
- * `jularrNeuralTtsEnabled` Gradle property is set. See docs/TTS.md for the manual step.
+ * `jularrNeuralTtsEnabled` Gradle property is set.
  *
  * [UnavailableNeuralTtsProvider] is the always-compiled default: it reports the offline
  * provider as unavailable so the rest of the app (settings screen, resolver, model

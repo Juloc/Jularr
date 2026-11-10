@@ -16,8 +16,8 @@ import java.io.File
  * accessible account, device settings and the reading-state sync queues.
  * Sibling of `OfflineStore` (bounded offline playback, #341) under its own
  * `library/` root, same `AtomicFile` + hand-written JSON codec approach (no
- * Room/reflection library exists anywhere in this app; see
- * docs/ANDROID_CLIENTS.md). Everything lives below `noBackupFilesDir`, so it
+ * Room/reflection library exists anywhere in this app).
+ * Everything lives below `noBackupFilesDir`, so it
  * is never part of a device backup.
  */
 class LibraryStore private constructor(val root: File) {
@@ -94,7 +94,7 @@ class LibraryStore private constructor(val root: File) {
 /**
  * Writes [bytes] to `<file>.part`, reads them back and compares before an
  * atomic rename into [file] — the same "write, then read back and compare"
- * finalization rule the PWA engine uses (docs/OFFLINE_LIBRARY.md#atomic-finalization),
+ * finalization rule the PWA engine uses,
  * catching a truncated/corrupted write immediately instead of surfacing a
  * broken chapter later. Returns `false` (and leaves [file] untouched) if the
  * write could not be verified.

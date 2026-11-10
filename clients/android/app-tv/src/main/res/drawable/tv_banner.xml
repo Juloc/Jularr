@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Leanback banner (320x180dp nominal): paper background with the Jularr mark on the left.
-     No wordmark is rasterized here; see docs/ANDROID_CLIENTS.md if a text lockup is added later. -->
+     No wordmark is rasterized here. -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item>
         <shape android:shape="rectangle">

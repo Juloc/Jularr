@@ -19,11 +19,11 @@ sealed interface LibraryInterceptTarget {
 
 /**
  * Maps a same-origin request path onto the offline-library API shape
- * (`/api/client/v1/offline-library` endpoints, see docs/OFFLINE_LIBRARY.md)
+ * (`/api/client/v1/offline-library` endpoints)
  * without touching the network or android.webkit, so it is plain-JUnit testable. The
  * WebView shell uses this to decide whether `shouldInterceptRequest` should
- * answer from local storage instead of the network ("local source first";
- * see docs/ANDROID_CLIENTS.md §8.1) — every other request is left untouched
+ * answer from local storage instead of the network ("local source first")
+ * — every other request is left untouched
  * (returns `null`) and falls through to the normal network load. This is
  * deliberately narrow: it is not a general asset loader and it never runs
  * arbitrary JS or adds a JS bridge, only a fixed set of read-only content

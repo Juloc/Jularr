@@ -10,8 +10,8 @@ sealed interface UpdateDownloadResult {
 
 /**
  * The one updater implementation app-mobile and app-tv both call, so the check/download/
- * verify sequence is never duplicated between the two clients (docs/ANDROID_CLIENTS.md
- * §"Architecture"). Deliberately stateless/Context-free so it is trivially unit-testable;
+ * verify sequence is never duplicated between the two clients.
+ * Deliberately stateless/Context-free so it is trivially unit-testable;
  * callers (a Compose screen with its own `rememberCoroutineScope`) own any UI state.
  */
 class UpdateManager(
