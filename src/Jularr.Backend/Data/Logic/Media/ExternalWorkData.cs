@@ -598,7 +598,7 @@ namespace Jularr.Backend.Data.Logic.Media
 
     internal sealed class ExternalWorkSyncSummaryData : BaseData
     {
-        public ExternalWorkSyncSummaryData(string @namespace, int requestsPerMinute, bool pausesWhileUsed, DateOnly? listedOn, long entries, long pending, long version)
+        public ExternalWorkSyncSummaryData(string @namespace, int requestsPerMinute, bool pausesWhileUsed, DateOnly? listedOn, long entries, long pending, DateTime? countedAt, long version)
         {
             Namespace = @namespace;
             RequestsPerMinute = requestsPerMinute;
@@ -606,6 +606,7 @@ namespace Jularr.Backend.Data.Logic.Media
             ListedOn = listedOn;
             Entries = entries;
             Pending = pending;
+            CountedAt = countedAt;
             Version = version;
         }
 
@@ -626,6 +627,9 @@ namespace Jularr.Backend.Data.Logic.Media
 
         [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.Pending))]
         public long Pending { get; }
+
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.CountedAt))]
+        public DateTime? CountedAt { get; }
 
         [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.Version))]
         public long Version { get; }

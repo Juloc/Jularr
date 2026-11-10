@@ -38,7 +38,7 @@ namespace Jularr.Backend.Data.Admin.Media.V1
     // A kept catalog with how much of it the Caching module keeps, the Owner's choices and how far its full sync has come.
     public sealed class ExternalWorkSyncV1 : BaseResponse
     {
-        public ExternalWorkSyncV1(string @namespace, CachingTier tier, int requestsPerMinute, bool pausesWhileUsed, DateOnly? listedOn, long entries, long pending, long version,
+        public ExternalWorkSyncV1(string @namespace, CachingTier tier, int requestsPerMinute, bool pausesWhileUsed, DateOnly? listedOn, long entries, long pending, DateTime? countedAt, long version,
             BaseDataList<ExternalWorkSyncWindowV1> windows)
         {
             Namespace = @namespace;
@@ -48,6 +48,7 @@ namespace Jularr.Backend.Data.Admin.Media.V1
             ListedOn = listedOn;
             Entries = entries;
             Pending = pending;
+            CountedAt = countedAt;
             Version = version;
             Windows = windows;
         }
@@ -68,12 +69,15 @@ namespace Jularr.Backend.Data.Admin.Media.V1
         [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.ListedOn))]
         public DateOnly? ListedOn { get; }
 
-        // Titles kept, and how many of them still wait to be read.
+        // Titles kept, and how many of them still wait to be read, as the worker counted them at CountedAt; both are 0 while CountedAt is null (not counted yet).
         [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.Entries))]
         public long Entries { get; }
 
         [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.Pending))]
         public long Pending { get; }
+
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.CountedAt))]
+        public DateTime? CountedAt { get; }
 
         [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.Version))]
         public long Version { get; }

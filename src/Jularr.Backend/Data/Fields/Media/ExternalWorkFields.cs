@@ -37,6 +37,8 @@ namespace Jularr.Backend.Data.Fields.Media
         public static readonly TimeField EndsAt = new();
         public static readonly LongField Entries = new() { Minimum = 0 };
         public static readonly LongField Pending = new() { Minimum = 0 };
+        // When the worker last counted a catalog's titles; null before its first count.
+        public static readonly DateTimeField CountedAt = new() { Required = false };
         public static readonly EnumField Tier = new(typeof(CachingTier));
         // Works a pass leaves out for now, such as titles that just could not be detailed.
         public static readonly LongArrayField WorkIds = new() { Minimum = 1, MaximumLength = 10000, IsSet = true };

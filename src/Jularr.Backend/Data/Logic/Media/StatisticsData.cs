@@ -40,7 +40,7 @@ namespace Jularr.Backend.Data.Logic.Media
 
     internal sealed class SystemTotalsData : BaseData
     {
-        public SystemTotalsData(long databaseBytes, long queuedOperations, long failedOperations, long profiles, long storageOffline, long catalogWorks)
+        public SystemTotalsData(long databaseBytes, long queuedOperations, long failedOperations, long profiles, long storageOffline, long catalogWorks, DateTime? catalogCountedAt)
         {
             DatabaseBytes = databaseBytes;
             QueuedOperations = queuedOperations;
@@ -48,6 +48,7 @@ namespace Jularr.Backend.Data.Logic.Media
             Profiles = profiles;
             StorageOffline = storageOffline;
             CatalogWorks = catalogWorks;
+            CatalogCountedAt = catalogCountedAt;
         }
 
         [DataField(typeof(StatisticsFields), nameof(StatisticsFields.Bytes))]
@@ -67,5 +68,8 @@ namespace Jularr.Backend.Data.Logic.Media
 
         [DataField(typeof(StatisticsFields), nameof(StatisticsFields.Count))]
         public long CatalogWorks { get; }
+
+        [DataField(typeof(StatisticsFields), nameof(StatisticsFields.At))]
+        public DateTime? CatalogCountedAt { get; }
     }
 }

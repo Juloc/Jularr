@@ -96,6 +96,24 @@ namespace Jularr.Backend.Tests
             CollectionAssert.AreEqual(new[] { "Alpha", "Beta" }, (await ReadAsync(host, "pageSize=2&page=1")).Select(item => item.CanonicalTitle).ToArray());
             CollectionAssert.AreEqual(new[] { "Delta", "Epsilon" }, (await ReadAsync(host, "pageSize=2&page=2")).Select(item => item.CanonicalTitle).ToArray());
             CollectionAssert.AreEqual(new[] { "Epsilon" }, (await ReadAsync(host, "pageSize=1&page=2&mediaTypeIds=1&isMonitored=true")).Select(item => item.CanonicalTitle).ToArray());
+
+            // The summary counts what the list shows with the same filters.
+            Assert.AreEqual("6|1|2|1|2|4|1|3000000000", await SummaryAsync(host, ""));
+            foreach (var filter in new[] { "", "mediaTypeIds=1", "mediaTypeIds=2&mediaTypeIds=7", "libraryRootId=801", "acquisitionProfileId=801", "query=%20ta%20" })
+            {
+                var listed = await ReadAsync(host, filter + "&pageSize=50");
+                Assert.AreEqual(string.Join('|', listed.Count, listed.Count(item => item.WorkListStatusId == WorkListStatus.Available), listed.Count(item => item.WorkListStatusId == WorkListStatus.Missing),
+                    listed.Count(item => item.WorkListStatusId == WorkListStatus.Downloading), listed.Count(item => item.WorkListStatusId == WorkListStatus.Unmonitored), listed.Count(item => item.IsMonitored),
+                    listed.Sum(item => item.FileCount), listed.Sum(item => item.SizeBytes)), await SummaryAsync(host, filter), filter);
+            }
+        }
+
+        private static async Task<string> SummaryAsync(Host host, string query)
+        {
+            using var response = await host.SendAsync(HttpMethod.Get, Works + "/summary?" + query);
+            Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, await response.Content.ReadAsStringAsync());
+            var summary = (await response.Content.ReadFromJsonAsync<WorksSummaryV1>())!;
+            return string.Join('|', summary.TotalCount, summary.AvailableCount, summary.MissingCount, summary.DownloadingCount, summary.UnmonitoredCount, summary.MonitoredCount, summary.FileCount, summary.SizeBytes);
         }
 
         [TestMethod]

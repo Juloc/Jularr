@@ -721,7 +721,7 @@ namespace Jularr.Backend.Logic.Media
             return await ctx.ReadSql.ReadListAsync<ExternalWorkSyncWindowData>(sql, ct);
         }
 
-        // The kept catalogs with how many titles they hold and how many still wait to be read.
+        // The kept catalogs with how many titles they held and still had to read at the worker's last count; before its first count CountedAt is null.
         public static async Task<IReadOnlyList<ExternalWorkSyncSummaryData>> ReadExternalWorkSyncSummariesAsync(this LogicContext ctx, CancellationToken ct)
         {
             var sql = new SqlStatement();
@@ -732,15 +732,88 @@ namespace Jularr.Backend.Logic.Media
                     sync."RequestsPerMinute"::integer AS "RequestsPerMinute",
                     sync."PausesWhileUsed",
                     sync."ListedOn",
-                    (SELECT count(*) FROM "Works" AS work WHERE work."CatalogNamespace" = sync."Namespace") AS "Entries",
-                    (SELECT count(*) FROM "Works" AS work WHERE work."CatalogNamespace" = sync."Namespace" AND work."FetchedAt" IS NULL) AS "Pending",
+                    coalesce(total."Entries", 0) AS "Entries",
+                    coalesce(total."Pending", 0) AS "Pending",
+                    total."CountedAt",
                     sync."Version"
                 FROM
                     "ExternalWorkSyncs" AS sync
+                    LEFT JOIN "CatalogNamespaceTotals" AS total ON total."Namespace" = sync."Namespace"
                 ORDER BY
                     sync."Namespace";
                 """;
             return await ctx.ReadSql.ReadListAsync<ExternalWorkSyncSummaryData>(sql, ct);
+        }
+
+        // The catalog figures are counted again when the last count is five minutes old or there was none yet.
+        public static async Task<bool> AreCatalogTotalsDueAsync(this LogicContext ctx, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT NOT EXISTS (
+                    SELECT 1 FROM "CatalogNamespaceTotals" AS total WHERE total."CountedAt" > now() - interval '5 minutes'
+                );
+                """;
+            return (bool)(await ctx.ReadSql.ExecuteScalarAsync(sql, ct))!;
+        }
+
+        // Counts every catalog in one pass over the Works: its titles, those still to read and those without a tie to the library. A catalog with sync settings
+        // or an earlier count keeps its row, with zeros once it holds nothing. Counts wait for each other, so two never write the rows at once.
+        public static async Task<int> RefreshCatalogTotalsAsync(this LogicContext ctx, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement = "SELECT pg_advisory_xact_lock(hashtextextended('catalog-totals', 0));";
+            await ctx.Sql.ExecuteScalarAsync(sql, ct);
+
+            sql = new SqlStatement();
+            sql.Statement =
+                """
+                WITH library AS MATERIALIZED (
+                    SELECT DISTINCT
+                        tie."WorkId"
+                    FROM
+                        "WorkLibraryRelations" AS tie
+                ), counted AS (
+                    SELECT
+                        work."CatalogNamespace" AS "Namespace",
+                        count(*) AS "Entries",
+                        count(*) FILTER (WHERE work."FetchedAt" IS NULL) AS "Pending",
+                        count(*) FILTER (WHERE library."WorkId" IS NULL) AS "CatalogOnly"
+                    FROM
+                        "Works" AS work
+                        LEFT JOIN library ON library."WorkId" = work."Id"
+                    WHERE
+                        work."CatalogNamespace" IS NOT NULL
+                    GROUP BY
+                        work."CatalogNamespace"
+                ), catalog AS (
+                    SELECT sync."Namespace" FROM "ExternalWorkSyncs" AS sync
+                    UNION
+                    SELECT total."Namespace" FROM "CatalogNamespaceTotals" AS total
+                    UNION
+                    SELECT counted."Namespace" FROM counted
+                )
+                INSERT INTO "CatalogNamespaceTotals" ("Namespace", "Entries", "Pending", "CatalogOnly", "CountedAt")
+                SELECT
+                    catalog."Namespace",
+                    coalesce(counted."Entries", 0),
+                    coalesce(counted."Pending", 0),
+                    coalesce(counted."CatalogOnly", 0),
+                    now()
+                FROM
+                    catalog
+                    LEFT JOIN counted ON counted."Namespace" = catalog."Namespace"
+                ORDER BY
+                    catalog."Namespace"
+                ON CONFLICT ("Namespace") DO UPDATE
+                SET
+                    "Entries" = EXCLUDED."Entries",
+                    "Pending" = EXCLUDED."Pending",
+                    "CatalogOnly" = EXCLUDED."CatalogOnly",
+                    "CountedAt" = EXCLUDED."CountedAt";
+                """;
+            return await ctx.ExecuteAsyncForAffectedRows(sql, ct);
         }
 
         // Progress of a pass; it leaves the Owner's choices and their version alone.

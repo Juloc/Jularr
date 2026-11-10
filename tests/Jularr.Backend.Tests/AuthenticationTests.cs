@@ -682,6 +682,7 @@ namespace Jularr.Backend.Tests
                 if (razor)
                 {
                     app.UseAuthorization();
+                    app.UseJularrPageTimings();
                     app.Use(async (http, next) =>
                     {
                         if (http.GetEndpoint()?.Metadata.GetMetadata<PageActionDescriptor>() is not null)

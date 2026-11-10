@@ -329,6 +329,9 @@ See [Frontend UX decisions](FRONTEND_UX.md) for design tokens, layout, page iden
   Keep the view HTML server-rendered and the language cache bounded.
 - A page that asks several providers asks them together (a few at a time, each with its own limit) and a provider that just failed
   is remembered for a minute; slow shelves are logged and timed in `Server-Timing`.
+- Owner's decision 10 Nov: a warm page takes at most 30 ms server time ([PageBudgets](../src/Jularr.Frontend/Framework/PageBudgets.cs)). Every page request is timed under its
+  view path (with Diagnostics on, never by address or id) and listed against the budget on `/Admin/Performance`; the Owner's responses name `shell` and `data` in
+  `Server-Timing`. A page adds its own entries with `Headers.Append`, never by replacing the header.
 - Local content must not wait for optional external recommendations. Load their
   server-rendered fragments independently, retaining usable native links and
   visible failures. Do not parallelize operations over one shared SQL transaction.

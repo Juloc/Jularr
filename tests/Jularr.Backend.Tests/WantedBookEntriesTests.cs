@@ -80,6 +80,18 @@ namespace Jularr.Backend.Tests
             var counts = await summary.Content.ReadFromJsonAsync<JsonElement>();
             Assert.AreEqual(7, counts.GetProperty("totalCount").GetInt32());
             Assert.AreEqual(4, counts.GetProperty("missingCount").GetInt32());
+
+            // The page's single read has the same entries and numbers, also for one type and on a page past the end.
+            foreach (var query in new[] { "?pageSize=48&wantedViewTypeId=0", "?pageSize=3&wantedViewTypeId=1", "?pageSize=48&wantedViewTypeId=0&mediaTypeIds=3", "?page=9&pageSize=3&wantedViewTypeId=0" })
+            {
+                using var listed = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/wanted" + query);
+                using var counted = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/wanted/summary" + query);
+                using var combined = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/wanted/page" + query);
+                Assert.AreEqual(HttpStatusCode.OK, combined.StatusCode, await combined.Content.ReadAsStringAsync());
+                var page = await combined.Content.ReadFromJsonAsync<JsonElement>();
+                Assert.AreEqual((await listed.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("items").GetRawText(), page.GetProperty("entries").GetProperty("items").GetRawText(), query);
+                Assert.AreEqual((await counted.Content.ReadFromJsonAsync<JsonElement>()).GetRawText(), page.GetProperty("summary").GetRawText(), query);
+            }
         }
     }
 }
