@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
@@ -21,6 +22,9 @@ namespace Jularr.Backend.Service.Core
         private readonly PostgresBackupTools _tools;
         private readonly IReadOnlyList<DatabaseMigration> _migrations;
         private readonly ILogger _logger;
+
+        // Told what the start is doing (the backup, which migration) so a status page can show it; null when nobody listens.
+        internal Action<DatabaseUpgradeProgress>? Progress { get; set; }
 
         // The embedded database/migrations/NNNN_name.sql scripts from version 2; the baselines (version 1) are frozen.
         internal static IReadOnlyList<DatabaseMigration> Migrations { get; } = DatabaseMigration.Embedded(typeof(DatabaseBaseline).Assembly);
@@ -128,6 +132,8 @@ namespace Jularr.Backend.Service.Core
                     requiresKeys = (bool)(await accounts.ExecuteScalarAsync(cancellationToken))!;
                 }
 
+                var clock = Stopwatch.StartNew();
+                Progress?.Invoke(new DatabaseUpgradeProgress(DatabaseUpgradePhase.BackingUp));
                 try
                 {
                     await BackupFiles.CreateAsync(_backup, _tools, DateTime.UtcNow, installedVersion, Fingerprint(installedVersion, _migrations), BackupKindType.Update, cancellationToken, requiresKeys);
@@ -136,6 +142,8 @@ namespace Jularr.Backend.Service.Core
                 {
                     throw new DatabaseUpgradeException("backup", "The backup before the update could not be made (" + exception.Message + "). No migration was applied.", exception);
                 }
+
+                _logger.LogInformation("Backup before the update took {Seconds:0.0} s.", clock.Elapsed.TotalSeconds);
             }
 
             await using var migrationTransaction = await connection.BeginTransactionAsync(cancellationToken);
@@ -154,8 +162,10 @@ namespace Jularr.Backend.Service.Core
                 throw new DatabaseUpgradeException(NameOf(installedVersion), "The database schema changed during its pre-upgrade backup. No migrations were applied.");
             }
 
+            var migrating = Stopwatch.StartNew();
             await ApplyMigrationsAsync(connection, migrationTransaction, installedVersion, cancellationToken);
             await migrationTransaction.CommitAsync(cancellationToken);
+            _logger.LogInformation("Database migrations took {Seconds:0.0} s.", migrating.Elapsed.TotalSeconds);
             if (isBackedUp)
             {
                 await PruneBackupsAsync(connection, cancellationToken);
@@ -271,8 +281,10 @@ namespace Jularr.Backend.Service.Core
         // All pending migrations and their version entries share one transaction: a failure leaves the database exactly as it was.
         private async Task ApplyMigrationsAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, int installedVersion, CancellationToken ct)
         {
-            foreach (var migration in _migrations.Where(migration => migration.Version > installedVersion))
+            var pending = _migrations.Where(migration => migration.Version > installedVersion).ToList();
+            foreach (var migration in pending)
             {
+                Progress?.Invoke(new DatabaseUpgradeProgress(DatabaseUpgradePhase.Migrating, pending.IndexOf(migration) + 1, pending.Count));
                 try
                 {
                     // An index or an update over a large catalog runs longer than the connection's default 30 s.

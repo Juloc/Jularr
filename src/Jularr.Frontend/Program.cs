@@ -29,16 +29,42 @@ builder.Services.AddSingleton<ShellNavigation>();
 builder.Services.AddSingleton<FrontendAssets>();
 builder.Services.AddJularrCompression();
 
+// The status page hands its addresses to the application at the moment the application's own server is about to bind them.
+var handover = new StartupHandover();
+handover.Install(builder);
 var app = builder.Build();
 
-// The database is brought to this version (migrations after a backup) before anything serves; a failed update was rolled back and leaves the
-// maintenance page only, on the same addresses.
-if (await DatabaseUpgrade.RunAsync(app.Services) is { } upgradeFailure)
+// The configured addresses answer from here on with a status page (503, "Jularr wird aktualisiert") while the backup and the migrations run;
+// the application takes them over when the database is current. A failed update was rolled back and leaves the maintenance page only.
+var startup = await StartupStatusServer.StartAsync(args);
+DatabaseUpgradeFailure? upgradeFailure;
+try
 {
+    upgradeFailure = await DatabaseUpgrade.RunAsync(app.Services, startup.Stopping, startup.Status.Report);
+}
+catch (OperationCanceledException) when (startup.Stopping.IsCancellationRequested)
+{
+    // Stopped while updating: nothing is left running.
     await app.DisposeAsync();
-    await DatabaseMaintenance.RunAsync(args, upgradeFailure);
+    await startup.DisposeAsync();
     return;
 }
+
+if (upgradeFailure is not null)
+{
+    startup.Status.Fail(upgradeFailure);
+    await app.DisposeAsync();
+    await startup.WaitForShutdownAsync();
+    await startup.DisposeAsync();
+    return;
+}
+
+startup.Status.Starting();
+handover.Arm(async () =>
+{
+    await startup.StopAsync();
+    await startup.DisposeAsync();
+});
 
 app.UseExceptionHandler();
 app.UseTrustedProxies();
