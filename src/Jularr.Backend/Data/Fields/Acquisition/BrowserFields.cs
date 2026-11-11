@@ -10,6 +10,8 @@ namespace Jularr.Backend.Data.Fields.Acquisition
         public static readonly BoolField IsAvailable = new();
         public static readonly BoolField IsRunning = new();
         public static readonly BoolField IsActive = new();
+        public static readonly StringField Phase = new(NpgsqlDbType.Varchar) { MaximumLength = 16, Trim = true };
+        public static readonly StringField Error = new(NpgsqlDbType.Varchar) { MaximumLength = 32, Required = false, Trim = true };
         public static readonly StringField Version = new(NpgsqlDbType.Varchar) { MaximumLength = 128, Required = false, Trim = true };
         public static readonly StringField Display = new(NpgsqlDbType.Varchar) { MaximumLength = 16, Required = false, Trim = true };
         public static readonly StringField LastUrl = new(NpgsqlDbType.Varchar) { MaximumLength = 500, Required = false, Trim = true };

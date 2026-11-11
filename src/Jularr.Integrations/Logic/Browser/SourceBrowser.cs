@@ -30,10 +30,12 @@ namespace Jularr.Integrations.Logic.Browser
     {
         // The source's own check needs an undisturbed page; reading it too often makes it fail.
         private const int PollMilliseconds = 3000;
-        private const int MaximumPageChars = 4 * 1024 * 1024;
 
-        // A fresh browser needs a moment before its first page counts.
-        private const int StartMilliseconds = 4000;
+        // The automatic work pauses between its reads; a person who wants the browser ends the pause (it ends the loop at its next look).
+        private TaskCompletionSource _personWaiting = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        private Task PollPauseAsync(CancellationToken ct) => Task.WhenAny(Task.Delay(PollMilliseconds, ct), _personWaiting.Task).Unwrap();
+        private const int MaximumPageChars = 4 * 1024 * 1024;
 
         // The file in the profile that holds the port of the browser.
         private const string PortFile = "browser.port";
@@ -358,7 +360,7 @@ namespace Jularr.Integrations.Logic.Browser
                         return new BrowserPage(page.Address, state.Html);
                     }
 
-                    await Task.Delay(PollMilliseconds, ct);
+                    await PollPauseAsync(ct);
                 }
 
                 // The pages stayed on the source's check; the browser is not through it.
@@ -644,8 +646,7 @@ namespace Jularr.Integrations.Logic.Browser
             {
                 _process = Process.Start(LaunchInfo(executable, arguments, _display?.Name, headless));
 
-                // The browser needs a moment before its first page counts.
-                await Task.Delay(StartMilliseconds, ct);
+                // No fixed wait: the first page is asked for every quarter second until the browser offers it (a cold start took 4.7 s, 4 of them waiting).
                 try
                 {
                     var socket = await ReadPageSocketAsync(new Uri($"http://127.0.0.1:{port}"), ct);
@@ -829,7 +830,7 @@ namespace Jularr.Integrations.Logic.Browser
                 var page = await ReadStateAsync(ct);
                 if (page is null)
                 {
-                    await Task.Delay(PollMilliseconds, ct);
+                    await PollPauseAsync(ct);
                     continue;
                 }
 
@@ -851,7 +852,7 @@ namespace Jularr.Integrations.Logic.Browser
                     }
                 }
 
-                await Task.Delay(PollMilliseconds, ct);
+                await PollPauseAsync(ct);
             }
 
             return null;

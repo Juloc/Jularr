@@ -178,6 +178,148 @@ namespace Jularr.Backend.Tests
             Assert.IsTrue((await assistance.OpenAsync(owner, 7, Source, default)).IsActive);
         }
 
+        // The click is answered at once with what the browser is doing; the view follows its state until the browser is ready.
+        [TestMethod]
+        public async Task SlowOpen_AnswersAtOnceWithItsStep_FollowsTheState_AndIsReadyWhenTheBrowserIs()
+        {
+            var browser = new Interaction { Hold = new(TaskCreationOptions.RunContinuationsAsynchronously) };
+            using var assistance = new BrowserAssistance(browser, new Clock());
+            var owner = Guid.NewGuid();
+
+            var started = System.Diagnostics.Stopwatch.StartNew();
+            var view = await assistance.OpenAsync(owner, 7, Source, default);
+            Assert.IsLessThan(2000, started.ElapsedMilliseconds);
+            Assert.AreEqual("starting", view.Phase);
+            Assert.IsFalse(view.IsActive);
+            Assert.AreEqual("starting", (await assistance.StateAsync(owner, view.LeaseId, default)).Phase);
+            Assert.AreEqual("starting", (await assistance.ReadOwnAsync(owner, default))!.Phase);
+
+            // Nothing can be seen or typed yet, and a second click joins the opening instead of starting the browser again.
+            await Assert.ThrowsExactlyAsync<ServiceUnavailableException>(() => assistance.FrameAsync(owner, view.LeaseId, default));
+            await Assert.ThrowsExactlyAsync<ServiceUnavailableException>(() => assistance.InputAsync(owner, view.LeaseId, new("key", key: "Enter"), default));
+            Assert.AreEqual(view.LeaseId, (await assistance.OpenAsync(owner, 7, Source, default)).LeaseId);
+            Assert.AreEqual(1, browser.Starts);
+            await Assert.ThrowsExactlyAsync<SecurityException>(() => assistance.StateAsync(Guid.NewGuid(), view.LeaseId, default));
+
+            browser.Hold.SetResult(new BrowserViewport(1000, 700));
+            BrowserViewV1 state;
+            do
+            {
+                state = await assistance.StateAsync(owner, view.LeaseId, default);
+                await Task.Delay(10);
+            }
+            while (state.Phase != "ready");
+            Assert.IsTrue(state.IsActive);
+            Assert.AreEqual((1000, 700), (state.Width, state.Height));
+            CollectionAssert.AreEqual(Interaction.Picture, await assistance.FrameAsync(owner, view.LeaseId, default));
+        }
+
+        [TestMethod]
+        public async Task SlowOpen_ThatFails_ShowsItsReason_AndCanBeOpenedAgain()
+        {
+            var browser = new Interaction { Hold = new(TaskCreationOptions.RunContinuationsAsynchronously) };
+            using var assistance = new BrowserAssistance(browser, new Clock());
+            var owner = Guid.NewGuid();
+            var view = await assistance.OpenAsync(owner, 7, Source, default);
+            Assert.AreEqual("starting", view.Phase);
+
+            browser.Hold.SetException(new SourceBrowserException("The browser did not open its debugging port."));
+            BrowserViewV1 state;
+            do
+            {
+                state = await assistance.StateAsync(owner, view.LeaseId, default);
+                await Task.Delay(10);
+            }
+            while (state.Phase != "failed");
+            Assert.AreEqual("no_start", state.Error);
+            Assert.IsFalse(state.IsActive);
+            await Assert.ThrowsExactlyAsync<ServiceUnavailableException>(() => assistance.FrameAsync(owner, view.LeaseId, default));
+
+            browser.Hold = null;
+            var again = await assistance.OpenAsync(owner, 7, Source, default);
+            Assert.AreEqual("ready", again.Phase);
+            Assert.IsTrue(again.IsActive);
+            Assert.AreEqual(2, browser.Starts);
+        }
+
+        [TestMethod]
+        public async Task SlowOpen_ClosedWhileOpening_IsCancelled()
+        {
+            var browser = new Interaction { Hold = new(TaskCreationOptions.RunContinuationsAsynchronously) };
+            using var assistance = new BrowserAssistance(browser, new Clock());
+            var owner = Guid.NewGuid();
+            var view = await assistance.OpenAsync(owner, 7, Source, default);
+            await assistance.CloseAsync(owner, view.LeaseId, default);
+            Assert.AreEqual(1, browser.Ends);
+            await Assert.ThrowsExactlyAsync<ServiceGoneException>(() => assistance.StateAsync(owner, view.LeaseId, default));
+        }
+
+        [TestMethod]
+        [DataRow("Manual assistance requires a local browser and a public HTTPS source.", "unsupported")]
+        [DataRow("Chrome is not installed.", "not_installed")]
+        [DataRow("The browser did not open its debugging port.", "no_start")]
+        [DataRow("The browser did not offer a page.", "no_start")]
+        [DataRow("anything else", "failed")]
+        public void FailureReasons_AreKeysThePageHasTextsFor(string message, string reason) =>
+            Assert.AreEqual(reason, BrowserAssistance.ReasonOf(new SourceBrowserException(message)));
+
+        [TestMethod]
+        public void FailureReason_OfATimeout_IsTimeout() => Assert.AreEqual("timeout", BrowserAssistance.ReasonOf(new OperationCanceledException()));
+
+        // Through the page and the API: the click returns with the step, the state endpoint follows it, the page says what it waits for.
+        [TestMethod]
+        public async Task Api_SlowOpen_ShowsTheStepOnThePage_AndTheStateEndpointFollowsIt()
+        {
+            using var storage = new TemporaryDirectory();
+            var browser = new Interaction { Hold = new(TaskCreationOptions.RunContinuationsAsynchronously) };
+            await using var host = await LibraryTests.CreateHostAsync(storage.Path, razor: true,
+                services: services =>
+                {
+                    services.AddSingleton<IBrowserInteraction>(browser);
+                    services.AddSingleton<ISourceBrowser>(browser);
+                });
+            await host.Fixture.RunSqlAsync("""
+                UPDATE "InstanceModules" SET "IsEnabled" = TRUE WHERE "Key" IN ('Acquisition', 'Browser');
+                INSERT INTO "AcquisitionConnections" ("Name", "AcquisitionConnectionTypeId", "BaseUrl", "IsEnabled", "Priority")
+                VALUES ('Anna', 5, 'https://annas-archive.gl', TRUE, 50);
+                """);
+            var id = Convert.ToInt64(await host.ScalarAsync("SELECT max(\"Id\") FROM \"AcquisitionConnections\""));
+            using var opened = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/browser/assistance/" + id);
+            Assert.AreEqual(HttpStatusCode.OK, opened.StatusCode, await opened.Content.ReadAsStringAsync());
+            var view = (await opened.Content.ReadFromJsonAsync<BrowserViewV1>())!;
+            Assert.AreEqual("starting", view.Phase);
+            var lease = "/api/v1/admin/browser/assistance/" + view.LeaseId;
+
+            using var state = await host.SendAsync(HttpMethod.Get, lease + "/state");
+            Assert.AreEqual(HttpStatusCode.OK, state.StatusCode, await state.Content.ReadAsStringAsync());
+            StringAssert.Contains(await state.Content.ReadAsStringAsync(), "\"phase\":\"starting\"");
+            using var early = await host.SendAsync(HttpMethod.Get, lease + "/frame");
+            Assert.AreEqual(HttpStatusCode.ServiceUnavailable, early.StatusCode);
+
+            using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Browser");
+            var html = await page.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
+            StringAssert.Contains(html, "data-phase=\"starting\"");
+            StringAssert.Contains(html, "Starting the browser");
+            StringAssert.Contains(html, "data-browser-progress");
+            Assert.DoesNotContain("data-browser-image=\"\" src", html);
+
+            browser.Hold.SetException(new SourceBrowserException("Chrome is not installed."));
+            string failed;
+            do
+            {
+                await Task.Delay(20);
+                using var again = await host.SendAsync(HttpMethod.Get, lease + "/state");
+                failed = await again.Content.ReadAsStringAsync();
+            }
+            while (!failed.Contains("\"phase\":\"failed\"", StringComparison.Ordinal));
+            StringAssert.Contains(failed, "\"error\":\"not_installed\"");
+            using var failedPage = await host.SendAsync(HttpMethod.Get, "/Admin/Browser");
+            var failedHtml = await failedPage.Content.ReadAsStringAsync();
+            StringAssert.Contains(failedHtml, "The browser is not installed.");
+            StringAssert.Contains(failedHtml, "Reconnect");
+        }
+
         [TestMethod]
         public async Task Api_RequiresPermissionEnabledModuleSessionAndCsrf_FrameIsNeverCached()
         {
@@ -297,13 +439,23 @@ namespace Jularr.Backend.Tests
             public int Captures { get; private set; }
             public bool FailNextCapture { get; set; }
             public bool FailNextStart { get; set; }
+            public TaskCompletionSource<BrowserViewport>? Hold { get; set; }
             public string? Text { get; private set; }
             public Uri? Address { get; private set; }
             public bool OpensPage { get; private set; }
             public Func<Uri, CancellationToken, Task<string?>>? ReadHtml { get; init; }
-            public Task<BrowserViewport> BeginManualAsync(Uri address, DateTimeOffset expiresAt, CancellationToken ct, bool opensPage = false)
+            public Task<BrowserViewport> BeginManualAsync(Uri address, DateTimeOffset expiresAt, CancellationToken ct, bool opensPage = false, Action<BrowserOpenPhase>? progress = null)
             {
                 Starts++;
+                if (Hold is { } hold)
+                {
+                    // A browser that is still starting: it tells its step and answers when the test lets it.
+                    progress?.Invoke(BrowserOpenPhase.Checking);
+                    progress?.Invoke(BrowserOpenPhase.Starting);
+                    HasManualControl = true;
+                    return hold.Task.WaitAsync(ct);
+                }
+
                 Address = address;
                 OpensPage = opensPage;
                 if (FailNextStart)

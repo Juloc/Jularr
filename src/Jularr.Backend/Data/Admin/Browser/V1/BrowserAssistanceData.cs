@@ -11,7 +11,7 @@ namespace Jularr.Backend.Data.Admin.Browser.V1
         public Guid LeaseId { get; } = leaseId;
     }
 
-    public sealed class BrowserViewV1(Guid leaseId, int width, int height, long acquisitionConnectionId, bool isActive, long? operationId = null) : BaseResponse
+    public sealed class BrowserViewV1(Guid leaseId, int width, int height, long acquisitionConnectionId, bool isActive, long? operationId = null, string phase = "ready", string? error = null) : BaseResponse
     {
         [DataField(typeof(BrowserFields), nameof(BrowserFields.LeaseId))]
         public Guid LeaseId { get; } = leaseId;
@@ -25,6 +25,11 @@ namespace Jularr.Backend.Data.Admin.Browser.V1
         public bool IsActive { get; } = isActive;
         [DataField(typeof(OperationFields), nameof(OperationFields.Id), false)]
         public long? OperationId { get; } = operationId;
+        // What the browser is doing for the view: checking, waiting, starting, ready or failed; the reason of a failure is a key the page has a text for.
+        [DataField(typeof(BrowserFields), nameof(BrowserFields.Phase))]
+        public string Phase { get; } = phase;
+        [DataField(typeof(BrowserFields), nameof(BrowserFields.Error), false)]
+        public string? Error { get; } = error;
     }
 
     public sealed class BrowserInputDataV1(string action, int x = 0, int y = 0, int delta = 0, string? key = null, string? text = null) : BaseData

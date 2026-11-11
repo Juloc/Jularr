@@ -12,15 +12,15 @@ namespace Jularr.Backend.Service.Core
         private readonly SemaphoreSlim _gate = new(1, 1);
         private Lease? _lease;
         private static readonly TimeSpan IdleTimeout = TimeSpan.FromMinutes(2);
+        private static readonly TimeSpan OpenTimeout = TimeSpan.FromSeconds(150);
+        private static readonly TimeSpan QuickOpen = TimeSpan.FromMilliseconds(100);
 
         public async Task<BrowserViewV1?> ReadOwnAsync(Guid owner, CancellationToken ct)
         {
             await _gate.WaitAsync(ct);
             try
             {
-                return _lease is { } lease && lease.Owner == owner
-                    ? new BrowserViewV1(lease.Id, lease.Viewport.Width, lease.Viewport.Height, lease.AcquisitionConnectionId,
-                        lease.ExpiresAt > time.GetUtcNow() && browser.HasManualControl, lease.OperationId) : null;
+                return _lease is { } lease && lease.Owner == owner ? View(lease) : null;
             }
             finally
             {
@@ -28,34 +28,109 @@ namespace Jularr.Backend.Service.Core
             }
         }
 
+        // The state of an opening or open view: what the browser is doing for it, how it ended, and the picture's size once it is there.
+        public async Task<BrowserViewV1> StateAsync(Guid owner, Guid id, CancellationToken ct)
+        {
+            await _gate.WaitAsync(ct);
+            try
+            {
+                return View(Require(owner, id, active: false));
+            }
+            finally
+            {
+                _gate.Release();
+            }
+        }
+
+        private BrowserViewV1 View(Lease lease)
+        {
+            var state = lease.State;
+            var active = state.Phase == "ready" && lease.ExpiresAt > time.GetUtcNow() && browser.HasManualControl;
+            return new BrowserViewV1(lease.Id, state.Viewport.Width, state.Viewport.Height, lease.AcquisitionConnectionId, active, lease.OperationId, state.Phase, state.Error);
+        }
+
+        // Opening the view starts the browser, which takes seconds when it is not running yet. The answer therefore comes at once: when the browser
+        // is quick (already running) the view is ready in it, otherwise it is "opening" with the step the browser is at, and the page asks for the
+        // state until it is ready or has failed. A second request for the view that is opening joins it.
         public async Task<BrowserViewV1> OpenAsync(Guid owner, long acquisitionConnectionId, Uri address, CancellationToken ct, long? operationId = null)
         {
+            Lease lease;
+            Lease? previous;
             await _gate.WaitAsync(ct);
             try
             {
                 var now = time.GetUtcNow();
                 Guid? continuing = null;
-                if (_lease is { } current && current.ExpiresAt > now && browser.HasManualControl)
+                previous = _lease;
+                if (_lease is { } current && current.ExpiresAt > now && (browser.HasManualControl || current.State.Phase is "checking" or "waiting" or "starting"))
                 {
                     if (current.Owner != owner) throw new ServiceUnavailableException("browser_assistance_busy");
-                    if (current.AcquisitionConnectionId == acquisitionConnectionId && current.OperationId == operationId) continuing = current.Id;
+                    if (current.AcquisitionConnectionId == acquisitionConnectionId && current.OperationId == operationId)
+                    {
+                        if (current.State.Phase is "checking" or "waiting" or "starting") return View(current);
+                        continuing = current.Id;
+                    }
                 }
 
-                var expires = now.Add(IdleTimeout);
-                var viewport = await browser.BeginManualAsync(address, expires, ct, opensPage: operationId is not null);
-                var lease = new Lease(continuing ?? Guid.NewGuid(), owner, acquisitionConnectionId, expires, viewport, operationId);
+                // The opening may outlast the idle time; it is bounded by OpenTimeout, and the view's own idle time starts when it is ready.
+                var expires = now.Add(OpenTimeout + IdleTimeout);
+                lease = new Lease(continuing ?? Guid.NewGuid(), owner, acquisitionConnectionId, expires, new BrowserViewport(1280, 900), operationId);
+                previous?.Opening?.Cancel();
                 _lease = lease;
-                return new BrowserViewV1(lease.Id, viewport.Width, viewport.Height, acquisitionConnectionId, true, operationId);
-            }
-            catch (SourceBrowserException exception)
-            {
-                throw new ServiceUnavailableException("browser_assistance_unavailable", exception);
+                lease.Opening = new CancellationTokenSource(OpenTimeout);
+                lease.Task = OpenInBackgroundAsync(lease, address, expires, operationId is not null);
             }
             finally
             {
                 _gate.Release();
             }
+
+            // A quick open is answered as before; a slow one answers now and is followed by its state.
+            await Task.WhenAny(lease.Task, Task.Delay(QuickOpen, ct));
+            if (lease.Task.IsCompleted && lease.State.Phase == "failed")
+            {
+                await _gate.WaitAsync(ct);
+                try
+                {
+                    if (ReferenceEquals(_lease, lease)) _lease = previous is { } earlier && !ReferenceEquals(earlier, lease) ? earlier : null;
+                }
+                finally
+                {
+                    _gate.Release();
+                }
+
+                throw new ServiceUnavailableException("browser_assistance_unavailable", lease.Failure);
+            }
+
+            return View(lease);
         }
+
+        // The browser's own work, with no request behind it: it ends in "ready" or "failed" and is never thrown at anybody.
+        private async Task OpenInBackgroundAsync(Lease lease, Uri address, DateTimeOffset expires, bool opensPage)
+        {
+            try
+            {
+                var viewport = await browser.BeginManualAsync(address, expires, lease.Opening!.Token, opensPage, phase =>
+                    lease.State = lease.State with { Phase = phase.ToString().ToLowerInvariant() });
+                lease.ExpiresAt = time.GetUtcNow().Add(IdleTimeout);
+                lease.State = new LeaseState("ready", null, viewport);
+            }
+            catch (Exception exception) when (exception is SourceBrowserException or OperationCanceledException)
+            {
+                lease.Failure = exception;
+                lease.State = lease.State with { Phase = "failed", Error = ReasonOf(exception) };
+            }
+        }
+
+        // Why the browser did not open, as a key the page has a text for; the exception's own words are for the log.
+        internal static string ReasonOf(Exception exception) => exception switch
+        {
+            OperationCanceledException => "timeout",
+            _ when exception.Message.Contains("local browser", StringComparison.Ordinal) => "unsupported",
+            _ when exception.Message.Contains("not installed", StringComparison.Ordinal) => "not_installed",
+            _ when exception.Message.Contains("debugging port", StringComparison.Ordinal) || exception.Message.Contains("did not offer a page", StringComparison.Ordinal) => "no_start",
+            _ => "failed"
+        };
 
         public async Task<byte[]> FrameAsync(Guid owner, Guid id, CancellationToken ct)
         {
@@ -123,6 +198,7 @@ namespace Jularr.Backend.Service.Core
             try
             {
                 var lease = Require(owner, id, active: false);
+                lease.Opening?.Cancel();
                 await browser.EndManualAsync(ct);
                 _lease = null;
                 return lease.AcquisitionConnectionId;
@@ -141,11 +217,14 @@ namespace Jularr.Backend.Service.Core
             }
 
             if (lease.Owner != owner) throw new SecurityException();
+            if (active && lease.State.Phase != "ready") throw new ServiceUnavailableException(lease.State.Phase == "failed" ? "browser_assistance_unavailable" : "browser_assistance_opening");
             if (active && (lease.ExpiresAt <= time.GetUtcNow() || !browser.HasManualControl)) throw new ServiceGoneException("browser_assistance_ended");
             return lease;
         }
 
         public void Dispose() => _gate.Dispose();
+
+        private sealed record LeaseState(string Phase, string? Error, BrowserViewport Viewport);
 
         private sealed class Lease(Guid id, Guid owner, long acquisitionConnectionId, DateTimeOffset expiresAt, BrowserViewport viewport, long? operationId)
         {
@@ -154,9 +233,16 @@ namespace Jularr.Backend.Service.Core
             public long AcquisitionConnectionId { get; } = acquisitionConnectionId;
             public long? OperationId { get; } = operationId;
             public DateTimeOffset ExpiresAt { get; set; } = expiresAt;
-            public BrowserViewport Viewport { get; } = viewport;
             public byte[]? Frame { get; set; }
             public DateTimeOffset FrameAt { get; set; }
+
+            // Written by the opening in the background, read by every request: the whole state is replaced at once.
+            private volatile LeaseState _state = new("checking", null, viewport);
+            public LeaseState State { get => _state; set => _state = value; }
+            public BrowserViewport Viewport => _state.Viewport;
+            public CancellationTokenSource? Opening { get; set; }
+            public Task Task { get; set; } = Task.CompletedTask;
+            public Exception? Failure { get; set; }
         }
     }
 }

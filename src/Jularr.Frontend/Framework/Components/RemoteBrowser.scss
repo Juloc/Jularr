@@ -18,6 +18,48 @@
         &:focus-visible { outline: 3px solid var(--focus); }
     }
 
+    // While the browser starts: a skeleton the size of the picture (nothing moves when the picture arrives) and an unending bar.
+    &__placeholder {
+        display: none;
+        aspect-ratio: 1280 / 900;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-inner);
+        background: linear-gradient(100deg, var(--accent-soft) 30%, var(--surface) 50%, var(--accent-soft) 70%) 0 0 / 300% 100%;
+        animation: remote-browser-shimmer 1.6s ease-in-out infinite;
+    }
+
+    &__progress {
+        display: none;
+        height: 6px;
+        overflow: hidden;
+        border-radius: 999px;
+        background: var(--accent-soft);
+
+        span {
+            display: block;
+            width: 35%;
+            height: 100%;
+            border-radius: inherit;
+            background: var(--accent);
+            animation: remote-browser-slide 1.4s ease-in-out infinite;
+        }
+    }
+
+    &[data-phase="checking"], &[data-phase="waiting"], &[data-phase="starting"] {
+        .remote-browser__placeholder { display: block; }
+        .remote-browser__progress { display: block; }
+        .remote-browser__image, .remote-browser__tools, textarea, label { display: none; }
+    }
+
+    &[data-phase="failed"] .remote-browser__image { display: none; }
+
     &__tools { display: flex; flex-wrap: wrap; gap: 8px; }
     textarea { width: 100%; }
+}
+
+@keyframes remote-browser-shimmer { to { background-position: -150% 0; } }
+@keyframes remote-browser-slide { from { transform: translateX(-100%); } to { transform: translateX(300%); } }
+
+@media (prefers-reduced-motion: reduce) {
+    .remote-browser__placeholder, .remote-browser__progress span { animation: none; }
 }

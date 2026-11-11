@@ -11,8 +11,9 @@ namespace Jularr.Integrations.Logic.Browser
         private BrowserViewport _viewport = new(1280, 900);
         public bool HasManualControl => DateTime.UtcNow.Ticks < Interlocked.Read(ref _manualUntil);
 
-        public async Task<BrowserViewport> BeginManualAsync(Uri address, DateTimeOffset expiresAt, CancellationToken ct, bool opensPage = false)
+        public async Task<BrowserViewport> BeginManualAsync(Uri address, DateTimeOffset expiresAt, CancellationToken ct, bool opensPage = false, Action<BrowserOpenPhase>? progress = null)
         {
+            progress?.Invoke(BrowserOpenPhase.Checking);
             if (!IsAvailable || !string.IsNullOrWhiteSpace(_options.RemoteAddress) || !await IsSafeSourceAsync(address, ct))
             {
                 throw new SourceBrowserException("Manual assistance requires a local browser and a public HTTPS source.");
@@ -20,11 +21,14 @@ namespace Jularr.Integrations.Logic.Browser
 
             // A person comes first: automatic work that holds the browser sees this and lets go, so the view opens without waiting for it.
             Interlocked.Exchange(ref _manualUntil, expiresAt.UtcTicks);
+            _personWaiting.TrySetResult();
             var locked = false;
             try
             {
+                progress?.Invoke(BrowserOpenPhase.Waiting);
                 await _gate.WaitAsync(ct);
                 locked = true;
+                if (_client is null) progress?.Invoke(BrowserOpenPhase.Starting);
                 await StartBrowserAsync(ct);
                 _manualMouseDown = false;
                 await _client!.SendAsync("Browser.setDownloadBehavior", new { behavior = "deny" }, ct);
@@ -51,6 +55,7 @@ namespace Jularr.Integrations.Logic.Browser
             catch
             {
                 Interlocked.Exchange(ref _manualUntil, 0);
+                _personWaiting = new(TaskCreationOptions.RunContinuationsAsynchronously);
                 throw;
             }
             finally
@@ -146,6 +151,7 @@ namespace Jularr.Integrations.Logic.Browser
             try
             {
                 Interlocked.Exchange(ref _manualUntil, 0);
+                _personWaiting = new(TaskCreationOptions.RunContinuationsAsynchronously);
                 Note("manual-ended", "the source browser is available to automatic work again");
             }
             finally
