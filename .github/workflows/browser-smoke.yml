@@ -22,7 +22,7 @@ concurrency:
 jobs:
   smoke:
     if: ${{ !github.event.pull_request.draft }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 12
     services:
       postgres:
@@ -70,6 +70,7 @@ jobs:
       - name: Check installation, sign-in, session expiry and timezone in Chromium
         run: |
           dotnet test tests/Jularr.E2E.Tests --configuration Release --no-build \
+            --blame-hang-timeout 5m --blame-hang-dump-type mini --blame-crash --blame-crash-dump-type mini \
             --filter "FullyQualifiedName~FreshInstance_OwnerSetupSignInAndMenuPages_OpenWithoutErrors|FullyQualifiedName~BrowserZone_FormatsUtcInstantsAndCalendarTodayInTwoZones|FullyQualifiedName~ExpiredSession_FromBoostedLink_SignsInAndRestoresDeepLink|FullyQualifiedName~InstalledPwa_ShowsUpdateButNeverReloadsUntilUserChooses" \
             --logger "trx;LogFileName=browser-smoke.trx" \
             --results-directory TestResults/ci/browser-smoke
@@ -89,3 +90,14 @@ jobs:
           path: TestResults/e2e
           if-no-files-found: ignore
           retention-days: 7
+      - name: Keep the hang and crash evidence
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: blame-browser-smoke
+          path: |
+            TestResults/ci/**/Sequence_*.xml
+            TestResults/ci/**/*.dmp
+            !TestResults/ci/**/In/**
+          if-no-files-found: ignore
+          retention-days: 2
