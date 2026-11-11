@@ -4,7 +4,7 @@ import kotlin.math.round
 
 /**
  * Deterministic voice/provider resolution, ported field-for-field and case-for-case from
- * `Jularr.Web.Features.Speech.SpeechPreferenceResolver` (docs/TTS.md). Keep this in sync
+ * `Jularr.Web.Features.Speech.SpeechPreferenceResolver`. Keep this in sync
  * with the C# resolver: the two must always agree given the same inputs.
  */
 object SpeechPreferenceResolver {

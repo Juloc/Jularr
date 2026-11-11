@@ -11,7 +11,7 @@ import kotlin.coroutines.suspendCoroutine
 /**
  * Device/system TTS provider backed by Android `TextToSpeech`. Device voices may be
  * vendor/network-backed (a common OEM engine streams some voices from the network); only
- * an Jularr-managed offline-neural model is "guaranteed offline" (docs/TTS.md).
+ * an Jularr-managed offline-neural model is "guaranteed offline".
  *
  * - Voice discovery maps [Voice.getLocale] to a BCP-47 tag via [Locale.toLanguageTag].
  * - Stop cancels the whole underlying utterance queue ([TextToSpeech.stop]).
@@ -98,7 +98,7 @@ class SystemTtsProvider(context: Context) : TtsProvider {
                     displayName = voice.name,
                     language = SpeechPreferenceResolver.normalizeLanguageTag(languageTag),
                     isDefault = defaultVoice?.name == voice.name,
-                    // Metadata only: not a universal privacy guarantee (docs/TTS.md).
+                    // Metadata only: not a universal privacy guarantee.
                     isLocal = !voice.isNetworkConnectionRequired,
                 )
             }

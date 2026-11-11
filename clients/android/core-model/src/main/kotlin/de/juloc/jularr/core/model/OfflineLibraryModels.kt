@@ -2,8 +2,8 @@ package de.juloc.jularr.core.model
 
 /**
  * Client mirror of the server's offline Book/Novel library contract
- * (`/api/client/v1/offline-library` endpoints, capability `offlineLibrary`,
- * see `docs/OFFLINE_LIBRARY.md`). Books and Novels share one server model; these
+ * (`/api/client/v1/offline-library` endpoints, capability `offlineLibrary`).
+ * Books and Novels share one server model; these
  * types are generic over "work -> volume -> chapter" and carry no anime/media
  * fields, mirroring `Features/OfflineLibrary` on the server exactly.
  */

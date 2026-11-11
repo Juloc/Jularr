@@ -8,7 +8,7 @@ import org.junit.Test
 
 /**
  * Mirrors `Jularr.Tests.SpeechPreferenceResolverTests` (server, C#) case-for-case: the
- * Android and server resolvers must agree given the same inputs (docs/TTS.md).
+ * Android and server resolvers must agree given the same inputs.
  */
 class SpeechPreferenceResolverTest {
 
