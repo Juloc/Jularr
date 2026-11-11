@@ -18,6 +18,7 @@ namespace Jularr.Backend.Infrastructure.Sql
         private bool _jitDisabled;
         private TimeSpan? _statementTimeout;
         private int _shortBatchActive;
+        private int _shortBatchVersion;
         private bool _readEnded;
         private bool _disposed;
 
@@ -28,6 +29,10 @@ namespace Jularr.Backend.Infrastructure.Sql
 
         // A short batch runs; its transaction belongs to the batch's own call path (TransactionMarker).
         internal bool InShortBatch => Volatile.Read(ref _shortBatchActive) != 0;
+
+        // Odd while a short batch runs: raised before its transaction opens and after it closes, so a reader on another call path can tell
+        // whether the transaction it saw belongs to a batch (TransactionMarker reads it on both sides).
+        internal int ShortBatchVersion => Volatile.Read(ref _shortBatchVersion);
 
         public SqlContext(NpgsqlDataSource database)
         {
@@ -165,6 +170,8 @@ namespace Jularr.Backend.Infrastructure.Sql
             ArgumentNullException.ThrowIfNull(transactionalAccessCheck);
             ObjectDisposedException.ThrowIf(_disposed, this);
 
+            var counted = false;
+
             // Reject concurrent transaction batches.
             if (Interlocked.CompareExchange(ref _shortBatchActive, 1, 0) != 0)
             {
@@ -179,6 +186,8 @@ namespace Jularr.Backend.Infrastructure.Sql
                 }
 
                 TransactionMarker.EnterBatch(this);
+                Interlocked.Increment(ref _shortBatchVersion);
+                counted = true;
 
                 using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                 timeout.CancelAfter(TimeSpan.FromSeconds(30));
@@ -201,6 +210,11 @@ namespace Jularr.Backend.Infrastructure.Sql
             }
             finally
             {
+                if (counted)
+                {
+                    Interlocked.Increment(ref _shortBatchVersion);
+                }
+
                 Volatile.Write(ref _shortBatchActive, 0);
             }
         }

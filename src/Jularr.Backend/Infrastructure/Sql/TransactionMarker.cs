@@ -45,12 +45,27 @@ namespace Jularr.Backend.Infrastructure.Sql
 
         private static bool Holds(SqlContext sql)
         {
-            if (!sql.InTransaction)
+            // A batch on another call path may open or close its transaction while this reads: read the batch version on both sides of the
+            // transaction and read again when it changed, so a batch's transaction never counts as the caller's own.
+            int version;
+            bool inTransaction;
+            while (true)
+            {
+                version = sql.ShortBatchVersion;
+                inTransaction = sql.InTransaction;
+                Interlocked.MemoryBarrier();
+                if (sql.ShortBatchVersion == version)
+                {
+                    break;
+                }
+            }
+
+            if (!inTransaction)
             {
                 return false;
             }
 
-            if (!sql.InShortBatch)
+            if ((version & 1) == 0)
             {
                 return true;
             }
