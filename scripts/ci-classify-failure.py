@@ -179,6 +179,14 @@ def gh(*args: str) -> str:
     return subprocess.run(["gh", "api", *args], check=True, capture_output=True, text=True).stdout
 
 
+def shares_group(run: dict) -> bool:
+    """A re-run joins the run's concurrency group again and cancels a newer run there. Push and PR runs share a
+    group per branch or PR, and so do manual Backend Full runs of a branch; a manual run on main (a release
+    check) has its own. A manual run on a tag counts as a branch here: at worst it is not re-run."""
+    event, branch = run.get("event"), run.get("head_branch")
+    return bool(branch) and (event in ("push", "pull_request") or (event == "workflow_dispatch" and branch != "main"))
+
+
 def fetch(repo: str, run_id: str) -> tuple[dict, list[dict], list[dict], Callable[[dict], list[str]]]:
     run = json.loads(gh(f"repos/{repo}/actions/runs/{run_id}"))
     attempt = run.get("run_attempt", 1)
@@ -186,8 +194,7 @@ def fetch(repo: str, run_id: str) -> tuple[dict, list[dict], list[dict], Callabl
         "--paginate", "--jq", ".jobs[]", f"repos/{repo}/actions/runs/{run_id}/attempts/{attempt}/jobs?per_page=100"
     ).splitlines() if line.strip()]
     newer: list[dict] = []
-    # Only push and PR runs share a cancelling concurrency group; a manual Backend Full run has its own.
-    if run.get("event") in ("push", "pull_request") and run.get("head_branch"):
+    if shares_group(run):
         query = f"branch={quote(run['head_branch'], safe='')}&event={run['event']}&per_page=20"
         newer = json.loads(gh(f"repos/{repo}/actions/workflows/{run['workflow_id']}/runs?{query}")).get("workflow_runs", [])
 
@@ -350,6 +357,8 @@ def self_test() -> None:
     check("other workflow", "none", full_run(name="Frontend", path=".github/workflows/frontend.yml"), [])
     check("newer push", "none", full_run(event="push", head_branch="main"), [],
           newer=[{"id": 100, "created_at": "2026-11-09T17:57:45Z"}, {"id": 101, "created_at": "2026-11-09T18:05:00Z"}])
+    assert shares_group({"event": "workflow_dispatch", "head_branch": "ci/x"}) and shares_group({"event": "push", "head_branch": "main"})
+    assert not shares_group({"event": "workflow_dispatch", "head_branch": "main"}), "a release check on main is never cancelled"
     check("only older runs", "all", full_run(event="push", head_branch="main"), [],
           newer=[{"id": 99, "created_at": "2026-11-09T17:00:00Z"}, {"id": 100, "created_at": "2026-11-09T17:57:45Z"}])
 

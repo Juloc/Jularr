@@ -25,11 +25,12 @@ on:
 permissions:
   contents: read
 
-# Newer commits supersede older runs of the same branch or PR (a failing or obsolete run
-# stops using runners). A manual release verification run is never cancelled by this workflow.
+# Newer commits supersede older runs of the same branch or PR, and a newer manual run of a branch supersedes the
+# older one (a failing or obsolete run stops using runners). A manual run on main or a tag is a release check
+# (release.yml needs a green Backend Full of the tagged commit): it has a group of its own and is never cancelled.
 concurrency:
-  group: backend-full-${{ github.event_name == 'workflow_dispatch' && github.run_id || (github.event.pull_request.number || github.ref) }}
-  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
+  group: backend-full-${{ github.event_name == 'workflow_dispatch' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')) && github.run_id || (github.event.pull_request.number || github.ref) }}
+  cancel-in-progress: true
 
 env:
   JULARR_TEST_DB: Host=127.0.0.1;Port=15433;Username=jularr_test;Password=isolated-test-password;Database=jularr_test_admin
