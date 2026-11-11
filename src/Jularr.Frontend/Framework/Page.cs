@@ -109,6 +109,13 @@ namespace Jularr.Frontend.Framework
                     _error = ServiceError.Describe(exception, HttpContext, HttpContext.RequestServices.GetRequiredService<ILogger<JularrPage>>());
                     Response.StatusCode = _error.StatusCode;
                 }
+
+                // A busy database is also said in the hint at the bottom of a script's action: its form may not show the failure.
+                if (_error.Code == "database_busy" && Request.Headers.ContainsKey("HX-Request"))
+                {
+                    var text = HttpContext.RequestServices.GetRequiredService<UiText>()[_error.ResourceKey];
+                    Response.Headers["HX-Trigger"] = JsonSerializer.Serialize(new Dictionary<string, object> { ["jularr:hint"] = new { text, failed = true } });
+                }
             }
 
             PreparePage();

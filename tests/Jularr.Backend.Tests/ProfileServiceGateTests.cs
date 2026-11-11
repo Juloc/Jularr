@@ -18,6 +18,8 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Hosting.Internal;
 using Microsoft.Extensions.Options;
 using Fixture = Jularr.Backend.Tests.ProfileReferenceVerticalTests.ProfileFixture;
 
@@ -246,7 +248,7 @@ namespace Jularr.Backend.Tests
             using var scope = services.CreateScope();
             SetPrincipal(scope.ServiceProvider, fixture.SessionPublicId, fixture.SessionToken);
             var gate = new AuthorizationChangingGate(scope.ServiceProvider.GetRequiredService<IServiceGate>(), fixture, mutation);
-            var rename = new ServiceRuntime(fixture.Database, gate, new ServiceTimings(TimeProvider.System)).Create<UpdateProfileV1>();
+            var rename = new ServiceRuntime(new SqlDatabase(fixture.Database), gate, new ServiceTimings(TimeProvider.System)).Create<UpdateProfileV1>();
 
             await Assert.ThrowsExactlyAsync<UnauthorizedAccessException>(() => rename.ExecuteAsync<UpdateResult>(
                 new UpdateProfileParametersV1(fixture.ProfileAId), new UpdateProfileDataV1("Denied")));
@@ -358,6 +360,7 @@ namespace Jularr.Backend.Tests
         {
             var services = new ServiceCollection();
             services.AddLogging();
+            services.AddSingleton<IHostApplicationLifetime, ApplicationLifetime>();
             services.AddJularrServices(fixture.Database, typeof(ServiceRuntime).Assembly);
             return services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
         }

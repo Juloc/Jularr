@@ -42,6 +42,7 @@ namespace Jularr.Backend.Service.Core
         protected Type ResultType => Current.ResultType;
         protected CancellationToken CancellationToken => Current.CancellationToken;
         protected PageRequest Page => Current.Page ?? throw new InvalidOperationException("This invocation has no PageRequest.");
+        protected object? Prepared => Current.Prepared;
 
         protected Service()
         {
@@ -65,6 +66,10 @@ namespace Jularr.Backend.Service.Core
         protected virtual Task<IServiceOutput> OnUpdate() => throw new InvalidOperationException("The Update hook is not implemented.");
         protected virtual Task<IServiceOutput> OnDelete() => throw new InvalidOperationException("The Delete hook is not implemented.");
         protected virtual Task<IServiceOutput> OnExecute() => throw new InvalidOperationException("The Execute hook is not implemented.");
+
+        // Runs after the caller's permission check, before ValidatePermissions, the module check and the transaction, for slow work outside the database
+        // (another server, the NAS). It reads only in short read-only batches, which recheck access and modules; its result is Prepared in the hook.
+        protected virtual Task<object?> OnPrepareAsync() => Task.FromResult<object?>(null);
 
         // Runs once the service's writes are committed: in-memory state that follows them changes only then.
         protected virtual void OnCommitted()
@@ -125,6 +130,7 @@ namespace Jularr.Backend.Service.Core
             catch (Exception exception) when (exception is not OperationCanceledException && ServiceError.FromException(exception).StatusCode >= 500)
             {
                 failed = true;
+                Runtime.ReportDatabaseLimit(Area + "/" + GetType().Name, exception);
                 throw;
             }
             finally
@@ -164,60 +170,69 @@ namespace Jularr.Backend.Service.Core
             // Verify caller and permission.
             var (caller, permission) = await RequireCallerAsync(parameters, resultType, cancellationToken);
 
-            // Own the transaction boundary.
+            // Own the SQL context; code further down sees whether its transaction is open.
             await using var sql = Runtime.CreateSqlContext();
+            TransactionMarker.Mark(sql, Area + "/" + GetType().Name);
+            var context = new LogicContext(sql);
             var isolation = GetTransaction(parameters);
             var needsTransaction = definition.OperationType != ServiceOperationType.Execute || isolation.HasValue;
-
-            if (needsTransaction)
-            {
-                var mode = definition.OperationType == ServiceOperationType.Read ? SqlAccessMode.ReadOnly : SqlAccessMode.ReadWrite;
-                if (mode == SqlAccessMode.ReadOnly)
-                {
-                    sql.PrepareReadTransaction(isolation ?? IsolationLevel.ReadCommitted);
-                }
-                else
-                {
-                    await sql.BeginAsync(mode, isolation ?? IsolationLevel.ReadCommitted, cancellationToken);
-                }
-            }
-
             var canMutate = definition.OperationType != ServiceOperationType.Read;
-            var context = new LogicContext(sql);
 
-            if (canMutate && needsTransaction)
+            // Short batches recheck access: an Execute service's for its whole run, any other's only to read while it prepares.
+            context.SetTransactionalAccessCheck(async (logic, mode, token) =>
             {
-                await Runtime.Gate.RequireTransactionalAccessAsync(caller, permission, context, cancellationToken);
-            }
-            else if (definition.OperationType == ServiceOperationType.Execute)
-            {
-                // Recheck access per batch.
-                context.SetTransactionalAccessCheck(async (logic, mode, token) =>
+                if (needsTransaction && mode != SqlAccessMode.ReadOnly)
                 {
-                    await Runtime.Gate.RequireTransactionalAccessAsync(caller, permission, logic, token, mode);
-                    if (modules.Mode != ModuleRequirementMode.None)
-                    {
-                        await Runtime.Gate.RequireModulesAsync(modules, logic, mode == SqlAccessMode.ReadWrite, token);
-                    }
-                });
-            }
+                    throw new InvalidOperationException("A service with one transaction prepares by reading only.");
+                }
 
-            // Keep authorization lock ordering.
-            if (needsTransaction || modules.Mode == ModuleRequirementMode.None)
-            {
-                await Runtime.Gate.RequireModulesAsync(modules, context, canMutate, cancellationToken);
-            }
-            else
-            {
-                // Authorize before external work.
-                await context.ExecuteBatchAsync((_, _) => Task.FromResult(true), cancellationToken, SqlAccessMode.ReadOnly);
-            }
+                await Runtime.Gate.RequireTransactionalAccessAsync(caller, permission, logic, token, mode);
+                if (modules.Mode != ModuleRequirementMode.None)
+                {
+                    await Runtime.Gate.RequireModulesAsync(modules, logic, mode == SqlAccessMode.ReadWrite, token);
+                }
+            });
 
             // Bind this invocation only.
             var previous = _invocation.Value;
-            _invocation.Value = new Invocation(parameters, data, resultType, caller, context, cancellationToken, page);
+            var invocation = new Invocation(parameters, data, resultType, caller, context, cancellationToken, page);
+            _invocation.Value = invocation;
             try
             {
+                // Work outside the database comes before the transaction.
+                invocation.Prepared = await OnPrepareAsync();
+                cancellationToken.ThrowIfCancellationRequested();
+
+                // Own the transaction boundary.
+                if (needsTransaction)
+                {
+                    var mode = definition.OperationType == ServiceOperationType.Read ? SqlAccessMode.ReadOnly : SqlAccessMode.ReadWrite;
+                    if (mode == SqlAccessMode.ReadOnly)
+                    {
+                        sql.PrepareReadTransaction(isolation ?? IsolationLevel.ReadCommitted);
+                    }
+                    else
+                    {
+                        await sql.BeginAsync(mode, isolation ?? IsolationLevel.ReadCommitted, cancellationToken);
+                    }
+                }
+
+                if (canMutate && needsTransaction)
+                {
+                    await Runtime.Gate.RequireTransactionalAccessAsync(caller, permission, context, cancellationToken);
+                }
+
+                // Keep authorization lock ordering.
+                if (needsTransaction || modules.Mode == ModuleRequirementMode.None)
+                {
+                    await Runtime.Gate.RequireModulesAsync(modules, context, canMutate, cancellationToken);
+                }
+                else
+                {
+                    // Authorize before external work.
+                    await context.ExecuteBatchAsync((_, _) => Task.FromResult(true), cancellationToken, SqlAccessMode.ReadOnly);
+                }
+
                 await ValidatePermissions(parameters);
                 cancellationToken.ThrowIfCancellationRequested();
                 var result = await (definition.OperationType switch
@@ -282,7 +297,10 @@ namespace Jularr.Backend.Service.Core
         }
 
         private sealed record ServiceDefinition(ServiceOperationType OperationType, HashSet<Type> ResultTypes, Type DefaultResultType);
-        private sealed record Invocation(TParameters Parameters, TData Data, Type ResultType, ServiceCaller Caller, LogicContext Context, CancellationToken CancellationToken, PageRequest? Page);
+        private sealed record Invocation(TParameters Parameters, TData Data, Type ResultType, ServiceCaller Caller, LogicContext Context, CancellationToken CancellationToken, PageRequest? Page)
+        {
+            public object? Prepared { get; set; }
+        }
     }
 
     public abstract class UserService<TParameters, TData> : Service<TParameters, TData>

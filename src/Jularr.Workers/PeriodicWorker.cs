@@ -33,6 +33,9 @@ namespace Jularr.Workers
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
+            // The host's stop ends the waits and the passes at once, not only this worker's own stop, which comes after the other workers'.
+            using var stop = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken, Runner.Stopping);
+            stoppingToken = stop.Token;
             using var timer = new PeriodicTimer(_interval, Time);
             var isRunning = _startDelay <= TimeSpan.Zero || await WaitAsync(async token =>
             {

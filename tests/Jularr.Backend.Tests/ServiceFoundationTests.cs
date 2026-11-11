@@ -5,6 +5,7 @@ using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Service.Core;
 using Jularr.Backend.Tests.Infrastructure;
 using Jularr.Backend.Data;
+using Microsoft.Extensions.Logging;
 using Npgsql;
 
 namespace Jularr.Backend.Tests
@@ -25,7 +26,7 @@ namespace Jularr.Backend.Tests
         {
             await using var database = CreateDataSource();
             var gate = new TestGate();
-            var runtime = new ServiceRuntime(database, gate, new ServiceTimings(TimeProvider.System));
+            var runtime = new ServiceRuntime(new SqlDatabase(database), gate, new ServiceTimings(TimeProvider.System));
             var service = runtime.Create(new AccountReadService());
             runtime.ValidateAll([service]);
 
@@ -41,7 +42,7 @@ namespace Jularr.Backend.Tests
         {
             await using var database = CreateDataSource();
             var gate = new TestGate { BlockModule = true };
-            var service = new ServiceRuntime(database, gate, new ServiceTimings(TimeProvider.System)).Create(new AccountReadService());
+            var service = new ServiceRuntime(new SqlDatabase(database), gate, new ServiceTimings(TimeProvider.System)).Create(new AccountReadService());
 
             await Assert.ThrowsExactlyAsync<InvalidOperationException>(
                 () => service.ExecuteAsync<AccountResult>(new AccountParameters(5)));
@@ -54,7 +55,7 @@ namespace Jularr.Backend.Tests
         {
             await using var database = CreateDataSource();
             var gate = new TestGate();
-            var service = new ServiceRuntime(database, gate, new ServiceTimings(TimeProvider.System)).Create(new AccountReadService());
+            var service = new ServiceRuntime(new SqlDatabase(database), gate, new ServiceTimings(TimeProvider.System)).Create(new AccountReadService());
 
             await Assert.ThrowsExactlyAsync<InvalidOperationException>(
                 () => service.ExecuteAsync<PrivateAccountResult>(new AccountParameters(5)));
@@ -67,7 +68,7 @@ namespace Jularr.Backend.Tests
         {
             await using var database = CreateDataSource();
             var gate = new TestGate();
-            var service = new ServiceRuntime(database, gate, new ServiceTimings(TimeProvider.System)).Create(new AccountListService());
+            var service = new ServiceRuntime(new SqlDatabase(database), gate, new ServiceTimings(TimeProvider.System)).Create(new AccountListService());
 
             await Assert.ThrowsExactlyAsync<ArgumentOutOfRangeException>(
                 () => service.ExecuteAsync<PageResult<AccountResult>>(new ListParameters(1, 25, (ListSort)255)));
@@ -83,7 +84,7 @@ namespace Jularr.Backend.Tests
         public async Task UserList_PageHook_IsEvaluatedOnceAndUsedBySql()
         {
             await using var database = CreateDataSource();
-            var service = new ServiceRuntime(database, new TestGate(), new ServiceTimings(TimeProvider.System)).Create(new AccountListService());
+            var service = new ServiceRuntime(new SqlDatabase(database), new TestGate(), new ServiceTimings(TimeProvider.System)).Create(new AccountListService());
 
             var result = await service.ExecuteAsync<PageResult<AccountResult>>(new ListParameters(2, 1, null));
 
@@ -104,7 +105,7 @@ namespace Jularr.Backend.Tests
             }
 
             var gate = new TestGate { Area = ServiceArea.Admin };
-            var service = new ServiceRuntime(database, gate, new ServiceTimings(TimeProvider.System)).Create(new AccountWriteService(new AccountWorkflowLogic()));
+            var service = new ServiceRuntime(new SqlDatabase(database), gate, new ServiceTimings(TimeProvider.System)).Create(new AccountWriteService(new AccountWorkflowLogic()));
 
             var error = await Assert.ThrowsExactlyAsync<PostgresException>(
                 () => service.ExecuteAsync<AccountResult>(new AccountParameters(5), new AccountData("test", Duplicate: true)));
@@ -129,7 +130,7 @@ namespace Jularr.Backend.Tests
             }
 
             var gate = new TestGate { Area = ServiceArea.System };
-            var service = new ServiceRuntime(database, gate, new ServiceTimings(TimeProvider.System)).Create(new SystemBatchService());
+            var service = new ServiceRuntime(new SqlDatabase(database), gate, new ServiceTimings(TimeProvider.System)).Create(new SystemBatchService());
 
             var error = await Assert.ThrowsExactlyAsync<PostgresException>(
                 () => service.ExecuteAsync<AccountResult>(new AccountParameters(9), new AccountData("batch")));
@@ -156,7 +157,7 @@ namespace Jularr.Backend.Tests
             }
 
             var gate = new TestGate { Area = ServiceArea.System, BlockSecondTransaction = true };
-            var service = new ServiceRuntime(database, gate, new ServiceTimings(TimeProvider.System)).Create(new SystemBatchService());
+            var service = new ServiceRuntime(new SqlDatabase(database), gate, new ServiceTimings(TimeProvider.System)).Create(new SystemBatchService());
 
             await Assert.ThrowsExactlyAsync<UnauthorizedAccessException>(
                 () => service.ExecuteAsync<AccountResult>(new AccountParameters(9), new AccountData("blocked")));
@@ -180,7 +181,7 @@ namespace Jularr.Backend.Tests
                 await setup.CommitAsync();
             }
             var gate = new TestGate { Area = ServiceArea.System };
-            var service = new ServiceRuntime(database, gate, new ServiceTimings(TimeProvider.System)).Create(new ReadBatchService(attemptMutation));
+            var service = new ServiceRuntime(new SqlDatabase(database), gate, new ServiceTimings(TimeProvider.System)).Create(new ReadBatchService(attemptMutation));
             await service.ExecuteAsync<AccountResult>(new AccountParameters(9), default(NoData));
 
             CollectionAssert.AreEqual(new[] { SqlAccessMode.ReadOnly, SqlAccessMode.ReadOnly, SqlAccessMode.ReadWrite }, gate.TransactionModes.ToArray());
@@ -194,7 +195,7 @@ namespace Jularr.Backend.Tests
         public async Task ReadService_CannotObtainLogicWriteCapability()
         {
             await using var database = CreateDataSource();
-            var service = new ServiceRuntime(database, new TestGate(), new ServiceTimings(TimeProvider.System)).Create(new ReadWithForbiddenLogicService());
+            var service = new ServiceRuntime(new SqlDatabase(database), new TestGate(), new ServiceTimings(TimeProvider.System)).Create(new ReadWithForbiddenLogicService());
 
             var result = await service.ExecuteAsync<AccountResult>(new AccountParameters(6));
             Assert.AreEqual("blocked", result.Name);
@@ -211,7 +212,7 @@ namespace Jularr.Backend.Tests
         {
             await using var database = CreateDataSource();
             var gate = new TestGate();
-            var service = new ServiceRuntime(database, gate, new ServiceTimings(TimeProvider.System)).Create(new HookReadService());
+            var service = new ServiceRuntime(new SqlDatabase(database), gate, new ServiceTimings(TimeProvider.System)).Create(new HookReadService());
 
             await Assert.ThrowsExactlyAsync<UnauthorizedAccessException>(
                 () => service.ExecuteAsync<AccountResult>(new AccountParameters(999)));
@@ -225,7 +226,7 @@ namespace Jularr.Backend.Tests
         public async Task OnRead_ConcurrentCalls_KeepInvocationStateIsolated()
         {
             await using var database = CreateDataSource();
-            var service = new ServiceRuntime(database, new TestGate(), new ServiceTimings(TimeProvider.System)).Create(new HookReadService());
+            var service = new ServiceRuntime(new SqlDatabase(database), new TestGate(), new ServiceTimings(TimeProvider.System)).Create(new HookReadService());
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
             var first = service.ExecuteAsync<AccountResult>(new AccountParameters(11), timeout.Token);
             var second = service.ExecuteAsync<AccountResult>(new AccountParameters(22), timeout.Token);
@@ -243,6 +244,103 @@ namespace Jularr.Backend.Tests
             CollectionAssert.AreEqual(new long[] { 11, 22 }, results.Select(result => result.AccountId).ToArray());
             Assert.AreEqual(2, service.HookCalls);
             Assert.ThrowsExactly<InvalidOperationException>(() => service.ReadBoundParameters());
+        }
+
+        [TestMethod]
+        public async Task Read_StatementTheServerCancels_IsDatabaseBusy_AndTheLogNamesServiceAndLane()
+        {
+            var connectionString = TestPostgres.ResolveConnectionString($"Data Source=service-foundation-{Guid.NewGuid():N}");
+            await using var database = new NpgsqlDataSourceBuilder(new NpgsqlConnectionStringBuilder(connectionString) { Options = "-c statement_timeout=100" }.ConnectionString).Build();
+            var logs = new ListLogger();
+            var service = new ServiceRuntime(new SqlDatabase(database, SqlLane.Worker), new TestGate(), new ServiceTimings(TimeProvider.System), logs).Create(new SleepService());
+
+            var cancelled = await Assert.ThrowsExactlyAsync<PostgresException>(() => service.ExecuteAsync<AccountResult>(new AccountParameters(5)));
+            Assert.AreEqual(PostgresErrorCodes.QueryCanceled, cancelled.SqlState);
+            Assert.AreEqual("database_busy", ServiceError.FromException(cancelled).Code);
+            Assert.AreEqual(503, ServiceError.FromException(cancelled).StatusCode);
+            var line = logs.Messages.Single();
+            Assert.IsTrue(line.Contains("User/SleepService", StringComparison.Ordinal) && line.Contains("jularr-worker", StringComparison.Ordinal) && line.Contains("57014", StringComparison.Ordinal), line);
+        }
+
+        [TestMethod]
+        public async Task Read_TransactionTheServerEndsWhileIdle_IsLoggedWithServiceAndLane()
+        {
+            var connectionString = TestPostgres.ResolveConnectionString($"Data Source=service-foundation-{Guid.NewGuid():N}");
+            await using var database = SqlDatabase.Create(connectionString, SqlLane.Worker, 2, TimeSpan.FromMilliseconds(200), SqlLanes.WorkerStatementTimeout);
+            var logs = new ListLogger();
+            var service = new ServiceRuntime(database, new TestGate(), new ServiceTimings(TimeProvider.System), logs).Create(new SleepService(idleBetween: true));
+
+            var ended = await Assert.ThrowsAsync<NpgsqlException>(() => service.ExecuteAsync<AccountResult>(new AccountParameters(5)));
+            Assert.AreEqual(500, ServiceError.FromException(ended).StatusCode);
+            var line = logs.Messages.Single();
+            Assert.IsTrue(line.Contains("User/SleepService", StringComparison.Ordinal) && line.Contains("jularr-worker", StringComparison.Ordinal) && line.Contains("25P03", StringComparison.Ordinal), line);
+        }
+
+        [TestMethod]
+        [DataRow(false)]
+        [DataRow(true)]
+        public async Task Read_PastTheLaneLimit_IsDatabaseBusyAtTheLimit_UnlessTheStatementHasItsOwn(bool ownLimit)
+        {
+            var connectionString = TestPostgres.ResolveConnectionString($"Data Source=service-foundation-{Guid.NewGuid():N}");
+            await using var database = SqlDatabase.Create(connectionString, SqlLane.Web, 2, SqlLanes.WebIdleInTransaction, TimeSpan.FromMilliseconds(300));
+            var service = new ServiceRuntime(database, new TestGate(), new ServiceTimings(TimeProvider.System))
+                .Create(new SleepService(statementTimeout: ownLimit ? TimeSpan.FromSeconds(5) : null));
+
+            if (ownLimit)
+            {
+                Assert.AreEqual("slept", (await service.ExecuteAsync<AccountResult>(new AccountParameters(5))).Name);
+                return;
+            }
+
+            // The server cancels at its limit; the client would wait five seconds longer.
+            var started = System.Diagnostics.Stopwatch.GetTimestamp();
+            var busy = await Assert.ThrowsExactlyAsync<PostgresException>(() => service.ExecuteAsync<AccountResult>(new AccountParameters(5)));
+            Assert.IsTrue(System.Diagnostics.Stopwatch.GetElapsedTime(started) < TimeSpan.FromSeconds(2));
+            Assert.AreEqual(503, ServiceError.FromException(busy).StatusCode);
+            Assert.AreEqual("database_busy", ServiceError.FromException(busy).Code);
+        }
+
+        private sealed class SleepService(bool idleBetween = false, TimeSpan? statementTimeout = null) : UserService<AccountParameters>
+        {
+            protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<AccountResult>()];
+
+            protected override ModuleRequirement GetInstanceModules(AccountParameters parameters) => ModuleRequirement.None;
+
+            protected override ServicePermission GetPermission(AccountParameters parameters, Type resultType) => new("account.read");
+
+            protected override async Task<IServiceOutput> OnRead()
+            {
+                // Waiting outside the database with the transaction open, or one statement that runs long.
+                if (idleBetween)
+                {
+                    await Context.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "SELECT 1" }, CancellationToken);
+                    await Task.Delay(TimeSpan.FromMilliseconds(600), CancellationToken);
+                    await Context.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "SELECT 1" }, CancellationToken);
+                }
+                else
+                {
+                    await Context.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "SELECT pg_sleep(0.6)::text", StatementTimeout = statementTimeout }, CancellationToken);
+                }
+
+                return new AccountResult(Parameters.AccountId, "slept");
+            }
+        }
+
+        private sealed class ListLogger : ILogger
+        {
+            public List<string> Messages { get; } = [];
+
+            public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+            public bool IsEnabled(LogLevel logLevel) => true;
+
+            public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+            {
+                lock (Messages)
+                {
+                    Messages.Add(formatter(state, exception));
+                }
+            }
         }
 
         private sealed class HookReadService : UserService<AccountParameters>
@@ -349,11 +447,215 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task TransactionMarker_IsSetWhileATransactionIsOpen_AndClearedBetweenBatchesAndAfterEndRead()
+        {
+            await using var database = CreateDataSource();
+            var runtime = new ServiceRuntime(new SqlDatabase(database), new TestGate { Area = ServiceArea.System }, new ServiceTimings(TimeProvider.System));
+
+            // A read opens its transaction with the first statement and gives it back early; SQL afterwards throws.
+            var read = runtime.Create(new MarkerReadService());
+            await read.ExecuteAsync<AccountResult>(new AccountParameters(1), default(NoData));
+            CollectionAssert.AreEqual(new string?[] { null, "System/MarkerReadService", null }, read.Seen);
+
+            // A write holds its transaction for the whole hook.
+            var write = runtime.Create(new MarkerWriteService());
+            await write.ExecuteAsync<AccountResult>(new AccountParameters(1), default(NoData));
+            CollectionAssert.AreEqual(new string?[] { "System/MarkerWriteService" }, write.Seen);
+
+            // An Execute service holds one only inside each batch.
+            var execute = runtime.Create(new MarkerExecuteService());
+            await execute.ExecuteAsync<AccountResult>(new AccountParameters(1), default(NoData));
+            CollectionAssert.AreEqual(new string?[] { null, "System/MarkerExecuteService", null }, execute.Seen);
+            Assert.IsNull(TransactionMarker.OpenTransactionOwner);
+        }
+
+        [TestMethod]
+        public async Task Prepare_RunsBeforeTheTransaction_ReadsInShortBatches_AndHandsItsResultToTheHook()
+        {
+            await using var database = CreateDataSource();
+            var gate = new TestGate { Area = ServiceArea.System };
+            var service = new ServiceRuntime(new SqlDatabase(database), gate, new ServiceTimings(TimeProvider.System)).Create(new PreparingWriteService(gate));
+
+            var result = await service.ExecuteAsync<AccountResult>(new AccountParameters(4), default(NoData));
+
+            Assert.AreEqual("prepared 7", result.Name);
+            CollectionAssert.AreEqual(new[] { "caller", "access", "prepare", "transaction", "transaction", "modules", "prepared" }, gate.Events.ToArray());
+            CollectionAssert.AreEqual(new[] { SqlAccessMode.ReadOnly, SqlAccessMode.ReadWrite }, gate.TransactionModes.ToArray());
+        }
+
+        [TestMethod]
+        public async Task ExternalCall_InsideATransaction_FailsInTests_AndIsLoggedOncePerServiceInProduction()
+        {
+            await using var database = CreateDataSource();
+            var runtime = new ServiceRuntime(new SqlDatabase(database), new TestGate { Area = ServiceArea.System }, new ServiceTimings(TimeProvider.System));
+            using var strict = new HttpClient(new ExternalCallGuard(true, new ListLogger()) { InnerHandler = new Answering() });
+
+            // Inside an update's transaction the call fails; between an Execute service's batches it goes ahead, inside one it fails.
+            var update = runtime.Create(new CallingService(strict, ServiceOperationType.Update));
+            var refused = await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => update.ExecuteAsync<AccountResult>(new AccountParameters(1), default(NoData)));
+            StringAssert.Contains(refused.Message, "external_call_in_transaction: System/CallingService");
+            var execute = runtime.Create(new CallingService(strict, ServiceOperationType.Execute));
+            Assert.AreEqual("called", (await execute.ExecuteAsync<AccountResult>(new AccountParameters(1), default(NoData))).Name);
+            Assert.AreEqual(1, execute.InsideBatchRefusals);
+
+            // A batch running beside the call on the same context (a periodic save) holds its transaction for its own call path only.
+            var beside = runtime.Create(new CallingService(strict, ServiceOperationType.Execute, besideABatch: true));
+            Assert.AreEqual("called", (await beside.ExecuteAsync<AccountResult>(new AccountParameters(1), default(NoData))).Name);
+
+            // Production lets it go ahead and logs it once for the service.
+            var logger = new ListLogger();
+            using var lenient = new HttpClient(new ExternalCallGuard(false, logger) { InnerHandler = new Answering() });
+            var logged = runtime.Create(new CallingService(lenient, ServiceOperationType.Update));
+            await logged.ExecuteAsync<AccountResult>(new AccountParameters(1), default(NoData));
+            await logged.ExecuteAsync<AccountResult>(new AccountParameters(1), default(NoData));
+            Assert.AreEqual(1, logger.Messages.Count(message => message.Contains("System/CallingService calls example.test", StringComparison.Ordinal)));
+        }
+
+        private sealed class Answering : HttpMessageHandler
+        {
+            protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
+                Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.OK));
+        }
+
+        private sealed class CallingService(HttpClient http, ServiceOperationType operation, bool besideABatch = false) : SystemService<AccountParameters, NoData>
+        {
+            public int InsideBatchRefusals { get; private set; }
+            protected override ServiceOperationType GetOperationType() => operation;
+            protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<AccountResult>()];
+            protected override ModuleRequirement GetInstanceModules(AccountParameters parameters) => ModuleRequirement.None;
+            protected override ServicePermission GetPermission(AccountParameters parameters, Type resultType) => new("account.update");
+
+            protected override async Task<IServiceOutput> OnUpdate()
+            {
+                (await http.GetAsync("https://example.test/", CancellationToken)).Dispose();
+                return new AccountResult(Parameters.AccountId, "called");
+            }
+
+            protected override async Task<IServiceOutput> OnExecute()
+            {
+                if (besideABatch)
+                {
+                    var inside = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                    var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                    var saving = Task.Run(() => Context.ExecuteBatchAsync(async (_, _) =>
+                    {
+                        inside.SetResult();
+                        await release.Task;
+                        return true;
+                    }, CancellationToken));
+                    await inside.Task;
+                    try
+                    {
+                        (await http.GetAsync("https://example.test/", CancellationToken)).Dispose();
+                    }
+                    finally
+                    {
+                        release.SetResult();
+                        await saving;
+                    }
+
+                    return new AccountResult(Parameters.AccountId, "called");
+                }
+
+                await Context.ExecuteBatchAsync(async (_, ct) =>
+                {
+                    await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => http.GetAsync("https://example.test/", ct));
+                    InsideBatchRefusals++;
+                    return true;
+                }, CancellationToken);
+                (await http.GetAsync("https://example.test/", CancellationToken)).Dispose();
+                return new AccountResult(Parameters.AccountId, "called");
+            }
+        }
+
+        private sealed class MarkerReadService : SystemService<AccountParameters, NoData>
+        {
+            public List<string?> Seen { get; } = [];
+            protected override ServiceOperationType GetOperationType() => ServiceOperationType.Read;
+            protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<AccountResult>()];
+            protected override ModuleRequirement GetInstanceModules(AccountParameters parameters) => ModuleRequirement.None;
+            protected override ServicePermission GetPermission(AccountParameters parameters, Type resultType) => new("account.read");
+
+            protected override async Task<IServiceOutput> OnRead()
+            {
+                Seen.Add(TransactionMarker.OpenTransactionOwner);
+                await Context.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "SELECT 1" }, CancellationToken);
+                Seen.Add(TransactionMarker.OpenTransactionOwner);
+                await Context.EndReadAsync(CancellationToken);
+                Seen.Add(TransactionMarker.OpenTransactionOwner);
+                await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => Context.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "SELECT 1" }, CancellationToken));
+                return new AccountResult(Parameters.AccountId, "read");
+            }
+        }
+
+        private sealed class MarkerWriteService : SystemService<AccountParameters, NoData>
+        {
+            public List<string?> Seen { get; } = [];
+            protected override ServiceOperationType GetOperationType() => ServiceOperationType.Update;
+            protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<AccountResult>()];
+            protected override ModuleRequirement GetInstanceModules(AccountParameters parameters) => ModuleRequirement.None;
+            protected override ServicePermission GetPermission(AccountParameters parameters, Type resultType) => new("account.update");
+
+            protected override async Task<IServiceOutput> OnUpdate()
+            {
+                Seen.Add(TransactionMarker.OpenTransactionOwner);
+                await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => Context.EndReadAsync(CancellationToken));
+                return new AccountResult(Parameters.AccountId, "written");
+            }
+        }
+
+        private sealed class MarkerExecuteService : SystemService<AccountParameters, NoData>
+        {
+            public List<string?> Seen { get; } = [];
+            protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
+            protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<AccountResult>()];
+            protected override ModuleRequirement GetInstanceModules(AccountParameters parameters) => ModuleRequirement.None;
+            protected override ServicePermission GetPermission(AccountParameters parameters, Type resultType) => new("account.system.execute");
+
+            protected override async Task<IServiceOutput> OnExecute()
+            {
+                Seen.Add(TransactionMarker.OpenTransactionOwner);
+                await Context.ExecuteBatchAsync((_, _) =>
+                {
+                    Seen.Add(TransactionMarker.OpenTransactionOwner);
+                    return Task.FromResult(true);
+                }, CancellationToken);
+                Seen.Add(TransactionMarker.OpenTransactionOwner);
+                return new AccountResult(Parameters.AccountId, "executed");
+            }
+        }
+
+        private sealed class PreparingWriteService(TestGate gate) : SystemService<AccountParameters, NoData>
+        {
+            protected override ServiceOperationType GetOperationType() => ServiceOperationType.Update;
+            protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<AccountResult>()];
+            protected override ModuleRequirement GetInstanceModules(AccountParameters parameters) => ModuleRequirement.None;
+            protected override ServicePermission GetPermission(AccountParameters parameters, Type resultType) => new("account.update");
+
+            protected override async Task<object?> OnPrepareAsync()
+            {
+                gate.Events.Add("prepare");
+                Assert.IsNull(TransactionMarker.OpenTransactionOwner);
+                Assert.ThrowsExactly<InvalidOperationException>(() => _ = Context.Sql);
+                var stored = await Context.ExecuteBatchAsync(async (ctx, ct) => (int)(await ctx.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "SELECT 7" }, ct))!,
+                    CancellationToken, SqlAccessMode.ReadOnly);
+                await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => Context.ExecuteBatchAsync((_, _) => Task.FromResult(true), CancellationToken));
+                return stored;
+            }
+
+            protected override Task<IServiceOutput> OnUpdate()
+            {
+                gate.Events.Add("prepared");
+                return Task.FromResult<IServiceOutput>(new AccountResult(Parameters.AccountId, "prepared " + (int)Prepared!));
+            }
+        }
+
+        [TestMethod]
         public async Task Execute_DisabledModule_NeverRunsOperationHook()
         {
             await using var database = CreateDataSource();
             var gate = new TestGate { Area = ServiceArea.System, BlockModule = true };
-            var service = new ServiceRuntime(database, gate, new ServiceTimings(TimeProvider.System)).Create(new SystemBatchService(requireModule: true));
+            var service = new ServiceRuntime(new SqlDatabase(database), gate, new ServiceTimings(TimeProvider.System)).Create(new SystemBatchService(requireModule: true));
 
             await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => service.ExecuteAsync<AccountResult>(new AccountParameters(9), new AccountData("blocked")));
             Assert.AreEqual(0, service.HookCalls);

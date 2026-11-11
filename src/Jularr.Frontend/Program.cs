@@ -29,6 +29,10 @@ builder.Services.AddSingleton<ShellNavigation>();
 builder.Services.AddSingleton<FrontendAssets>();
 builder.Services.AddJularrCompression();
 
+// A stop (an update, docker stop) ends within this budget: open requests finish, workers begin nothing new and cut a running step after a
+// short grace. compose.yaml gives the container a few seconds more before it is killed.
+builder.Services.Configure<HostOptions>(options => options.ShutdownTimeout = TimeSpan.FromSeconds(15));
+
 // The status page hands its addresses to the application at the moment the application's own server is about to bind them.
 var handover = new StartupHandover();
 handover.Install(builder);
@@ -73,7 +77,7 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts();
 }
 
-app.UseHttpsRedirection();
+app.UseJularrHttpsRedirection();
 app.UseResponseCompression();
 // EmulatorJS cores are .data files; pdf.js loads character maps, standard fonts and colour profiles.
 var contentTypes = new FileExtensionContentTypeProvider();
@@ -130,6 +134,7 @@ if (app.Environment.IsDevelopment())
     app.MapGet("/Development/Fail", Fail).AllowAnonymous();
 }
 
+app.MapJularrHealth();
 app.MapJularrServices();
 app.MapJularrLive();
 app.MapJularrPwa();

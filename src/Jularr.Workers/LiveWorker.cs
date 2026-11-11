@@ -1,3 +1,4 @@
+using Jularr.Backend.Data.Enums.Sql;
 using Jularr.Backend.Data.System.Live.V1;
 using Jularr.Backend.Service.Core;
 using Jularr.Backend.Service.System.Live.V1;
@@ -18,7 +19,8 @@ namespace Jularr.Workers
                 try
                 {
                     await changes.WaitForSubscribersAsync(stoppingToken);
-                    await using var scope = scopes.CreateAsyncScope();
+                    // It serves the open streams: the web lane.
+                    await using var scope = scopes.CreateAsyncScope(SqlLane.Web);
                     var version = await scope.ServiceProvider.GetRequiredService<ReadLiveVersionV1>().ExecuteAsync<LiveVersionV1>(new ReadLiveVersionParametersV1(), default, stoppingToken);
                     changes.Publish(version.Version, version.HasDownloads);
                     interval = LiveChanges.IntervalFor(version.HasDownloads, version.HasJobs);

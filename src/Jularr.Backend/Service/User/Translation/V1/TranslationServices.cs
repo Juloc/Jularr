@@ -24,6 +24,9 @@ namespace Jularr.Backend.Service.User.Translation.V1
 
         protected override async Task<IServiceOutput> OnRead()
         {
+            // Mozilla is asked after the module check gives its connection back.
+            await Context.EndReadAsync(CancellationToken);
+
             // A remote catalogue must never keep the Reader page waiting for the
             // HTTP client's long default timeout. No negative result is cached:
             // opening the Reader again can retry after Mozilla recovers.
@@ -61,7 +64,8 @@ namespace Jularr.Backend.Service.User.Translation.V1
 
         protected override async Task<IServiceOutput> OnRead()
         {
-            // The browser translates with these files; English bridges two other languages.
+            // The browser translates with these files; English bridges two other languages. Mozilla is asked after the module check gives its connection back.
+            await Context.EndReadAsync(CancellationToken);
             var route = await _files.RouteAsync(Parameters.SourceLanguage, Parameters.TargetLanguage, CancellationToken);
             return new BaseDataList<TranslationFileV1>([.. route.Select(entry => new TranslationFileV1(entry.Step, entry.File.FileType ?? "engine",
                 "/api/v1/translation/files/" + TranslationModels.FileName(entry.File), entry.Precision))]);
@@ -92,6 +96,8 @@ namespace Jularr.Backend.Service.User.Translation.V1
                 throw new KeyNotFoundException("Unknown translation file.");
             }
 
+            // A file not kept yet is downloaded after the module check gives its connection back.
+            await Context.EndReadAsync(CancellationToken);
             var path = await _files.PathAsync(Parameters.Name, CancellationToken);
             return new TranslationFileContentV1(File.OpenRead(path), Parameters.Name.EndsWith(".wasm", StringComparison.Ordinal) ? "application/wasm" : "application/octet-stream");
         }

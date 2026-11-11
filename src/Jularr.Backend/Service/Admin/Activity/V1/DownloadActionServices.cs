@@ -545,7 +545,9 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
                         CancellationToken);
                     return new DownloadSpeedLimitV1(settings.MaxBytesPerSecond);
                 case DownloadClientKind.Sabnzbd or DownloadClientKind.Qbittorrent when Parameters.AcquisitionConnectionId is { } id:
+                    // The client is asked after the read gives its connection back.
                     var connection = DownloadSpeedLimits.Require(await Context.ReadAcquisitionConnectionAsync(id, CancellationToken), Parameters.DownloadClientKindId.Value);
+                    await Context.EndReadAsync(CancellationToken);
                     try
                     {
                         return new DownloadSpeedLimitV1(Parameters.DownloadClientKindId == DownloadClientKind.Sabnzbd

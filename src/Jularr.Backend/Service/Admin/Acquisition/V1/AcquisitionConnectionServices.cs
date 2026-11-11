@@ -6,6 +6,7 @@ using Jularr.Backend.Data.Admin.Acquisition.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Enums.Service;
+using Jularr.Backend.Data.Enums.Sql;
 using Jularr.Backend.Data.Logic.Acquisition;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Acquisition;
@@ -178,6 +179,18 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
         protected override ModuleRequirement GetInstanceModules(CreateAcquisitionConnectionParametersV1 parameters) => ModuleRequirement.All("Acquisition");
         protected override ServicePermission GetPermission(CreateAcquisitionConnectionParametersV1 parameters, Type resultType) => new("acquisition.manage");
 
+        // The download client says where it writes before the transaction begins, once access and modules are checked.
+        protected override async Task<object?> OnPrepareAsync()
+        {
+            if (!AcquisitionConnectionInput.AsksForFolder(Data))
+            {
+                return null;
+            }
+
+            await Context.ExecuteBatchAsync((_, _) => Task.FromResult(true), CancellationToken, SqlAccessMode.ReadOnly);
+            return await AcquisitionConnectionInput.DiscoverCompleteFolderAsync(Data, null, _protector, _sabnzbd, _qbittorrent, CancellationToken);
+        }
+
         protected override async Task<IServiceOutput> OnCreate()
         {
             // OpenSubtitles downloads need its account.
@@ -186,8 +199,7 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                 throw new DataValidationException(Data.Username is null ? nameof(SaveAcquisitionConnectionDataV1.Username) : nameof(SaveAcquisitionConnectionDataV1.Password), "required");
             }
 
-            var detected = await AcquisitionConnectionInput.DiscoverCompleteFolderAsync(Data, null, _protector, _sabnzbd, _qbittorrent, CancellationToken);
-            var data = AcquisitionConnectionInput.Create(null, Data, _protector, detected);
+            var data = AcquisitionConnectionInput.Create(null, Data, _protector, (string?)Prepared);
             return new CreateAcquisitionConnectionResultV1(await Context.CreateAcquisitionConnectionAsync(data, CancellationToken));
         }
     }
@@ -211,20 +223,32 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
         protected override ModuleRequirement GetInstanceModules(AcquisitionConnectionParametersV1 parameters) => ModuleRequirement.All("Acquisition");
         protected override ServicePermission GetPermission(AcquisitionConnectionParametersV1 parameters, Type resultType) => new("acquisition.manage");
 
-        protected override async Task<IServiceOutput> OnUpdate()
+        // The download client says where it writes before the transaction begins; the short read also checks access and modules.
+        protected override async Task<object?> OnPrepareAsync()
         {
-            // This read is authorized by the service, but must not open a short write batch.
-            // Only a SAB connection with a stored secret needs its previous protected key.
-            AcquisitionConnectionData? stored = null;
-            if (Data.AcquisitionConnectionTypeId == AcquisitionConnectionType.Sabnzbd && Data.ApiKey is null && Data.RemotePath is null
-                && (Data.DownloadStorageMountId is not null || Data.LocalPath is not null))
+            if (!AcquisitionConnectionInput.AsksForFolder(Data))
             {
-                stored = await Context.ReadSql.ReadRequiredAsync<AcquisitionConnectionData>(
-                    AcquisitionConnectionLogic.ReadAcquisitionConnectionStatement(Parameters.AcquisitionConnectionId), CancellationToken);
+                return null;
             }
 
-            var detected = await AcquisitionConnectionInput.DiscoverCompleteFolderAsync(Data, stored, _protector, _sabnzbd, _qbittorrent, CancellationToken);
-            await Context.UpdateAcquisitionConnectionAsync(AcquisitionConnectionInput.Create(Parameters.AcquisitionConnectionId, Data, _protector, detected), CancellationToken);
+            // Only a SAB connection with a stored secret needs its previous protected key.
+            AcquisitionConnectionData? stored = null;
+            if (Data.AcquisitionConnectionTypeId == AcquisitionConnectionType.Sabnzbd && Data.ApiKey is null)
+            {
+                stored = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadSql.ReadRequiredAsync<AcquisitionConnectionData>(
+                    AcquisitionConnectionLogic.ReadAcquisitionConnectionStatement(Parameters.AcquisitionConnectionId), ct), CancellationToken, SqlAccessMode.ReadOnly);
+            }
+            else
+            {
+                await Context.ExecuteBatchAsync((_, _) => Task.FromResult(true), CancellationToken, SqlAccessMode.ReadOnly);
+            }
+
+            return await AcquisitionConnectionInput.DiscoverCompleteFolderAsync(Data, stored, _protector, _sabnzbd, _qbittorrent, CancellationToken);
+        }
+
+        protected override async Task<IServiceOutput> OnUpdate()
+        {
+            await Context.UpdateAcquisitionConnectionAsync(AcquisitionConnectionInput.Create(Parameters.AcquisitionConnectionId, Data, _protector, (string?)Prepared), CancellationToken);
             return new UpdateResult(true);
         }
     }
@@ -380,11 +404,14 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
     {
         public const string ProtectorPurpose = "Jularr.Acquisition.ApiKey.V1";
 
+        // Existing explicit API mappings remain valid; the regular UI no longer asks for a remote path.
+        public static bool AsksForFolder(SaveAcquisitionConnectionDataV1 data) => data.RemotePath is null && (data.DownloadStorageMountId is not null || data.LocalPath is not null)
+            && data.AcquisitionConnectionTypeId is AcquisitionConnectionType.Qbittorrent or AcquisitionConnectionType.Sabnzbd;
+
         public static async Task<string?> DiscoverCompleteFolderAsync(SaveAcquisitionConnectionDataV1 data, AcquisitionConnectionData? stored,
             IDataProtector protector, SabnzbdClient sabnzbd, QbittorrentClient qbittorrent, CancellationToken ct)
         {
-            // Existing explicit API mappings remain valid; the regular UI no longer asks for a remote path.
-            if (data.RemotePath is not null || data.DownloadStorageMountId is null && data.LocalPath is null) return null;
+            if (!AsksForFolder(data)) return null;
 
             if (data.AcquisitionConnectionTypeId == AcquisitionConnectionType.Qbittorrent)
             {

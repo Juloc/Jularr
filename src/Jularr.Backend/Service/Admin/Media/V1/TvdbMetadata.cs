@@ -20,9 +20,6 @@ namespace Jularr.Backend.Service.Admin.Media.V1
     {
         private readonly IDataProtector _protector = protection.CreateProtector(SaveProviderSecretV1.ProtectorPurpose);
 
-        public async Task<TvdbSession> ConnectAsync(LogicContext context, CancellationToken ct) =>
-            await LoginAsync(await context.ReadProviderCredentialAsync(new ProviderParameters("tvdb"), ct), ct);
-
         // For callers between batches: the key is read in its own short batch.
         public async Task<TvdbSession> OpenAsync(LogicContext context, CancellationToken ct) =>
             await LoginAsync(await context.ExecuteBatchAsync((ctx, token) => ctx.ReadProviderCredentialAsync(new ProviderParameters("tvdb"), token), ct, mode: SqlAccessMode.ReadOnly), ct);

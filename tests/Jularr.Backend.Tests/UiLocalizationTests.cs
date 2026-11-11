@@ -68,8 +68,8 @@ namespace Jularr.Backend.Tests
                 """);
             var time = new CatalogClock();
             using var cache = new UiLocalizationCache(time);
-            var runtime = new ServiceRuntime(fixture.Database,
-                new ServiceGate(new SessionAuthentication(fixture.Database), new HttpContextAccessor(), new UserActivity(TimeProvider.System)), new ServiceTimings(TimeProvider.System));
+            var runtime = new ServiceRuntime(new SqlDatabase(fixture.Database),
+                new ServiceGate(new SessionAuthentication(new SqlDatabase(fixture.Database)), new HttpContextAccessor(), new UserActivity(TimeProvider.System)), new ServiceTimings(TimeProvider.System));
             var service = runtime.Create(new ReadUiTextsV1(cache));
             var bundle = await service.ExecuteAsync<ReadUiTextsResultV1>(new ReadUiTextsParametersV1(5));
             Assert.AreEqual("Parent A", bundle["a"]);
@@ -97,8 +97,8 @@ namespace Jularr.Backend.Tests
             // A warm Public read needs no connection, but still applies canonical parameter validation.
             await using var unavailable = new NpgsqlDataSourceBuilder(
                 "Host=127.0.0.1;Port=1;Username=unused;Database=unused;Timeout=1").Build();
-            var offlineRuntime = new ServiceRuntime(unavailable,
-                new ServiceGate(new SessionAuthentication(unavailable), new HttpContextAccessor(), new UserActivity(TimeProvider.System)), new ServiceTimings(TimeProvider.System));
+            var offlineRuntime = new ServiceRuntime(new SqlDatabase(unavailable),
+                new ServiceGate(new SessionAuthentication(new SqlDatabase(unavailable)), new HttpContextAccessor(), new UserActivity(TimeProvider.System)), new ServiceTimings(TimeProvider.System));
             var offlineService = offlineRuntime.Create(new ReadUiTextsV1(cache));
             Assert.AreEqual("English C", (await offlineService.ExecuteAsync<ReadUiTextsResultV1>(new ReadUiTextsParametersV1(999)))["c"]);
             await Assert.ThrowsExactlyAsync<DataValidationException>(() =>
@@ -220,6 +220,7 @@ namespace Jularr.Backend.Tests
         {
             var services = new ServiceCollection();
             services.AddSingleton(new SqlDatabase(fixture.Database));
+            services.AddKeyedSingleton(SqlLane.Worker, new SqlDatabase(fixture.Database, SqlLane.Worker));
             services.AddJularrLocalization(resources, catalogs);
             // The fixture retains ownership of its data source; this provider is registration-only.
             using var provider = services.BuildServiceProvider();

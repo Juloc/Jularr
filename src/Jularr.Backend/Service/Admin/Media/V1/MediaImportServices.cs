@@ -63,6 +63,8 @@ namespace Jularr.Backend.Service.Admin.Media.V1
         protected override ServicePermission GetPermission(MediaImportEditionParametersV1 parameters, Type resultType) => new("media.manual.update");
         protected override async Task<IServiceOutput> OnRead()
         {
+            // Open Library is asked after the module check gives its connection back.
+            await Context.EndReadAsync(CancellationToken);
             var editions = await _books.ReadEditionsAsync(Parameters.WorkId, CancellationToken);
             return new MediaImportEditionsV1(new BaseDataList<MediaImportEditionV1>(editions
                 .OrderBy(edition => edition.Year ?? int.MaxValue).ThenBy(edition => edition.Title).Take(30)

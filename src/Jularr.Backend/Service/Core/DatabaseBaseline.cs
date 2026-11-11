@@ -303,6 +303,19 @@ namespace Jularr.Backend.Service.Core
             : version > 1 && version - 2 < _migrations.Count ? _migrations[version - 2].Name
             : "version " + version.ToString(global::System.Globalization.CultureInfo.InvariantCulture);
 
+        // The readiness probe: on a connection of its own (no lane's pool), within the limit, the database answers with this release's schema version.
+        internal async Task<bool> IsCurrentAsync(TimeSpan limit, CancellationToken ct)
+        {
+            var seconds = Math.Max(1, (int)Math.Ceiling(limit.TotalSeconds));
+            var probe = new NpgsqlConnectionStringBuilder(_connectionString) { Pooling = false, Timeout = seconds, CommandTimeout = seconds, ApplicationName = "jularr-health" };
+            using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            deadline.CancelAfter(limit);
+            await using var connection = new NpgsqlConnection(probe.ConnectionString);
+            await connection.OpenAsync(deadline.Token);
+            await using var version = new NpgsqlCommand("SELECT max(\"Version\") FROM \"DatabaseSchemaVersions\";", connection);
+            return await version.ExecuteScalarAsync(deadline.Token) is int installed && installed == 1 + _migrations.Count;
+        }
+
         private async Task<int> ReadVersionAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, CancellationToken ct)
         {
             await using var versions = new NpgsqlCommand("SELECT \"Version\", \"Fingerprint\" FROM \"DatabaseSchemaVersions\" ORDER BY \"Version\";", connection, transaction);

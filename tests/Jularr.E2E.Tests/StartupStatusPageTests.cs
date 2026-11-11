@@ -1,3 +1,4 @@
+using System.Net;
 using System.Text.RegularExpressions;
 using Microsoft.Playwright;
 using Npgsql;
@@ -55,6 +56,10 @@ namespace Jularr.E2E.Tests
                         await Assertions.Expect(page.Locator("[data-startup-elapsed]")).ToContainTextAsync("Läuft seit");
                         phases.Add(await page.Locator("[data-startup-phase]").GetAttributeAsync("data-startup-phase") ?? "");
 
+                        // The container's probes: alive, not ready while the backup runs.
+                        Assert.AreEqual(HttpStatusCode.OK, await ProbeAsync(instance, "health/live"));
+                        Assert.AreEqual(HttpStatusCode.ServiceUnavailable, await ProbeAsync(instance, "health/ready"));
+
                         // Phone, tablet and desktop: nothing runs wider than the screen.
                         foreach (var (name, width, height) in new[] { ("phone", 375, 812), ("tablet", 768, 1024), ("desktop", 1280, 800) })
                         {
@@ -71,6 +76,8 @@ namespace Jularr.E2E.Tests
 
                 var final = await session!.Page.GotoAsync("/");
                 Assert.AreEqual(200, final!.Status);
+                Assert.AreEqual(HttpStatusCode.OK, await ProbeAsync(jularr, "health/ready"));
+                Assert.AreEqual(HttpStatusCode.OK, await ProbeAsync(jularr, "health/live"));
                 Assert.AreEqual(0, await session.Page.Locator("[data-startup-phase]").CountAsync());
                 CollectionAssert.Contains(phases, "backingup");
                 Assert.AreEqual(1, Directory.GetDirectories(backups).Length, "The update's backup is missing.");
@@ -84,6 +91,13 @@ namespace Jularr.E2E.Tests
 
                 Directory.Delete(folder, true);
             }
+        }
+
+        private static async Task<HttpStatusCode> ProbeAsync(JularrInstance instance, string path)
+        {
+            using var http = new HttpClient { BaseAddress = instance.Address, Timeout = TimeSpan.FromSeconds(10) };
+            using var response = await http.GetAsync(path);
+            return response.StatusCode;
         }
 
         private static async Task WaitForPhaseAsync(IPage page, string phase)

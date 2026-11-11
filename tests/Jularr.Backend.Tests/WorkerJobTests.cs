@@ -6,10 +6,14 @@ using Jularr.Backend.Data.Admin.Activity.V1;
 using Jularr.Backend.Data.Admin.Worker.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Operation;
+using Jularr.Backend.Data.Enums.Sql;
 using Jularr.Backend.Data.Enums.Worker;
 using Jularr.Backend.Data.Logic.Worker;
+using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Service.Core;
 using Jularr.Workers;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Host = Jularr.Backend.Tests.AuthenticationTests.Host;
 
@@ -436,6 +440,79 @@ namespace Jularr.Backend.Tests
             Assert.IsTrue(log.Any(message => message.Contains("maintenance ignores its time limit", StringComparison.Ordinal)), string.Join(" | ", log));
         }
 
+        // A stop (an update, docker stop): nothing new begins, a round that ends within the grace keeps its result, one that does not is cancelled
+        // after the grace and named in the log, never kept as a failure.
+        [TestMethod]
+        public async Task Stopping_StartsNoNewRound_CancelsStepAfterGrace()
+        {
+            var time = new ManualTime(Start);
+            await using var host = await Host.CreateAsync(library: true, services: services => services.AddSingleton<TimeProvider>(time));
+            var runner = host.Services.GetRequiredService<WorkerJobRunner>();
+            time.Advance(TimeSpan.FromMinutes(5));
+
+            // A busy pass whose round listens to its token, and a round that comes back on its own.
+            var rounds = 0;
+            var listening = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var busy = runner.RunWhileBusyAsync("covers", async (_, token) =>
+            {
+                rounds++;
+                listening.TrySetResult();
+                await Task.Delay(Timeout.Infinite, token);
+                return true;
+            }, TimeSpan.Zero, default);
+            var finishing = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var quick = runner.RunAsync("catalog", async (_, _) =>
+            {
+                finishing.TrySetResult();
+                await release.Task;
+            }, default);
+            await Task.WhenAll(listening.Task, finishing.Task).WaitAsync(TimeSpan.FromSeconds(10));
+
+            host.Services.GetRequiredService<Microsoft.Extensions.Hosting.IHostApplicationLifetime>().StopApplication();
+            Assert.IsTrue(runner.Stopping.IsCancellationRequested);
+
+            // No pass begins after the stop.
+            var isStarted = false;
+            Assert.IsNull(await runner.RunAsync("discoverFeeds", (_, _) =>
+            {
+                isStarted = true;
+                return Task.CompletedTask;
+            }, default));
+            Assert.IsFalse(isStarted);
+
+            // Within the grace the running rounds go on; the one that comes back keeps its result.
+            await time.WaitForTimerAsync(WorkerJobRunner.ShutdownGrace);
+            time.Advance(WorkerJobRunner.ShutdownGrace - TimeSpan.FromSeconds(1));
+            Assert.IsFalse(busy.IsCompleted, "A running round is not cancelled at the stop itself.");
+            release.SetResult();
+            Assert.AreEqual(WorkerJobResultType.Succeeded, await quick.WaitAsync(TimeSpan.FromSeconds(10)));
+            Assert.AreEqual((short)1, await host.ScalarAsync("SELECT \"LastResultTypeId\" FROM \"WorkerJobs\" WHERE \"Key\" = 'catalog'"));
+
+            // After the grace the other is cancelled, starts no further round, is named in the log and is no failure.
+            time.Advance(TimeSpan.FromSeconds(1));
+            Assert.IsNull(await busy.WaitAsync(TimeSpan.FromSeconds(10)));
+            Assert.AreEqual(1, rounds);
+            Assert.IsNull(await host.ScalarAsync("SELECT \"LastErrorKey\" FROM \"WorkerJobs\" WHERE \"Key\" = 'covers'"));
+            Assert.AreEqual(0L, await OpenNoticesAsync(host, "covers"));
+            var log = host.Services.GetRequiredService<RecentLogs>().Read(100).Where(entry => entry.Category == typeof(WorkerJobRunner).FullName).Select(entry => entry.Message).ToArray();
+            Assert.IsTrue(log.Any(message => message.StartsWith("covers was cancelled", StringComparison.Ordinal)), string.Join(" | ", log));
+            Assert.IsFalse(log.Any(message => message.StartsWith("catalog", StringComparison.Ordinal)), string.Join(" | ", log));
+        }
+
+        // The operation lanes claim nothing once the stop began; the queued operation waits for the next start.
+        [TestMethod]
+        public async Task Stopping_ClaimsNoOperation()
+        {
+            await using var host = await Host.CreateAsync(library: true);
+            await host.Fixture.RunSqlAsync("INSERT INTO \"Operations\" (\"OperationTypeId\", \"OperationStatusTypeId\") VALUES (" + (short)OperationType.Backup + ", 1)");
+            using var stopped = new CancellationTokenSource();
+            await stopped.CancelAsync();
+            await using var scope = host.Services.CreateAsyncScope();
+            Assert.IsFalse(await OperationWorker.RunNextAsync(scope.ServiceProvider, Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance, OperationType.Backup, CancellationToken.None, stopped.Token));
+            Assert.AreEqual((short)1, await host.ScalarAsync("SELECT \"OperationStatusTypeId\" FROM \"Operations\" WHERE \"OperationTypeId\" = " + (short)OperationType.Backup));
+        }
+
         [TestMethod]
         public async Task Runner_ABusyPass_IsKeptAtItsLimit_AndGoesOnAtTheNextTick()
         {
@@ -505,6 +582,35 @@ namespace Jularr.Backend.Tests
             Assert.IsTrue(jobs.RequestRun("catalog"));
             Assert.AreEqual(WorkerJobResultType.Failed, await runner.RunAsync("catalog", Fail, default));
             Assert.AreEqual(time.Now.UtcDateTime.Ticks, ((DateTime)(await host.ScalarAsync("SELECT \"LastFinishedAt\" FROM \"WorkerJobs\" WHERE \"Key\" = 'catalog'"))!).Ticks);
+        }
+
+        [TestMethod]
+        public async Task Lanes_TheRunnerUsesTheWorkerPool_RequestsAndTheLiveLookTheWebPool()
+        {
+            await using var host = await Host.CreateAsync(library: true, endpoints: endpoints => endpoints.MapGet("/test/lane", async http => await http.Response.WriteAsync(await ApplicationNameAsync(http.RequestServices))));
+            var runner = host.Services.GetRequiredService<WorkerJobRunner>();
+            Assert.IsTrue(host.Services.GetRequiredService<WorkerJobs>().RequestRun("catalog"));
+
+            // A job's round runs without a request: the worker lane.
+            string? background = null;
+            Assert.AreEqual(WorkerJobResultType.Succeeded, await runner.RunAsync("catalog", async (services, token) => background = await ApplicationNameAsync(services), default));
+            Assert.AreEqual("jularr-worker", background);
+
+            // The live look serves the open streams and names the web lane; a request is on it by itself.
+            await using (var live = host.Services.GetRequiredService<IServiceScopeFactory>().CreateAsyncScope(SqlLane.Web))
+            {
+                Assert.AreEqual("jularr-web", await ApplicationNameAsync(live.ServiceProvider));
+            }
+
+            using var request = await host.SendAsync(HttpMethod.Get, "/test/lane");
+            Assert.AreEqual("jularr-web", await request.Content.ReadAsStringAsync());
+        }
+
+        private static async Task<string> ApplicationNameAsync(IServiceProvider services)
+        {
+            await using var sql = services.GetRequiredService<ServiceRuntime>().CreateSqlContext();
+            await sql.BeginAsync(SqlAccessMode.ReadOnly);
+            return (string)(await sql.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "SELECT current_setting('application_name')" }))!;
         }
 
         private static async Task<long> OpenNoticesAsync(Host host, string key) =>

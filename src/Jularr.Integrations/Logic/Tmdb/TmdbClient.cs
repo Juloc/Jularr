@@ -6,6 +6,7 @@ using System.Runtime.CompilerServices;
 using System.Text.Json;
 using Jularr.Integrations.Data.Common;
 using Jularr.Integrations.Data.Tmdb;
+using Jularr.Integrations.Logic.Common;
 
 namespace Jularr.Integrations.Logic.Tmdb
 {
@@ -224,10 +225,14 @@ namespace Jularr.Integrations.Logic.Tmdb
         // TMDB's daily list of every film id with its popularity: public, gzip, one JSON object per line; published around 08:00 UTC.
         private static readonly Uri ExportHost = new("https://files.tmdb.org/p/exports/");
 
+        // The list is read while its batches are stored, which takes far longer than an answer.
+        private static readonly ExternalCallLimits ExportLimits = ExternalCallLimits.Download(15, TimeSpan.FromHours(2));
+
         public async IAsyncEnumerable<TmdbExportEntry> ReadMovieIdExportAsync(DateOnly day, [EnumeratorCancellation] CancellationToken ct)
         {
             var file = "movie_ids_" + day.ToString("MM_dd_yyyy", CultureInfo.InvariantCulture) + ".json.gz";
             using var request = new HttpRequestMessage(HttpMethod.Get, new Uri(ExportHost, file));
+            request.Options.Set(CallLimitHandler.OwnLimits, ExportLimits);
             HttpResponseMessage response;
             try
             {

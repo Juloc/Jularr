@@ -82,6 +82,10 @@ namespace Jularr.Backend.Service.Core
             ProviderUnavailableException => new(StatusCodes.Status503ServiceUnavailable, "provider_unavailable"),
             NasMountException storage => new(StatusCodes.Status503ServiceUnavailable, storage.Code),
             PostgresException { SqlState: PostgresErrorCodes.SerializationFailure or PostgresErrorCodes.DeadlockDetected } => new(StatusCodes.Status409Conflict, "concurrent_change"),
+
+            // A statement past its limit, a lock not granted in time or no free connection in the lane's pool.
+            PostgresException { SqlState: PostgresErrorCodes.QueryCanceled or PostgresErrorCodes.LockNotAvailable } => new(StatusCodes.Status503ServiceUnavailable, "database_busy"),
+            NpgsqlException { InnerException: TimeoutException } => new(StatusCodes.Status503ServiceUnavailable, "database_busy"),
             IOException => new(StatusCodes.Status503ServiceUnavailable, "storage_unavailable"),
             ServiceUnavailableException unavailable => new(StatusCodes.Status503ServiceUnavailable, unavailable.Code),
             ServiceGoneException gone => new(StatusCodes.Status410Gone, gone.Code),

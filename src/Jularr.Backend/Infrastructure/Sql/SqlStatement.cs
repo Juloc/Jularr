@@ -10,5 +10,8 @@ namespace Jularr.Backend.Infrastructure.Sql
 
         // Avoid compilation overhead for short reads; scoped to the operation's transaction.
         public bool DisableJit { get; set; }
+
+        // A known long statement's own server limit instead of its lane's; the next statement without one returns to the lane's.
+        public TimeSpan? StatementTimeout { get; set; }
     }
 }

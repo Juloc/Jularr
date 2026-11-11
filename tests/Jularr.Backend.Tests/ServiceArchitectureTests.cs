@@ -8,6 +8,8 @@ using Jularr.Backend.Data;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Service.Public.Localization.V1;
 using Jularr.Integrations.Logic.Plex;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Jularr.Backend.Tests
 {
@@ -93,6 +95,135 @@ namespace Jularr.Backend.Tests
                 .Where(file => Regex.IsMatch(File.ReadAllText(file), @"SELECT convert_from\([^)]*\)::jsonb AS value\s*\)"))
                 .Select(Path.GetFileName).ToArray();
             Assert.AreEqual(0, inlined.Length, "Parse stored JSON in a LATERAL (... OFFSET 0) in: " + string.Join(", ", inlined));
+        }
+
+        [TestMethod]
+        public void HttpClients_ComeFromAddClientOrTheDirectAllowlist()
+        {
+            // A direct client has a handler of its own that DI cannot give it, and bounds its calls itself.
+            var direct = new Dictionary<string, string>
+            {
+                ["VpnTunnels.cs"] = "asks for the public exit directly and through the tunnel process's own handler",
+                ["TorrentJob.cs"] = "announces to trackers through the torrent route's handler",
+                ["WireproxyTunnel.cs"] = "talks to the local wireproxy process on the loopback",
+                ["BrowserPackages.cs"] = "installs the browser package for the browser host, which is built without DI",
+                ["SourceBrowser.cs"] = "reads the local browser's debugging endpoint on the loopback"
+            };
+
+            var root = new DirectoryInfo(AppContext.BaseDirectory);
+            while (root.GetFiles("Jularr.sln").Length == 0)
+            {
+                root = root.Parent!;
+            }
+
+            var files = new[] { "Jularr.Backend", "Jularr.Integrations", "Jularr.Workers", "Jularr.Frontend" }
+                .SelectMany(project => Directory.EnumerateFiles(Path.Combine(root.FullName, "src", project), "*.cs", SearchOption.AllDirectories))
+                .Where(file => !file.Contains(Path.DirectorySeparatorChar + "obj" + Path.DirectorySeparatorChar, StringComparison.Ordinal)).ToArray();
+            var registrations = files.Sum(file => Regex.Matches(File.ReadAllText(file), @"\bAddHttpClient\b").Count);
+            Assert.AreEqual(1, registrations, "Register external clients only through ServiceApi.AddClient, which gives them their call limits.");
+
+            var unbounded = new List<string>();
+            foreach (var file in files)
+            {
+                foreach (Match creation in Regex.Matches(File.ReadAllText(file), @"new HttpClient\b([^;]*);"))
+                {
+                    var bounded = creation.Groups[1].Value.Contains("CallLimitHandler", StringComparison.Ordinal)
+                        || Regex.IsMatch(creation.Groups[1].Value, @"Timeout = (?!Timeout\.InfiniteTimeSpan)");
+                    if (!direct.ContainsKey(Path.GetFileName(file)) || !bounded)
+                    {
+                        unbounded.Add(Path.GetFileName(file));
+                    }
+                }
+            }
+
+            Assert.AreEqual(0, unbounded.Count, "Use AddClient, or allow the direct client with a reason and a timeout: " + string.Join(", ", unbounded));
+        }
+
+        [TestMethod]
+        public void ServicesWithOneTransaction_ReachOnlyGuardedExternalClients()
+        {
+            // Clients that talk to another machine past the transaction guard of AddClient; a service with one transaction may reach them for this reason.
+            var unguarded = new Dictionary<Type, string>
+            {
+                [typeof(Jularr.Integrations.Logic.Usenet.UsenetDownloader)] = "NNTP: downloads run in Execute jobs",
+                [typeof(Jularr.Integrations.Logic.Storage.SmbShares)] = "SMB: NAS file access is not HTTP and is not checked by this guard",
+                [typeof(Jularr.Integrations.Logic.Codex.CodexCli)] = "Codex CLI: a local process that asks the AI service; translations run in Execute jobs",
+                [typeof(VpnTunnels)] = "direct client through the tunnel process: VPN checks run in Execute services and jobs",
+                [typeof(Jularr.Backend.Service.Admin.Wanted.V1.TorrentJob)] = "direct tracker client: torrent passes run in Execute jobs",
+                [typeof(Jularr.Integrations.Logic.Network.WireproxyTunnel)] = "direct client to the local wireproxy process on the loopback",
+                [typeof(Jularr.Integrations.Logic.Browser.BrowserPackages)] = "direct client that installs the browser package: runs in Execute services",
+                [typeof(Jularr.Integrations.Logic.Browser.SourceBrowser)] = "direct client to the local browser on the loopback"
+            };
+            var external = new[] { typeof(HttpClient), typeof(System.Net.Sockets.Socket), typeof(System.Net.Sockets.TcpClient), typeof(System.Net.Sockets.NetworkStream) };
+
+            var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["JULARR_DB"] = "Host=127.0.0.1;Port=1;Database=none",
+                ["DataPath"] = Path.Combine(Path.GetTempPath(), "jularr-tests", Guid.NewGuid().ToString("N"))
+            }).Build();
+            var registrations = new ServiceCollection().AddJularrServices(configuration);
+            var guarded = registrations.Select(service => service.ServiceType).Where(TakesHttpClient).ToHashSet();
+            var types = new[] { typeof(ServiceApi).Assembly, typeof(PlexClient).Assembly }.SelectMany(assembly => assembly.GetTypes())
+                .Where(type => type is { IsClass: true, IsAbstract: false, IsGenericTypeDefinition: false }).ToArray();
+            var implementations = registrations.Where(service => !service.IsKeyedService).GroupBy(service => service.ServiceType)
+                .ToDictionary(group => group.Key, group => group.Select(service => service.ImplementationType ?? service.ImplementationInstance?.GetType()).OfType<Type>().ToArray());
+
+            var violations = new SortedSet<string>(StringComparer.Ordinal);
+            foreach (var service in types.Where(type => typeof(Service.Core.Service).IsAssignableFrom(type)))
+            {
+                var instance = System.Runtime.CompilerServices.RuntimeHelpers.GetUninitializedObject(service);
+                var operation = (ServiceOperationType)service.GetMethod("GetOperationType", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(instance, null)!;
+                if (operation == ServiceOperationType.Execute)
+                {
+                    continue;
+                }
+
+                // Every type its constructor reaches through DI.
+                var seen = new HashSet<Type>();
+                var pending = new Stack<Type>([service]);
+                while (pending.TryPop(out var type))
+                {
+                    if (!seen.Add(type))
+                    {
+                        continue;
+                    }
+
+                    var isExternal = TakesHttpClient(type) || type.GetFields(BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public).Any(field => external.Contains(field.FieldType)
+                        || field.FieldType.Namespace?.StartsWith("SMBLibrary", StringComparison.Ordinal) == true);
+                    if (isExternal && !guarded.Contains(type) && !unguarded.ContainsKey(type))
+                    {
+                        violations.Add(service.Name + " -> " + type.Name);
+                    }
+
+                    foreach (var parameter in type.GetConstructors(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).SelectMany(constructor => constructor.GetParameters()))
+                    {
+                        var dependency = parameter.ParameterType;
+                        if (dependency.IsGenericType && dependency.GetGenericTypeDefinition() is var definition
+                            && (definition == typeof(IEnumerable<>) || definition == typeof(Func<>) || definition == typeof(Lazy<>)))
+                        {
+                            dependency = dependency.GenericTypeArguments[0];
+                        }
+
+                        if (dependency.Namespace?.StartsWith("Jularr.", StringComparison.Ordinal) != true)
+                        {
+                            continue;
+                        }
+
+                        var concrete = implementations.TryGetValue(dependency, out var registered) && registered.Length > 0 ? registered
+                            : dependency.IsInterface || dependency.IsAbstract ? types.Where(dependency.IsAssignableFrom).ToArray() : [dependency];
+                        foreach (var next in concrete)
+                        {
+                            pending.Push(next);
+                        }
+                    }
+                }
+            }
+
+            Assert.AreEqual(0, violations.Count, "Register the client through AddClient, or allow it here with a reason: " + string.Join("; ", violations));
+            Assert.IsTrue(unguarded.Values.All(reason => reason.Length > 0));
+
+            static bool TakesHttpClient(Type type) => type.GetConstructors(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+                .Any(constructor => constructor.GetParameters().Any(parameter => parameter.ParameterType == typeof(HttpClient)));
         }
 
         [TestMethod]
