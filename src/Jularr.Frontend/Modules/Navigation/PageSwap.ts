@@ -83,6 +83,9 @@ export function stayHere(): void {
     staying = { x: window.scrollX, y: window.scrollY };
 }
 
+// True while a request shows the same page again (a typed search, an action): it keeps its page instead of a skeleton.
+export const isStaying = () => staying !== undefined;
+
 // Page styles arrive with the content; it stays invisible until they apply, at most briefly.
 function hideUntilStyled(content: HTMLElement): void {
     const pending = Array.from(content.querySelectorAll<HTMLLinkElement>('link[rel="stylesheet"]')).filter(link => !link.sheet);

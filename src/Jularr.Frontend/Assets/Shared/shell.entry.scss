@@ -86,6 +86,39 @@ h3 { font-size: 13px; font-weight: 780; line-height: 1.35; }
 .app-content { display: contents; }
 .app-content--loading { visibility: hidden; }
 
+// A page that takes longer than the reload budget (0.1 s): a thin bar runs at the top and the content gives way to a skeleton
+// of the page kind (Modules/Navigation/PageWait.ts). Grey blocks, also for sections that load after the page (DeferredSection).
+body[data-page-wait]::before {
+    content: "";
+    position: fixed;
+    z-index: var(--z-top);
+    inset: 0 0 auto;
+    height: 3px;
+    background: var(--accent);
+    transform-origin: left;
+    animation: page-wait 1.6s ease-out infinite;
+}
+#main-content[data-waiting-for] > :not(.page-skeleton) { display: none; }
+.skeleton-block {
+    display: block;
+    border-radius: var(--radius-small);
+    background: var(--surface-hover);
+    animation: skeleton-pulse 1.4s ease-in-out infinite;
+}
+.page-skeleton { display: grid; gap: 14px; }
+.page-skeleton--rows .page-skeleton__item { height: 52px; }
+.page-skeleton--covers { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+.page-skeleton--covers .page-skeleton__item { aspect-ratio: 2 / 3; border-radius: var(--radius-tile); }
+.deferred-section { display: grid; align-content: start; gap: 10px; }
+.deferred-section__skeleton { height: 100%; min-height: inherit; }
+.deferred-section__failed { margin: 0; color: var(--muted); }
+@keyframes page-wait { from { transform: scaleX(0); } 70% { transform: scaleX(.85); } to { transform: scaleX(.95); opacity: .4; } }
+@keyframes skeleton-pulse { 50% { opacity: .45; } }
+@media (prefers-reduced-motion: reduce) {
+    body[data-page-wait]::before { animation: none; transform: scaleX(.6); }
+    .skeleton-block { animation: none; }
+}
+
 .page-title { margin: 0 0 26px; font-size: clamp(24px, 3vw, 29px); }
 .ui-panel {
     padding: 20px;

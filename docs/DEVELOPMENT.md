@@ -80,6 +80,8 @@ The owner's local preview (`scripts/run-main-preview.ps1`) runs only `origin/mai
 - Use the design tokens (`src/Jularr.Frontend/Modules/Appearance/Theme.scss`, `Palette.ts`), never literal colours, radii, shadows or font sizes.
   Change a look in its token or the shared component, and reuse shared components instead of copying them.
 - No layout shifts: images have dimensions, script-only controls show through `@media (scripting: enabled)` and keep their room.
+- Speed budget: a page answers in 0.03 s server time, a part loaded afterwards in 0.1 s. A part that cannot is a `DeferredSection` (skeleton of
+  fixed height, loaded right after the page); a click always answers at once, and a page slower than 0.1 s shows the wait bar and a skeleton.
 
 ## UX rules (owner)
 

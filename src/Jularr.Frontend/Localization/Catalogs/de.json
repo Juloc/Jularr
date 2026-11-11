@@ -4262,6 +4262,14 @@
    "Try again",
    "Erneut versuchen"
   ],
+  "deferred.failed": [
+   "This part could not be loaded.",
+   "Dieser Teil konnte nicht geladen werden."
+  ],
+  "deferred.retry": [
+   "Try again",
+   "Erneut versuchen"
+  ],
   "discover.noResults": [
    "Nothing matches this search.",
    "Nichts passt zu dieser Suche."

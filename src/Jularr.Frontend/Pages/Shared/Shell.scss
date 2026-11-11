@@ -446,6 +446,9 @@ html[data-skin="original"] .sidebar-secondary {
 }
 .nav-link:hover { background-color: var(--surface-hover); }
 .nav-link.is-active { background-color: var(--accent-soft); color: var(--accent-text); }
+// The link just clicked is the current place at once, while its page loads.
+.nav-link.is-pending { background-color: var(--accent-soft); color: var(--accent-text); }
+.app-layout:has(.nav-link.is-pending) .nav-link.is-active:not(.is-pending) { background-color: transparent; color: inherit; }
 
 // The administration menu (the owner's proposal, variant B): a find field, then every group open under a thin line and a small name, an icon tile on each entry
 // (the current one in the accent), and a figure on the three entries whose work waits.
