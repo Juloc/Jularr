@@ -89,11 +89,12 @@ namespace Jularr.Backend.Tests
             File.WriteAllBytes(Path.Combine(folder.Path, "a.mkv"), Film);
             var store = new FakeSmbStore(folder.Path);
             var clock = new Clock();
+            // Every session lane runs on its own thread: count opens and closes atomically.
             var (connects, closes) = (0, 0);
             using var share = new SmbShare(() =>
             {
-                connects++;
-                return new SmbSession(store, () => closes++);
+                Interlocked.Increment(ref connects);
+                return new SmbSession(store, () => Interlocked.Increment(ref closes));
             }, clock);
             var files = new SmbStorageFiles(share, "");
             var ct = CancellationToken.None;
@@ -104,7 +105,7 @@ namespace Jularr.Backend.Tests
             var second = await files.OpenReadAsync("a.mkv", ct);
             Assert.AreEqual(0, first.ReadByte());
             Assert.AreEqual(0, second.ReadByte());
-            Assert.AreEqual((3, 3), (connects, share.OpenSessions));
+            Assert.AreEqual((3, 3), (Volatile.Read(ref connects), share.OpenSessions));
 
             // At most eight sessions; further files share the least busy one.
             var more = new List<Stream>();
@@ -142,7 +143,7 @@ namespace Jularr.Backend.Tests
             clock.Advance(TimeSpan.FromMinutes(16));
             await share.CloseIfIdleAsync(SmbShares.IdleTime);
             Assert.AreEqual(0, share.OpenSessions);
-            Assert.AreEqual(connects, closes);
+            Assert.AreEqual(Volatile.Read(ref connects), Volatile.Read(ref closes));
             Assert.IsNotNull(await files.GetAsync("a.mkv", ct));
         }
 
