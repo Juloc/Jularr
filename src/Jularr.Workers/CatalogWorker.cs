@@ -14,8 +14,12 @@ namespace Jularr.Workers
         {
             await Runner.RunAsync("discoverFeeds", (services, token) =>
                 services.GetRequiredService<RefreshDiscoverFeedsV1>().ExecuteAsync<UpdateResult>(new RefreshDiscoverFeedsParametersV1(), default, token), ct);
-            await Runner.RunAsync("catalog", (services, token) =>
-                services.GetRequiredService<SyncExternalWorksV1>().ExecuteAsync<UpdateResult>(new SyncExternalWorksParametersV1(), default, token), ct);
+            // The catalog figures first: they need no module, while a switched-off full catalog ends the pass.
+            await Runner.RunAsync("catalog", async (services, token) =>
+            {
+                await services.GetRequiredService<CountCatalogTitlesV1>().ExecuteAsync<UpdateResult>(new SyncExternalWorksParametersV1(), default, token);
+                await services.GetRequiredService<SyncExternalWorksV1>().ExecuteAsync<UpdateResult>(new SyncExternalWorksParametersV1(), default, token);
+            }, ct);
         }
     }
 }

@@ -157,6 +157,18 @@ namespace Jularr.Backend.Data.Logic.Library
         public int? Width { get; }
     }
 
+    // The libraries a rename plan reads: every one, or only those holding this title's files.
+    internal sealed class LibraryRenameScopeData : BaseData
+    {
+        public LibraryRenameScopeData(long? workId)
+        {
+            WorkId = workId;
+        }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.Id), false)]
+        public long? WorkId { get; }
+    }
+
     // A file move the Owner confirms; subtitles name the media file they follow.
     internal sealed class LibraryRenameData : BaseData
     {

@@ -18,6 +18,8 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Hosting.Internal;
 using Microsoft.Extensions.Options;
 using Fixture = Jularr.Backend.Tests.ProfileReferenceVerticalTests.ProfileFixture;
 
@@ -358,6 +360,7 @@ namespace Jularr.Backend.Tests
         {
             var services = new ServiceCollection();
             services.AddLogging();
+            services.AddSingleton<IHostApplicationLifetime, ApplicationLifetime>();
             services.AddJularrServices(fixture.Database, typeof(ServiceRuntime).Assembly);
             return services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
         }

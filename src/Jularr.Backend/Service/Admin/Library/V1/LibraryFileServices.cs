@@ -245,7 +245,7 @@ namespace Jularr.Backend.Service.Admin.Library.V1
         protected override async Task<IServiceOutput> OnRead()
         {
             // The whole plan is fingerprinted; one page is shown.
-            var renames = LibraryRenameLogic.PlanFor(await Context.ReadLibraryRenameFilesAsync(CancellationToken), await Context.ReadNamingPatternsAsync(CancellationToken), Parameters.WorkId);
+            var renames = LibraryRenameLogic.PlanFor(await Context.ReadLibraryRenameFilesAsync(Parameters.WorkId, CancellationToken), await Context.ReadNamingPatternsAsync(CancellationToken), Parameters.WorkId);
             var items = renames.Skip((Page.Page - 1) * Page.PageSize).Take(Page.PageSize)
                 .Select(rename => new LibraryRenameV1(rename.StoredFileId, rename.LibraryRootName, rename.RelativePath, rename.TargetPath));
             return new LibraryRenamePlanV1(new BaseDataList<LibraryRenameV1>(items), LibraryRenameLogic.Fingerprint(renames), renames.Count);
@@ -271,7 +271,7 @@ namespace Jularr.Backend.Service.Admin.Library.V1
         {
             var (renames, roots) = await Context.ExecuteBatchAsync(async (ctx, ct) =>
             {
-                var plan = LibraryRenameLogic.PlanFor(await ctx.ReadLibraryRenameFilesAsync(ct), await ctx.ReadNamingPatternsAsync(ct), Data.WorkId);
+                var plan = LibraryRenameLogic.PlanFor(await ctx.ReadLibraryRenameFilesAsync(Data.WorkId, ct), await ctx.ReadNamingPatternsAsync(ct), Data.WorkId);
                 var locations = new List<LibraryRootLocationData>();
                 foreach (var rootId in plan.Select(rename => rename.LibraryRootId).Distinct())
                 {

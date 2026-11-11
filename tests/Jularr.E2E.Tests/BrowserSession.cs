@@ -15,18 +15,21 @@ namespace Jularr.E2E.Tests
                 JularrInstance.Unavailable("Chromium for Playwright could not be installed.");
             }
         }
+
+        [AssemblyCleanup]
+        public static async Task CloseAsync() => await BrowserSession.CloseAsync();
     }
 
-    // One browser on a started instance, kept on this machine, with the problems its page causes.
+    // A browser on a started instance, kept on this machine, with the problems its page causes. All tests share one Chromium, started at the first
+    // test; each test has a new context of its own (cookies, storage, routes, viewport), in English and UTC wherever it runs.
     internal sealed class BrowserSession : IAsyncDisposable
     {
-        private readonly IPlaywright _playwright;
-        private readonly IBrowser _browser;
+        private static readonly SemaphoreSlim Gate = new(1, 1);
+        private static IPlaywright? _playwright;
+        private static IBrowser? _browser;
 
-        private BrowserSession(IPlaywright playwright, IBrowser browser, IBrowserContext context, IPage page, ConcurrentQueue<string> problems)
+        private BrowserSession(IBrowserContext context, IPage page, ConcurrentQueue<string> problems)
         {
-            _playwright = playwright;
-            _browser = browser;
             Context = context;
             Page = page;
             Problems = problems;
@@ -38,18 +41,56 @@ namespace Jularr.E2E.Tests
 
         public static async Task<BrowserSession> StartAsync(JularrInstance jularr)
         {
-            var playwright = await Playwright.CreateAsync();
-            var browser = await playwright.Chromium.LaunchAsync();
-            var context = await browser.NewContextAsync(new BrowserNewContextOptions { BaseURL = jularr.Address.ToString() });
+            var browser = await BrowserAsync();
+            var context = await browser.NewContextAsync(new BrowserNewContextOptions { BaseURL = jularr.Address.ToString(), Locale = "en-US", TimezoneId = "UTC" });
             await Steps.KeepLocalAsync(context);
             var page = await context.NewPageAsync();
-            return new BrowserSession(playwright, browser, context, page, Steps.Watch(page));
+            return new BrowserSession(context, page, Steps.Watch(page));
         }
 
+        // Closes the test's context with its pages; the browser stays for the next test. A browser that went away took the context with it.
         public async ValueTask DisposeAsync()
         {
-            await _browser.DisposeAsync();
-            _playwright.Dispose();
+            try
+            {
+                await Context.CloseAsync();
+            }
+            catch (PlaywrightException) when (_browser is not { IsConnected: true })
+            {
+            }
+        }
+
+        // The shared browser; launched again when it is gone, so a crash fails only the test that saw it.
+        private static async Task<IBrowser> BrowserAsync()
+        {
+            await Gate.WaitAsync();
+            try
+            {
+                if (_browser is { IsConnected: true })
+                {
+                    return _browser;
+                }
+
+                _playwright ??= await Playwright.CreateAsync();
+                _browser = await _playwright.Chromium.LaunchAsync();
+                return _browser;
+            }
+            finally
+            {
+                Gate.Release();
+            }
+        }
+
+        internal static async Task CloseAsync()
+        {
+            if (_browser is not null)
+            {
+                await _browser.DisposeAsync();
+                _browser = null;
+            }
+
+            _playwright?.Dispose();
+            _playwright = null;
         }
     }
 }

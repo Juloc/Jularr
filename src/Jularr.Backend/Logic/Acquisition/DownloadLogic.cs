@@ -172,27 +172,8 @@ namespace Jularr.Backend.Logic.Acquisition
                             AND edition."Title" IS NOT NULL
                             AND edition."Title" <> work."CanonicalTitle"
                     ) AS "EditionTitles",
-                    ARRAY(
-                        SELECT
-                            language."Language"
-                        FROM
-                            "WantedBookLanguages" AS language
-                        WHERE
-                            language."WantedItemId" = wanted."Id"
-                        ORDER BY
-                            language."Position"
-                    ) AS "WantedLanguages",
-                    ARRAY(
-                        SELECT
-                            language."Language"
-                        FROM
-                            "WantedBookLanguages" AS language
-                        WHERE
-                            language."WantedItemId" = wanted."Id"
-                            AND NOT language."IsCovered"
-                        ORDER BY
-                            language."Position"
-                    ) AS "MissingLanguages",
+                    coalesce(book_languages."Wanted", '{}') AS "WantedLanguages",
+                    coalesce(book_languages."Missing", '{}') AS "MissingLanguages",
                     ARRAY(
                         SELECT
                             chain."FirstLanguage" || '|' || coalesce(chain."SecondLanguage", '') || '|' || CASE WHEN chain."UsesOriginal" THEN '1' ELSE '0' END
@@ -324,6 +305,18 @@ namespace Jularr.Backend.Logic.Acquisition
                     ) AS requested ON TRUE
                     JOIN "WantedItemProfiles" AS resolved ON resolved."WantedItemId" = wanted."Id"
                     LEFT JOIN "AcquisitionProfiles" AS profile ON profile."Id" = resolved."AcquisitionProfileId"
+                    LEFT JOIN LATERAL (
+                        -- The view holds books only and works out every book's languages: read once, and not at all for other media.
+                        SELECT
+                            array_agg(language."Language" ORDER BY language."Position") AS "Wanted",
+                            array_agg(language."Language" ORDER BY language."Position") FILTER (WHERE NOT language."IsCovered") AS "Missing"
+                        FROM
+                            "WantedBookLanguages" AS language
+                        WHERE
+                            work."MediaTypeId" = 3
+                            AND language."WantedItemId" = wanted."Id"
+                        OFFSET 0
+                    ) AS book_languages ON TRUE
                 WHERE
                     wanted."Id" = @WantedItemId;
                 """;

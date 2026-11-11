@@ -149,13 +149,11 @@ namespace Jularr.E2E.Tests
                 // Both wait for a person at first; the one with a file to assign keeps waiting, the one with only an archive fails with the next pass of the download monitor.
                 await page.GotoAsync("/Admin/Queue");
                 await Assertions.Expect(Steps.ListRow(page, "Packed Book")).ToHaveCountAsync(1);
-                var deadline = DateTime.UtcNow.AddMinutes(3);
-                while (await Steps.ListRow(page, "Packed Book").CountAsync() > 0 && DateTime.UtcNow < deadline)
+                await Steps.WaitForDownloadMonitorAsync(page, async () =>
                 {
-                    await page.WaitForTimeoutAsync(5000);
                     await page.GotoAsync("/Admin/Queue");
-                }
-
+                    return await Steps.ListRow(page, "Packed Book").CountAsync() == 0;
+                }, "The download with only an archive did not leave the queue", TimeSpan.FromMinutes(3));
                 await Assertions.Expect(Steps.ListRow(page, "Packed Book")).ToHaveCountAsync(0);
                 await Assertions.Expect(Steps.ListRow(page, "Odd Book")).ToHaveCountAsync(1);
                 await page.GotoAsync("/Admin/Queue/History");

@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Microsoft.Playwright;
 using System.Security.Cryptography;
 using System.Text.Json;
@@ -337,13 +338,15 @@ namespace Jularr.E2E.Tests
                     await Assertions.Expect(pager).ToContainTextAsync("Page 2");
                     await Assertions.Expect(page.GetByRole(AriaRole.Link, new() { Name = "Previous", Exact = true })).ToBeVisibleAsync();
                     await Assertions.Expect(pager.GetByRole(AriaRole.Button, new() { Name = "Next", Exact = true })).ToBeDisabledAsync();
+                    // A choice submits the filter form: the page is swapped in place and its address follows. The swap is waited for, so the next choice
+                    // never opens a list the swap replaces, and the address is read until it holds the choice (an event of the push may come before a wait for it).
                     async Task ChooseAsync(string label, string field, string value)
                     {
                         var select = page.Locator("#choice-" + field);
                         var optionLabel = await select.Locator("option[value='" + value + "']").TextContentAsync();
                         await page.Locator("#choice-" + field + "-button").ClickAsync();
-                        await page.GetByRole(AriaRole.Listbox, new() { Name = label, Exact = true }).GetByRole(AriaRole.Option, new() { Name = optionLabel!, Exact = true }).ClickAsync();
-                        await page.WaitForURLAsync(url => System.Web.HttpUtility.ParseQueryString(new Uri(url).Query)[field] == value);
+                        await Steps.FollowAsync(page, page.GetByRole(AriaRole.Listbox, new() { Name = label, Exact = true }).GetByRole(AriaRole.Option, new() { Name = optionLabel!, Exact = true }));
+                        await Assertions.Expect(page).ToHaveURLAsync(new Regex("[?&]" + field + "=" + Regex.Escape(Uri.EscapeDataString(value)) + "(&|$)"));
                         await Assertions.Expect(select).ToHaveValueAsync(value);
                     }
 
@@ -357,7 +360,7 @@ namespace Jularr.E2E.Tests
                     var search = page.GetByRole(AriaRole.Searchbox, new() { Name = "Search voices, languages or quality…", Exact = true });
                     await search.FillAsync("fixture 27");
                     await search.PressAsync("Enter");
-                    await page.WaitForURLAsync(url => new Uri(url).Query.Contains("q=fixture+27", StringComparison.Ordinal));
+                    await Assertions.Expect(page).ToHaveURLAsync(new Regex("[?&]q=fixture\\+27(&|$)"));
                     await Assertions.Expect(rows).ToHaveCountAsync(1);
                     await Assertions.Expect(search).ToHaveValueAsync("fixture 27");
                     await Assertions.Expect(page.Locator("#choice-gender")).ToHaveValueAsync("1");
@@ -367,7 +370,7 @@ namespace Jularr.E2E.Tests
                     await Assertions.Expect(rows).ToHaveCountAsync(1);
                     await search.FillAsync("fixture 28");
                     await search.PressAsync("Enter");
-                    await page.WaitForURLAsync(url => new Uri(url).Query.Contains("q=fixture+28", StringComparison.Ordinal));
+                    await Assertions.Expect(page).ToHaveURLAsync(new Regex("[?&]q=fixture\\+28(&|$)"));
                     await Assertions.Expect(rows).ToHaveCountAsync(1);
                     await Assertions.Expect(search).ToHaveValueAsync("fixture 28");
 

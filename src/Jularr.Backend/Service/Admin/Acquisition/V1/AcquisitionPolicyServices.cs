@@ -130,12 +130,16 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                     item."Version"
                 FROM
                     "Tags" AS item
+                WHERE
+                    cardinality(@AcquisitionTagIds::bigint[]) = 0
+                    OR item."Id" = ANY(@AcquisitionTagIds::bigint[])
                 ORDER BY
                     item."Label",
                     item."Id"
                 LIMIT @PageSize
                 OFFSET @Offset;
                 """;
+            sql.Parameters.Add(new AcquisitionTagFilterData(Parameters.AcquisitionTagIds));
             sql.Page = Page;
 
             return new PageResult<AcquisitionTagDetailsV1>(await Context.ReadSql.ReadListAsync<AcquisitionTagDetailsV1>(sql, CancellationToken), Page!);

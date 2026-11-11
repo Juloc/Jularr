@@ -142,8 +142,8 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                     async (source, inner) =>
                     {
                         // Include waiting for Chrome and every title/ISBN variant in the source's budget.
-                        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(inner);
-                        timeout.CancelAfter(limits.IndexerTimeout);
+                        using var share = new CancellationTokenSource(limits.IndexerTimeout, _time);
+                        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(inner, share.Token);
                         IReadOnlyList<ReleaseOffer>? answers;
                         try
                         {
@@ -884,8 +884,8 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             ConcurrentDictionary<string, ReleaseOffer> offers, IndexerUse use, bool automatic, CancellationToken ct)
         {
             // A slow indexer only costs its own share.
-            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            timeout.CancelAfter(budget.IndexerTimeout);
+            using var share = new CancellationTokenSource(budget.IndexerTimeout, _time);
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct, share.Token);
             var capabilities = ReadCapabilities(indexer);
             var categories = AcquisitionSelectionLogic.ReadCategories(kind, indexer.Categories, capabilities, igdbPlatform);
             var limit = Math.Min(PageLimit, capabilities?.MaximumLimit ?? PageLimit);
