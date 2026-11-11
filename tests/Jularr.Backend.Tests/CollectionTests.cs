@@ -194,7 +194,7 @@ namespace Jularr.Backend.Tests
             CollectionAssert.AreEqual(new[] { 30L }, await InAsync(next, "?mediaTypeIds=3"));
 
             // The page shows the chosen collection with the collections of each title; the old address leads to it.
-            using var page = await host.SendAsync(HttpMethod.Get, "/Favorites?collection=" + next);
+            using var page = await host.SendAsync(HttpMethod.Get, "/Favorites?type=books&collection=" + next);
             var html = await page.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
             StringAssert.Contains(html, "data-favorites-entry=\"30\"");

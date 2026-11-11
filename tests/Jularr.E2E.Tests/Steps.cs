@@ -198,7 +198,7 @@ namespace Jularr.E2E.Tests
         // Found in Discover and requested from its card; the Owner's request is approved at once.
         public static async Task RequestAsync(IPage page, string query, string title)
         {
-            await page.GotoAsync("/?q=" + Uri.EscapeDataString(query));
+            await page.GotoAsync("/?scope=all&q=" + Uri.EscapeDataString(query));
             var card = page.Locator(".media-card", new() { HasText = title });
             await RequestOnCardAsync(card);
         }
@@ -321,8 +321,14 @@ namespace Jularr.E2E.Tests
             string? details = null;
             await WaitForDownloadMonitorAsync(page, async () =>
             {
-                await page.GotoAsync("/Library");
+                // The Library shows one mode at a time: look in each until the title shows.
                 var card = page.GetByRole(AriaRole.Link, new() { Name = title });
+                foreach (var mode in new[] { "watch", "animanga", "read", "hear", "play" })
+                {
+                    await page.GotoAsync("/Library?mode=" + mode);
+                    if (await card.CountAsync() > 0) break;
+                }
+
                 if (await card.CountAsync() == 0) return false;
                 await FollowAsync(page, card.First);
 

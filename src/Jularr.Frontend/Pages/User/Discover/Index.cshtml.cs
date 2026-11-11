@@ -125,8 +125,8 @@ namespace Jularr.Frontend.Pages.User.Discover
         // The scopes shown: every listed one, or the chosen ones.
         private IReadOnlyList<DiscoverScopeV1> Chosen => [.. Listed.Where(scope => IsAll || Requested.Contains(scope.Slug))];
 
-        // Set when exactly one scope is chosen: rankings, catalog search and the back link need a single one.
-        private DiscoverScopeV1? Selected => !IsAll && Chosen.Count == 1 ? Chosen[0] : null;
+        // Set when exactly one scope is chosen, or when the mode holds only one type: rankings, catalog search and the back link need a single one.
+        private DiscoverScopeV1? Selected => Chosen.Count == 1 && (!IsAll || Narrowed) ? Chosen[0] : null;
 
         private DiscoverFeedType? FeedType => FeedSlugs.Where(feed => feed.Slug == Feed).Select(feed => (DiscoverFeedType?)feed.Feed).FirstOrDefault();
 
@@ -246,10 +246,18 @@ namespace Jularr.Frontend.Pages.User.Discover
                 return;
             }
 
+            // A mode of which the profile lists no type has nothing to show.
+            if (Narrowed && !Listed.Any())
+            {
+                page.Content.Add(new P(new Text("mode.hidden")).Class("discover-mode-note"));
+                return;
+            }
+
             // The highlights are part of the initial response, never a late insertion above the shelves; they keep their place when nothing is highlighted.
             page.Content.Add(new HeroCarousel(assets, _hero, HeroPreferences, "discover.hero.empty"));
 
             page.Content.Add(Toolbar());
+            if (texts.Mode.Key == "hear" && Narrowed) page.Content.Add(new P(new Icon("info", assets, 16), new Span(new Text("mode.hear.audiobooks"))).Class("discover-mode-note"));
             if (texts.CanRequest()) page.Content.Add(MediaAvailability.RequestTemplates(assets));
 
             // Watching, listening and reading continue on their own shelves, in the profile's order.
@@ -626,8 +634,8 @@ namespace Jularr.Frontend.Pages.User.Discover
                 () => continuation.ExecuteAsync<BaseDataList<ContinueItemV1>>(new ReadContinueParametersV1(), HttpContext.RequestAborted));
 
             // The chosen types narrow the read: a type without its subtypes, a subtype across its types.
-            var recentTypes = IsAll ? null : Chosen.Where(scope => scope.MediaSubtypeId is null).Select(scope => scope.MediaTypeId).ToArray();
-            var recentSubtypes = IsAll ? null : Chosen.Where(scope => scope.MediaSubtypeId is not null).Select(scope => scope.MediaSubtypeId!.Value).ToArray();
+            var recentTypes = IsAll && !Narrowed ? null : Chosen.Where(scope => scope.MediaSubtypeId is null).Select(scope => scope.MediaTypeId).ToArray();
+            var recentSubtypes = IsAll && !Narrowed ? null : Chosen.Where(scope => scope.MediaSubtypeId is not null).Select(scope => scope.MediaSubtypeId!.Value).ToArray();
             var recentTask = ReadWhenAsync(hero || shown.Contains(HomeShelfType.RecentlyAdded),
                 () => library.ExecuteAsync<PageResult<LibraryItemV1>>(new ReadLibraryParametersV1(recentTypes, pageSize: 20, mediaSubtypeIds: recentSubtypes), HttpContext.RequestAborted));
             var heroFeed = Feed is null ? DiscoverFeedType.Trending : FeedType;
@@ -747,8 +755,15 @@ namespace Jularr.Frontend.Pages.User.Discover
             return [.. rows.Select(row => new MediaShelf(assets, "discover.type." + row.Scope.Slug, Address(Current with { Types = [row.Scope.Slug], Page = 1 }), [.. row.Hits.Select(hit => hit.Card)]))];
         }
 
-        private async Task LoadListedAsync() =>
-            _scopes ??= await readScopes.ExecuteAsync<BaseDataList<DiscoverScopeV1>>(new DiscoverParametersV1(), HttpContext.RequestAborted);
+        // The active mode narrows what the profile lists, except while a search asks for every mode.
+        private bool Narrowed => !(texts.SearchesAllModes && !string.IsNullOrWhiteSpace(Query));
+
+        private async Task LoadListedAsync()
+        {
+            if (_scopes is not null) return;
+            var all = await readScopes.ExecuteAsync<BaseDataList<DiscoverScopeV1>>(new DiscoverParametersV1(), HttpContext.RequestAborted);
+            _scopes = Narrowed ? [.. all.Where(scope => texts.Mode.Slugs.Contains(scope.Slug))] : all;
+        }
 
         // Per chosen type its continued titles, then its best titles of the feed, then what the library added last, each title once; the device shows the first few
         // of each type, one place after the other across the types. Read from the whole catalogs; series, which TheTVDB never gives whole, from Discover's series list
@@ -978,7 +993,7 @@ namespace Jularr.Frontend.Pages.User.Discover
         private string Csrf => _csrf ??= antiforgery.GetAndStoreTokens(HttpContext).RequestToken ?? "";
 
         // A Work belongs to the scope of its subtype, else of its type: series without anime, books without manga and light novels.
-        private bool MediaTypeChosen(MediaType type, MediaSubtype? subtype) => IsAll || Chosen.Any(scope => InScope(scope, type, subtype));
+        private bool MediaTypeChosen(MediaType type, MediaSubtype? subtype) => IsAll && !Narrowed || Chosen.Any(scope => InScope(scope, type, subtype));
 
         private static bool InScope(DiscoverScopeV1 scope, MediaType type, MediaSubtype? subtype) => scope.Slug == LibraryScopes.Slug(type, subtype);
 
@@ -1048,10 +1063,11 @@ namespace Jularr.Frontend.Pages.User.Discover
 
         // Everything the address holds; links change one part and keep the rest.
         // Filters keeps the chosen filters; another media type starts without them.
-        private sealed record State(IReadOnlyList<string> Types, string? Feed, string? Sort, string? Availability, bool Filters, string? Query, DiscoverFeedType? View, int Page);
+        private sealed record State(IReadOnlyList<string> Types, string? Feed, string? Sort, string? Availability, bool Filters, string? Query, DiscoverFeedType? View, int Page, bool AllModes = false);
 
         private State Current => new(IsAll ? [] : [.. Chosen.Select(scope => scope.Slug)], Feed,
-            (ChosenSort ?? FilterSort) is { } sort ? SortSlugs.First(entry => entry.Sort == sort).Slug : null, Availability, true, Query?.Trim(), View, PageNumber);
+            (ChosenSort ?? FilterSort) is { } sort ? SortSlugs.First(entry => entry.Sort == sort).Slug : null, Availability, true, Query?.Trim(), View, PageNumber,
+            texts.SearchesAllModes);
 
         private static string? Known(string? value, params string[] allowed) => allowed.Contains(value) ? value : null;
 
@@ -1069,6 +1085,7 @@ namespace Jularr.Frontend.Pages.User.Discover
             if (state.Availability is not null) values.Add("availability=" + Uri.EscapeDataString(state.Availability));
             if (state.Filters) values.AddRange(FilterValues());
             if (searching) values.Add("q=" + Uri.EscapeDataString(state.Query!));
+            if (searching && state.AllModes) values.Add("scope=all");
             if (state.Page > 1) values.Add("p=" + state.Page.ToString(CultureInfo.InvariantCulture));
             return values.Count == 0 ? "/" : "/?" + string.Join('&', values);
         }

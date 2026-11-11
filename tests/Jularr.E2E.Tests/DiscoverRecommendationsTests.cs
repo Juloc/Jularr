@@ -37,7 +37,7 @@ namespace Jularr.E2E.Tests
             var page = browser.Page;
             await Owner.SetUpAndSignInAsync(page);
 
-            // Films, books and AniList's anime, manga and light novels read whole, forty titles each: twenty lists, of which the anime seasons stay empty; the series' provider
+            // The Anime and Manga mode: AniList's anime, manga and light novels read whole, forty titles each, of which the anime seasons stay empty; the series' provider
             // does not answer, which the shelves say once.
             await jularr.RunSqlAsync("""
                 UPDATE "InstanceModules" SET "IsEnabled" = TRUE WHERE "Key" = 'LocalDiscovery';
@@ -55,9 +55,9 @@ namespace Jularr.E2E.Tests
             try
             {
                 // The page itself (asked once before, so the host has started up) and its first shelves: shelves only, never a whole document, and a link to the next ones.
-                await page.APIRequest.GetAsync("/");
+                await page.APIRequest.GetAsync("/?mode=animanga");
                 var watch = Stopwatch.StartNew();
-                var document = await page.APIRequest.GetAsync("/");
+                var document = await page.APIRequest.GetAsync("/?mode=animanga");
                 var documentTime = watch.ElapsedMilliseconds;
                 var fragmentHeaders = new Dictionary<string, string> { ["X-Jularr-Fragment"] = "recommendations" };
                 await page.APIRequest.GetAsync("/?handler=Recommendations", new() { Headers = fragmentHeaders });
@@ -69,7 +69,7 @@ namespace Jularr.E2E.Tests
                     + $"{shelves.Length} bytes, {Regex.Count(shelves, "class=\"media-card\"")} cards in {fragmentTime} ms ({fragment.Headers.GetValueOrDefault("server-timing")})");
                 Assert.AreEqual(200, fragment.Status, shelves);
                 StringAssert.DoesNotMatch(shelves, new Regex("<!DOCTYPE|<html|<head", RegexOptions.IgnoreCase));
-                Assert.AreEqual(4, Regex.Count(shelves, "<section class=\"media-shelf\""), shelves);
+                Assert.AreEqual(2, Regex.Count(shelves, "<section class=\"media-shelf\""), shelves);
                 StringAssert.Contains(shelves, "/?p=2&amp;handler=Recommendations");
 
                 // On the desktop the third part fails once and its link becomes the retry.
@@ -79,10 +79,10 @@ namespace Jularr.E2E.Tests
                 foreach (var (width, height, name) in new[] { (1440, 900, "desktop"), (390, 844, "phone") })
                 {
                     await page.SetViewportSizeAsync(width, height);
-                    await page.GotoAsync("/");
+                    await page.GotoAsync("/?mode=animanga");
                     var shown = page.Locator("#discover-recommendations .media-shelf");
-                    await Assertions.Expect(shown).ToHaveCountAsync(4);
-                    await Assertions.Expect(page.Locator("#discover-recommendations .discover-media-heading")).ToHaveTextAsync(["Movies"]);
+                    await Assertions.Expect(shown).ToHaveCountAsync(2);
+                    await Assertions.Expect(page.Locator("#discover-recommendations .discover-media-heading")).ToHaveTextAsync(["Anime"]);
                     await Evidence.SaveAsync(page, $"discover-recommendations-{name}-first");
 
                     // Scrolling down brings the next shelves until the last type's last list; each type is named once, above its first shelf.
@@ -106,8 +106,8 @@ namespace Jularr.E2E.Tests
 
                     await Assertions.Expect(page.Locator("#discover-recommendations [data-discover-recommendations]")).ToHaveCountAsync(0);
                     await Assertions.Expect(page.Locator("#discover-recommendations .discover-media-heading"))
-                        .ToHaveTextAsync(["Movies", "Anime", "Light novels", "Books", "Manga"]);
-                    await Assertions.Expect(page.Locator("#discover-recommendations > [role=status]")).ToHaveCountAsync(1);
+                        .ToHaveTextAsync(["Anime", "Light novels", "Manga"]);
+                    await Assertions.Expect(page.Locator("#discover-recommendations > [role=status]")).ToHaveCountAsync(0);
                     await Assertions.Expect(shown.Last.Locator("h2")).ToHaveTextAsync("Top 100");
                     await Assertions.Expect(shown.Last).ToContainTextAsync("Manga 1");
 

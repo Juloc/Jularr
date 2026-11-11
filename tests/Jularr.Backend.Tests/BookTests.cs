@@ -505,7 +505,8 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.BadRequest, films.StatusCode);
 
             // The page lists it with its Work's page, which asks for the language.
-            using var page = await host.SendAsync(HttpMethod.Get, "/?type=books&q=Pride%20and%20Prejudice");
+            (await host.SendAsync(HttpMethod.Get, "/?type=books&q=Pride%20and%20Prejudice")).Dispose(); // a book's address opens the Read mode, kept in a cookie
+            using var page = await host.SendAsync(HttpMethod.Get, "/?q=Pride%20and%20Prejudice");
             var html = await page.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
             StringAssert.Contains(html, "href=\"/Details/" + workId + "\"");
@@ -537,7 +538,7 @@ namespace Jularr.Backend.Tests
             using var shelves = await host.SendAsync(HttpMethod.Get, "/?type=books&handler=Recommendations");
             var landing = await shelves.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, shelves.StatusCode, landing);
-            StringAssert.Contains(landing, "/?type=books&amp;view=Trending");
+            StringAssert.Contains(landing, "/?view=Trending");
             StringAssert.Contains(landing, "/Details/" + workId);
         }
 

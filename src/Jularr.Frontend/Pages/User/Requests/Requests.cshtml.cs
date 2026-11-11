@@ -44,7 +44,7 @@ namespace Jularr.Frontend.Pages.User.Requests
 
         private bool Cards => Layout == "cards";
 
-        private ScopeSelection Scopes => _scopes ??= new ScopeSelection(Types, _media);
+        private ScopeSelection Scopes => _scopes ??= new ScopeSelection(Types, _media, texts.Mode);
 
         protected override void Define(Page page)
         {

@@ -1,5 +1,5 @@
 // One document-level listener: an outside click or Escape closes any open link menu or action menu.
-const MENUS = 'details.select-link-menu[open], details.action-menu[open]';
+const MENUS = 'details.select-link-menu[open], details.action-menu[open], details.mode-switch[open]';
 
 function closeOutside(target: EventTarget | null): void {
     document.querySelectorAll<HTMLDetailsElement>(MENUS).forEach(menu => {

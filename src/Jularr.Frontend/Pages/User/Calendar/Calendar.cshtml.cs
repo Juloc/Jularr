@@ -210,7 +210,7 @@ namespace Jularr.Frontend.Pages.User.Calendar
             var profileId = (await authentication.ExecuteAsync<AuthenticationResultV1>(cancellationToken: HttpContext.RequestAborted)).ProfileId
                 ?? throw new UnauthorizedAccessException("An active profile is required.");
             var media = await readMedia.ExecuteAsync<BaseDataList<ProfileMediaV1>>(new ReadProfileParametersV1(profileId), HttpContext.RequestAborted);
-            _listed = [.. LibraryScopes.Listed(media).Where(scope => scope.Slug != "all").Select(scope => scope.Slug)];
+            _listed = [.. LibraryScopes.Listed(media, texts.Mode).Where(scope => scope.Slug != "all").Select(scope => scope.Slug)];
             var (from, days) = Range;
             _entries = await read.ExecuteAsync<BaseDataList<CalendarEntryV1>>(new ReadCalendarParametersV1(from, days), HttpContext.RequestAborted);
         }

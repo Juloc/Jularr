@@ -86,6 +86,7 @@ namespace Jularr.Backend.Tests
             using var readingOnly = await host.SendAsync(HttpMethod.Get, "/api/v1/continue");
             Assert.AreEqual(HttpStatusCode.OK, readingOnly.StatusCode);
             Assert.IsTrue((await readingOnly.Content.ReadFromJsonAsync<BaseDataList<ContinueItemV1>>())!.Any(item => item.MediaAssetId == first));
+            (await host.SendAsync(HttpMethod.Get, "/?mode=read")).Dispose(); // the mode is kept in a cookie
             using var home = await host.SendAsync(HttpMethod.Get, "/");
             StringAssert.Contains(await home.Content.ReadAsStringAsync(), "/Read/" + first);
             using var page = await host.SendAsync(HttpMethod.Get, "/Read/" + first);
@@ -679,6 +680,7 @@ namespace Jularr.Backend.Tests
             var item = (await continuing.Content.ReadFromJsonAsync<BaseDataList<ContinueItemV1>>())!.Single(entry => entry.MediaAssetId == asset);
             Assert.AreEqual(MediaAssetType.Comic, item.MediaAssetTypeId);
             Assert.AreEqual(0.6667m, item.Progression);
+            (await host.SendAsync(HttpMethod.Get, "/?mode=animanga")).Dispose(); // the mode is kept in a cookie
             using var home = await host.SendAsync(HttpMethod.Get, "/");
             var homeHtml = await home.Content.ReadAsStringAsync();
             StringAssert.Contains(homeHtml, "Continue reading");

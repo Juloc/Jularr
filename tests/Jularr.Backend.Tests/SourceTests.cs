@@ -690,7 +690,7 @@ namespace Jularr.Backend.Tests
                 Assert.AreEqual(HttpStatusCode.NotFound, other.StatusCode);
             }
 
-            using var page = await host.SendAsync(HttpMethod.Get, "/Requests");
+            using var page = await host.SendAsync(HttpMethod.Get, "/Requests?type=books");
             var html = await page.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
             StringAssert.Contains(html, "handler=SourceLink");
