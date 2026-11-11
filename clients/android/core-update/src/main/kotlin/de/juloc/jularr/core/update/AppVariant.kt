@@ -2,7 +2,7 @@ package de.juloc.jularr.core.update
 
 /**
  * Which Jularr Android client is checking for an update. Selects the matching GitHub
- * release asset by the fixed naming convention from docs/ANDROID_CLIENTS.md §13
+ * release asset by the fixed naming convention
  * (`Jularr-Mobile-<version>.apk` / `Jularr-TV-<version>.apk`) so a phone can never be
  * offered the TV package or vice versa.
  */

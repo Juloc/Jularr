@@ -1419,7 +1419,7 @@ namespace Jularr.Backend.Tests
 
             var actual = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(content.ToString())));
             var frozen = File.ReadAllText(Path.Combine(database, "baseline.sha256")).Trim();
-            Assert.AreEqual(frozen, actual, "The baseline database/*.sql changed after the release freeze. Add a numbered migration database/migrations/NNNN_short_name.sql instead (docs/DATABASE_MIGRATIONS.md); node scripts/freeze-baseline.mjs is for releases only.");
+            Assert.AreEqual(frozen, actual, "The baseline database/*.sql changed after the release freeze. Add a numbered migration database/migrations/NNNN_short_name.sql instead (docs/DEVELOPMENT.md); node scripts/freeze-baseline.mjs is for releases only.");
             Assert.AreEqual(frozen, DatabaseBaseline.Fingerprint(1, []), "The embedded baselines differ from database/*.sql.");
 
             // Every baseline file is part of the hash.

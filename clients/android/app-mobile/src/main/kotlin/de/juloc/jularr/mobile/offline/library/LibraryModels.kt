@@ -114,7 +114,7 @@ enum class BookDownloadStatus {
 }
 
 object LibraryBookStatus {
-    /** A book is "available" only once every wanted chapter is verified up to date; see docs/OFFLINE_LIBRARY.md. */
+    /** A book is "available" only once every wanted chapter is verified up to date. */
     fun of(chapters: List<LibraryChapterRecord>): BookDownloadStatus {
         if (chapters.isEmpty()) {
             return BookDownloadStatus.QUEUED

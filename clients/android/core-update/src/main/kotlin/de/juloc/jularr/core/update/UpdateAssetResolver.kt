@@ -2,7 +2,7 @@ package de.juloc.jularr.core.update
 
 /**
  * Picks the APK (and its `.sha256` sibling) for this client's [AppVariant] from a
- * GitHub release, per the fixed naming convention in docs/ANDROID_CLIENTS.md §13:
+ * GitHub release, per the fixed naming convention:
  * `Jularr-Mobile-<version>.apk` / `Jularr-TV-<version>.apk` plus matching `.sha256`
  * files. Only assets whose name starts with the variant's own prefix are considered,
  * so a phone build can never resolve (and therefore never install) the TV package, or

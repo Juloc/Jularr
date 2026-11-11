@@ -46,7 +46,7 @@ import java.net.URL
  * Native TTS settings: provider choice, rate/pitch/volume and offline-neural model
  * management. Profile-level preferences sync through `/me/tts-preferences` (the same
  * canonical store the web Reader's Vorlesen settings use); installed models are a
- * device-only fact and never leave the device (docs/TTS.md).
+ * device-only fact and never leave the device.
  */
 @Composable
 fun TtsSettingsScreen(
