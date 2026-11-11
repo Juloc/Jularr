@@ -726,17 +726,38 @@ def self_test() -> None:
             assert sorted(flat) == sorted(unit.name for unit in units) and len(flat) == len(set(flat)), (kind, shards, lanes)
             assert plan == plan_lanes(list(reversed(units)), shards, lanes), "the plan is deterministic"
 
-    # Backend Full: the smoke job (ci-select-backend-tests.py --boot-filter) plus the backend shards
-    # (planned with --exclude of its --boot-units) run every backend test exactly once
+    # Backend Full: the smoke job (ci-select-backend-tests.py --boot-filter), the real-tool step (--tools-filter)
+    # and the backend shards (planned with --exclude of its --full-exclude) run every backend test exactly once.
+    # The PR shards (--pr-exclude) leave out the real-tool and the Full-only tests.
     select = [sys.executable, str(ROOT / "scripts" / "ci-select-backend-tests.py")]
-    boot = subprocess.run(select + ["--boot-units"], capture_output=True, text=True, check=True).stdout.strip().split(",")
-    smoke = compile_filter(subprocess.run(select + ["--boot-filter"], capture_output=True, text=True, check=True).stdout.strip())
+
+    def listing(option: str) -> str:
+        return subprocess.run(select + [option], capture_output=True, text=True, check=True).stdout.strip()
+
     tests = scan("backend")
     names = [f"{name}.{method}" for name, methods in tests.items() for method in methods]
-    units, _ = units_of("backend", tests, load_durations("backend"), exclude=boot)
+    smoke, tools = compile_filter(listing("--boot-filter")), compile_filter(listing("--tools-filter"))
     smoked = {name for name in names if smoke(name)}
-    assert len(smoked) >= len(boot), "the smoke filter runs every boot class and method"
-    assert_exactly_once(units, names, absent=smoked)
+    tooled = {name for name in names if tools(name)}
+    full_only = {f"{KINDS['backend'][1]}.{unit}" for unit in listing("--pr-exclude").split(",")} - tooled
+    assert len(tooled) == listing("--tools-filter").count("|") + 1, "every real-tool test names one test of the source"
+    assert full_only and full_only <= set(names), f"a Full-only test is not in the source: {sorted(full_only - set(names))}"
+    assert not smoked & tooled
+    units, _ = units_of("backend", tests, load_durations("backend"), exclude=listing("--full-exclude").split(","))
+    assert len(smoked) >= len(listing("--full-exclude").split(",")) - len(tooled), "the smoke filter runs every boot class and method"
+    assert_exactly_once(units, names, absent=smoked | tooled)
+    pr_units, _ = units_of("backend", tests, load_durations("backend"), exclude=listing("--pr-exclude").split(","))
+    assert_exactly_once(pr_units, names, absent=tooled | full_only)
+    # A test that reads JULARR_TEST_FFMPEG or JULARR_TEST_CJXL runs only with the tools: it must be a real-tool test.
+    for file in sorted((ROOT / KINDS["backend"][0]).rglob("*Tests.cs")):
+        text = file.read_text(encoding="utf-8-sig", errors="replace")
+        attributes = [match.end() for match in TEST_METHOD.finditer(text)] + [len(text)]
+        for start, end in zip(attributes, attributes[1:]):
+            signature = SIGNATURE.search(text, start)
+            if signature and re.search(r'"JULARR_TEST_(FFMPEG|CJXL)"', text[start:end]):
+                owner = [match.group(1) for match in TEST_CLASS.finditer(text) if match.start(1) < start]
+                assert owner and f"{KINDS['backend'][1]}.{owner[-1]}.{signature.group(1)}" in tooled, \
+                    f"{file.name}: {signature.group(1)} needs the real tools; list it in REAL_TOOLS of ci-select-backend-tests.py"
 
     # every shard matrix in the workflows is complete (1/N ... N/N) and planned with the same N
     seen = 0

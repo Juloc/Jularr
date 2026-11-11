@@ -142,7 +142,8 @@ jobs:
               --results-directory TestResults/ci/fast
           fi
       # One plan for all shards (shipped in the build): the fewest shards, at most 6, whose slowest
-      # lane is planned at up to 330 s, so a shard ends well within its 12 minutes.
+      # lane is planned at up to 330 s, so a shard ends well within its 12 minutes. The real-tool tests
+      # and the Full-only tests (ci-select-backend-tests.py --pr-exclude) run only in Backend Full.
       - name: Plan the test shards
         id: plan
         if: steps.select.outputs.classes != ''
@@ -152,7 +153,8 @@ jobs:
         run: |
           set -euo pipefail
           matrix="$(python3 scripts/ci-shard-tests.py matrix --kind backend --lanes 2 --lane-limit 330 --max-shards 6 \
-            --classes "${CLASSES}" --measured "${RUNNER_TEMP}/measured" --out ci-plan/backend.json)"
+            --classes "${CLASSES}" --exclude "$(python3 scripts/ci-select-backend-tests.py --pr-exclude)" \
+            --measured "${RUNNER_TEMP}/measured" --out ci-plan/backend.json)"
           echo "matrix=${matrix}" >> "$GITHUB_OUTPUT"
       - uses: ./.github/actions/pack-build
         if: steps.select.outputs.classes != ''

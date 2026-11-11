@@ -21,11 +21,24 @@ SMOKE = (
 )
 
 # The `smoke` job of Backend Full: startup, schema, migrations, sessions and the first-owner
-# setup gate. Whole classes plus SMOKE; the Backend Full shards leave these out (--boot-units).
+# setup gate. Whole classes plus SMOKE; the Backend Full shards leave these out (--full-exclude).
 BOOT_CLASSES = ("DatabaseBaselineTests", "DatabaseMigrationTests", "ServiceFoundationTests",
                 "SessionLockTests", "AccountSchemaTests")
 BOOT_METHODS = ("SetupTests.Razor_FirstOwner_ValidatesRollsBackAndSignsIn",
                 "SetupTests.FirstOwner_ConcurrentCreation_OnlyOneSucceedsAndBootstrapStaysClosed")
+# The tests of the real tools (FFmpeg, ffprobe, cjxl): only the real-tool step of Backend Full runs them
+# (--tools-filter, with JULARR_TEST_FFMPEG and JULARR_TEST_CJXL set). No shard plans them: without the tools
+# they only report Inconclusive. ci-shard-tests.py --self-test checks that every test reading those variables is here.
+REAL_TOOLS = ("CoverTests.Cover_WithFfmpeg_KeepsOneWebPWidthBesideTheOriginal_AndConvertsOlderFormats",
+              "CoverTests.Cover_WithFfmpegAndCjxl_KeepsOnlyJxlWidths_AndAnswersOtherBrowsersWithWebPOrJpeg",
+              "CoverTests.CoverStore_WithFfmpeg_ConvertsAWidthToWebP_ServesItAndDerivesForOtherBrowsers",
+              "CoverTests.JxlEncoder_WithCjxl_WritesAJxlFile",
+              "MediaMarkerTests.Scan_ReadsChaptersAndSidecar_FromARealFile",
+              "PlaybackTests.Fonts_OfAMatroskaFile_AreTakenOutOnceAndServedOneByOne",
+              "PlaybackTests.Hls_RealFfmpeg_TranscodesSeeksAndStaysWithinBudget",
+              "SmbStorageTests.Inputs_DirectShare_RealFfmpegTranscodesAndSeeksHls")
+# Too slow for a PR: the Backend Full shards run them once, the PR shards leave them out (--pr-exclude).
+FULL_ONLY = ("LibraryPerformanceTests.Favorites_LargeCatalog_ReadsStayIndependentOfCatalogSize",)  # 500,000 works, ~37 s
 
 # A path may belong to several areas (e.g. downloads + storage). The mappings
 # are deliberately plain to make changes auditable in code review. Keep them
@@ -126,9 +139,18 @@ def boot_filter() -> str:
     return "|".join(clauses)
 
 
-def boot_units() -> str:
-    """The boot classes and methods for ci-shard-tests.py --exclude: Backend Full runs them in `smoke` only."""
-    return ",".join(BOOT_CLASSES + SMOKE + BOOT_METHODS)
+def tools_filter() -> str:
+    return "|".join(method_clause(method) for method in REAL_TOOLS)
+
+
+def full_exclude() -> str:
+    """ci-shard-tests.py --exclude of the Backend Full shards: `smoke` and the real-tool step run these."""
+    return ",".join(BOOT_CLASSES + SMOKE + BOOT_METHODS + REAL_TOOLS)
+
+
+def pr_exclude() -> str:
+    """ci-shard-tests.py --exclude of the PR shards: the real-tool and the Full-only tests."""
+    return ",".join(REAL_TOOLS + FULL_ONLY)
 
 
 def self_test() -> None:
@@ -147,9 +169,15 @@ def self_test() -> None:
         assert required in selected, (paths, selected)
     assert boot_filter().count("FullyQualifiedName=") == len(SMOKE) + len(BOOT_METHODS)
     assert boot_filter().count("FullyQualifiedName~") == len(BOOT_CLASSES)
-    units = boot_units().split(",")
-    assert len(units) == len(set(units)) == len(BOOT_CLASSES) + len(SMOKE) + len(BOOT_METHODS)
-    assert all(f"{NAMESPACE}{unit}" in boot_filter() for unit in units), "smoke runs every unit the shards leave out"
+    units = full_exclude().split(",")
+    assert len(units) == len(set(units)) == len(BOOT_CLASSES) + len(SMOKE) + len(BOOT_METHODS) + len(REAL_TOOLS)
+    assert all(f"{NAMESPACE}{unit}" in boot_filter() + "|" + tools_filter() for unit in units), \
+        "smoke or the real-tool step runs every unit the Full shards leave out"
+    assert tools_filter().split("|") == [method_clause(method) for method in REAL_TOOLS] and "~" not in tools_filter()
+    pr_units = pr_exclude().split(",")
+    assert len(pr_units) == len(set(pr_units)) == len(REAL_TOOLS) + len(FULL_ONLY)
+    assert not set(FULL_ONLY) & set(units), "a Full-only test still runs in the Backend Full shards"
+    assert all(unit.count(".") == 1 for unit in REAL_TOOLS + FULL_ONLY), "Class.Method"
     filter_text, classes = choose(["docs/README.md"])
     assert not classes and filter_text.count("FullyQualifiedName=") == len(SMOKE) and "~" not in filter_text
     filter_text, classes = choose(["src/Jularr.Frontend/Styles/app.scss"])
@@ -175,12 +203,14 @@ def main() -> int:
     if len(sys.argv) == 2 and sys.argv[1] == "--boot-filter":
         print(boot_filter())
         return 0
-    if len(sys.argv) == 2 and sys.argv[1] == "--boot-units":
-        print(boot_units())
+    listings = {"--tools-filter": tools_filter, "--full-exclude": full_exclude, "--pr-exclude": pr_exclude}
+    if len(sys.argv) == 2 and sys.argv[1] in listings:
+        print(listings[sys.argv[1]]())
         return 0
     as_json = len(sys.argv) == 4 and sys.argv[3] == "--json"
     if len(sys.argv) != 3 and not as_json:
-        print("Usage: ci-select-backend-tests.py BASE_SHA HEAD_SHA [--json] | --self-test | --boot-filter | --boot-units", file=sys.stderr)
+        print("Usage: ci-select-backend-tests.py BASE_SHA HEAD_SHA [--json] | --self-test | --boot-filter | --tools-filter"
+              " | --full-exclude | --pr-exclude", file=sys.stderr)
         return 2
     changed = subprocess.check_output(
         ["git", "diff", "--name-only", "--diff-filter=ACMR", sys.argv[1], sys.argv[2]],

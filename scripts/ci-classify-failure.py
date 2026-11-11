@@ -369,7 +369,7 @@ def self_test() -> None:
                  "Fetch the base and head commits", "Fetch the measured test durations of recent main runs"):
         assert is_setup(name), name
     for name in ("Run the backend shard", "Run the browser shard", "Run the selected test classes of this shard",
-                 "Real-tool tests (FFmpeg HLS, JPEG XL covers)", "Frontend unit tests", "Compile the backend and browser test projects once",
+                 "Real-tool tests (FFmpeg, ffprobe, cjxl)", "Frontend unit tests", "Compile the backend and browser test projects once",
                  "Verify the CI scripts (test shards and selection)", "Detect affected project files", "Plan the test shards",
                  "Select the tests for the changed areas and run the smoke methods"):
         assert not is_setup(name), name

@@ -89,12 +89,13 @@ jobs:
         run: |
           dotnet build tests/Jularr.Backend.Tests --configuration Release
           dotnet build tests/Jularr.E2E.Tests --configuration Release
-      # The shard counts here equal the matrix entries of `shards`; the real-tool tests run on backend 6/6.
+      # The shard counts here equal the matrix entries of `shards`. The real-tool step runs on backend 6/6 after its
+      # lanes: --reserve 6=S plans each of its two lanes S/2 seconds lighter (S = 2 x the step's measured time).
       - name: Plan the test shards
         run: |
           set -euo pipefail
           python3 scripts/ci-shard-tests.py matrix --kind backend --shards 6 --lanes 2 --reserve 6=150 \
-            --exclude "$(python3 scripts/ci-select-backend-tests.py --boot-units)" \
+            --exclude "$(python3 scripts/ci-select-backend-tests.py --full-exclude)" \
             --measured "${RUNNER_TEMP}/measured" --out ci-plan/backend.json
           python3 scripts/ci-shard-tests.py matrix --kind e2e --shards 6 --lanes 1 \
             --measured "${RUNNER_TEMP}/measured" --out ci-plan/e2e.json
@@ -174,7 +175,7 @@ jobs:
           - { kind: backend, shard: 3/6 }
           - { kind: backend, shard: 4/6 }
           - { kind: backend, shard: 5/6 }
-          # Also runs the real-tool tests (FFmpeg, cjxl): shard 6 is planned 150 lane-seconds lighter.
+          # Also runs the real-tool tests (FFmpeg, ffprobe, cjxl): shard 6 is planned lighter by their time.
           - { kind: backend, shard: 6/6, tools: true }
           - { kind: e2e, shard: 1/6 }
           - { kind: e2e, shard: 2/6 }
@@ -234,6 +235,7 @@ jobs:
       # The assembly disables in-process parallelism; lanes are separate dotnet test processes with
       # their own fixture state and databases. The TRX files (timings-*) plan the next runs.
       - name: Run the backend shard
+        id: lanes
         if: matrix.kind == 'backend'
         shell: bash
         run: |
@@ -263,13 +265,16 @@ jobs:
           fi
         env:
           JULARR_TEST_DJVULIBRE: /usr/bin
-      - name: Real-tool tests (FFmpeg HLS, JPEG XL covers)
-        if: matrix.kind == 'backend' && matrix.tools == true
+      # The tests of REAL_TOOLS in ci-select-backend-tests.py (no shard plans them), also after a failed lane, so one
+      # run reports both. Their TRX goes with the timings.
+      - name: Real-tool tests (FFmpeg, ffprobe, cjxl)
+        if: ${{ !cancelled() && matrix.kind == 'backend' && matrix.tools == true && (steps.lanes.outcome == 'success' || steps.lanes.outcome == 'failure') }}
         run: |
           cjxl --version
+          ffmpeg -version | head -1
           dotnet test tests/Jularr.Backend.Tests --configuration Release --no-build ${DOTNET_TEST_BLAME} \
-            --filter "FullyQualifiedName~JxlEncoder_WithCjxl|FullyQualifiedName~Cover_WithFfmpegAndCjxl|FullyQualifiedName~Inputs_DirectShare_RealFfmpegTranscodesAndSeeksHls" \
-            --logger "trx;LogFileName=real-tools.trx" --results-directory TestResults/ci/tools
+            --filter "$(python3 scripts/ci-select-backend-tests.py --tools-filter)" \
+            --logger "trx;LogFileName=real-tools.trx" --results-directory TestResults/ci/backend
         env:
           JULARR_TEST_FFMPEG: /usr/bin/ffmpeg
           JULARR_TEST_CJXL: /usr/bin/cjxl
