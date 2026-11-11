@@ -31,9 +31,7 @@ BOOT_METHODS = ("SetupTests.Razor_FirstOwner_ValidatesRollsBackAndSignsIn",
 # The tests of the real tools (FFmpeg, ffprobe, cjxl): only the real-tool step of Backend Full runs them
 # (--tools-filter, with JULARR_TEST_FFMPEG and JULARR_TEST_CJXL set). No shard plans them: without the tools
 # they only report Inconclusive. ci-shard-tests.py --self-test checks that every test reading those variables is here.
-REAL_TOOLS = ("CoverTests.Cover_WithFfmpeg_KeepsOneWebPWidthBesideTheOriginal_AndConvertsOlderFormats",
-              "CoverTests.Cover_WithFfmpegAndCjxl_KeepsOnlyJxlWidths_AndAnswersOtherBrowsersWithWebPOrJpeg",
-              "CoverTests.CoverStore_WithFfmpeg_ConvertsAWidthToWebP_ServesItAndDerivesForOtherBrowsers",
+REAL_TOOLS = ("CoverTests.Cover_WithFfmpegAndCjxl_KeepsOnlyJxlWidths_AndAnswersOtherBrowsersWithWebPOrJpeg",
               "CoverTests.JxlEncoder_WithCjxl_WritesAJxlFile",
               "MediaMarkerTests.Scan_ReadsChaptersAndSidecar_FromARealFile",
               "PlaybackTests.Fonts_OfAMatroskaFile_AreTakenOutOnceAndServedOneByOne",
