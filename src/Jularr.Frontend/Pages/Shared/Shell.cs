@@ -59,7 +59,23 @@ namespace Jularr.Frontend.Pages.Shared
             if (texts.CanReadMedia())
             {
                 // Suggestions open under it while typing (Pages/Shared/HeaderSearch.ts); on a phone it covers the header and the back button closes it.
-                var search = new SearchBox("/", "search.global", searchQuery, searchType is null ? null : new Dictionary<string, string> { ["type"] = searchType });
+                // The search stays in the active mode; the chip in the field widens it to every mode (a checkbox of the form, so it needs no script). The administration has no modes.
+                var searchKeep = searchType is null ? null : new Dictionary<string, string> { ["type"] = searchType };
+                SearchBox search;
+                if (adminPath)
+                {
+                    search = new SearchBox("/", "search.global", searchQuery, searchKeep);
+                }
+                else
+                {
+                    var box = new Input().Attribute("type", "checkbox").Attribute("name", "scope").Attribute("value", "all");
+                    if (texts.SearchesAllModes) box.Attribute("checked", "checked");
+                    var scope = new Label(box,
+                        new Span(new Icon(texts.Mode.Icon, assets, 14), new Text(texts.Mode.LabelKey)).Class("app-search__scope-mode"),
+                        new Span(new Text("mode.searchAll")).Class("app-search__scope-all")).Class("app-search__scope").Attribute("title", texts["mode.searchAllTip"]);
+                    search = new SearchBox("/", "search.global", searchQuery, searchKeep, extra: scope, placeholderKey: "search.mode." + texts.Mode.Key);
+                }
+
                 header.Add(new Div(new Button(new Icon("chevron-left", assets)).IconOnly(texts["common.back"]).Attribute("class", "button button--icon app-search__close").Attribute("data-search-close", ""),
                     new Label(new Icon("search", assets)).Class("app-search__icon").Attribute("for", SearchBox.InputId("search.global")).Attribute("aria-hidden", "true"), search).Class("app-search"));
             }
@@ -96,8 +112,11 @@ namespace Jularr.Frontend.Pages.Shared
                 return;
             }
 
+            // The modes are the user area's own worlds: the switch sits under the brand while media can be read.
+            IUiComponent modes = texts.IsAuthenticated && texts.CanReadMedia() ? new ModeSwitch(assets) : new Div();
             new Aside(
                 new Brand(assets),
+                modes,
                 Links(primary, "nav.primary", "sidebar-navigation", texts),
                 Links(secondary, "nav.secondary", "sidebar-navigation sidebar-secondary", texts)
             ).Class("app-sidebar").Attribute("id", "app-sidebar").WriteTo(writer, encoder, texts);

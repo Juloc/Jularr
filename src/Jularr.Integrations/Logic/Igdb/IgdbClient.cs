@@ -154,7 +154,7 @@ namespace Jularr.Integrations.Logic.Igdb
             finally
             {
                 // The spacing counts from the end of the request.
-                _pace.Last = DateTimeOffset.UtcNow;
+                _pace.MarkNow();
                 _pace.Gate.Release();
             }
         }

@@ -83,6 +83,13 @@ document.addEventListener("input", event => {
     timer = setTimeout(() => void suggest(input), pause);
 });
 
+// The chip that widens the search to every mode asks again.
+document.addEventListener("change", event => {
+    if (!(event.target instanceof HTMLInputElement) || !event.target.matches(".app-search__scope input")) return;
+    const input = event.target.closest(".app-search")?.querySelector<HTMLInputElement>(".search-box__input");
+    if (input && input.value.trim().length >= 2) void suggest(input);
+});
+
 document.addEventListener("keydown", event => {
     if (!(event.target instanceof Element)) return;
     const search = event.target.closest(".app-search");

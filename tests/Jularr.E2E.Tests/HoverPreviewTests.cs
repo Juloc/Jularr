@@ -8,7 +8,7 @@ namespace Jularr.E2E.Tests
     public sealed class HoverPreviewTests
     {
         private const string Seed = """
-            INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle", "ReleaseYear", "RuntimeMinutes") VALUES (9101, 1, 'Trailer Film', 2024, 106), (9102, 3, 'Plain Book', 2019, NULL);
+            INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle", "ReleaseYear", "RuntimeMinutes") VALUES (9101, 1, 'Trailer Film', 2024, 106), (9102, 2, 'Plain Book', 2019, NULL);
             INSERT INTO "WorkMetadataFacts" ("WorkId", "FactKey", "Value", "IsManual") VALUES
                 (9101, 'Poster', 'https://127.0.0.1/poster.jpg', TRUE), (9101, 'Backdrop', 'https://127.0.0.1/backdrop.jpg', TRUE),
                 (9101, 'Overview', 'A film that has a trailer.', TRUE), (9101, 'Trailer', 'Way9Dexny3w', TRUE),

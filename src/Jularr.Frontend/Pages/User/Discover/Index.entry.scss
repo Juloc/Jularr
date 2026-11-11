@@ -168,3 +168,13 @@ html[data-discover-layout="grid"] {
 .discover-feedback {
     color: var(--muted);
 }
+
+// What a mode says about itself: audiobooks are coming, or the profile lists nothing for the mode.
+.discover-mode-note {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 16px;
+    color: var(--muted);
+    font-size: var(--text-body);
+}

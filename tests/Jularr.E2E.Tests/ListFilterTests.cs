@@ -61,29 +61,29 @@ namespace Jularr.E2E.Tests
                 var bar = page.Locator(".capsule-bar");
                 await Assertions.Expect(bar).ToHaveCountAsync(1);
                 await Assertions.Expect(bar.Locator(".capsule-bar__all--on")).ToBeVisibleAsync();
-                await Assertions.Expect(page.Locator(".media-card")).ToHaveCountAsync(4);
+                await Assertions.Expect(page.Locator(".media-card")).ToHaveCountAsync(3);
                 await Assertions.Expect(page.Locator("button.choice-select__control")).ToBeVisibleAsync();
                 await Assertions.Expect(page.Locator("[data-layout-toggle]")).ToBeVisibleAsync();
                 var libraryBar = await bar.Locator(".capsule-bar__areas").InnerTextAsync();
 
                 // Types are chosen one by one, several at once; the choice is in the address.
-                await bar.Locator(".capsule-group__item", new() { HasText = "Books" }).ClickAsync();
-                await Assertions.Expect(page).ToHaveURLAsync(new Regex("type=books"));
+                await bar.Locator(".capsule-group__item", new() { HasText = "Series" }).ClickAsync();
+                await Assertions.Expect(page).ToHaveURLAsync(new Regex("type=series"));
                 await Assertions.Expect(page.Locator(".media-card")).ToHaveCountAsync(1);
                 await bar.Locator(".capsule-group__item", new() { HasText = "Movies" }).ClickAsync();
-                await Assertions.Expect(page).ToHaveURLAsync(new Regex("type=movies,books"));
+                await Assertions.Expect(page).ToHaveURLAsync(new Regex("/Library$"));
                 await Assertions.Expect(page.Locator(".media-card")).ToHaveCountAsync(3);
 
                 // The filter panel keeps the types and narrows by release year; the filter button counts the choice.
                 await page.Locator("button[data-drawer-open=library-filter]").ClickAsync();
                 var drawer = page.Locator("dialog#library-filter");
                 await Assertions.Expect(drawer.Locator("input[name=type][value=movies]")).ToBeCheckedAsync();
-                await Assertions.Expect(drawer.Locator("input[name=type][value=series]")).Not.ToBeCheckedAsync();
+                await Assertions.Expect(drawer.Locator("input[name=type][value=series]")).ToBeCheckedAsync();
                 await drawer.GetByText("Since 2020", new() { Exact = true }).ClickAsync();
                 await Steps.FollowAsync(page, drawer.GetByRole(AriaRole.Button, new() { Name = "Apply", Exact = true }));
                 await Assertions.Expect(page).ToHaveURLAsync(new Regex("year=2020"));
-                await Assertions.Expect(page.Locator(".media-card")).ToHaveCountAsync(1);
-                await Assertions.Expect(page.Locator(".media-card__title")).ToContainTextAsync("New Film");
+                await Assertions.Expect(page.Locator(".media-card")).ToHaveCountAsync(2);
+                await Assertions.Expect(page.Locator(".media-card", new() { HasText = "Old Film" })).ToHaveCountAsync(0);
                 await Assertions.Expect(page.Locator("button[data-drawer-open=library-filter] .capsule-bar__badge")).ToHaveTextAsync("1");
 
                 // The order and the layout stay with the choices; the layout is the device's and rows replace the grid.

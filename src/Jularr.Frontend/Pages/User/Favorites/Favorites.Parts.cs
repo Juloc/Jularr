@@ -32,7 +32,7 @@ namespace Jularr.Frontend.Pages.User.Favorites
         private ProgressStateType? ProgressState => Statuses.Where(status => status.Slug == ValidStatus).Select(status => (ProgressStateType?)status.State).FirstOrDefault();
 
         // The media types of the address against the types the profile lists.
-        private ScopeSelection Scopes => _scopes ??= new ScopeSelection(Types, _media);
+        private ScopeSelection Scopes => _scopes ??= new ScopeSelection(Types, _media, texts.Mode);
 
         private IReadOnlyList<string> Picked => Scopes.Picked;
 

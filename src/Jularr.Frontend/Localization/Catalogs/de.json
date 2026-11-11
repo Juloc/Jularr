@@ -4710,6 +4710,66 @@
    "Open details",
    "Details öffnen"
   ],
+  "search.mode.watch": [
+   "Search films, series",
+   "Filme, Serien suchen"
+  ],
+  "search.mode.animanga": [
+   "Search anime, manga",
+   "Anime, Manga suchen"
+  ],
+  "search.mode.read": [
+   "Search books",
+   "Bücher suchen"
+  ],
+  "search.mode.hear": [
+   "Search music",
+   "Musik suchen"
+  ],
+  "search.mode.play": [
+   "Search games",
+   "Spiele suchen"
+  ],
+  "mode.watch": [
+   "Watch",
+   "Schauen"
+  ],
+  "mode.animanga": [
+   "Anime and manga",
+   "Anime und Manga"
+  ],
+  "mode.read": [
+   "Read",
+   "Lesen"
+  ],
+  "mode.hear": [
+   "Listen",
+   "Hören"
+  ],
+  "mode.play": [
+   "Play",
+   "Spielen"
+  ],
+  "mode.switch": [
+   "Switch mode",
+   "Modus wechseln"
+  ],
+  "mode.searchAll": [
+   "Everywhere",
+   "Überall"
+  ],
+  "mode.searchAllTip": [
+   "Search in every mode",
+   "In allen Modi suchen"
+  ],
+  "mode.hear.audiobooks": [
+   "Audiobooks are coming soon. Audiobooks in your library continue under Continue listening.",
+   "Hörbücher kommen bald. Hörbücher aus deiner Bibliothek findest du unter Weiterhören."
+  ],
+  "mode.hidden": [
+   "Your profile lists no media types for this mode. You can turn them on in Settings.",
+   "In deinem Profil ist für diesen Modus nichts aktiviert. Du kannst es in den Einstellungen einschalten."
+  ],
   "media.cardMenu": [
    "More actions for this title",
    "Weitere Aktionen für diesen Titel"
