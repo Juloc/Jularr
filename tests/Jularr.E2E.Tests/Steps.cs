@@ -198,7 +198,7 @@ namespace Jularr.E2E.Tests
         // Found in Discover and requested from its card; the Owner's request is approved at once.
         public static async Task RequestAsync(IPage page, string query, string title)
         {
-            await page.GotoAsync("/?q=" + Uri.EscapeDataString(query));
+            await page.GotoAsync("/?scope=all&q=" + Uri.EscapeDataString(query));
             var card = page.Locator(".media-card", new() { HasText = title });
             await RequestOnCardAsync(card);
         }
@@ -271,16 +271,20 @@ namespace Jularr.E2E.Tests
             var deadline = Stopwatch.StartNew();
             while (deadline.Elapsed < TimeSpan.FromMinutes(2))
             {
-                await page.GotoAsync("/Library");
-                var card = page.GetByRole(AriaRole.Link, new() { Name = title });
-                if (await card.CountAsync() > 0)
+                // The Library shows one mode at a time: look in each until the title shows.
+                foreach (var mode in new[] { "watch", "animanga", "read", "hear", "play" })
                 {
+                    await page.GotoAsync("/Library?mode=" + mode);
+                    var card = page.GetByRole(AriaRole.Link, new() { Name = title });
+                    if (await card.CountAsync() == 0) continue;
                     await FollowAsync(page, card.First);
                     // The primary action may name the unit it opens ("Read · Volume 1").
                     if (await page.GetByRole(AriaRole.Link, new() { NameRegex = new System.Text.RegularExpressions.Regex("^" + System.Text.RegularExpressions.Regex.Escape(action) + "( · .*)?$") }).CountAsync() > 0)
                     {
                         return new Uri(page.Url).PathAndQuery;
                     }
+
+                    break;
                 }
 
                 // The download monitor runs every fifteen seconds.

@@ -49,13 +49,16 @@ namespace Jularr.E2E.Tests
                 await page.SetViewportSizeAsync(width, 844);
                 await page.GotoAsync("/Library");
                 var film = page.Locator(".media-card").Filter(new() { HasText = "Accepted film" });
-                var book = page.Locator(".media-card").Filter(new() { HasText = "Accepted book" });
                 var subtitled = page.Locator(".media-card").Filter(new() { HasText = "Subtitled film" });
                 await Assertions.Expect(film.Locator(".media-availability-badge--profileaudio")).ToBeVisibleAsync();
-                await Assertions.Expect(book.Locator(".media-availability-badge--profileaudio")).ToBeVisibleAsync();
                 await Assertions.Expect(subtitled.Locator(".media-availability-badge--preferredsubtitles")).ToHaveAttributeAsync("aria-label", "Available with subtitles in a preferred language.");
                 await Assertions.Expect(page.Locator(".media-availability-badge--searching")).ToHaveCountAsync(0);
                 await Evidence.SaveAsync(page, "content-availability-library-" + width);
+
+                // The book is in the Read mode.
+                await page.GotoAsync("/Library?mode=read");
+                await Assertions.Expect(page.Locator(".media-card").Filter(new() { HasText = "Accepted book" }).Locator(".media-availability-badge--profileaudio")).ToBeVisibleAsync();
+                await page.GotoAsync("/Library?mode=watch");
 
                 // Cached Trending gets current local availability, including paused-but-present media.
                 await page.GotoAsync("/?type=movies&view=Trending");

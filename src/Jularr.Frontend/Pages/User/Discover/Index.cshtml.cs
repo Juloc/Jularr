@@ -125,8 +125,8 @@ namespace Jularr.Frontend.Pages.User.Discover
         // The scopes shown: every listed one, or the chosen ones.
         private IReadOnlyList<DiscoverScopeV1> Chosen => [.. Listed.Where(scope => IsAll || Requested.Contains(scope.Slug))];
 
-        // Set when exactly one scope is chosen: rankings, catalog search and the back link need a single one.
-        private DiscoverScopeV1? Selected => !IsAll && Chosen.Count == 1 ? Chosen[0] : null;
+        // Set when exactly one scope is chosen, or when the mode holds only one type: rankings, catalog search and the back link need a single one.
+        private DiscoverScopeV1? Selected => Chosen.Count == 1 && (!IsAll || Narrowed) ? Chosen[0] : null;
 
         private DiscoverFeedType? FeedType => FeedSlugs.Where(feed => feed.Slug == Feed).Select(feed => (DiscoverFeedType?)feed.Feed).FirstOrDefault();
 
