@@ -9,8 +9,9 @@ method together. The group with the most methods takes the rest of the class (`~
 methods of the other groups and the excluded ones), so a test the source scan did not see still runs
 exactly once.
 
-Weights. Seconds per test method are the median over the last green Backend Full runs on main
-(`fetch` downloads their timings-* and smoke-results TRX), filled up from tests/ci-durations.json.
+Weights. Seconds per test method are the median over the last three finished Backend Full runs on main
+(`fetch` downloads their timings-* and smoke-results TRX; only passed tests count, so a red main still
+measures its current code), filled up from tests/ci-durations.json.
 A method without a measurement weighs as the median measured method of its class; a class without
 any weighs as its stored class time, else as the median class.
 
@@ -60,6 +61,7 @@ GROUP_LIMIT = 120.0  # a larger class is split into method groups of about this 
 FQN = "FullyQualifiedName"
 # Artifacts of a Backend Full run that hold TRX files with the seconds of every test.
 MEASURED_ARTIFACTS = re.compile(r"^(timings-.+|smoke-results)$")
+FAILED_OUTCOMES = {"Failed", "Error", "Timeout", "Aborted"}
 
 NAMESPACE = re.compile(r"^\s*namespace\s+([\w.]+)", re.M)
 TEST_CLASS = re.compile(r"\[TestClass(?:\([^\]]*\))?\][\s\S]{0,300}?\bclass\s+(\w+)")
@@ -130,7 +132,8 @@ def seconds(value: str) -> float:
 
 def trx_methods(folder: Path) -> dict[str, dict[str, dict[str, float]]]:
     """kind -> class -> method -> seconds for the TRX files of one run. The DataRows of a method are
-    summed per file; a method in several files (smoke and shard) counts once, with its longest time."""
+    summed per file; a method in several files (smoke and shard) counts once, with its longest time.
+    A method with a failed row is no measurement (a failure can be instant or run into a timeout)."""
     result: dict[str, dict[str, dict[str, float]]] = {kind: {} for kind in KINDS}
     for file in sorted(folder.rglob("*.trx")):
         try:
@@ -145,11 +148,16 @@ def trx_methods(folder: Path) -> dict[str, dict[str, dict[str, float]]]:
                 tests[unit.attrib.get("id", "")] = (method.attrib.get("className", "").split(",")[0].strip(),
                                                     method.attrib.get("name", ""))
         sums: dict[tuple[str, str], float] = {}
+        failed: set[tuple[str, str]] = set()
         for outcome in root.findall("./{*}Results/{*}UnitTestResult"):
             key = tests.get(outcome.attrib.get("testId", ""))
             if key and key[1]:
                 sums[key] = sums.get(key, 0.0) + seconds(outcome.attrib.get("duration", "00:00:00"))
+                if outcome.attrib.get("outcome") in FAILED_OUTCOMES:
+                    failed.add(key)
         for (name, method), value in sums.items():
+            if (name, method) in failed:
+                continue
             for kind, (_, namespace) in KINDS.items():
                 if name.startswith(namespace + "."):
                     stored = result[kind].setdefault(name, {})
@@ -397,24 +405,33 @@ def gh_api(path: str) -> bytes:
 
 def fetch(repo: str, out: Path, runs: int = 3, api: Callable[[str], bytes] = gh_api,
           workflow: str = "backend.yml", branch: str = "main") -> list[str]:
-    """Download the TRX files of the last `runs` green Backend Full runs on main into out/RUN_ID/ARTIFACT/.
-    Returns the run IDs that delivered TRX files; any failure only narrows that list."""
+    """Download the TRX files of the last `runs` finished Backend Full runs on main (green or red, not
+    cancelled) that kept timings into out/RUN_ID/ARTIFACT/. Red runs count: trx_methods takes passed tests
+    only, and a red main would otherwise freeze the plan on old code. Returns the run IDs that delivered
+    TRX files; any failure only narrows that list."""
     out.mkdir(parents=True, exist_ok=True)
     try:
-        listing = json.loads(api(f"repos/{repo}/actions/workflows/{workflow}/runs?branch={branch}&status=success&per_page=20"))
+        listing = json.loads(api(f"repos/{repo}/actions/workflows/{workflow}/runs?branch={branch}&status=completed&per_page=20"))
     except (OSError, subprocess.SubprocessError, ValueError) as error:
-        print(f"::warning::Listing the green {workflow} runs failed ({error}).", file=sys.stderr)
+        print(f"::warning::Listing the finished {workflow} runs failed ({error}).", file=sys.stderr)
         return []
-    chosen = [run for run in listing.get("workflow_runs", []) if run.get("conclusion") == "success"][:runs]
     downloads: list[tuple[str, str, int]] = []
-    for run in chosen:
+    chosen = 0
+    for run in listing.get("workflow_runs", []):
+        if chosen == runs:
+            break
+        if run.get("conclusion") not in ("success", "failure"):
+            continue
         try:
             artifacts = json.loads(api(f"repos/{repo}/actions/runs/{run['id']}/artifacts?per_page=100")).get("artifacts", [])
         except (OSError, subprocess.SubprocessError, ValueError) as error:
             print(f"::warning::Listing the artifacts of run {run['id']} failed ({error}).", file=sys.stderr)
             continue
-        downloads += [(str(run["id"]), artifact["name"], artifact["id"]) for artifact in artifacts
-                      if MEASURED_ARTIFACTS.match(artifact.get("name", "")) and not artifact.get("expired")]
+        measured = [(str(run["id"]), artifact["name"], artifact["id"]) for artifact in artifacts
+                    if MEASURED_ARTIFACTS.match(artifact.get("name", "")) and not artifact.get("expired")]
+        if measured:
+            downloads += measured
+            chosen += 1
 
     def download(item: tuple[str, str, int]) -> str:
         run_id, name, artifact_id = item
@@ -593,10 +610,11 @@ def self_test() -> None:
         "no shard without a unit"
 
     # TRX: DataRows of a method summed, a method in two files of one run once, median over runs
-    def trx(rows: list[tuple[str, str, str]]) -> str:
+    def trx(rows: list[tuple[str, str, str]], failed: set[int] = frozenset()) -> str:
         units_xml = "".join(f'<UnitTest id="{index}"><TestMethod className="{cls}" name="{method}"/></UnitTest>'
                             for index, (cls, method, _) in enumerate(rows))
-        results = "".join(f'<UnitTestResult testId="{index}" duration="{duration}"/>' for index, (_, _, duration) in enumerate(rows))
+        results = "".join(f'<UnitTestResult testId="{index}" duration="{duration}" outcome="{"Failed" if index in failed else "Passed"}"/>'
+                          for index, (_, _, duration) in enumerate(rows))
         return f'<TestRun xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010"><Results>{results}</Results><TestDefinitions>{units_xml}</TestDefinitions></TestRun>'
 
     with tempfile.TemporaryDirectory() as folder:
@@ -604,13 +622,14 @@ def self_test() -> None:
         row = "Jularr.Backend.Tests.RowTests"
         for run, (first, second) in {"1": ("00:00:01", "00:00:02"), "2": ("00:00:03", "00:00:04"), "3": ("00:00:10", "00:00:10")}.items():
             (base / run / "timings-backend-0").mkdir(parents=True)
-            (base / run / "timings-backend-0" / "lane1.trx").write_text(trx([(row, "Data", first), (row, "Data", second), (row, "One", first)]))
+            (base / run / "timings-backend-0" / "lane1.trx").write_text(trx([(row, "Data", first), (row, "Data", second), (row, "One", first),
+                                                                             (row, "Broken", first), (row, "Broken", second)], failed={4}))
             (base / run / "smoke-results").mkdir()
             (base / run / "smoke-results" / "smoke.trx").write_text(trx([(row, "One", "00:00:00.5")]))
         (base / "4").mkdir()  # a run without TRX files is no run
         assert [folder.name for folder in run_folders(base)] == ["1", "2", "3"]
         result = measure(run_folders(base))["backend"]
-        assert result.methods[row] == {"Data": 7.0, "One": 3.0}, result.methods
+        assert result.methods[row] == {"Data": 7.0, "One": 3.0}, "DataRows summed, a failed method no measurement"
         filled = merged(result, Measured({row: {"Old": 5.0}}, {"Jularr.Backend.Tests.Other": 4.0}, "file"))
         assert filled.methods[row] == {"Data": 7.0, "One": 3.0, "Old": 5.0} and filled.classes == {"Jularr.Backend.Tests.Other": 4.0}
 
@@ -619,25 +638,28 @@ def self_test() -> None:
         with zipfile.ZipFile(archive, "w") as zipped:
             zipped.writestr("backend-lane1.trx", trx([(row, "Data", "00:00:02")]))
             zipped.writestr("notes.txt", "ignored")
-        responses = {
-            "runs": {"workflow_runs": [{"id": 11, "conclusion": "success"}, {"id": 12, "conclusion": "success"},
-                                       {"id": 13, "conclusion": "failure"}, {"id": 14, "conclusion": "success"},
-                                       {"id": 15, "conclusion": "success"}]},
-            "artifacts": {"artifacts": [{"id": 1, "name": "timings-backend-0"}, {"id": 2, "name": "jularr-build"},
-                                        {"id": 3, "name": "smoke-results"}, {"id": 4, "name": "timings-e2e-6", "expired": True}]},
-        }
+        # the last three finished runs with timings: red ones too, never cancelled ones or runs without timings
+        runs_listed = {"workflow_runs": [{"id": 11, "conclusion": "success"}, {"id": 12, "conclusion": "cancelled"},
+                                         {"id": 13, "conclusion": "failure"}, {"id": 14, "conclusion": "success"},
+                                         {"id": 15, "conclusion": "success"}, {"id": 16, "conclusion": "success"}]}
+        artifacts = {"artifacts": [{"id": 1, "name": "timings-backend-0"}, {"id": 2, "name": "jularr-build"},
+                                   {"id": 3, "name": "smoke-results"}, {"id": 4, "name": "timings-e2e-6", "expired": True}]}
         requested: list[str] = []
 
         def fake_api(path: str) -> bytes:
             requested.append(path)
             if path.endswith("/zip"):
                 return archive.getvalue()
+            if "/runs/14/artifacts?" in path:
+                return json.dumps({"artifacts": [{"id": 9, "name": "jularr-build"}]}).encode()
             if "/artifacts?" in path:
-                return json.dumps(responses["artifacts"]).encode()
-            return json.dumps(responses["runs"]).encode()
+                return json.dumps(artifacts).encode()
+            assert "status=completed" in path, path
+            return json.dumps(runs_listed).encode()
 
         target = base / "fetched"
-        assert fetch("o/r", target, 3, fake_api) == ["11", "12", "14"]
+        assert fetch("o/r", target, 3, fake_api) == ["11", "13", "15"]
+        assert not any("/runs/12/" in path or "/runs/16/" in path for path in requested), requested
         assert sorted(path for path in requested if path.endswith("/zip")) == ["repos/o/r/actions/artifacts/1/zip"] * 3 + ["repos/o/r/actions/artifacts/3/zip"] * 3
         assert not list(target.rglob("*.txt")) and len(list(target.rglob("*.trx"))) == 6
         assert durations_for("backend", target, base / "missing.json").methods[row] == {"Data": 2.0}
@@ -648,7 +670,7 @@ def self_test() -> None:
         with contextlib.redirect_stderr(io.StringIO()) as log:
             assert fetch("o/r", base / "none", 3, broken_api) == []
             assert durations_for("backend", base / "none").source == load_durations("backend").source, "fallback to the committed file"
-        assert "Listing the green backend.yml runs failed" in log.getvalue() and "uses ci-durations.json" in log.getvalue()
+        assert "Listing the finished backend.yml runs failed" in log.getvalue() and "uses ci-durations.json" in log.getvalue()
         assert durations_for("backend", None).source == load_durations("backend").source
 
     # discovery against a temporary tree: block and file-scoped namespaces, attributes, partial parts,
@@ -767,9 +789,9 @@ def main() -> int:
     if args.command == "fetch":
         runs = fetch(args.repo, args.out, args.runs)
         if runs:
-            print(f"Durations: median of the green Backend Full runs {', '.join(runs)} on main.")
+            print(f"Durations: median of the Backend Full runs {', '.join(runs)} on main (passed tests).")
         else:
-            print(f"::notice::No green Backend Full run with timings found: the plan uses {DURATIONS.relative_to(ROOT)}.")
+            print(f"::notice::No Backend Full run with timings found: the plan uses {DURATIONS.relative_to(ROOT)}.")
         return 0
     if args.command == "lanes":
         document = json.loads(args.plan.read_text(encoding="utf-8"))
