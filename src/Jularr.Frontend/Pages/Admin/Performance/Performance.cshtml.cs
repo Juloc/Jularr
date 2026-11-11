@@ -6,7 +6,8 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Jularr.Frontend.Pages.Admin.Performance
 {
-    // How hard the process works: the processor and memory now, what answers take on average and how many fail, the load of the last 24 hours and what each service took.
+    // How hard the process works: the processor and memory now, what answers take on average and how many fail, the load of the last 24 hours, each page's server time
+    // against its budget and what each service took.
     public sealed class PerformanceModel(ReadResourceSamplesV1 readResources, ReadServiceTimingsV1 readTimings, FrontendAssets assets) : JularrPage
     {
         private ResourceHistoryV1? _resources;
@@ -34,6 +35,19 @@ namespace Jularr.Frontend.Pages.Admin.Performance
                 page.Content.Add(new UiSection("performance.history", [new ResourceChart(resources.Samples, resources.AvailableMemoryBytes)]));
             }
 
+            // A page is over its budget when its average is; its longest call may be a cold start.
+            var budget = (int)PageBudgets.Server.TotalMilliseconds;
+            page.Content.Add(new UiSection("performance.pages", [timings.Pages.Count > 0
+                ? new Table<ServiceTimingV1>(timings.Pages).Dense()
+                    .Text(item => item.Service, "performance.page")
+                    .Content("performance.calls", item => new ValueText(item.Count.ToString("N0", CultureInfo.CurrentCulture)))
+                    .Content("performance.average", item => new ValueText(item.AverageMilliseconds.ToString("N0", CultureInfo.CurrentCulture) + " ms"))
+                    .Content("performance.maximum", item => new ValueText(item.MaximumMilliseconds.ToString("N0", CultureInfo.CurrentCulture) + " ms"))
+                    .Content("performance.budget", item => new ValueText(budget.ToString("N0", CultureInfo.CurrentCulture) + " ms"))
+                    .Content("performance.budgetState", item => item.AverageMilliseconds > budget
+                        ? new StateChip(new Text("performance.overBudget"), UiTone.Warning)
+                        : new StateChip(new Text("performance.withinBudget"), UiTone.Success))
+                : new P(new Text("performance.pagesEmpty"))]));
             page.Content.Add(new UiSection("performance.services", [timings.Services.Count > 0
                 ? new Table<ServiceTimingV1>(timings.Services).Dense()
                     .Text(item => item.Service, "performance.service")

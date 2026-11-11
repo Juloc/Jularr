@@ -3,6 +3,7 @@ using System.Text.Json;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Enums.Service;
+using Jularr.Backend.Data.Enums.Sql;
 using Jularr.Backend.Data.Logic.Media;
 using Jularr.Backend.Data.System.Media.V1;
 using Jularr.Backend.Logic.Media;
@@ -14,6 +15,27 @@ using Jularr.Integrations.Logic.Tmdb;
 
 namespace Jularr.Backend.Service.System.Media.V1
 {
+    // The catalog and system pages read the catalogs' figures the worker counted: every catalog pass counts again once the last count is five minutes old,
+    // whatever modules are on, as Discover and searches add catalog titles too. The cleanup counts after it deleted titles.
+    public sealed class CountCatalogTitlesV1 : SystemService<SyncExternalWorksParametersV1, NoData>
+    {
+        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
+        protected override ModuleRequirement GetInstanceModules(SyncExternalWorksParametersV1 parameters) => ModuleRequirement.None;
+        protected override ServicePermission GetPermission(SyncExternalWorksParametersV1 parameters, Type resultType) => new("system.media");
+
+        protected override async Task<IServiceOutput> OnExecute()
+        {
+            if (!await Context.ExecuteBatchAsync((ctx, ct) => ctx.AreCatalogTotalsDueAsync(ct), CancellationToken, mode: SqlAccessMode.ReadOnly))
+            {
+                return new UpdateResult(false);
+            }
+
+            await Context.ExecuteBatchAsync((ctx, ct) => ctx.RefreshCatalogTotalsAsync(ct), CancellationToken);
+            return new UpdateResult(true);
+        }
+    }
+
     // One pass of full local discovery for TMDB films and AniList: TMDB's daily id list, the changes, then the next entries by popularity.
     // Provider reads happen between short write batches, never inside one.
     public sealed class SyncExternalWorksV1 : SystemService<SyncExternalWorksParametersV1, NoData>

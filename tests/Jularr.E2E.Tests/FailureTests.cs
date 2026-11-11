@@ -192,7 +192,7 @@ namespace Jularr.E2E.Tests
                 while (!fakes.Grabbed.Contains(fakes.NzbAddress(Film).ToString()))
                 {
                     Assert.IsTrue(waited.Elapsed < TimeSpan.FromMinutes(6), "The release was not taken automatically within six minutes.");
-                    await Task.Delay(3000);
+                    await Task.Delay(250);
                 }
 
                 // The doubt shows with its reason and the actions that decide it; there is nothing to pause while it waits.
@@ -216,7 +216,7 @@ namespace Jularr.E2E.Tests
                 while (!fakes.Grabbed.Contains(fakes.NzbAddress(LowerFilm).ToString()))
                 {
                     Assert.IsTrue(waited.Elapsed < TimeSpan.FromMinutes(6), "The next release was not taken within six minutes.");
-                    await Task.Delay(3000);
+                    await Task.Delay(250);
                 }
 
                 var details = await Steps.WaitForAvailableAsync(page, FakeServices.MovieTitle);
@@ -235,20 +235,13 @@ namespace Jularr.E2E.Tests
         // The queue row with this reason once the download monitor has read the finished download.
         private static async Task<ILocator> WaitForQueueRowAsync(IPage page, string reason)
         {
-            var deadline = DateTime.UtcNow.AddMinutes(2);
-            while (DateTime.UtcNow < deadline)
+            var row = Steps.ListRow(page, reason);
+            await Steps.WaitForDownloadMonitorAsync(page, async () =>
             {
                 await page.GotoAsync("/Admin/Queue");
-                var row = Steps.ListRow(page, reason);
-                if (await row.CountAsync() > 0)
-                {
-                    return row.First;
-                }
-
-                await page.WaitForTimeoutAsync(3000);
-            }
-
-            throw new AssertFailedException("No download waited with '" + reason + "' within two minutes.");
+                return await row.CountAsync() > 0;
+            }, "No download waited with '" + reason + "'", TimeSpan.FromMinutes(2));
+            return row.First;
         }
 
         private static Task<JularrInstance> StartAsync(FakeServices fakes, Folders folders) => JularrInstance.StartAsync(new Dictionary<string, string>
@@ -288,25 +281,13 @@ namespace Jularr.E2E.Tests
             }
         }
 
-        // The queue row once the download monitor reports the failure.
         // The failure reaches the History (and leaves the queue) with the download monitor's next pass.
-        private static async Task WaitForFailureInHistoryAsync(IPage page)
-        {
-            var deadline = DateTime.UtcNow.AddMinutes(2);
-            while (DateTime.UtcNow < deadline)
+        private static async Task WaitForFailureInHistoryAsync(IPage page) =>
+            await Steps.WaitForDownloadMonitorAsync(page, async () =>
             {
                 await page.GotoAsync("/Admin/Queue/History");
-                if (await Steps.ListRow(page, "Download failed").CountAsync() > 0)
-                {
-                    return;
-                }
-
-                // The download monitor runs every fifteen seconds.
-                await page.WaitForTimeoutAsync(3000);
-            }
-
-            throw new AssertFailedException("No failed download in the History within two minutes.");
-        }
+                return await Steps.ListRow(page, "Download failed").CountAsync() > 0;
+            }, "No failed download in the History", TimeSpan.FromMinutes(2));
 
         // Another process may hold a file inside for a moment.
         private static async Task MoveAsync(string from, string to)

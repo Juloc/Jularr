@@ -8,18 +8,18 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using Jularr.Integrations.Data.Common;
 using Jularr.Integrations.Data.Igdb;
+using Jularr.Integrations.Logic.Common;
 
 namespace Jularr.Integrations.Logic.Igdb
 {
     // IGDB through a Twitch application token; tokens are cached until shortly before they expire.
-    internal sealed partial class IgdbClient(HttpClient http)
+    internal sealed partial class IgdbClient(HttpClient http, RequestPace<IgdbClient>? pace = null)
     {
         private static readonly Uri TokenEndpoint = new("https://id.twitch.tv/oauth2/token");
         private static readonly Uri Api = new("https://api.igdb.com/v4/");
         private static readonly ConcurrentDictionary<string, (string Token, DateTimeOffset Expires)> Tokens = new(StringComparer.Ordinal);
-        private static readonly SemaphoreSlim Pace = new(1, 1);
-        private static readonly TimeSpan Spacing = TimeSpan.FromMilliseconds(260);
-        private static DateTimeOffset _last = DateTimeOffset.MinValue;
+        public static readonly TimeSpan DefaultSpacing = TimeSpan.FromMilliseconds(260);
+        private readonly RequestPace<IgdbClient> _pace = pace ?? new(DefaultSpacing);
 
         private const string Fields = "fields name,first_release_date,summary,cover.image_id,platforms.name,platforms.abbreviation,"
             + "involved_companies.company.id,involved_companies.company.name,involved_companies.developer,alternative_names.name;";
@@ -141,15 +141,10 @@ namespace Jularr.Integrations.Logic.Igdb
         private async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
         {
             // IGDB allows four requests per second.
-            await Pace.WaitAsync(ct);
+            await _pace.Gate.WaitAsync(ct);
             try
             {
-                var wait = _last + Spacing - DateTimeOffset.UtcNow;
-                if (wait > TimeSpan.Zero)
-                {
-                    await Task.Delay(wait, ct);
-                }
-
+                await _pace.WaitForTurnAsync(ct);
                 return await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
             }
             catch (Exception exception) when (exception is HttpRequestException || exception is TaskCanceledException && !ct.IsCancellationRequested)
@@ -158,8 +153,9 @@ namespace Jularr.Integrations.Logic.Igdb
             }
             finally
             {
-                _last = DateTimeOffset.UtcNow;
-                Pace.Release();
+                // The spacing counts from the end of the request.
+                _pace.Last = DateTimeOffset.UtcNow;
+                _pace.Gate.Release();
             }
         }
 

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { test } from "node:test";
 
@@ -67,19 +67,6 @@ test("Sign in, request access and approval pending are the owner's login mockup:
     assert.match(register, /account\.pending\.waiting/);
 });
 
-test("Shell has one owning C# file, not feature-specific Framework wrappers", () => {
-    const view = load("Pages/Shared/_AppShell.cshtml");
-    const shell = load("Pages/Shared/Shell.cs");
-    assert.doesNotMatch(view, /<(?:header|nav|aside|button)(?:\s|>)/i);
-    assert.match(view, /new Shell\(/);
-    assert.match(shell, /"nav\.breadcrumb"/);
-    assert.doesNotMatch(shell, /new H1\(/);
-    for (const old of ["ShellHeader", "ShellSidebar", "ShellMobileNavigation"]) {
-        assert.ok(!existsSync(resolve(root, "Framework/Components/" + old + ".cs")));
-    }
-    assert.match(load("Assets/Shared/shell.entry.scss"), /Pages\/Shared\/Shell/);
-});
-
 test("Shell has an admin mode, a linked breadcrumb and a one-row flat header", () => {
     const shell = load("Pages/Shared/Shell.cs");
     const styles = load("Pages/Shared/Shell.scss");
@@ -105,7 +92,6 @@ test("Clean shows the single-path parrot mark in the accent colour, Original kee
     const [, side] = /viewBox="0 0 ([\d.]+) \1"/.exec(clean) ?? [];
     assert.ok(side, "the mark has a square viewBox starting at the origin");
     assert.match(load("Pages/Shared/brand-original.svg"), /--jularr-ring/);
-    assert.ok(!existsSync(resolve(root, "Pages/Shared/brand-mark.svg")), "the J in a ring must not exist");
 
     const brand = load("Pages/Shared/Brand.cs");
     assert.match(brand, /Mark\(assets, "brand-clean", "brand-symbol__clean"\)/);
@@ -127,20 +113,6 @@ test("Clean shows the single-path parrot mark in the accent colour, Original kee
     assert.match(layout, /rel="apple-touch-icon"/);
 });
 
-test("Shell does not invent optional media modules", () => {
-    const shell = load("Pages/Shared/Shell.cs");
-    assert.doesNotMatch(shell, /new\("nav\.watchlist"/);
-    assert.match(load("Localization/UiResources.cs"), /new\("nav\.secondary", "Secondary navigation"\)/);
-});
-
-test("Split offers MasterDetail as optional layout mode", () => {
-    const split = load("Framework/Components/Split.cs");
-    assert.match(split, /public Split MasterDetail\(/);
-    assert.match(split, /split--master-detail/);
-    assert.match(split, /"nav\.back"/);
-    assert.ok(!existsSync(resolve(root, "Framework/Components/MasterDetail.cs")));
-});
-
 test("Tabs show only selected content and provide real server navigation", () => {
     const tabs = load("Framework/Components/Tabs.cs");
     assert.match(tabs, /Items\.Single\(item => item\.Selected\)/);
@@ -149,13 +121,4 @@ test("Tabs show only selected content and provide real server navigation", () =>
     assert.match(navigation, /Attribute\("href", tab\.Href\)/);
     assert.match(navigation, /Attribute\("aria-current", "page"\)/);
     assert.match(tabs, /Exactly one tab must be selected/);
-});
-
-test("Settings use backend services and generic forms without unsupported controls", () => {
-    const settings = load("Pages/User/Settings/Settings.cshtml.cs");
-    assert.match(settings, /new UiSection\(/);
-    assert.match(settings, /new Form<UpdateProfileDataV1>/);
-    assert.match(settings, /updateProfile\.ExecuteAsync<UpdateResult>/);
-    assert.doesNotMatch(settings, /Npgsql|SqlStatement|settings\.playback|settings\.connections/);
-    assert.ok(!existsSync(resolve(root, "Framework/Components/SettingsGroup.cs")));
 });

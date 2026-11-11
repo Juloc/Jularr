@@ -35,9 +35,9 @@ jobs:
           - 15433:5432
         options: >-
           --health-cmd "pg_isready -U jularr_test -d jularr_test_admin"
-          --health-interval 5s
+          --health-interval 1s
           --health-timeout 5s
-          --health-retries 10
+          --health-retries 60
     env:
       JULARR_TEST_DB: Host=127.0.0.1;Port=15433;Username=jularr_test;Password=isolated-test-password;Database=jularr_test_admin
     steps:
@@ -65,6 +65,12 @@ jobs:
           npm run build
       - name: Compile E2E test host
         run: dotnet build tests/Jularr.E2E.Tests --configuration Release
+      # The same key as the browser shards of Backend Full, so a PR reuses the browser main downloaded.
+      - name: Cache the Playwright browser
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('tests/Jularr.E2E.Tests/Jularr.E2E.Tests.csproj') }}
       - name: Install Chromium
         uses: ./.github/actions/install-chromium
       - name: Check installation, sign-in, session expiry and timezone in Chromium

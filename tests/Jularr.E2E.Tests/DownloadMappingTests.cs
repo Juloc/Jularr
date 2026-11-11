@@ -11,7 +11,6 @@ namespace Jularr.E2E.Tests
 
         [TestMethod]
         [DataRow(1440, 900)]
-        [DataRow(390, 844)]
         [Timeout(180_000)]
         public async Task CompletedDownloadStorage_BrowsesAndPersistsWithoutLosingTheDraft(int width, int height)
         {

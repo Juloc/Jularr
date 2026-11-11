@@ -691,7 +691,9 @@ namespace Jularr.Backend.Tests
         {
             var day = new DateTime(2026, 11, 6, 0, 0, 0, DateTimeKind.Utc);
             var taken = new Dictionary<long, DateTime>();
-            await using var source = NpgsqlDataSource.Create(cs);
+
+            // 720 cycles of the same query: pooled connections that keep it prepared, instead of a new connection planning it again each time.
+            await using var source = NpgsqlDataSource.Create(new NpgsqlConnectionStringBuilder(cs) { Pooling = true, MaxAutoPrepare = 20 }.ConnectionString);
             for (var minute = 0; minute < 1440; minute += 2)
             {
                 var now = day.AddMinutes(minute);
@@ -706,7 +708,11 @@ namespace Jularr.Backend.Tests
                     if (perHour is not null) perHour[minute / 60]++;
                     if (markSearched)
                     {
-                        await ExecuteAsync(cs, $"UPDATE \"WantedItems\" SET \"LastSearchedAt\" = '{now:O}', \"PeriodicSearchAt\" = '{now.AddDays(7):O}' WHERE \"Id\" = {item.WantedItemId}");
+                        await using var searched = source.CreateCommand("UPDATE \"WantedItems\" SET \"LastSearchedAt\" = @now, \"PeriodicSearchAt\" = @next WHERE \"Id\" = @id");
+                        searched.Parameters.AddWithValue("now", now);
+                        searched.Parameters.AddWithValue("next", now.AddDays(7));
+                        searched.Parameters.AddWithValue("id", item.WantedItemId);
+                        await searched.ExecuteNonQueryAsync();
                     }
                 }
             }

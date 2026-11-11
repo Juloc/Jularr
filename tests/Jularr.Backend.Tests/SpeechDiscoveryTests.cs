@@ -33,24 +33,6 @@ namespace Jularr.Backend.Tests
         });
 
         [TestMethod]
-        public async Task Source_ExplicitOfficialMetadataSmoke()
-        {
-            if (Environment.GetEnvironmentVariable("JULARR_SPEECH_LIVE_METADATA") != "1") Assert.Inconclusive("Explicit external metadata smoke only.");
-            using var http = new HttpClient();
-            var packages = await new SpeechCatalogClient(http).ReadAsync(default);
-            Assert.IsTrue(packages.Count > 3);
-            Assert.IsTrue(packages.Any(package => package.Key == "de_DE-eva_k-x_low"));
-            Console.WriteLine("Official compatible packages: " + packages.Count);
-            using var models = new TemporaryDirectory();
-            var files = new SpeechFiles(Options.Create(new MediaOptions { SpeechPath = models.Path }), new SpeechModelClient(http), new SpeechCatalogClient(http));
-            var discovered = await files.DiscoverAsync(default);
-            var parsed = SpeechCatalog.Parse(JsonSerializer.Serialize(new { models = discovered }, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
-            Assert.AreEqual(discovered.Count, parsed.Count, "Excluded metadata: " + string.Join(", ", discovered.Where(model => !parsed.Any(item => item.Id == model.Id)).Select(model => model.Id)));
-            await files.SaveDiscoveredAsync(discovered, default);
-            Assert.IsTrue((await files.CatalogAsync(default)).Count > 3);
-        }
-
-        [TestMethod]
         public void Catalog_GenderRequiresKnownClassificationAndSource()
         {
             var node = JsonNode.Parse(JsonSerializer.Serialize(new { models = new[] { new { id = "fixture", version = "1", name = "Fixture", language = "de-DE", voice = "0",

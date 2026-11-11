@@ -44,11 +44,12 @@ namespace Jularr.Frontend.Pages.Admin.Catalog
                     .Attribute("role", "status"));
             }
 
-            // The figures, then the catalogs.
+            // The figures, then the catalogs; the titles are the worker's last count, and before its first one they are being counted.
+            var counted = _syncs.All(sync => sync.CountedAt is not null);
             page.Content.Add(new KpiTiles(
                 new KpiTile("admin.catalog.kpi.catalogs", Number(_syncs.Count), Glyph("globe"), UiTone.Accent),
-                new KpiTile("admin.catalog.entries", Number(_syncs.Sum(sync => sync.Entries)), Glyph("layers"), UiTone.Success),
-                new KpiTile("admin.catalog.pending", Number(_syncs.Sum(sync => sync.Pending)), Glyph("clock"), UiTone.Warning)).Strip());
+                new KpiTile("admin.catalog.entries", counted ? Number(_syncs.Sum(sync => sync.Entries)) : new Text("admin.catalog.counting"), Glyph("layers"), UiTone.Success),
+                new KpiTile("admin.catalog.pending", counted ? Number(_syncs.Sum(sync => sync.Pending)) : new Text("admin.catalog.counting"), Glyph("clock"), UiTone.Warning)).Strip());
 
             // Each catalog is a card with its counts and its own inputs, saved by the page's pill.
             page.Content.Add(new CardGrid([.. _syncs.Select(sync => Card(sync, token))]));
@@ -89,7 +90,10 @@ namespace Jularr.Frontend.Pages.Admin.Catalog
                 ? new StateChip(new Text("admin.catalog.state.active"), UiTone.Success, Glyph("check", 14))
                 : new StateChip(new Text("admin.catalog.state.off"), UiTone.Neutral, Glyph("pause", 14));
             var listed = sync.ListedOn is { } date ? new ValueText(date.ToString("d", CultureInfo.CurrentCulture)) : new ValueText("–");
-            var body = new List<IUiComponent> { Fact("admin.catalog.entries", Number(sync.Entries)), Fact("admin.catalog.pending", Number(sync.Pending)), Fact("admin.catalog.listedOn", listed) };
+            var body = sync.CountedAt is { } countedAt
+                ? new List<IUiComponent> { Fact("admin.catalog.entries", Number(sync.Entries)), Fact("admin.catalog.pending", Number(sync.Pending)), Fact("admin.catalog.countedAt", new LocalTime(countedAt, "time")) }
+                : [Fact("admin.catalog.entries", new Text("admin.catalog.counting")), Fact("admin.catalog.pending", new Text("admin.catalog.counting"))];
+            body.Add(Fact("admin.catalog.listedOn", listed));
 
             var data = _draftNamespace == sync.Namespace ? _draft! : new UpdateExternalWorkSyncDataV1(sync.RequestsPerMinute, sync.PausesWhileUsed, sync.Version, sync.Windows);
             var address = "/Admin/Catalog?namespace=" + Uri.EscapeDataString(sync.Namespace);

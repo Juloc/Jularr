@@ -31,9 +31,9 @@ namespace Jularr.Frontend.Pages.Admin.Work
 
     // One page per title: films and series are managed here, with their seasons, files, searches and history; other types still show their metadata.
     public sealed partial class WorkModel(ReadWorkV1 read, UpdateWorkV1 update, UpdateWorkFranchiseV1 updateFranchise, RefreshWorkMetadataV1 refresh, ReadWorkUnitGroupsV1 readGroups, CreateWorkUnitGroupV1 createGroup,
-        DeleteWorkUnitGroupV1 deleteGroup, SearchMetadataV1 search, RematchWorkV1 rematch, ReadWorkManagementV1 readManagement, ReadWantedItemV1 readWanted, UpdateWantedV1 updateWanted, ReadWantedLanguagesV1 readLanguages, SaveWantedLanguagesV1 saveLanguages, StartWorkMonitoringV1 startMonitoring, UpdateWantedUnitV1 updateUnit,
+        DeleteWorkUnitGroupV1 deleteGroup, SearchMetadataV1 search, RematchWorkV1 rematch, ReadWorkManagementV1 readManagement, ReadWantedItemV1 readWanted, ReadWantedItemsV1 readTargets, UpdateWantedV1 updateWanted, ReadWantedLanguagesV1 readLanguages, SaveWantedLanguagesV1 saveLanguages, StartWorkMonitoringV1 startMonitoring, UpdateWantedUnitV1 updateUnit,
         SearchWantedAutomaticallyV1 automatic, QueueWorksSearchV1 queueSearch, ReadWantedReleasesV1 readReleases, MarkWantedReleaseV1 markRelease, ReadActivityEventsV1 readEvents, ReadAcquisitionProfilesV1 profiles, ReadWantedLibrariesV1 libraries,
-        ReadAcquisitionTagsV1 tags, ReadAcquisitionTagV1 tag, DeleteLibraryFilesV1 deleteFiles, DeleteDocumentTranslationV1 deleteTranslation, DeleteWorkV1 deleteWork, UpdateWorkEditionV1 updateEdition, UpdateLibraryFileFactsV1 updateFacts, ReadLibraryRenamesV1 readRenames, ApplyLibraryRenamesV1 applyRenames, FrontendAssets assets,
+        ReadAcquisitionTagsV1 tags, DeleteLibraryFilesV1 deleteFiles, DeleteDocumentTranslationV1 deleteTranslation, DeleteWorkV1 deleteWork, UpdateWorkEditionV1 updateEdition, UpdateLibraryFileFactsV1 updateFacts, ReadLibraryRenamesV1 readRenames, ApplyLibraryRenamesV1 applyRenames, FrontendAssets assets,
         IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         private SearchMetadataDataV1? _matchQuery;
@@ -303,49 +303,67 @@ namespace Jularr.Frontend.Pages.Admin.Work
             return work.WantedItemId ?? throw new KeyNotFoundException("The title is not wanted.");
         }
 
+        // The reads run together in two rounds, the title with its management, then what they name: its targets in one read, the choices of the edit dialog and the
+        // tab's lists. Chosen tags the first page of choices lacks come in one more read.
         protected override async Task LoadDataAsync()
         {
             var ct = HttpContext.RequestAborted;
-            _work = await read.ExecuteAsync<WorkDetailsV1>(new WorkParametersV1(Id), ct);
-            if (texts.CanGroupUnits() && (!Managed || Tab == WorkTab.Metadata))
+            var workTask = read.ExecuteAsync<WorkDetailsV1>(new WorkParametersV1(Id), ct);
+            var managementTask = readManagement.ExecuteAsync<WorkManagementV1>(new WorkParametersV1(Id), ct);
+            await Task.WhenAll(workTask, managementTask);
+            _work = await workTask;
+            var grouped = texts.CanGroupUnits() && (!Managed || Tab == WorkTab.Metadata);
+            if (!Managed)
             {
-                _groups = await readGroups.ExecuteAsync<BaseDataList<WorkUnitGroupV1>>(new WorkParametersV1(Id), ct);
+                if (grouped) _groups = await readGroups.ExecuteAsync<BaseDataList<WorkUnitGroupV1>>(new WorkParametersV1(Id), ct);
+                return;
             }
 
-            if (!Managed) return;
-
-            _management = await readManagement.ExecuteAsync<WorkManagementV1>(new WorkParametersV1(Id), ct);
-            if (texts.CanManageWanted() && _management.WantedItemId is { } wantedItemId)
-            {
-                _wanted = await readWanted.ExecuteAsync<WantedDetailsV1>(new WantedItemParametersV1(wantedItemId), ct);
-                if (_work is { MediaTypeId: MediaType.Book, MediaSubtypeId: not MediaSubtype.Manga }) _languages = await readLanguages.ExecuteAsync<WantedLanguagesV1>(new WantedItemParametersV1(wantedItemId), ct);
-                if (Tab == WorkTab.History) _releases = await readReleases.ExecuteAsync<BaseDataList<WantedReleaseV1>>(new WantedItemParametersV1(wantedItemId), ct);
-                if (CanAcquire)
-                {
-                    _profiles = await profiles.ExecuteAsync<BaseDataList<AcquisitionProfileDetailsV1>>(new ReadAcquisitionProfilesParametersV1(wantedItemId), ct);
-                    _libraries = await libraries.ExecuteAsync<BaseDataList<WantedLibraryV1>>(new WantedItemParametersV1(wantedItemId), ct);
-                    var page = await tags.ExecuteAsync<PageResult<AcquisitionTagDetailsV1>>(new ReadAcquisitionTagsParametersV1(1), ct);
-                    var choices = page.Items.ToList();
-                    foreach (var id in (_choice?.TagIds ?? _wanted.TagIds).Where(id => !choices.Any(item => item.Id == id)).Take(100))
-                    {
-                        choices.Add(await tag.ExecuteAsync<AcquisitionTagDetailsV1>(new AcquisitionTagParametersV1(id), ct));
-                    }
-
-                    _tagChoices = choices.Select(item => new SelectOption(item.Id.ToString(CultureInfo.InvariantCulture), item.Label)).ToArray();
-                }
-            }
+            _management = await managementTask;
+            var wantedItemId = texts.CanManageWanted() ? _management.WantedItemId : null;
 
             // A game is wanted per platform; each target has its own settings to edit.
-            if (_management.MediaTypeId == MediaType.Game && CanAcquire && texts.CanManageWanted())
-            {
-                foreach (var group in _management.Groups.Where(group => group.WantedItemId is not null))
-                {
-                    _platformTargets[group.WantedItemId!.Value] = await readWanted.ExecuteAsync<WantedDetailsV1>(new WantedItemParametersV1(group.WantedItemId.Value), ct);
-                }
-            }
+            long[] platforms = _management.MediaTypeId == MediaType.Game && CanAcquire && texts.CanManageWanted()
+                ? [.. _management.Groups.Where(group => group.WantedItemId is not null).Select(group => group.WantedItemId!.Value)]
+                : [];
+            long[] targetIds = [.. (wantedItemId is { } own ? platforms.Prepend(own) : platforms).Distinct()];
+            var choices = wantedItemId is not null && CanAcquire;
+            var targetsTask = ReadWhenAsync(targetIds.Length > 0, () => readTargets.ExecuteAsync<BaseDataList<WantedDetailsV1>>(new ReadWantedItemsParametersV1(targetIds), ct));
+            var groupsTask = ReadWhenAsync(grouped, () => readGroups.ExecuteAsync<BaseDataList<WorkUnitGroupV1>>(new WorkParametersV1(Id), ct));
+            var languagesTask = ReadWhenAsync(wantedItemId is not null && _work is { MediaTypeId: MediaType.Book, MediaSubtypeId: not MediaSubtype.Manga },
+                () => readLanguages.ExecuteAsync<WantedLanguagesV1>(new WantedItemParametersV1(wantedItemId!.Value), ct));
+            var releasesTask = ReadWhenAsync(wantedItemId is not null && Tab == WorkTab.History, () => readReleases.ExecuteAsync<BaseDataList<WantedReleaseV1>>(new WantedItemParametersV1(wantedItemId!.Value), ct));
+            var profilesTask = ReadWhenAsync(choices, () => profiles.ExecuteAsync<BaseDataList<AcquisitionProfileDetailsV1>>(new ReadAcquisitionProfilesParametersV1(wantedItemId!.Value), ct));
+            var librariesTask = ReadWhenAsync(choices, () => libraries.ExecuteAsync<BaseDataList<WantedLibraryV1>>(new WantedItemParametersV1(wantedItemId!.Value), ct));
+            var tagsTask = ReadWhenAsync(choices, () => tags.ExecuteAsync<PageResult<AcquisitionTagDetailsV1>>(new ReadAcquisitionTagsParametersV1(1), ct));
+            var renamesTask = ReadWhenAsync(Tab == WorkTab.Files && texts.CanManageStorage(), () => readRenames.ExecuteAsync<LibraryRenamePlanV1>(new ReadLibraryRenamesParametersV1(1, 100, Id), ct));
+            var eventsTask = ReadWhenAsync(Tab == WorkTab.History, () => readEvents.ExecuteAsync<PageResult<ActivityEventV1>>(new ReadActivityEventsParametersV1(Id, Math.Max(1, HistoryPage)), ct));
+            await Task.WhenAll(targetsTask, groupsTask, languagesTask, releasesTask, profilesTask, librariesTask, tagsTask, renamesTask, eventsTask);
 
-            if (Tab == WorkTab.Files && texts.CanManageStorage()) _renames = await readRenames.ExecuteAsync<LibraryRenamePlanV1>(new ReadLibraryRenamesParametersV1(1, 100, Id), ct);
-            if (Tab == WorkTab.History) _events = await readEvents.ExecuteAsync<PageResult<ActivityEventV1>>(new ReadActivityEventsParametersV1(Id, Math.Max(1, HistoryPage)), ct);
+            var targets = (await targetsTask)?.ToDictionary(target => target.Id) ?? [];
+            _wanted = wantedItemId is { } wanted ? targets.GetValueOrDefault(wanted) : null;
+            foreach (var platform in platforms.Where(targets.ContainsKey)) _platformTargets[platform] = targets[platform];
+            _groups = await groupsTask ?? _groups;
+            _languages = await languagesTask;
+            _releases = await releasesTask ?? _releases;
+            _profiles = await profilesTask ?? _profiles;
+            _libraries = await librariesTask ?? _libraries;
+            _renames = await renamesTask;
+            _events = await eventsTask;
+            if (await tagsTask is { } page && _wanted is { } target)
+            {
+                var listed = page.Items.ToList();
+                long[] missing = [.. (_choice?.TagIds ?? target.TagIds).Where(id => !listed.Any(item => item.Id == id)).Distinct().Take(100)];
+                if (missing.Length > 0)
+                {
+                    var found = (await tags.ExecuteAsync<PageResult<AcquisitionTagDetailsV1>>(new ReadAcquisitionTagsParametersV1(1, 100, missing), ct)).Items.ToDictionary(item => item.Id);
+                    listed.AddRange(missing.Where(found.ContainsKey).Select(id => found[id]));
+                }
+
+                _tagChoices = listed.Select(item => new SelectOption(item.Id.ToString(CultureInfo.InvariantCulture), item.Label)).ToArray();
+            }
         }
+
+        private static async Task<TResult?> ReadWhenAsync<TResult>(bool shown, Func<Task<TResult>> read) where TResult : class => shown ? await read() : null;
     }
 }

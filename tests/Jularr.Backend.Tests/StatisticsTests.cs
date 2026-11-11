@@ -1,9 +1,11 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.RegularExpressions;
 using Jularr.Backend.Data.Admin.System.V1;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Public.Authentication.V1;
 using Jularr.Backend.Data.User.Statistics.V1;
+using Jularr.Backend.Service.Core;
 using Microsoft.Extensions.DependencyInjection;
 using Host = Jularr.Backend.Tests.AuthenticationTests.Host;
 
@@ -80,6 +82,46 @@ namespace Jularr.Backend.Tests
             await host.Fixture.RunSqlAsync("UPDATE \"Accounts\" SET \"AccountRoleTypeId\" = 3 WHERE \"Id\" = 41");
             using var manager = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/system/timings");
             Assert.AreEqual(HttpStatusCode.Forbidden, manager.StatusCode);
+        }
+
+        [TestMethod]
+        public async Task Performance_Pages_TimedByViewPathAgainstTheirBudget()
+        {
+            using var storage = new LibraryTests.TemporaryDirectory();
+            await using var host = await LibraryTests.CreateHostAsync(storage.Path, razor: true);
+            var timings = host.Services.GetRequiredService<ServiceTimings>();
+
+            // The Owner's page names its shell and data parts; the address's query adds no key of its own.
+            foreach (var path in new[] { "/Admin/Catalog", "/Admin/Catalog?unknown=1", "/" })
+            {
+                using var page = await host.SendAsync(HttpMethod.Get, path);
+                Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, path + await page.Content.ReadAsStringAsync());
+                StringAssert.Matches(string.Join(", ", page.Headers.GetValues("Server-Timing")), new Regex(@"^shell;dur=[0-9.]+, data;dur=[0-9.]+$"), path);
+            }
+
+            Assert.AreEqual(2L, timings.ReadPages().Single(item => item.Service == "/Admin/Catalog/Catalog").Count);
+            Assert.IsFalse(timings.ReadPages().Any(item => item.Service.Contains('?', StringComparison.Ordinal)));
+
+            // The Performance page lists every page apart from the services, with its budget, and marks one over it; a minute is slower than any cold first render above.
+            timings.RecordPage("/Admin/Slow/Slow", TimeSpan.FromMinutes(1), false);
+            using var read = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/system/timings");
+            var timing = (await read.Content.ReadFromJsonAsync<ServiceTimingsV1>())!;
+            Assert.AreEqual("/Admin/Slow/Slow", timing.Pages[0].Service);
+            Assert.AreEqual(2L, timing.Pages.Single(item => item.Service == "/Admin/Catalog/Catalog").Count);
+            Assert.IsFalse(timing.Services.Any(item => item.Service.StartsWith("Page", StringComparison.Ordinal)));
+            using var performance = await host.SendAsync(HttpMethod.Get, "/Admin/Performance");
+            var html = await performance.Content.ReadAsStringAsync();
+            StringAssert.Contains(html, "Pages by server time");
+            StringAssert.Contains(html, "/Admin/Slow/Slow");
+            StringAssert.Contains(html, "Over budget");
+
+            // Without the Diagnostics module (the resource job follows it each minute) nothing is measured and no page names its parts.
+            await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = FALSE WHERE \"Key\" = 'Diagnostics'");
+            timings.Enable(false);
+            using var plain = await host.SendAsync(HttpMethod.Get, "/Admin/Catalog");
+            Assert.AreEqual(HttpStatusCode.OK, plain.StatusCode);
+            Assert.IsFalse(plain.Headers.Contains("Server-Timing"));
+            Assert.AreEqual(0, timings.ReadPages().Count);
         }
     }
 }

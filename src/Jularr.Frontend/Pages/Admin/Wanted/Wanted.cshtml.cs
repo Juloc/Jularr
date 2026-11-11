@@ -13,7 +13,7 @@ using Microsoft.AspNetCore.Mvc.ModelBinding;
 namespace Jularr.Frontend.Pages.Admin.Wanted
 {
     // Shared Work targets, not requests, on the list kit; each opens on its own page. Rows are chosen for a priority or a search of their own, in the dock's bulk zone.
-    public sealed class WantedModel(ReadWantedV1 read, ReadWantedSummaryV1 readSummary, UpdateWantedV1 update, UpdateWantedPriorityV1 updatePriority, StartWantedSearchV1 startSearch, SearchWantedAutomaticallyV1 automatic, IAntiforgery antiforgery, UiText texts, FrontendAssets assets) : JularrPage
+    public sealed class WantedModel(ReadWantedPageV1 read, UpdateWantedV1 update, UpdateWantedPriorityV1 updatePriority, StartWantedSearchV1 startSearch, SearchWantedAutomaticallyV1 automatic, IAntiforgery antiforgery, UiText texts, FrontendAssets assets) : JularrPage
     {
         // The form that the chosen rows belong to; the dock's buttons carry it.
         private const string BulkForm = "wanted-bulk";
@@ -248,8 +248,9 @@ namespace Jularr.Frontend.Pages.Admin.Wanted
         {
             var ct = HttpContext.RequestAborted;
             var (types, subtypes) = Scopes.Filter();
-            _wanted = await read.ExecuteAsync<PageResult<WantedDetailsV1>>(new ReadWantedParametersV1(PageNumber, wantedViewTypeId: View, mediaTypeIds: types, mediaSubtypeIds: subtypes), ct);
-            _summary = await readSummary.ExecuteAsync<WantedSummaryV1>(new ReadWantedParametersV1(mediaTypeIds: types, mediaSubtypeIds: subtypes), ct);
+            var wanted = await read.ExecuteAsync<WantedPageV1>(new ReadWantedParametersV1(PageNumber, wantedViewTypeId: View, mediaTypeIds: types, mediaSubtypeIds: subtypes), ct);
+            _wanted = wanted.Entries;
+            _summary = wanted.Summary;
         }
 
         // A view's first page with the chosen types (or the given ones; none for all of them).
