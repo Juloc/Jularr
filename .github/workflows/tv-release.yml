@@ -24,7 +24,7 @@ concurrency:
 
 jobs:
   guard:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     outputs:
       dry_run: ${{ steps.check.outputs.dry_run }}
@@ -74,7 +74,7 @@ jobs:
 
   verify:
     needs: guard
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v7
@@ -106,7 +106,7 @@ jobs:
   sign:
     needs: [guard, verify]
     if: needs.guard.outputs.dry_run != 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v7
@@ -176,7 +176,7 @@ jobs:
 
   publish:
     needs: [guard, sign]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
       contents: write
