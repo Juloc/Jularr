@@ -52,7 +52,7 @@ jobs:
           cache-from: type=gha,scope=jularr-runtime-base
       # A tag reads caches of main only: the release builds its tool layers from this one and writes none. Only the
       # stage runtime-base (base image and tools, about 0.4 GB, new only when they change) is kept, not the app
-      # layer of every commit. Its layers are already built above.
+      # layer of every commit. Its layers are already built above. A failed cache upload only warns: the image is fine.
       - name: Keep the runtime base layers for the release
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: docker/build-push-action@v7
@@ -60,7 +60,7 @@ jobs:
           context: .
           platforms: linux/amd64
           target: runtime-base
-          cache-to: type=gha,mode=min,scope=jularr-runtime-base
+          cache-to: type=gha,mode=min,scope=jularr-runtime-base,ignore-error=true
       - name: Download the managed Chrome version for the runtime check
         run: |
           version=$(curl --fail --silent --show-error --retry 3 https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions.json | python3 -c 'import json,sys; print(json.load(sys.stdin)["channels"]["Stable"]["version"])')
