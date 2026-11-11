@@ -339,9 +339,11 @@ namespace Jularr.Backend.Service.User.Reading.V1
             sql.Parameters.Add(Parameters);
             sql.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));
             var source = await Context.ReadSql.ReadOptionalAsync<PlaybackStreamData>(sql, CancellationToken) ?? throw new KeyNotFoundException("The book was not found.");
+            var mount = await Context.ReadStorageMountAsync(source.StorageMountId, CancellationToken);
+            await Context.EndReadAsync(CancellationToken);
             try
             {
-                var files = _storage.Open(await Context.ReadStorageMountAsync(source.StorageMountId, CancellationToken));
+                var files = _storage.Open(mount);
                 return new ReadingFileV1(await files.OpenReadAsync(StoragePath.Combine(source.RootRelativePath, source.RelativePath), CancellationToken));
             }
             catch (NasMountException)
@@ -726,15 +728,17 @@ namespace Jularr.Backend.Service.User.Reading.V1
                     ?? throw new KeyNotFoundException("The book is not translated into that language in every section.");
             }
 
-            // The pictures the sections show, from the disk or the book's file.
+            // The pictures the sections show, from the disk or the book's file; the database is not read after them.
             var images = new List<ReadingEbookResourceData>();
             if (await ReadingContent.ReadFileSourceAsync(Context, document.DocumentId, Auth.ProfileId!.Value, null, CancellationToken) is { } source)
             {
-                foreach (var path in sections.SelectMany(section => ReadingHtml.ResourcePaths(section, document.DocumentId)).Distinct(StringComparer.Ordinal))
+                string[] paths = [.. sections.SelectMany(section => ReadingHtml.ResourcePaths(section, document.DocumentId)).Distinct(StringComparer.Ordinal)];
+                var files = await _content.ReadFilesAsync(Context, source, paths, CancellationToken);
+                for (var index = 0; index < paths.Length; index++)
                 {
-                    if (await _content.ReadFileAsync(Context, source, path, CancellationToken) is { } file && file.MediaType.StartsWith("image/", StringComparison.Ordinal))
+                    if (files[index] is { } file && file.MediaType.StartsWith("image/", StringComparison.Ordinal))
                     {
-                        images.Add(new ReadingEbookResourceData(path, file.MediaType, await File.ReadAllBytesAsync(file.FullPath, CancellationToken)));
+                        images.Add(new ReadingEbookResourceData(paths[index], file.MediaType, await File.ReadAllBytesAsync(file.FullPath, CancellationToken)));
                     }
                 }
             }

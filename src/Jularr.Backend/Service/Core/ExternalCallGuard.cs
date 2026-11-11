@@ -13,22 +13,28 @@ namespace Jularr.Backend.Service.Core
 
         public static bool IsStrict(IHostEnvironment? environment) => environment is null || environment.IsDevelopment() || environment.IsEnvironment("Test");
 
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        // The same rule for every wait on another machine (an HTTP call, the NAS, FFmpeg reading it): the code names the kind, the action what it reaches.
+        public static void Check(bool strict, ILogger logger, string code, string action)
         {
-            if (TransactionMarker.OpenTransactionOwner is { } service)
+            if (TransactionMarker.OpenTransactionOwner is not { } service)
             {
-                var host = request.RequestUri?.Host ?? "a server";
-                if (strict)
-                {
-                    throw new InvalidOperationException($"external_call_in_transaction: {service} calls {host} while its SQL transaction is open.");
-                }
-
-                if (Reported.TryAdd(service, true))
-                {
-                    logger.LogWarning("{Service} calls {Host} while its SQL transaction is open (external_call_in_transaction).", service, host);
-                }
+                return;
             }
 
+            if (strict)
+            {
+                throw new InvalidOperationException($"{code}: {service} {action} while its SQL transaction is open.");
+            }
+
+            if (Reported.TryAdd(code + " " + service, true))
+            {
+                logger.LogWarning("{Service} {Action} while its SQL transaction is open ({Code}).", service, action, code);
+            }
+        }
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            Check(strict, logger, "external_call_in_transaction", "calls " + (request.RequestUri?.Host ?? "a server"));
             return base.SendAsync(request, cancellationToken);
         }
     }

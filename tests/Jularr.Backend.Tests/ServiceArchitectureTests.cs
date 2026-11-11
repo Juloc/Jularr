@@ -146,7 +146,7 @@ namespace Jularr.Backend.Tests
             var unguarded = new Dictionary<Type, string>
             {
                 [typeof(Jularr.Integrations.Logic.Usenet.UsenetDownloader)] = "NNTP: downloads run in Execute jobs",
-                [typeof(Jularr.Integrations.Logic.Storage.SmbShares)] = "SMB: NAS file access is not HTTP and is not checked by this guard",
+                [typeof(Jularr.Integrations.Logic.Storage.SmbShares)] = "SMB: NAS file access is not HTTP; StorageAccess guards it against an open transaction itself",
                 [typeof(Jularr.Integrations.Logic.Codex.CodexCli)] = "Codex CLI: a local process that asks the AI service; translations run in Execute jobs",
                 [typeof(VpnTunnels)] = "direct client through the tunnel process: VPN checks run in Execute services and jobs",
                 [typeof(Jularr.Backend.Service.Admin.Wanted.V1.TorrentJob)] = "direct tracker client: torrent passes run in Execute jobs",

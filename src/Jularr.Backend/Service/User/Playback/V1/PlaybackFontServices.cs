@@ -66,7 +66,9 @@ namespace Jularr.Backend.Service.User.Playback.V1
         protected override async Task<IServiceOutput> OnRead()
         {
             var source = await PlaybackFontSources.FindAsync(sql => Context.ReadSql.ReadOptionalAsync<PlaybackSubtitleSourceData>(sql, CancellationToken), Parameters.MediaAssetId, Auth.ProfileId!.Value);
-            var files = _storage.Open(await Context.ReadStorageMountAsync(source.StorageMountId, CancellationToken));
+            var mount = await Context.ReadStorageMountAsync(source.StorageMountId, CancellationToken);
+            await Context.EndReadAsync(CancellationToken);
+            var files = _storage.Open(mount);
             var names = await _fonts.ListAsync(files, StoragePath.Combine(source.RootRelativePath, source.RelativePath), PlaybackFontSources.CacheKey(source), CancellationToken);
             return new BaseDataList<PlaybackFontV1>([.. names.OrderBy(item => item.Key).Select(item => new PlaybackFontV1(item.Key, item.Value))]);
         }

@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
@@ -88,11 +89,12 @@ namespace Jularr.Backend.Tests
             File.WriteAllBytes(Path.Combine(folder.Path, "a.mkv"), Film);
             var store = new FakeSmbStore(folder.Path);
             var clock = new Clock();
+            // Every session lane runs on its own thread: count opens and closes atomically.
             var (connects, closes) = (0, 0);
             using var share = new SmbShare(() =>
             {
-                connects++;
-                return new SmbSession(store, () => closes++);
+                Interlocked.Increment(ref connects);
+                return new SmbSession(store, () => Interlocked.Increment(ref closes));
             }, clock);
             var files = new SmbStorageFiles(share, "");
             var ct = CancellationToken.None;
@@ -103,7 +105,7 @@ namespace Jularr.Backend.Tests
             var second = await files.OpenReadAsync("a.mkv", ct);
             Assert.AreEqual(0, first.ReadByte());
             Assert.AreEqual(0, second.ReadByte());
-            Assert.AreEqual((3, 3), (connects, share.OpenSessions));
+            Assert.AreEqual((3, 3), (Volatile.Read(ref connects), share.OpenSessions));
 
             // At most eight sessions; further files share the least busy one.
             var more = new List<Stream>();
@@ -135,14 +137,184 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(0, active.ReadByte());
             // An open file keeps its session; after 15 idle minutes the others close and the NAS may sleep.
             clock.Advance(TimeSpan.FromMinutes(16));
-            share.CloseIfIdle(SmbShares.IdleTime);
+            await share.CloseIfIdleAsync(SmbShares.IdleTime);
             Assert.AreEqual(1, share.OpenSessions);
             await active.DisposeAsync();
             clock.Advance(TimeSpan.FromMinutes(16));
-            share.CloseIfIdle(SmbShares.IdleTime);
+            await share.CloseIfIdleAsync(SmbShares.IdleTime);
             Assert.AreEqual(0, share.OpenSessions);
-            Assert.AreEqual(connects, closes);
+            Assert.AreEqual(Volatile.Read(ref connects), Volatile.Read(ref closes));
             Assert.IsNotNull(await files.GetAsync("a.mkv", ct));
+        }
+
+        [TestMethod]
+        public async Task Share_NasThatStopsAnswering_FailsEveryCallAtItsDeadlineOnTheSessionThreadsAndReconnects()
+        {
+            using var folder = new LibraryTests.TemporaryDirectory();
+            File.WriteAllBytes(Path.Combine(folder.Path, "a.mkv"), Film);
+            var store = new FakeSmbStore(folder.Path);
+            var clock = new WorkerJobTests.ManualTime(DateTimeOffset.UtcNow);
+            var connects = 0;
+            using var share = new SmbShare(() =>
+            {
+                Interlocked.Increment(ref connects);
+                return new SmbSession(store, () => { });
+            }, clock);
+            var files = new SmbStorageFiles(share, "");
+            var ct = CancellationToken.None;
+
+            // Awake: the shared session and the file's own session connect.
+            Assert.IsNotNull(await files.GetAsync("a.mkv", ct));
+            var file = await files.OpenReadAsync("a.mkv", ct);
+            Assert.AreEqual(2, connects);
+            await Task.Delay(1);
+            var threadsBefore = Process.GetCurrentProcess().Threads.Count;
+
+            // The NAS stops answering: the file's read and 200 short requests wait, but only on the two sessions' own threads.
+            using var hold = new ManualResetEventSlim(false);
+            store.Hold = hold;
+            var read = file.ReadAsync(new byte[100], ct).AsTask();
+            var calls = Enumerable.Range(0, 200).Select(index => index % 2 == 0 ? files.GetAsync("a.mkv", ct) : (Task)files.ListAsync("", ct)).ToArray();
+            await WaitUntilAsync(() => store.Waiting == 2, "both sessions wait for the NAS");
+            await clock.WaitForTimerAsync(SmbLane.RequestTime);
+            await clock.WaitForTimerAsync(SmbLane.PieceTime);
+            Assert.IsFalse(calls.Any(call => call.IsCompleted) || read.IsCompleted);
+            Assert.IsLessThanOrEqualTo(threadsBefore + 2, Process.GetCurrentProcess().Threads.Count, "Waiting requests add no threads beyond the sessions'.");
+            if (OperatingSystem.IsLinux()) Assert.AreEqual(2, SessionThreads());
+
+            // A caller that stops waiting is free at once, though the session still waits for the NAS.
+            using (var stop = new CancellationTokenSource())
+            {
+                var cancelled = files.ListAsync("", stop.Token);
+                var started = Stopwatch.GetTimestamp();
+                await stop.CancelAsync();
+                await Assert.ThrowsAsync<OperationCanceledException>(() => cancelled);
+                Assert.IsLessThan(TimeSpan.FromMilliseconds(100), Stopwatch.GetElapsedTime(started));
+            }
+
+            // At the deadline every waiting request fails as unavailable storage within a second, and new ones fail at once.
+            var deadline = Stopwatch.GetTimestamp();
+            clock.Advance(SmbLane.RequestTime);
+            foreach (var call in calls)
+            {
+                var failure = await Assert.ThrowsExactlyAsync<NasMountException>(() => call.WaitAsync(TimeSpan.FromSeconds(1)));
+                Assert.AreEqual("storage_unavailable", failure.Code);
+                Assert.IsInstanceOfType<TimeoutException>(failure.InnerException);
+            }
+
+            Assert.IsLessThan(TimeSpan.FromSeconds(1), Stopwatch.GetElapsedTime(deadline));
+            var fast = Stopwatch.GetTimestamp();
+            await Assert.ThrowsExactlyAsync<NasMountException>(() => files.GetAsync("a.mkv", ct));
+            Assert.IsLessThan(TimeSpan.FromMilliseconds(100), Stopwatch.GetElapsedTime(fast));
+
+            // A piece of the file has its own, longer deadline.
+            Assert.IsFalse(read.IsCompleted);
+            clock.Advance(SmbLane.PieceTime - SmbLane.RequestTime);
+            await Assert.ThrowsExactlyAsync<NasMountException>(() => read.WaitAsync(TimeSpan.FromSeconds(1)));
+
+            // The NAS answers again: the hanging requests return, their sessions are dropped, and the next request connects anew.
+            hold.Set();
+            await WaitUntilAsync(async () =>
+            {
+                try
+                {
+                    return await files.GetAsync("a.mkv", ct) is not null;
+                }
+                catch (NasMountException)
+                {
+                    return false;
+                }
+            }, "the share answers again");
+            Assert.AreEqual(3, connects);
+
+            // A file opened on a dropped session fails fast, once its session is dropped too; a new one reads.
+            await WaitUntilAsync(() =>
+            {
+                try
+                {
+                    var read = file.Read(new byte[100]);
+                    Assert.Fail("A file of a dropped session read " + read + " bytes.");
+                    return true;
+                }
+                catch (IOException)
+                {
+                    return true;
+                }
+                catch (NasMountException)
+                {
+                    return false;
+                }
+            }, "the file's session is dropped");
+            await file.DisposeAsync();
+            await using var again = await files.OpenReadAsync("a.mkv", ct);
+            Assert.AreEqual(0, again.ReadByte());
+        }
+
+        [TestMethod]
+        public async Task Share_NasThatStopsAnswering_CloseAndDisposeReturnWithin100Ms()
+        {
+            using var folder = new LibraryTests.TemporaryDirectory();
+            File.WriteAllBytes(Path.Combine(folder.Path, "a.mkv"), Film);
+            var store = new FakeSmbStore(folder.Path);
+            using var hold = new ManualResetEventSlim(false);
+            var share = new SmbShare(() => new SmbSession(store, () => { }), TimeProvider.System);
+            try
+            {
+                var files = new SmbStorageFiles(share, "");
+                var file = await files.OpenReadAsync("a.mkv", CancellationToken.None);
+                Assert.IsNotNull(await files.GetAsync("a.mkv", CancellationToken.None));
+
+                // Both sessions wait for the NAS: a read of the file and a listing.
+                store.Hold = hold;
+                var read = file.ReadAsync(new byte[100], CancellationToken.None).AsTask();
+                var listing = files.ListAsync("", CancellationToken.None);
+                await WaitUntilAsync(() => store.Waiting == 2, "both sessions wait for the NAS");
+
+                // Closing the file and the share never waits for the NAS.
+                var started = Stopwatch.GetTimestamp();
+                await file.DisposeAsync();
+                Assert.IsLessThan(TimeSpan.FromMilliseconds(100), Stopwatch.GetElapsedTime(started));
+                started = Stopwatch.GetTimestamp();
+                share.Dispose();
+                Assert.IsLessThan(TimeSpan.FromMilliseconds(100), Stopwatch.GetElapsedTime(started));
+                await Assert.ThrowsExactlyAsync<NasMountException>(() => files.GetAsync("a.mkv", CancellationToken.None));
+                Assert.IsFalse(read.IsCompleted || listing.IsCompleted);
+
+                // What was running finishes once the NAS answers, and the sessions' threads end.
+                hold.Set();
+                await Task.WhenAll(read, listing).WaitAsync(TimeSpan.FromSeconds(5));
+                if (OperatingSystem.IsLinux()) await WaitUntilAsync(() => SessionThreads() == 0, "the session threads end");
+            }
+            finally
+            {
+                hold.Set();
+                share.Dispose();
+            }
+        }
+
+        // Threads of this process that belong to an SMB session.
+        private static int SessionThreads() => Directory.EnumerateDirectories("/proc/self/task").Count(task =>
+        {
+            try
+            {
+                return File.ReadAllText(Path.Combine(task, "comm")).TrimEnd('\n') == "Jularr SMB lane";
+            }
+            catch (IOException)
+            {
+                return false;
+            }
+        });
+
+        private static Task WaitUntilAsync(Func<bool> condition, string what) => WaitUntilAsync(() => Task.FromResult(condition()), what);
+
+        private static async Task WaitUntilAsync(Func<Task<bool>> condition, string what)
+        {
+            var deadline = DateTime.UtcNow.AddSeconds(10);
+            while (!await condition())
+            {
+                Assert.IsTrue(DateTime.UtcNow < deadline, "Timed out waiting until " + what + ".");
+                await Task.Delay(10);
+            }
         }
 
         [TestMethod]
@@ -263,7 +435,8 @@ namespace Jularr.Backend.Tests
             var movie = Path.Combine(share, "library", "Movies", "Film (2020)");
             Directory.CreateDirectory(movie);
             File.WriteAllBytes(Path.Combine(movie, "Film.mp4"), Film);
-            host.Services.GetRequiredService<SmbShares>().Get(mountId, 1, () => new SmbSession(new FakeSmbStore(share), () => { }));
+            var store = new FakeSmbStore(share);
+            host.Services.GetRequiredService<SmbShares>().Get(mountId, 1, () => new SmbSession(store, () => { }));
             var rootId = await LibraryTests.CreateRootAsync(host, mountId, "Movies", MediaType.Movie);
             await LibraryTests.ScanAsync(host, rootId);
             var fileId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"StoredFiles\""))!;
@@ -296,7 +469,19 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.OK, progress.StatusCode, await progress.Content.ReadAsStringAsync());
             using var resumed = await host.SendAsync(HttpMethod.Post, "/api/v1/playback/assets/" + assetId + "/sessions", capabilities);
             Assert.AreEqual(HttpStatusCode.OK, resumed.StatusCode, await resumed.Content.ReadAsStringAsync());
-            Assert.AreEqual(2_500L, (await resumed.Content.ReadFromJsonAsync<PlaybackPlanV1>())!.ResumePositionMs);
+            var again = (await resumed.Content.ReadFromJsonAsync<PlaybackPlanV1>())!;
+            Assert.AreEqual(2_500L, again.ResumePositionMs);
+
+            // A share that refuses Jularr is a 503 with its own text, never the 401 that would sign the viewer out.
+            store.DeniedDirectory = movie;
+            using var refusedRequest = new HttpRequestMessage(HttpMethod.Get, again.StreamUrl);
+            refusedRequest.Headers.Add("Cookie", string.Join("; ", host.Cookies.Select(cookie => cookie.Key + "=" + cookie.Value)));
+            using var refused = await client.SendAsync(refusedRequest);
+            Assert.AreEqual(HttpStatusCode.ServiceUnavailable, refused.StatusCode, await refused.Content.ReadAsStringAsync());
+            StringAssert.Contains(await refused.Content.ReadAsStringAsync(), NasMountException.AccessDenied);
+            Assert.IsNotNull(refused.Headers.RetryAfter);
+            using var signedIn = await host.SendAsync(HttpMethod.Get, "/api/v1/playback/assets/" + assetId);
+            Assert.AreEqual(HttpStatusCode.OK, signedIn.StatusCode, await signedIn.Content.ReadAsStringAsync());
         }
 
         [TestMethod]
@@ -365,6 +550,65 @@ namespace Jularr.Backend.Tests
                 Directory.CreateDirectory(sheets);
                 Assert.IsTrue(await transcoder.CreateTrickplayAsync(video.Location, sheets, 10, 64, 36, 3, 2, CancellationToken.None));
                 Assert.IsTrue(Directory.EnumerateFiles(sheets, "*.jpg").Any());
+            }
+        }
+
+        [TestMethod]
+        public async Task Inputs_StallingLoopbackRead_EndsFfmpegWithinItsReadTimeout()
+        {
+            if (Environment.GetEnvironmentVariable("JULARR_TEST_FFMPEG") is not { Length: > 0 } ffmpeg)
+            {
+                Assert.Inconclusive("Set JULARR_TEST_FFMPEG to run real FFmpeg against a stalling loopback input.");
+                return;
+            }
+
+            // The loopback address of a file whose server answers the request and then sends nothing, like a NAS that fell asleep mid-read.
+            using var cache = new LibraryTests.TemporaryDirectory();
+            using var stop = new CancellationTokenSource();
+            var listener = new System.Net.Sockets.TcpListener(IPAddress.Loopback, 0);
+            listener.Start();
+            var serving = Task.Run(async () =>
+            {
+                var clients = new List<System.Net.Sockets.TcpClient>();
+                try
+                {
+                    while (true)
+                    {
+                        var client = await listener.AcceptTcpClientAsync(stop.Token);
+                        clients.Add(client);
+                        var stream = client.GetStream();
+                        var header = new byte[16 * 1024];
+                        var read = 0;
+                        while (!System.Text.Encoding.ASCII.GetString(header, 0, read).Contains("\r\n\r\n", StringComparison.Ordinal) && read < header.Length)
+                        {
+                            read += await stream.ReadAsync(header.AsMemory(read), stop.Token);
+                        }
+
+                        await stream.WriteAsync("HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: 10000000\r\nAccept-Ranges: bytes\r\n\r\n"u8.ToArray(), stop.Token);
+                    }
+                }
+                catch (OperationCanceledException)
+                {
+                }
+                finally
+                {
+                    clients.ForEach(client => client.Dispose());
+                }
+            });
+
+            try
+            {
+                var transcoder = new MediaTranscoder { ExecutablePath = ffmpeg, InputTimeout = TimeSpan.FromSeconds(1) };
+                var address = "http://127.0.0.1:" + ((IPEndPoint)listener.LocalEndpoint).Port + "/token/film.mkv";
+                var started = System.Diagnostics.Stopwatch.GetTimestamp();
+                Assert.IsFalse(await transcoder.ConvertSubtitleAsync(address, null, 2, Path.Combine(cache.Path, "film.vtt"), CancellationToken.None));
+                Assert.IsLessThan(transcoder.InputTimeout + TimeSpan.FromSeconds(5), System.Diagnostics.Stopwatch.GetElapsedTime(started));
+            }
+            finally
+            {
+                await stop.CancelAsync();
+                listener.Stop();
+                await serving;
             }
         }
 

@@ -447,7 +447,7 @@ namespace Jularr.Backend.Service.User.Playback.V1
                 throw new ServiceUnavailableException("playback_conversion_unavailable");
             }
 
-            // Sleeping storage wakes only when the Owner allowed it.
+            // Sleeping storage wakes only when the Owner allowed it; storage that refuses Jularr is awake already.
             var path = StoragePath.Combine(source.RootRelativePath, source.RelativePath);
             StorageFiles files;
             try
@@ -459,7 +459,7 @@ namespace Jularr.Backend.Service.User.Playback.V1
                     throw new NasMountException("storage_unavailable");
                 }
             }
-            catch (NasMountException) when (source is { WakeOnDemand: true, WakeMacAddress: { } macAddress })
+            catch (NasMountException exception) when (exception.Code != NasMountException.AccessDenied && source is { WakeOnDemand: true, WakeMacAddress: { } macAddress })
             {
                 await _wake.SendAsync(macAddress, source.WakeBroadcastAddress, CancellationToken);
                 throw new ServiceUnavailableException("storage_waking");
@@ -552,9 +552,11 @@ namespace Jularr.Backend.Service.User.Playback.V1
                 """;
             sql.Parameters.Add(new PlaybackSessionLookupData(Parameters.PlaybackSessionId, Auth.ProfileId!.Value));
             var stream = await Context.ReadSql.ReadRequiredAsync<PlaybackStreamData>(sql, CancellationToken);
+            var mount = await Context.ReadStorageMountAsync(stream.StorageMountId, CancellationToken);
+            await Context.EndReadAsync(CancellationToken);
 
             // The HTTP adapter streams it with ranges.
-            var files = _storage.Open(await Context.ReadStorageMountAsync(stream.StorageMountId, CancellationToken));
+            var files = _storage.Open(mount);
             var content = await files.OpenReadAsync(StoragePath.Combine(stream.RootRelativePath, stream.RelativePath), CancellationToken);
             return new PlaybackStreamV1(content, LibraryFileTypes.GetStream(stream.RelativePath).ContentType);
         }

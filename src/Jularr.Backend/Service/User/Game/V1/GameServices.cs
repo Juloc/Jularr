@@ -114,7 +114,9 @@ namespace Jularr.Backend.Service.User.Game.V1
                 throw new KeyNotFoundException("The game file was not found.");
             }
 
-            var files = _storage.Open(await Context.ReadStorageMountAsync(stream.StorageMountId, CancellationToken));
+            var mount = await Context.ReadStorageMountAsync(stream.StorageMountId, CancellationToken);
+            await Context.EndReadAsync(CancellationToken);
+            var files = _storage.Open(mount);
             return new GameFileV1(await files.OpenReadAsync(StoragePath.Combine(stream.RootRelativePath, stream.RelativePath), CancellationToken));
         }
     }
@@ -307,7 +309,9 @@ namespace Jularr.Backend.Service.User.Game.V1
                 throw new KeyNotFoundException("The game file was not found.");
             }
 
-            var files = _storage.Open(await Context.ReadStorageMountAsync(file.StorageMountId, CancellationToken));
+            var mount = await Context.ReadStorageMountAsync(file.StorageMountId, CancellationToken);
+            await Context.EndReadAsync(CancellationToken);
+            var files = _storage.Open(mount);
             return new GameFileV1(await files.OpenReadAsync(StoragePath.Combine(file.RootRelativePath, file.RelativePath), CancellationToken));
         }
     }

@@ -36,7 +36,8 @@ REAL_TOOLS = ("CoverTests.Cover_WithFfmpegAndCjxl_KeepsOnlyJxlWidths_AndAnswersO
               "MediaMarkerTests.Scan_ReadsChaptersAndSidecar_FromARealFile",
               "PlaybackTests.Fonts_OfAMatroskaFile_AreTakenOutOnceAndServedOneByOne",
               "PlaybackTests.Hls_RealFfmpeg_TranscodesSeeksAndStaysWithinBudget",
-              "SmbStorageTests.Inputs_DirectShare_RealFfmpegTranscodesAndSeeksHls")
+              "SmbStorageTests.Inputs_DirectShare_RealFfmpegTranscodesAndSeeksHls",
+              "SmbStorageTests.Inputs_StallingLoopbackRead_EndsFfmpegWithinItsReadTimeout")
 # Too slow for a PR: the Backend Full shards run them once, the PR shards leave them out (--pr-exclude).
 FULL_ONLY = ("LibraryPerformanceTests.Favorites_LargeCatalog_ReadsStayIndependentOfCatalogSize",)  # 500,000 works, ~37 s
 

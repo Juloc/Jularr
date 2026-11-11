@@ -41,6 +41,7 @@ namespace Jularr.Backend.Service.Core.Localization
             new("errors.provider_unavailable", "The external provider is currently unavailable."),
             new("errors.database_busy", "The database is busy right now. Please reload in a few seconds."),
             new("errors.storage_unavailable", "The storage is not reachable. Check that the NAS is on and the share is mounted."),
+            new("errors.storage_access_denied", "The storage refused Jularr's login or access. Check the account and the share permissions on the NAS."),
             new("errors.download_storage_mount_required", "Choose writable folders on storage mounted inside Jularr. A direct SMB library connection alone cannot run the native downloader and unpack tools."),
             new("errors.download_storage_unavailable", "The download storage cannot be read or written. Check its mount and permissions."),
             new("errors.download_storage_paths_overlap", "Incomplete and Complete must be separate folders; neither may contain the other."),

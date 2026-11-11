@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Security;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Service.Core.Localization;
@@ -15,16 +16,23 @@ namespace Jularr.Backend.Service.Core
         private const string DetailItem = "Jularr.ServiceErrorDetail";
         private const string LoggedItem = "Jularr.ServiceErrorLogged";
 
-        private ServiceError(int statusCode, string code, string? field = null, string? validationCode = null)
+        // When a client may try a 503 again unless the failure knows better.
+        private static readonly TimeSpan RetrySoon = TimeSpan.FromSeconds(5);
+
+        private ServiceError(int statusCode, string code, string? field = null, string? validationCode = null, TimeSpan? retryAfter = null)
         {
             StatusCode = statusCode;
             Code = code;
             Field = field;
             ValidationCode = validationCode;
+            RetryAfter = statusCode == StatusCodes.Status503ServiceUnavailable ? retryAfter ?? RetrySoon : null;
         }
 
         public int StatusCode { get; }
         public string Code { get; }
+
+        // Every 503 says when to try again: as long as the storage stays closed, else a few seconds.
+        public TimeSpan? RetryAfter { get; }
 
         // A code without text reads as an unknown error.
         public bool IsDefined => ServiceErrorResources.IsDefined(ServiceErrorResources.GetKey(Code))
@@ -62,8 +70,22 @@ namespace Jularr.Backend.Service.Core
             }
 
             return context.Items.TryGetValue(DetailItem, out var shows) && shows is true
-                ? new ServiceError(error.StatusCode, error.Code, error.Field, error.ValidationCode) { Detail = exception.GetType().Name + ": " + exception.Message }
+                ? new ServiceError(error.StatusCode, error.Code, error.Field, error.ValidationCode, error.RetryAfter) { Detail = exception.GetType().Name + ": " + exception.Message }
                 : error;
+        }
+
+        // The status of the answer, and for a 503 its Retry-After; any other status drops one an earlier failure of the same answer set.
+        public void Answer(HttpResponse response)
+        {
+            response.StatusCode = StatusCode;
+            if (RetryAfter is { } wait)
+            {
+                response.Headers.RetryAfter = Math.Max(1, (int)Math.Ceiling(wait.TotalSeconds)).ToString(CultureInfo.InvariantCulture);
+            }
+            else
+            {
+                response.Headers.Remove("Retry-After");
+            }
         }
 
         // Set once the request's caller is known.
@@ -80,7 +102,7 @@ namespace Jularr.Backend.Service.Core
             AntiforgeryValidationException => new(StatusCodes.Status400BadRequest, "invalid_antiforgery_token"),
             BadHttpRequestException request => new(request.StatusCode, "invalid_request"),
             ProviderUnavailableException => new(StatusCodes.Status503ServiceUnavailable, "provider_unavailable"),
-            NasMountException storage => new(StatusCodes.Status503ServiceUnavailable, storage.Code),
+            NasMountException storage => new(StatusCodes.Status503ServiceUnavailable, storage.Code, retryAfter: storage.RetryAfter),
             PostgresException { SqlState: PostgresErrorCodes.SerializationFailure or PostgresErrorCodes.DeadlockDetected } => new(StatusCodes.Status409Conflict, "concurrent_change"),
 
             // A statement past its limit, a lock not granted in time or no free connection in the lane's pool.

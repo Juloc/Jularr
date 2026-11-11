@@ -35,7 +35,7 @@ namespace Jularr.Frontend.Framework
                     var logger = context.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger("Jularr.ErrorPages");
                     var error = ServiceError.Describe(exception, context, logger);
                     context.Response.Clear();
-                    context.Response.StatusCode = error.StatusCode;
+                    error.Answer(context.Response);
                 }
             });
         });

@@ -98,7 +98,7 @@ namespace Jularr.Frontend.Framework
         private async Task<IActionResult> PrepareFailureAsync(ServiceError error)
         {
             _error = error;
-            Response.StatusCode = error.StatusCode;
+            error.Answer(Response);
 
             // Reload only failed mutations.
             if (HttpMethods.IsPost(Request.Method))
@@ -110,7 +110,14 @@ namespace Jularr.Frontend.Framework
                 catch (Exception exception) when (exception is not OperationCanceledException)
                 {
                     _error = ServiceError.Describe(exception, HttpContext, HttpContext.RequestServices.GetRequiredService<ILogger<JularrPage>>());
-                    Response.StatusCode = _error.StatusCode;
+                    _error.Answer(Response);
+                }
+
+                // A busy database is also said in the hint at the bottom of a script's action: its form may not show the failure.
+                if (_error.Code == "database_busy" && Request.Headers.ContainsKey("HX-Request"))
+                {
+                    var text = HttpContext.RequestServices.GetRequiredService<UiText>()[_error.ResourceKey];
+                    Response.Headers["HX-Trigger"] = JsonSerializer.Serialize(new Dictionary<string, object> { ["jularr:hint"] = new { text, failed = true } });
                 }
 
                 // A busy database is also said in the hint at the bottom of a script's action: its form may not show the failure.
