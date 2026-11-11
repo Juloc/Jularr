@@ -526,7 +526,7 @@ namespace Jularr.Backend.Service.Core
         }
 
         // Each service type's activation, compiled once per process (a host that registers the services again, as every test host does, reuses it).
-        private static readonly System.Collections.Concurrent.ConcurrentDictionary<Type, Func<IServiceProvider, Service>> Activators = new();
+        private static readonly global::System.Collections.Concurrent.ConcurrentDictionary<Type, Func<IServiceProvider, Service>> Activators = new();
 
         public static IEndpointRouteBuilder MapJularrServices(this IEndpointRouteBuilder endpoints)
         {
