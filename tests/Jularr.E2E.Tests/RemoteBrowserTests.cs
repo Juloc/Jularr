@@ -77,6 +77,7 @@ namespace Jularr.E2E.Tests
 
         [TestMethod]
         [DataRow(401)]
+        [DataRow(403)]
         [Timeout(90_000)]
         public async Task AuthorizationEnded_ClearsPictureAndStopsControls(int status)
         {
