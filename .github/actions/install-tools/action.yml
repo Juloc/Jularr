@@ -114,16 +114,21 @@ runs:
         fi
         if [[ "${installed}" != "true" ]]; then
           # apt on hosted runners can stall (IPv6, a slow mirror): IPv4 is forced, every command has a time
-          # limit and the install is retried instead of hanging for minutes. The downloaded packages stay in
+          # limit (5 min: a slow but working mirror must not count as stalled) and the install is retried. The downloaded packages stay in
           # ${dir} for the cache.
           mkdir -p "${dir}/partial"
           apt_opts=(-o Acquire::Retries=3 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 -o Acquire::ForceIPv4=true -o Dpkg::Use-Pty=0)
           keep=(-o "Dir::Cache::archives=${dir}" -o APT::Keep-Downloaded-Packages=true)
+          # The runner's Azure mirror of the Ubuntu archive can be unreachable for hours (2026-11-11): take the
+          # main archive first and keep the Azure mirror as the fallback.
+          if [[ -f /etc/apt/apt-mirrors.txt ]]; then
+            printf 'http://archive.ubuntu.com/ubuntu/\tpriority:1\nhttp://azure.archive.ubuntu.com/ubuntu/\tpriority:2\n' | sudo tee /etc/apt/apt-mirrors.txt >/dev/null
+          fi
           sudo install -d -m 0755 /usr/share/postgresql-common/pgdg
           curl -fsSL --retry 3 --retry-delay 2 --max-time 30 https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo tee /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc >/dev/null
           echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(. /etc/os-release && echo "${VERSION_CODENAME}")-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list >/dev/null
           for attempt in 1 2 3; do
-            if sudo timeout 90 apt-get update -qq "${apt_opts[@]}" && sudo env DEBIAN_FRONTEND=noninteractive timeout 150 apt-get install -qq --yes --no-install-recommends "${apt_opts[@]}" "${keep[@]}" "${packages[@]}"; then
+            if sudo timeout 300 apt-get update -q "${apt_opts[@]}" && sudo env DEBIAN_FRONTEND=noninteractive timeout 300 apt-get install -qq --yes --no-install-recommends "${apt_opts[@]}" "${keep[@]}" "${packages[@]}"; then
               installed=true
               break
             fi
