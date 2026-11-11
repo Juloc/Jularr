@@ -1,8 +1,9 @@
 name: Backend
 
 # Always report a stable PR check (`Backend / test`); docs-only changes skip the costly jobs.
-# Job graph: prepare (build once, smoke methods, change-aware selection) -> shards (the selected
-# test classes split in two balanced shards) -> test (the one required conclusion).
+# Job graph: prepare (build once, smoke methods, change-aware selection, shard plan) -> shards (the
+# selected tests in 1 to 6 balanced shards of two lanes, as many as their measured time needs)
+# -> test (the one required conclusion).
 # CI retry (ci-retry.yml) re-runs a run once that failed only in set-up steps; their names are listed in
 # scripts/ci-classify-failure.py: rename or add set-up steps there too.
 on:
@@ -27,9 +28,13 @@ jobs:
   prepare:
     runs-on: ubuntu-24.04
     timeout-minutes: 12
+    permissions:
+      contents: read
+      actions: read  # the timings artifacts of the last green Backend Full runs
     outputs:
       backend: ${{ steps.paths.outputs.backend }}
       classes: ${{ steps.select.outputs.classes }}
+      matrix: ${{ steps.plan.outputs.matrix }}
     services:
       postgres:
         image: postgres:18
@@ -41,14 +46,19 @@ jobs:
           - 15433:5432
         options: >-
           --health-cmd "pg_isready -U jularr_test -d jularr_test_admin"
-          --health-interval 5s
+          --health-interval 1s
           --health-timeout 5s
-          --health-retries 10
+          --health-retries 60
     steps:
       - uses: actions/checkout@v7
         with:
-          fetch-depth: 0
           persist-credentials: false
+      # Only the two compared commits, without history: git diff compares their trees.
+      - name: Fetch the base and head commits
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: git fetch --no-tags --quiet --depth=1 origin "$BASE_SHA" "$HEAD_SHA"
       - name: Detect affected project files
         id: paths
         env:
@@ -93,6 +103,13 @@ jobs:
           python3 scripts/ci-shard-tests.py --self-test
           python3 scripts/ci-select-backend-tests.py --self-test
           python3 scripts/ci-classify-failure.py --self-test
+      # Never fails: without a token, run or artifact the plan uses tests/ci-durations.json (the log says which).
+      - name: Fetch the measured test durations of recent main runs
+        if: steps.paths.outputs.backend == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: python3 scripts/ci-shard-tests.py fetch --repo "${REPOSITORY}" --out "${RUNNER_TEMP}/measured"
       - name: Compile assets required by Razor tests
         if: steps.paths.outputs.backend == 'true'
         working-directory: src/Jularr.Frontend
@@ -115,10 +132,26 @@ jobs:
           echo "classes=$(jq -r '.classes | join(",")' <<< "$selection")" >> "$GITHUB_OUTPUT"
           methods="$(jq -r '.methods' <<< "$selection")"
           if [[ -n "$methods" ]]; then
+            # Download storage refuses tmpfs and overlay folders: test folders lie on the runner disk.
+            export TMPDIR="${RUNNER_TEMP}"
+            findmnt -T "${TMPDIR}" -o TARGET,FSTYPE,SOURCE || true
             dotnet test tests/Jularr.Backend.Tests --configuration Release --no-build ${DOTNET_TEST_BLAME} \
               --filter "$methods" --logger "trx;LogFileName=backend-pr-smoke.trx" \
               --results-directory TestResults/ci/fast
           fi
+      # One plan for all shards (shipped in the build): the fewest shards, at most 6, whose slowest
+      # lane is planned at up to 330 s, so a shard ends well within its 12 minutes.
+      - name: Plan the test shards
+        id: plan
+        if: steps.select.outputs.classes != ''
+        env:
+          CLASSES: ${{ steps.select.outputs.classes }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          matrix="$(python3 scripts/ci-shard-tests.py matrix --kind backend --lanes 2 --lane-limit 330 --max-shards 6 \
+            --classes "${CLASSES}" --measured "${RUNNER_TEMP}/measured" --out ci-plan/backend.json)"
+          echo "matrix=${matrix}" >> "$GITHUB_OUTPUT"
       - uses: ./.github/actions/pack-build
         if: steps.select.outputs.classes != ''
       - name: Keep smoke test results
@@ -141,9 +174,10 @@ jobs:
           if-no-files-found: ignore
           retention-days: 2
 
-  # The selected test classes of the changed areas, packed by measured duration. Two shards,
-  # two test processes each; they start only when `prepare` (smoke) is green. A failing shard
-  # does not cancel the other one (fail-fast off), so one run reports every failing class.
+  # The selected tests of the changed areas as planned by `prepare` (ci-plan/backend.json): packed by
+  # measured seconds per test, a long class split by method, two test processes each. They start only
+  # when `prepare` (smoke) is green. A failing shard does not cancel the others (fail-fast off), so one
+  # run reports every failing test.
   shards:
     name: backend (${{ matrix.shard }})
     needs: prepare
@@ -152,10 +186,7 @@ jobs:
     timeout-minutes: 12
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - { kind: backend, shard: 1/2 }
-          - { kind: backend, shard: 2/2 }
+      matrix: ${{ fromJSON(needs.prepare.outputs.matrix || '{"include":[{"shard":"1/1"}]}') }}
     services:
       postgres:
         image: postgres:18
@@ -167,12 +198,11 @@ jobs:
           - 15433:5432
         options: >-
           --health-cmd "pg_isready -U jularr_test -d jularr_test_admin"
-          --health-interval 5s
+          --health-interval 1s
           --health-timeout 5s
-          --health-retries 10
+          --health-retries 60
     env:
       SHARD: ${{ matrix.shard }}
-      CLASSES: ${{ needs.prepare.outputs.classes }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -191,8 +221,12 @@ jobs:
           # initialization the NuGet-Migrations mutex can race in /run/user/.../shm.
           export XDG_RUNTIME_DIR="${RUNNER_TEMP}/jularr-dotnet-runtime"
           install -d -m 0700 "${XDG_RUNTIME_DIR}" "${XDG_RUNTIME_DIR}/.dotnet" "${XDG_RUNTIME_DIR}/.dotnet/shm"
+          # Download storage refuses tmpfs and overlay folders: test folders lie on the runner disk.
+          export TMPDIR="${RUNNER_TEMP}"
+          findmnt -T "${TMPDIR}" -o TARGET,FSTYPE,SOURCE || true
           dotnet --info >/dev/null
-          mapfile -t lanes < <(python3 scripts/ci-shard-tests.py plan --kind backend --shard "${SHARD}" --lanes 2 --classes "${CLASSES}")
+          python3 scripts/ci-shard-tests.py lanes --plan ci-plan/backend.json --shard "${SHARD}" > "${RUNNER_TEMP}/lanes.txt" || exit 1
+          mapfile -t lanes < "${RUNNER_TEMP}/lanes.txt"
           pids=()
           for index in "${!lanes[@]}"; do
             [[ -n "${lanes[$index]}" ]] || continue
@@ -256,3 +290,4 @@ jobs:
     uses: ./.github/workflows/backend.yml
     permissions:
       contents: read
+      actions: read  # its build job plans the shards from the timings of the last green runs

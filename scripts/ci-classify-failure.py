@@ -40,6 +40,9 @@ SETUP_STEPS = {
     "Stop containers",
     "Complete job",
     "Prepare .NET runtime mutex directory",
+    "Fetch the base and head commits",
+    # Never fails on its own (it falls back to tests/ci-durations.json); a crash there is the runner.
+    "Fetch the measured test durations of recent main runs",
     "Cache the Playwright browser",
     "Install Chromium",
     "Keep smoke test results",
@@ -235,8 +238,13 @@ def full_run(**overrides) -> dict:
     return run
 
 
-GATE_FAILED = job("gate", "failure", ("Set up job", "success"), ("Require smoke and all shards", "failure"))
-SMOKE = job("smoke", "success", ("Set up job", "success"), ("Critical backend tests (startup, schema, migrations, sessions, setup gate)", "success"))
+GATE_FAILED = job("gate", "failure", ("Set up job", "success"), ("Require the build, smoke and all shards", "failure"))
+BUILD = job("build", "success", ("Set up job", "success"), ("Run actions/checkout@v7", "success"),
+            ("Fetch the measured test durations of recent main runs", "success"),
+            ("Compile the backend and browser test projects once", "success"), ("Plan the test shards", "success"),
+            ("Run ./.github/actions/pack-build", "success"))
+SMOKE = job("smoke", "success", ("Set up job", "success"), ("Run ./.github/actions/restore-build", "success"),
+            ("Critical backend tests (startup, schema, migrations, sessions, setup gate)", "success"))
 
 
 def self_test() -> None:
@@ -251,9 +259,30 @@ def self_test() -> None:
         assert result["reason"], name
         assert ACTIONS[result["decision"]] in summary(run, result), name
 
-    every_shard = [shard(f"backend ({i}/4)") for i in range(1, 5)] + [shard(f"e2e ({i}/4)", kind="e2e") for i in range(1, 5)]
+    every_shard = [shard(f"backend ({i}/6)") for i in range(1, 7)] + [shard(f"e2e ({i}/6)", kind="e2e") for i in range(1, 7)]
     # 42669663513 / 42669292640: every shard green, gate never created, run red.
-    check("42669663513", "all", full_run(id=42669663513), [SMOKE, *every_shard])
+    check("42669663513", "all", full_run(id=42669663513), [BUILD, SMOKE, *every_shard])
+    # build, smoke and shards: smoke runs beside the shards. A failed smoke test or build step is no re-run;
+    # a smoke job that could not unpack the build is.
+    check("smoke test beside green shards", "none", full_run(),
+          [BUILD, job("smoke", "failure", ("Run ./.github/actions/restore-build", "success"),
+                      ("Critical backend tests (startup, schema, migrations, sessions, setup gate)", "failure")),
+           *every_shard, GATE_FAILED])
+    check("smoke restore-build", "failed", full_run(),
+          [BUILD, job("smoke", "failure", ("Set up job", "success"), ("Run ./.github/actions/restore-build", "failure")),
+           *every_shard, GATE_FAILED])
+    check("build compile", "none", full_run(),
+          [job("build", "failure", ("Run actions/checkout@v7", "success"), ("Compile the backend and browser test projects once", "failure")),
+           job("smoke", "skipped"), GATE_FAILED])
+    check("build plan", "none", full_run(),
+          [job("build", "failure", ("Fetch the measured test durations of recent main runs", "success"), ("Plan the test shards", "failure")),
+           GATE_FAILED])
+    check("build fetch crashed", "failed", full_run(),
+          [job("build", "failure", ("Run actions/checkout@v7", "success"), ("Fetch the measured test durations of recent main runs", "failure")),
+           GATE_FAILED])
+    check("prepare base and head fetch", "failed", full_run(name="Backend", path=".github/workflows/backend-pr.yml"),
+          [job("prepare", "failure", ("Run actions/checkout@v7", "success"), ("Fetch the base and head commits", "failure")),
+           job("test", "failure", ("Require prepare and the shards", "failure"))])
     # 42672877493 / 42671517066: no job at all.
     check("42672877493", "all", full_run(id=42672877493), [])
     # 42670336356 (Backend PR): prepare and both shards green, full-regression skipped, `test` missing.
@@ -327,11 +356,13 @@ def self_test() -> None:
     # Every set-up step name used by the watched workflows is still recognised.
     for name in ("Set up job", "Run actions/checkout@v7", "Run actions/setup-node@v7", "Run actions/cache@v6",
                  "Run ./.github/actions/install-tools", "Run ./.github/actions/restore-build", "Run ./.github/actions/pack-build",
-                 "Post Run actions/cache@v6", "Install Chromium", "Keep the hang and crash evidence"):
+                 "Post Run actions/cache@v6", "Install Chromium", "Keep the hang and crash evidence",
+                 "Fetch the base and head commits", "Fetch the measured test durations of recent main runs"):
         assert is_setup(name), name
     for name in ("Run the backend shard", "Run the browser shard", "Run the selected test classes of this shard",
                  "Real-tool tests (FFmpeg HLS, JPEG XL covers)", "Frontend unit tests", "Compile the backend and browser test projects once",
-                 "Verify the CI scripts (test shards and selection)", "Detect affected project files"):
+                 "Verify the CI scripts (test shards and selection)", "Detect affected project files", "Plan the test shards",
+                 "Select the tests for the changed areas and run the smoke methods"):
         assert not is_setup(name), name
 
 
