@@ -2,10 +2,12 @@ using System.Collections.Concurrent;
 
 namespace Jularr.Backend.Service.Core
 {
-    // What each service did during the last 24 hours, in hourly slices. Recording costs a lock on one slice and nothing else; the slices that changed
-    // are written to the database in batches (SavePerformanceHistoryV1) and read back once after a restart.
-    internal sealed class ServiceTimings(TimeProvider time)
+    // What each service and each Razor page did during the last 24 hours, in hourly slices. Recording costs a lock on one slice and nothing else; the slices
+    // that changed are written to the database in batches (SavePerformanceHistoryV1) and read back once after a restart. A page is kept as "Page" and its
+    // view path, a named handler or a POST after it, never its address.
+    public sealed class ServiceTimings(TimeProvider time)
     {
+        private const string PagePrefix = "Page";
         private static readonly TimeSpan SliceLength = TimeSpan.FromHours(1);
         private const int SliceCount = 24;
         private readonly ConcurrentDictionary<string, Slice[]> _services = new(StringComparer.Ordinal);
@@ -13,13 +15,16 @@ namespace Jularr.Backend.Service.Core
         // Follows the Diagnostics module.
         public bool IsEnabled { get; private set; } = true;
 
-        public void Enable(bool enabled)
+        internal void Enable(bool enabled)
         {
             IsEnabled = enabled;
             if (!enabled) _services.Clear();
         }
 
-        public void Record(string service, TimeSpan duration, bool failed)
+        // The whole server time of a page request; the page names itself by its view path ("/Admin/Catalog/Catalog").
+        public void RecordPage(string page, TimeSpan duration, bool failed) => Record(PagePrefix + page, duration, failed);
+
+        internal void Record(string service, TimeSpan duration, bool failed)
         {
             if (!IsEnabled)
             {
@@ -38,14 +43,18 @@ namespace Jularr.Backend.Service.Core
         }
 
         // The services that took the most time in total first, over the window of 24 hourly slices.
-        public IReadOnlyList<ServiceTiming> Read(int count) => [.. Window().OrderByDescending(timing => timing.TotalMilliseconds).Take(count)];
+        internal IReadOnlyList<ServiceTiming> Read(int count) => [.. Window().Where(timing => !IsPage(timing.Service)).OrderByDescending(timing => timing.TotalMilliseconds).Take(count)];
 
-        // Everything together, for the figures at the top of the Performance page.
-        public ServiceTimingTotals Totals()
+        // Every page by its view path, the slowest on average first.
+        internal IReadOnlyList<ServiceTiming> ReadPages() =>
+            [.. Window().Where(timing => IsPage(timing.Service)).Select(timing => timing with { Service = timing.Service[PagePrefix.Length..] }).OrderByDescending(timing => timing.TotalMilliseconds / timing.Count)];
+
+        // All service calls together, for the figures at the top of the Performance page; a page's time already holds the services it called.
+        internal ServiceTimingTotals Totals()
         {
             long calls = 0, errors = 0;
             double total = 0;
-            foreach (var timing in Window())
+            foreach (var timing in Window().Where(timing => !IsPage(timing.Service)))
             {
                 calls += timing.Count;
                 errors += timing.Errors;
@@ -56,7 +65,7 @@ namespace Jularr.Backend.Service.Core
         }
 
         // The slices that changed since they were last saved; the saver confirms with MarkSaved once the database has them.
-        public IReadOnlyList<ServiceTimingSlice> ReadUnsaved()
+        internal IReadOnlyList<ServiceTimingSlice> ReadUnsaved()
         {
             var unsaved = new List<ServiceTimingSlice>();
             var oldest = CurrentIndex() - SliceCount + 1;
@@ -77,7 +86,7 @@ namespace Jularr.Backend.Service.Core
             return unsaved;
         }
 
-        public void MarkSaved(IEnumerable<ServiceTimingSlice> saved)
+        internal void MarkSaved(IEnumerable<ServiceTimingSlice> saved)
         {
             foreach (var item in saved)
             {
@@ -92,7 +101,7 @@ namespace Jularr.Backend.Service.Core
         }
 
         // What an earlier run of the process kept; calls made since the start stay and add up.
-        public void Load(IEnumerable<ServiceTimingSlice> kept)
+        internal void Load(IEnumerable<ServiceTimingSlice> kept)
         {
             if (!IsEnabled)
             {
@@ -118,11 +127,14 @@ namespace Jularr.Backend.Service.Core
         }
 
         // The first hour of a slice's number, counted from the Unix epoch.
-        public static DateTime StartOf(long index) => new DateTime(index * SliceLength.Ticks, DateTimeKind.Utc);
+        internal static DateTime StartOf(long index) => new DateTime(index * SliceLength.Ticks, DateTimeKind.Utc);
 
-        public static long IndexOf(DateTime at) => at.ToUniversalTime().Ticks / SliceLength.Ticks;
+        internal static long IndexOf(DateTime at) => at.ToUniversalTime().Ticks / SliceLength.Ticks;
 
         private long CurrentIndex() => time.GetUtcNow().UtcTicks / SliceLength.Ticks;
+
+        // A page's key is its prefix and its view path, which starts with a slash; a service's key is its area and name.
+        private static bool IsPage(string key) => key.StartsWith(PagePrefix + "/", StringComparison.Ordinal);
 
         // The slice of the service for an hour; one that still holds an older hour starts over.
         private Slice SliceOf(string service, long index)

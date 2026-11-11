@@ -13,8 +13,8 @@ namespace Jularr.Backend.Data.Admin.System.V1
     // What the Owner needs to see at a glance: tools, queues, storage, backups and the library's size.
     public sealed class SystemHealthV1 : BaseResponse
     {
-        public SystemHealthV1(long databaseBytes, long queuedOperations, long failedOperations, long profiles, long storageOffline, long catalogWorks, DateTime? lastBackupAt, BaseDataList<ToolStateV1> tools,
-            BaseDataList<MediaTypeCountV1> library)
+        public SystemHealthV1(long databaseBytes, long queuedOperations, long failedOperations, long profiles, long storageOffline, long catalogWorks, DateTime? catalogCountedAt, DateTime? lastBackupAt,
+            BaseDataList<ToolStateV1> tools, BaseDataList<MediaTypeCountV1> library)
         {
             DatabaseBytes = databaseBytes;
             QueuedOperations = queuedOperations;
@@ -22,6 +22,7 @@ namespace Jularr.Backend.Data.Admin.System.V1
             Profiles = profiles;
             StorageOffline = storageOffline;
             CatalogWorks = catalogWorks;
+            CatalogCountedAt = catalogCountedAt;
             LastBackupAt = lastBackupAt;
             Tools = tools;
             Library = library;
@@ -43,9 +44,13 @@ namespace Jularr.Backend.Data.Admin.System.V1
         [DataField(typeof(StatisticsFields), nameof(StatisticsFields.Count))]
         public long StorageOffline { get; }
 
-        // Titles only the catalog knows (no tie to the library); the library's own titles are counted per type below.
+        // Titles only the catalog knows (no tie to the library) as the worker counted them at CatalogCountedAt (0 while that is null: not counted yet);
+        // the library's own titles are counted per type below.
         [DataField(typeof(StatisticsFields), nameof(StatisticsFields.Count))]
         public long CatalogWorks { get; }
+
+        [DataField(typeof(StatisticsFields), nameof(StatisticsFields.At))]
+        public DateTime? CatalogCountedAt { get; }
 
         [DataField(typeof(StatisticsFields), nameof(StatisticsFields.At))]
         public DateTime? LastBackupAt { get; }
@@ -159,12 +164,13 @@ namespace Jularr.Backend.Data.Admin.System.V1
     // The services that took the most time in the last 24 hours, and what all calls came to.
     public sealed class ServiceTimingsV1 : BaseResponse
     {
-        public ServiceTimingsV1(long calls, long errors, int averageMilliseconds, BaseDataList<ServiceTimingV1> services)
+        public ServiceTimingsV1(long calls, long errors, int averageMilliseconds, BaseDataList<ServiceTimingV1> services, BaseDataList<ServiceTimingV1> pages)
         {
             Calls = calls;
             Errors = errors;
             AverageMilliseconds = averageMilliseconds;
             Services = services;
+            Pages = pages;
         }
 
         [DataField(typeof(PerformanceFields), nameof(PerformanceFields.Count))]
@@ -177,5 +183,8 @@ namespace Jularr.Backend.Data.Admin.System.V1
         public int AverageMilliseconds { get; }
 
         public BaseDataList<ServiceTimingV1> Services { get; }
+
+        // Every Razor page by its view path (Service), the slowest on average first; a page's time holds the services it called.
+        public BaseDataList<ServiceTimingV1> Pages { get; }
     }
 }

@@ -22,62 +22,19 @@ namespace Jularr.Backend.Service.Admin.Media.V1
         {
             // One bounded read: only titles with a tie to the library (catalog titles are not listed), filtered and ordered first, only the page gets its cover. A title is monitored while one of its targets is not paused;
             // it is filed when it has a file and no monitored aired unit still lacks one, and downloading while one of its releases is on its way.
+            // The library's titles come first, then their order: it reads only what its filters and sort need (a parameter folds the rest away), and only the page
+            // reads the other facts of the list.
             var sql = new SqlStatement { DisableJit = true };
             sql.Statement =
                 """
-                WITH listed AS (
-                    SELECT
-                        listed."Id",
-                        listed."MediaTypeId",
-                        listed."MediaSubtypeId",
-                        listed."CanonicalTitle",
-                        listed."ReleaseYear",
-                        listed."CreatedAt",
-                        listed."WantedItemId",
-                        listed."TargetCount",
-                        listed."IsMonitored",
-                        listed."AcquisitionProfileId",
-                        listed."LibraryRootId",
-                        listed."ProfileName",
-                        listed."LibraryName",
-                        listed."FileCount",
-                        listed."SizeBytes",
-                        listed."WorkListStatusId"
+                WITH managed AS MATERIALIZED (
+                    SELECT DISTINCT
+                        tie."WorkId"
                     FROM
-                        "WorkListEntries" AS listed
-                    WHERE
-                        EXISTS (SELECT 1 FROM "WorkManagedRelations" AS tie WHERE tie."WorkId" = listed."Id")
-                        AND (cardinality(@MediaTypeIds::smallint[]) + cardinality(@MediaSubtypeIds::smallint[]) = 0
-                            OR listed."MediaSubtypeId" IS NULL AND listed."MediaTypeId" = ANY(@MediaTypeIds::smallint[])
-                            OR listed."MediaSubtypeId" = ANY(@MediaSubtypeIds::smallint[]))
-                        AND (@Query::text IS NULL OR strpos(lower(listed."CanonicalTitle"), lower(@Query)) > 0)
-                        AND (@AcquisitionProfileId::bigint IS NULL OR listed."AcquisitionProfileId" = @AcquisitionProfileId)
-                        AND (
-                            @LibraryRootId::bigint IS NULL OR listed."LibraryRootId" = @LibraryRootId
-                            OR EXISTS (
-                                SELECT 1 FROM "MediaAssets" AS asset
-                                    JOIN "StoredFiles" AS file ON file."MediaAssetId" = asset."Id" AND file."MissingSince" IS NULL AND NOT file."IsSubtitle"
-                                WHERE asset."WorkId" = listed."Id" AND file."LibraryRootId" = @LibraryRootId
-                            )
-                        )
+                        "WorkManagedRelations" AS tie
                 ), ordered AS (
                     SELECT
                         listed."Id",
-                        listed."MediaTypeId",
-                        listed."MediaSubtypeId",
-                        listed."CanonicalTitle",
-                        listed."ReleaseYear",
-                        listed."CreatedAt",
-                        listed."WantedItemId",
-                        listed."TargetCount",
-                        listed."IsMonitored",
-                        listed."AcquisitionProfileId",
-                        listed."LibraryRootId",
-                        listed."ProfileName",
-                        listed."LibraryName",
-                        listed."FileCount",
-                        listed."SizeBytes",
-                        listed."WorkListStatusId",
                         row_number() OVER (
                             ORDER BY
                                 CASE WHEN @WorkSortTypeId = 0 AND NOT @IsDescending THEN lower(listed."CanonicalTitle") END ASC,
@@ -96,30 +53,45 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                                 listed."Id"
                         ) AS "Position"
                     FROM
-                        listed
+                        managed
+                        JOIN "WorkListEntries" AS listed ON listed."Id" = managed."WorkId"
                     WHERE
-                        (@IsMonitored::boolean IS NULL OR listed."IsMonitored" = @IsMonitored)
+                        (cardinality(@MediaTypeIds::smallint[]) + cardinality(@MediaSubtypeIds::smallint[]) = 0
+                            OR listed."MediaSubtypeId" IS NULL AND listed."MediaTypeId" = ANY(@MediaTypeIds::smallint[])
+                            OR listed."MediaSubtypeId" = ANY(@MediaSubtypeIds::smallint[]))
+                        AND (@Query::text IS NULL OR strpos(lower(listed."CanonicalTitle"), lower(@Query)) > 0)
+                        AND (@AcquisitionProfileId::bigint IS NULL OR listed."AcquisitionProfileId" = @AcquisitionProfileId)
+                        AND (
+                            @LibraryRootId::bigint IS NULL OR listed."LibraryRootId" = @LibraryRootId
+                            OR EXISTS (
+                                SELECT 1 FROM "MediaAssets" AS asset
+                                    JOIN "StoredFiles" AS file ON file."MediaAssetId" = asset."Id" AND file."MissingSince" IS NULL AND NOT file."IsSubtitle"
+                                WHERE asset."WorkId" = listed."Id" AND file."LibraryRootId" = @LibraryRootId
+                            )
+                        )
+                        AND (@IsMonitored::boolean IS NULL OR listed."IsMonitored" = @IsMonitored)
                         AND (@WorkListStatusId::smallint IS NULL OR listed."WorkListStatusId" = @WorkListStatusId)
                 )
                 SELECT
-                    ordered."Id",
-                    ordered."MediaTypeId",
-                    ordered."MediaSubtypeId",
-                    ordered."CanonicalTitle",
-                    ordered."ReleaseYear",
-                    ordered."CreatedAt",
+                    listed."Id",
+                    listed."MediaTypeId",
+                    listed."MediaSubtypeId",
+                    listed."CanonicalTitle",
+                    listed."ReleaseYear",
+                    listed."CreatedAt",
                     facts."PosterUrl",
                     facts."Overview",
-                    ordered."WantedItemId",
-                    ordered."TargetCount",
-                    ordered."IsMonitored",
-                    ordered."ProfileName",
-                    ordered."LibraryName",
-                    ordered."FileCount",
-                    ordered."SizeBytes",
-                    ordered."WorkListStatusId"
+                    listed."WantedItemId",
+                    listed."TargetCount",
+                    listed."IsMonitored",
+                    listed."ProfileName",
+                    listed."LibraryName",
+                    listed."FileCount",
+                    listed."SizeBytes",
+                    listed."WorkListStatusId"
                 FROM
                     ordered
+                    JOIN "WorkListEntries" AS listed ON listed."Id" = ordered."Id"
                     LEFT JOIN LATERAL (
                         SELECT
                             (array_agg(fact."Value" ORDER BY fact."IsManual" DESC) FILTER (WHERE fact."FactKey" = 'Poster'))[1] AS "PosterUrl",
@@ -153,16 +125,26 @@ namespace Jularr.Backend.Service.Admin.Media.V1
 
         protected override async Task<IServiceOutput> OnRead()
         {
+            // Each title's state is worked out once (the materialized set), not again for every count that reads it.
             var sql = new SqlStatement { DisableJit = true };
             sql.Statement =
                 """
-                WITH listed AS (
-                    SELECT listed."WorkListStatusId", listed."IsMonitored", listed."FileCount", listed."SizeBytes"
+                WITH managed AS MATERIALIZED (
+                    SELECT DISTINCT
+                        tie."WorkId"
                     FROM
-                        "WorkListEntries" AS listed
+                        "WorkManagedRelations" AS tie
+                ), listed AS MATERIALIZED (
+                    SELECT
+                        listed."WorkListStatusId",
+                        listed."IsMonitored",
+                        listed."FileCount",
+                        listed."SizeBytes"
+                    FROM
+                        managed
+                        JOIN "WorkListEntries" AS listed ON listed."Id" = managed."WorkId"
                     WHERE
-                        EXISTS (SELECT 1 FROM "WorkManagedRelations" AS tie WHERE tie."WorkId" = listed."Id")
-                        AND (cardinality(@MediaTypeIds::smallint[]) + cardinality(@MediaSubtypeIds::smallint[]) = 0
+                        (cardinality(@MediaTypeIds::smallint[]) + cardinality(@MediaSubtypeIds::smallint[]) = 0
                             OR listed."MediaSubtypeId" IS NULL AND listed."MediaTypeId" = ANY(@MediaTypeIds::smallint[])
                             OR listed."MediaSubtypeId" = ANY(@MediaSubtypeIds::smallint[]))
                         AND (@Query::text IS NULL OR strpos(lower(listed."CanonicalTitle"), lower(@Query)) > 0)

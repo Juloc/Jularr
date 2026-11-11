@@ -75,6 +75,38 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(1, restarted.ReadUnsaved().Count, "What was called before the load is not in the database yet.");
         }
 
+        [TestMethod]
+        public void Timings_Pages_KeptApartFromServicesAndSavedLikeThem()
+        {
+            var clock = new Clock();
+            var timings = new ServiceTimings(clock);
+            timings.Record("Admin/ReadExternalWorkSyncsV1", TimeSpan.FromMilliseconds(8), false);
+            timings.RecordPage("/Admin/Catalog/Catalog", TimeSpan.FromMilliseconds(20), false);
+            timings.RecordPage("/Admin/Catalog/Catalog", TimeSpan.FromMilliseconds(40), false);
+            timings.RecordPage("/User/Discover/Index:GetRecommendations", TimeSpan.FromMilliseconds(90), true);
+
+            // The service list and its totals hold services only; a page's time already holds the services it called.
+            Assert.AreEqual("Admin/ReadExternalWorkSyncsV1", timings.Read(20).Single().Service);
+            Assert.AreEqual(1L, timings.Totals().Calls);
+
+            // One row per page by its view path, the slowest on average first.
+            var pages = timings.ReadPages();
+            CollectionAssert.AreEqual(new[] { "/User/Discover/Index:GetRecommendations", "/Admin/Catalog/Catalog" }, pages.Select(page => page.Service).ToArray());
+            Assert.AreEqual(2L, pages[1].Count);
+            Assert.AreEqual(60d, pages[1].TotalMilliseconds);
+            Assert.AreEqual(1L, pages[0].Errors);
+
+            // Pages are saved and read back after a restart like services.
+            var restarted = new ServiceTimings(clock);
+            restarted.Load(timings.ReadUnsaved());
+            Assert.AreEqual(2L, restarted.ReadPages().Single(page => page.Service == "/Admin/Catalog/Catalog").Count);
+
+            // Switched off, no page is kept or recorded.
+            timings.Enable(false);
+            timings.RecordPage("/Admin/Catalog/Catalog", TimeSpan.FromMilliseconds(5), false);
+            Assert.AreEqual(0, timings.ReadPages().Count);
+        }
+
         private sealed class Clock : TimeProvider
         {
             private DateTimeOffset _now = new(2026, 10, 14, 12, 0, 0, TimeSpan.Zero);

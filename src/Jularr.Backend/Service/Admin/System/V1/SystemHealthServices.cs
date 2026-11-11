@@ -38,7 +38,7 @@ namespace Jularr.Backend.Service.Admin.System.V1
 
         protected override async Task<IServiceOutput> OnRead()
         {
-            // Stored state only; nothing here touches storage or providers.
+            // Stored state only; nothing here touches storage or providers. The catalog's titles are the worker's last count (CountCatalogTitlesV1).
             var sql = new SqlStatement();
             sql.Statement =
                 """
@@ -48,7 +48,8 @@ namespace Jularr.Backend.Service.Admin.System.V1
                     (SELECT count(*) FROM "Operations" AS operation WHERE operation."OperationStatusTypeId" = 4 AND operation."DismissedAt" IS NULL) AS "FailedOperations",
                     (SELECT count(*) FROM "Profiles") AS "Profiles",
                     (SELECT count(*) FROM "StorageMountHealth" AS health WHERE health."StorageHealthTypeId" IN (3, 4)) AS "StorageOffline",
-                    (SELECT count(*) FROM "Works" AS work WHERE work."CatalogNamespace" IS NOT NULL AND NOT EXISTS (SELECT 1 FROM "WorkLibraryRelations" AS tie WHERE tie."WorkId" = work."Id")) AS "CatalogWorks";
+                    (SELECT coalesce(sum(total."CatalogOnly"), 0)::bigint FROM "CatalogNamespaceTotals" AS total) AS "CatalogWorks",
+                    (SELECT min(total."CountedAt") FROM "CatalogNamespaceTotals" AS total) AS "CatalogCountedAt";
                 """;
             var totals = await Context.ReadSql.ReadRequiredAsync<SystemTotalsData>(sql, CancellationToken);
 
@@ -81,7 +82,7 @@ namespace Jularr.Backend.Service.Admin.System.V1
                 new("pgDump", _backups.CanBackUp)
             ];
             var lastBackup = _backupOptions.Path is { } path ? BackupFiles.Newest(path) : null;
-            return new SystemHealthV1(totals.DatabaseBytes, totals.QueuedOperations, totals.FailedOperations, totals.Profiles, totals.StorageOffline, totals.CatalogWorks, lastBackup,
+            return new SystemHealthV1(totals.DatabaseBytes, totals.QueuedOperations, totals.FailedOperations, totals.Profiles, totals.StorageOffline, totals.CatalogWorks, totals.CatalogCountedAt, lastBackup,
                 new BaseDataList<ToolStateV1>(tools), new BaseDataList<MediaTypeCountV1>(library));
         }
     }
@@ -120,14 +121,15 @@ namespace Jularr.Backend.Service.Admin.System.V1
         protected override ModuleRequirement GetInstanceModules(ReadPerformanceParametersV1 parameters) => ModuleRequirement.All("Diagnostics");
         protected override ServicePermission GetPermission(ReadPerformanceParametersV1 parameters, Type resultType) => new("instance.settings.read");
 
-        // What all calls of the last 24 hours came to, and the 20 services that took the most time.
+        // What all service calls of the last 24 hours came to, the 20 services that took the most time and every page, the slowest on average first.
         protected override Task<IServiceOutput> OnRead()
         {
+            static ServiceTimingV1 Item(ServiceTiming timing) => new(timing.Service, timing.Count, timing.Errors, (int)Math.Min(int.MaxValue, Math.Round(timing.TotalMilliseconds / timing.Count)),
+                (int)Math.Min(int.MaxValue, Math.Round(timing.MaxMilliseconds)));
+
             var totals = _timings.Totals();
-            var services = _timings.Read(20).Select(timing => new ServiceTimingV1(timing.Service, timing.Count, timing.Errors,
-                (int)Math.Min(int.MaxValue, Math.Round(timing.TotalMilliseconds / timing.Count)), (int)Math.Min(int.MaxValue, Math.Round(timing.MaxMilliseconds))));
             return Task.FromResult<IServiceOutput>(new ServiceTimingsV1(totals.Calls, totals.Errors, totals.Calls == 0 ? 0 : (int)Math.Min(int.MaxValue, Math.Round(totals.TotalMilliseconds / totals.Calls)),
-                new BaseDataList<ServiceTimingV1>(services)));
+                new BaseDataList<ServiceTimingV1>(_timings.Read(20).Select(Item)), new BaseDataList<ServiceTimingV1>(_timings.ReadPages().Select(Item))));
         }
     }
 }
