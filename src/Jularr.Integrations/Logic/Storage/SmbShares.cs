@@ -23,10 +23,11 @@ namespace Jularr.Integrations.Logic.Storage
 
         public void CloseIdle()
         {
-            // The share objects stay; only their sessions close, so a share in use never runs beside a second one.
+            // The share objects stay; only their sessions close, so a share in use never runs beside a second one. Each session closes on its own
+            // thread, so the timer never waits for a NAS.
             foreach (var share in _shares.Values)
             {
-                share.CloseIfIdle(IdleTime);
+                _ = share.CloseIfIdleAsync(IdleTime);
             }
         }
 

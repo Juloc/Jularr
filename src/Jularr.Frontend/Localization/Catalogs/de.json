@@ -8784,6 +8784,10 @@
    "The storage is not reachable. Check that the NAS is on and the share is mounted.",
    "Der Speicher ist nicht erreichbar. Prüfe, ob das NAS an ist und die Freigabe eingebunden ist."
   ],
+  "errors.storage_access_denied": [
+   "The storage refused Jularr's login or access. Check the account and the share permissions on the NAS.",
+   "Der Speicher hat Jularrs Anmeldung oder Zugriff abgelehnt. Prüfe das Konto und die Freigaberechte auf dem NAS."
+  ],
   "errors.download_storage_mount_required": [
    "Choose writable folders on storage mounted inside Jularr. A direct SMB library connection alone cannot run the native downloader and unpack tools.",
    "Wähle beschreibbare Ordner auf einem in Jularr eingebundenen Dateisystem. Eine direkte SMB-Bibliotheksverbindung allein reicht für den eigenen Downloader und die Entpackprogramme nicht aus."

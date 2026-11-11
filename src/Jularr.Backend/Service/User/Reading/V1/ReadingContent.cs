@@ -9,6 +9,7 @@ using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Reading;
 using Jularr.Backend.Data.Logic.Library;
 using Jularr.Backend.Data.Logic.Reading;
+using Jularr.Backend.Data.Logic.Storage;
 using Jularr.Backend.Data.User.Reading.V1;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Reading;
@@ -809,28 +810,58 @@ namespace Jularr.Backend.Service.User.Reading.V1
 
         // A picture or page a reader shows (in a read-only service): kept on disk, else read from an EPUB or CBZ itself and kept, else the book's pictures drawn again.
         // None when the book has no such picture.
-        public async Task<ReadingFile?> ReadFileAsync(LogicContext context, ReadingFileSourceData source, string path, CancellationToken ct)
+        public async Task<ReadingFile?> ReadFileAsync(LogicContext context, ReadingFileSourceData source, string path, CancellationToken ct) =>
+            (await ReadFilesAsync(context, source, [path], ct))[0];
+
+        // Several of them in the order asked. Before the book's own file is reached, what it needs from the database is read and the read transaction ends,
+        // so the caller reads nothing from the database afterwards.
+        public async Task<IReadOnlyList<ReadingFile?>> ReadFilesAsync(LogicContext context, ReadingFileSourceData source, IReadOnlyList<string> paths, CancellationToken ct)
         {
-            if (_files.Find(source.DocumentId, path) is { } kept)
+            var files = new ReadingFile?[paths.Count];
+            StoredBook? book = null;
+            for (var index = 0; index < paths.Count; index++)
             {
-                return kept;
+                if (_files.Find(source.DocumentId, paths[index]) is { } kept)
+                {
+                    files[index] = kept;
+                    continue;
+                }
+
+                // A complete set has no such picture; a DjVu page is drawn through the reader's page handler only.
+                if (_files.IsComplete(source.DocumentId) || IsDjvu(source.RelativePath))
+                {
+                    continue;
+                }
+
+                if (!source.IsCurrent)
+                {
+                    throw new ServiceUnavailableException("reading_unavailable");
+                }
+
+                if (book is null)
+                {
+                    var mount = await context.ReadStorageMountAsync(source.StorageMountId, ct);
+                    var recognized = source.ReadingFormatTypeId == ReadingFormatType.Pdf
+                        ? await ReadRecognizedAsync(context, new ReadingRecognitionData(source.StoredFileId, source.SizeBytes, source.ModifiedAt), ct) : null;
+                    await context.EndReadAsync(ct);
+                    book = new StoredBook(mount, recognized);
+                }
+
+                files[index] = await ReadStoredFileAsync(book, source, paths[index], ct);
             }
 
-            // A complete set has no such picture; a DjVu page is drawn through the reader's page handler only.
-            if (_files.IsComplete(source.DocumentId) || IsDjvu(source.RelativePath))
-            {
-                return null;
-            }
+            return files;
+        }
 
-            if (!source.IsCurrent)
-            {
-                throw new ServiceUnavailableException("reading_unavailable");
-            }
+        // The book's file as its storage holds it, once the database has given what it needs: its mount and, for a PDF, the recognized pages.
+        private sealed record StoredBook(StorageMountData Mount, IReadOnlyDictionary<int, RecognizedPage>? Recognized);
 
+        private async Task<ReadingFile?> ReadStoredFileAsync(StoredBook book, ReadingFileSourceData source, string path, CancellationToken ct)
+        {
             Stream file;
             try
             {
-                file = await _storage.Open(await context.ReadStorageMountAsync(source.StorageMountId, ct)).OpenReadAsync(StoragePath.Combine(source.RootRelativePath, source.RelativePath), ct);
+                file = await _storage.Open(book.Mount).OpenReadAsync(StoragePath.Combine(source.RootRelativePath, source.RelativePath), ct);
             }
             catch (Exception exception) when (exception is NasMountException or IOException or UnauthorizedAccessException)
             {
@@ -889,10 +920,9 @@ namespace Jularr.Backend.Service.User.Reading.V1
 
                     if (source.ReadingFormatTypeId == ReadingFormatType.Pdf)
                     {
-                        var recognized = await ReadRecognizedAsync(context, new ReadingRecognitionData(source.StoredFileId, source.SizeBytes, source.ModifiedAt), ct);
                         try
                         {
-                            await WritePdfFilesAsync(source.DocumentId, await ReadPdfAsync(file, recognized, ct), ct);
+                            await WritePdfFilesAsync(source.DocumentId, await ReadPdfAsync(file, book.Recognized!, ct), ct);
                         }
                         catch (Exception exception) when (exception is PdfWithoutTextException or InvalidDataException)
                         {

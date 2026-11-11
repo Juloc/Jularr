@@ -4,15 +4,19 @@ using System.Net.Http.Json;
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Admin.Library.V1;
+using Jularr.Backend.Data.Admin.Storage.V1;
 using Jularr.Backend.Data.Enums.Account;
 using Jularr.Backend.Data.Enums.Library;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Enums.Playback;
+using Jularr.Backend.Data.Enums.Sql;
 using Jularr.Backend.Data.Logic.Playback;
 using Jularr.Backend.Data.System.Media.V1;
 using Jularr.Backend.Data.User.Media.V1;
 using Jularr.Backend.Data.User.Playback.V1;
+using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Playback;
+using Jularr.Backend.Service.Core;
 using Jularr.Backend.Service.System.Media.V1;
 using Jularr.Backend.Service.User.Playback.V1;
 using Jularr.Integrations.Logic.Storage;
@@ -20,7 +24,9 @@ using Jularr.Integrations.Data.Media;
 using Jularr.Integrations.Logic.Media;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Npgsql;
 using Host = Jularr.Backend.Tests.AuthenticationTests.Host;
 
 namespace Jularr.Backend.Tests
@@ -108,6 +114,158 @@ namespace Jularr.Backend.Tests
             using var offline = await host.SendAsync(HttpMethod.Post, "/api/v1/playback/assets/" + assetId + "/sessions", Browser);
             StringAssert.Contains(await offline.Content.ReadAsStringAsync(), "storage_unavailable");
             Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"PlaybackSessions\""));
+        }
+
+        [TestMethod]
+        public async Task Stream_HangingStorage_HoldsNoDatabaseConnection()
+        {
+            if (!OperatingSystem.IsLinux())
+            {
+                Assert.Inconclusive("The storage that never answers is a Linux FIFO.");
+                return;
+            }
+
+            // A pool of eight: requests that kept their transaction while the storage hangs would leave the others without a connection.
+            using var storage = new LibraryTests.TemporaryDirectory();
+            await using var host = await LibraryTests.CreateHostAsync(storage.Path, services: collection => collection.AddSingleton(provider =>
+                SqlDatabase.Create(new NpgsqlConnectionStringBuilder(provider.GetRequiredService<IConfiguration>()["JULARR_DB"]) { Pooling = true }.ConnectionString,
+                    SqlLane.Web, 8, SqlLanes.WebIdleInTransaction, SqlLanes.WebStatementTimeout)));
+            var (assetId, _) = await CreatePlayableAsync(host, storage.Path, wakeOnDemand: false);
+            var plan = await StartAsync(host, assetId);
+
+            // The file becomes one whose opening never returns, like a NAS that stopped answering.
+            var file = Directory.EnumerateFiles(storage.Path, "Film.mp4", SearchOption.AllDirectories).Single();
+            File.Delete(file);
+            using (var fifo = System.Diagnostics.Process.Start("mkfifo", [file]))
+            {
+                await fifo.WaitForExitAsync();
+                Assert.AreEqual(0, fifo.ExitCode);
+            }
+
+            // Sixteen requests at a time wait for the hanging storage, each on one of the connection's own threads; the others hear within seconds that it is busy.
+            var requests = Enumerable.Range(0, 50).Select(_ => SendAsync(host, new HttpRequestMessage(HttpMethod.Get, plan.StreamUrl))).ToArray();
+            try
+            {
+                await WaitUntilAsync(() => Task.FromResult(WaitingOnFifo() >= StorageGate.MaximumCalls), "sixteen requests wait for the storage");
+                await WaitUntilAsync(() => Task.FromResult(requests.Count(request => request.IsCompleted) == requests.Length - StorageGate.MaximumCalls), "the others are answered");
+                Assert.AreEqual(StorageGate.MaximumCalls, WaitingOnFifo());
+                CollectionAssert.AreEqual(Enumerable.Repeat("Jularr storage", StorageGate.MaximumCalls).ToArray(), FifoWaiters(), "The connection's own threads wait, never the thread pool's.");
+                foreach (var answered in requests.Where(request => request.IsCompleted))
+                {
+                    var response = await answered;
+                    Assert.AreEqual(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+                    StringAssert.Contains(await response.Content.ReadAsStringAsync(), "storage_unavailable");
+                    Assert.IsNotNull(response.Headers.RetryAfter);
+                }
+
+                // None of them holds a connection or an open transaction, and the server still answers.
+                await WaitUntilAsync(async () => (long)(await host.ScalarAsync(
+                    "SELECT count(*) FROM pg_stat_activity WHERE datname = current_database() AND pid <> pg_backend_pid() AND state <> 'idle'"))! == 0, "no busy connection");
+                Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM pg_stat_activity WHERE datname = current_database() AND state LIKE 'idle in transaction%'"));
+                using var item = await host.SendAsync(HttpMethod.Get, "/api/v1/playback/assets/" + assetId);
+                Assert.AreEqual(HttpStatusCode.OK, item.StatusCode, await item.Content.ReadAsStringAsync());
+            }
+            finally
+            {
+                await ReleaseFifoAsync(file, requests);
+            }
+
+            foreach (var request in requests)
+            {
+                (await request).Dispose();
+            }
+        }
+
+        [TestMethod]
+        public async Task Stream_HangingMount_FailsAtTheDeadlineThenAtOnce_WhileOtherMountsServe()
+        {
+            if (!OperatingSystem.IsLinux())
+            {
+                Assert.Inconclusive("The storage that never answers is a Linux FIFO.");
+                return;
+            }
+
+            // A short deadline instead of 35 s; the hanging file is a FIFO nobody writes to.
+            using var storage = new LibraryTests.TemporaryDirectory();
+            await using var host = await LibraryTests.CreateHostAsync(storage.Path);
+            host.Services.GetRequiredService<StorageAccess>().CallTime = TimeSpan.FromSeconds(1);
+            var (assetId, _) = await CreatePlayableAsync(host, storage.Path, wakeOnDemand: false);
+            var plan = await StartAsync(host, assetId);
+            var otherMountId = await LibraryTests.CreateMountAsync(host);
+            Directory.CreateDirectory(Path.Combine(storage.Path, otherMountId.ToString(), "Music"));
+            var file = Directory.EnumerateFiles(storage.Path, "Film.mp4", SearchOption.AllDirectories).Single();
+            File.Delete(file);
+            using (var fifo = System.Diagnostics.Process.Start("mkfifo", [file]))
+            {
+                await fifo.WaitForExitAsync();
+                Assert.AreEqual(0, fifo.ExitCode);
+            }
+
+            var requests = new List<Task<HttpResponseMessage>>();
+            try
+            {
+                // The first request fails at the deadline and tells the player to try again in 30 s.
+                var started = System.Diagnostics.Stopwatch.GetTimestamp();
+                requests.Add(SendAsync(host, new HttpRequestMessage(HttpMethod.Get, plan.StreamUrl)));
+                using var first = await requests[^1];
+                Assert.AreEqual(HttpStatusCode.ServiceUnavailable, first.StatusCode, await first.Content.ReadAsStringAsync());
+                StringAssert.Contains(await first.Content.ReadAsStringAsync(), "storage_unavailable");
+                Assert.AreEqual(TimeSpan.FromSeconds(30), first.Headers.RetryAfter?.Delta);
+                Assert.IsGreaterThanOrEqualTo(TimeSpan.FromSeconds(1), System.Diagnostics.Stopwatch.GetElapsedTime(started));
+
+                // The next one does not wait for the storage at all.
+                started = System.Diagnostics.Stopwatch.GetTimestamp();
+                requests.Add(SendAsync(host, new HttpRequestMessage(HttpMethod.Get, plan.StreamUrl)));
+                using var next = await requests[^1];
+                Assert.IsLessThan(TimeSpan.FromMilliseconds(500), System.Diagnostics.Stopwatch.GetElapsedTime(started));
+                Assert.AreEqual(HttpStatusCode.ServiceUnavailable, next.StatusCode);
+                Assert.IsNotNull(next.Headers.RetryAfter?.Delta);
+                Assert.AreEqual(1, WaitingOnFifo());
+
+                // Another connection still answers.
+                using var browse = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/storage/mounts/" + otherMountId + "/directories", new ReadStorageDirectoriesDataV1(""));
+                Assert.AreEqual(HttpStatusCode.OK, browse.StatusCode, await browse.Content.ReadAsStringAsync());
+                StringAssert.Contains(await browse.Content.ReadAsStringAsync(), "Music");
+            }
+            finally
+            {
+                await ReleaseFifoAsync(file, [.. requests]);
+            }
+        }
+
+        // The storage answers again: a writer lets every waiting open through, and closing it ends the file.
+        private static async Task ReleaseFifoAsync(string file, Task[] requests)
+        {
+            for (var attempt = 0; attempt < 100 && WaitingOnFifo() > 0; attempt++)
+            {
+                new FileStream(file, FileMode.Open, FileAccess.ReadWrite).Dispose();
+                await Task.WhenAny(Task.WhenAll(requests), Task.Delay(100));
+            }
+        }
+
+        // Threads of this process the kernel holds in a FIFO's open until a writer comes; the runtime's own debugger pipe waits there too and is not counted.
+        private static int WaitingOnFifo() => FifoWaiters().Length;
+
+        private static string[] FifoWaiters() => [.. Directory.EnumerateDirectories("/proc/self/task").Select(task =>
+        {
+            try
+            {
+                return File.ReadAllText(Path.Combine(task, "wchan")) == "wait_for_partner" ? File.ReadAllText(Path.Combine(task, "comm")).TrimEnd('\n') : null;
+            }
+            catch (IOException)
+            {
+                return null;
+            }
+        }).OfType<string>().Where(name => name != ".NET DebugPipe")];
+
+        private static async Task WaitUntilAsync(Func<Task<bool>> condition, string what)
+        {
+            var deadline = DateTime.UtcNow.AddSeconds(30);
+            while (!await condition())
+            {
+                Assert.IsTrue(DateTime.UtcNow < deadline, "Timed out waiting until " + what + ".");
+                await Task.Delay(50);
+            }
         }
 
         [TestMethod]

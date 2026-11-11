@@ -26,6 +26,10 @@ namespace Jularr.Backend.Logic.Storage
                 options.Add("vers=" + mount.ProtocolVersion);
                 options.Add("uid=" + AppUser.ToString(CultureInfo.InvariantCulture));
                 options.Add("gid=" + AppUser.ToString(CultureInfo.InvariantCulture));
+
+                // A NAS that stops answering returns errors instead of hanging the files Jularr reads; it counts as gone after about 30 s.
+                options.Add("soft");
+                options.Add("echo_interval=15");
             }
             else
             {

@@ -178,6 +178,85 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public void Transcoder_LoopbackInput_BoundsEachRead()
+        {
+            // A file on a direct share reaches FFmpeg through the loopback stream server: a read that stalls 30 s ends the conversion. Other inputs have no limit.
+            var share = MediaTranscoder.BuildArguments(new TranscodeRequest("http://127.0.0.1:4100/token/film.mkv", "/cache/s", 0, 6, 0, 1, true, true, [], [])).ToList();
+            Assert.AreEqual("30000000", share[share.IndexOf("-rw_timeout") + 1]);
+            Assert.IsTrue(share.IndexOf("-rw_timeout") < share.IndexOf("-i"));
+            CollectionAssert.DoesNotContain(MediaTranscoder.BuildArguments(new TranscodeRequest("/media/film.mkv", "/cache/s", 0, 6, 0, 1, true, true, [], [])).ToList(), "-rw_timeout");
+            CollectionAssert.DoesNotContain(MediaTranscoder.BuildArguments(new TranscodeRequest("http://192.0.2.1/film.mkv", "/cache/s", 0, 6, 0, 1, true, true, [], [])).ToList(), "-rw_timeout");
+        }
+
+        [TestMethod]
+        public async Task Transcoder_BackgroundWork_YieldsToPlayback_AndLoopbackReadsAreBounded()
+        {
+            if (!OperatingSystem.IsLinux())
+            {
+                Assert.Inconclusive("The fake tools are shell scripts that read their priority from /proc.");
+                return;
+            }
+
+            // The fake FFmpeg notes its arguments, waits until the test lets it go, then notes the priority it runs at.
+            using var folder = new LibraryTests.TemporaryDirectory();
+            var ffmpeg = Path.Combine(folder.Path, "ffmpeg");
+            var go = Path.Combine(folder.Path, "go");
+            File.WriteAllText(ffmpeg, "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$0.args\"\nwhile [ ! -e \"$(dirname \"$0\")/go\" ]; do sleep 0.02; done\ncut -d ' ' -f 19 /proc/$$/stat > \"$0.nice\"\n");
+            File.SetUnixFileMode(ffmpeg, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            var transcoder = new MediaTranscoder { ExecutablePath = ffmpeg };
+            const string share = "http://127.0.0.1:4100/token/film.mkv";
+
+            // Each method sets the priority before it first waits, so the run it returns already has it.
+            async Task<(List<string> Arguments, int Nice)> RunAsync(Func<Task> run)
+            {
+                File.Delete(go);
+                var running = run();
+                File.WriteAllText(go, "");
+                await running;
+                return ([.. File.ReadAllLines(ffmpeg + ".args")], int.Parse(File.ReadAllText(ffmpeg + ".nice").Trim(), System.Globalization.CultureInfo.InvariantCulture));
+            }
+
+            // Trickplay and picture scaling run below normal priority.
+            var trickplay = await RunAsync(() => transcoder.CreateTrickplayAsync(share, folder.Path, 10, 64, 36, 3, 2, CancellationToken.None));
+            Assert.IsGreaterThan(0, trickplay.Nice);
+            Assert.AreEqual("30000000", trickplay.Arguments[trickplay.Arguments.IndexOf("-rw_timeout") + 1]);
+            Assert.IsTrue(trickplay.Arguments.IndexOf("-rw_timeout") < trickplay.Arguments.IndexOf("-i"));
+            var picture = await RunAsync(() => transcoder.ScaleImageAsync(Path.Combine(folder.Path, "cover.jpg"), Path.Combine(folder.Path, "small.jpg"), 300, CancellationToken.None));
+            Assert.IsGreaterThan(0, picture.Nice);
+            CollectionAssert.DoesNotContain(picture.Arguments, "-rw_timeout");
+
+            // A subtitle and a font the player waits for, and the HLS conversion a viewer watches, keep normal priority.
+            var subtitle = await RunAsync(() => transcoder.ConvertSubtitleAsync(share, null, 2, Path.Combine(folder.Path, "film.vtt"), CancellationToken.None));
+            Assert.AreEqual(0, subtitle.Nice);
+            Assert.IsTrue(subtitle.Arguments.IndexOf("-rw_timeout") is var limit and >= 0 && limit < subtitle.Arguments.IndexOf("-i"));
+            var font = await RunAsync(() => transcoder.DumpAttachmentAsync(share, 3, Path.Combine(folder.Path, "font.ttf"), CancellationToken.None));
+            Assert.AreEqual(0, font.Nice);
+            Assert.IsTrue(font.Arguments.IndexOf("-rw_timeout") is var fontLimit and >= 0 && fontLimit < font.Arguments.IndexOf("-i"));
+            var hls = await RunAsync(async () =>
+            {
+                using var process = transcoder.Start(new TranscodeRequest(share, Path.Combine(folder.Path, "hls"), 0, 6, 0, 1, true, true, [], []));
+                await process.WaitForExitAsync();
+            });
+            Assert.AreEqual(0, hls.Nice);
+            Assert.AreEqual("30000000", hls.Arguments[hls.Arguments.IndexOf("-rw_timeout") + 1]);
+
+            // ffprobe bounds its reads of a loopback input the same way.
+            var ffprobe = Path.Combine(folder.Path, "ffprobe");
+            File.WriteAllText(ffprobe, "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$0.args\"\necho '{\"streams\":[]}'\n");
+            File.SetUnixFileMode(ffprobe, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            var probe = new MediaProbeClient { ExecutablePath = ffprobe };
+            Assert.AreEqual(0, (await probe.AttachmentsAsync(share, CancellationToken.None)).Count);
+            List<string> probed = [.. File.ReadAllLines(ffprobe + ".args")];
+            Assert.AreEqual("30000000", probed[probed.IndexOf("-rw_timeout") + 1]);
+            Assert.IsTrue(probed.IndexOf("-rw_timeout") < probed.IndexOf("--"));
+            await probe.ProbeAsync(share, CancellationToken.None);
+            probed = [.. File.ReadAllLines(ffprobe + ".args")];
+            Assert.IsTrue(probed.IndexOf("-rw_timeout") is var probeLimit and >= 0 && probeLimit < probed.IndexOf("--"));
+            await probe.ProbeAsync(Path.Combine(folder.Path, "film.mkv"), CancellationToken.None);
+            CollectionAssert.DoesNotContain(File.ReadAllLines(ffprobe + ".args"), "-rw_timeout");
+        }
+
+        [TestMethod]
         public async Task Benchmark_FakeFfmpeg_FindsHardwareAndTimesEveryPipeline()
         {
             var calls = new List<string>();

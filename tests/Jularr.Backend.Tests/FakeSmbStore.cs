@@ -23,6 +23,11 @@ namespace Jularr.Backend.Tests
         public bool IsLost { get; set; }
         public string? DeniedDirectory { get; set; }
 
+        // Set to make every request wait until it is set again, like a NAS that stopped answering; Waiting counts the requests held now.
+        public ManualResetEventSlim? Hold { get; set; }
+        public int Waiting => Volatile.Read(ref _waiting);
+        private int _waiting;
+
         public int OpenHandles { get; private set; }
 
         public NTStatus CreateFile(out object handle, out FileStatus fileStatus, string path, AccessMask desiredAccess, FileAttributes fileAttributes, ShareAccess shareAccess,
@@ -194,6 +199,19 @@ namespace Jularr.Backend.Tests
 
         private void CheckSession()
         {
+            if (Hold is { IsSet: false } hold)
+            {
+                Interlocked.Increment(ref _waiting);
+                try
+                {
+                    hold.Wait();
+                }
+                finally
+                {
+                    Interlocked.Decrement(ref _waiting);
+                }
+            }
+
             // SMBLibrary reports a dropped connection as an invalid operation.
             if (IsLost) throw new InvalidOperationException("The connection was closed.");
         }

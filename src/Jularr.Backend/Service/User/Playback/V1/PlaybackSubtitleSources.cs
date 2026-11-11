@@ -15,7 +15,7 @@ namespace Jularr.Backend.Service.User.Playback.V1
             source.StoredFileId.ToString(global::System.Globalization.CultureInfo.InvariantCulture) + "-" + (streamIndex is { } stream ? PlaybackTracks.StreamKey(stream) : "file") + "-"
             + source.ModifiedAt.Ticks.ToString(global::System.Globalization.CultureInfo.InvariantCulture) + "-" + language;
 
-        // The subtitle as WebVTT, or as ASS from a track that is ASS or SSA and asked for as it is.
+        // The subtitle as WebVTT, or as ASS from a track that is ASS or SSA and asked for as it is. Ends the caller's read before the storage and FFmpeg.
         public static async Task<string> ReadAsync(LogicContext context, StorageAccess storage, PlaybackSubtitles subtitles, long mediaAssetId, long profileId, string key, bool styled, CancellationToken ct)
         {
             var (source, streamIndex) = await FindAsync(sql => context.ReadSql.ReadOptionalAsync<PlaybackSubtitleSourceData>(sql, ct), mediaAssetId, profileId, key);
@@ -24,7 +24,9 @@ namespace Jularr.Backend.Service.User.Playback.V1
                 throw new KeyNotFoundException("The subtitle was not found.");
             }
 
-            var files = storage.Open(await context.ReadStorageMountAsync(source.StorageMountId, ct));
+            var mount = await context.ReadStorageMountAsync(source.StorageMountId, ct);
+            await context.EndReadAsync(ct);
+            var files = storage.Open(mount);
             var path = StoragePath.Combine(source.RootRelativePath, source.RelativePath);
             var cacheKey = source.StoredFileId.ToString(global::System.Globalization.CultureInfo.InvariantCulture) + "-" + (streamIndex is { } stream ? PlaybackTracks.StreamKey(stream) : "file") + "-"
                 + source.ModifiedAt.Ticks.ToString(global::System.Globalization.CultureInfo.InvariantCulture);

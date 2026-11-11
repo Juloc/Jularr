@@ -31,6 +31,7 @@ namespace Jularr.Backend.Service.Core
                 };
             }
 
+            error.Answer(context.Response);
             await Results.Problem(statusCode: error.StatusCode, title: error.Code, detail: error.Detail, extensions: extensions).ExecuteAsync(context);
             return true;
         }

@@ -3,10 +3,15 @@ using SMBLibrary;
 namespace Jularr.Integrations.Logic.Storage
 {
     // A file on an SMB share on its own session. Reads come in pieces of up to a megabyte, and while one is used the next is already on its way,
-    // so a player or FFmpeg reading forward never waits for a round trip; seeking simply starts a new piece. Writes append.
+    // so a player or FFmpeg reading forward never waits for a round trip; seeking simply starts a new piece. Writes append. Every request runs on
+    // the session's own thread with its deadline: an asynchronous read holds no thread while it waits, and closing never waits for a NAS that
+    // does not answer.
     internal sealed class SmbFileStream : Stream
     {
         private const int PieceBytes = 1024 * 1024;
+
+        // How long closing waits for the NAS to confirm; one that does not answer gets the close later, or loses the handle with its session.
+        private static readonly TimeSpan CloseWait = TimeSpan.FromMilliseconds(50);
 
         private readonly SmbLane _lane;
         private readonly object _handle;
@@ -42,69 +47,46 @@ namespace Jularr.Integrations.Logic.Storage
 
         public override int Read(byte[] buffer, int offset, int count) => Read(buffer.AsSpan(offset, count));
 
+        // A synchronous reader waits for the piece on its own thread.
         public override int Read(Span<byte> buffer)
         {
-            ObjectDisposedException.ThrowIf(_closed, this);
-            if (_writable) throw new NotSupportedException();
-            if (buffer.Length == 0 || _position >= _length) return 0;
-
-            if (_position < _pieceStart || _position >= _pieceStart + _piece.Length)
-            {
-                // Only a piece that arrived replaces the current one, so a failed request never leaves old bytes at the new position.
-                var next = _next;
-                _next = null;
-                var piece = next is { } ahead && ahead.Start == _position ? ahead.Data.GetAwaiter().GetResult() : Fetch(_position);
-                (_pieceStart, _piece) = (_position, piece);
-                if (_piece.Length == 0) return 0;
-            }
-
-            // The next piece follows while this one is read.
-            var end = _pieceStart + _piece.Length;
-            if (_next is null && end < _length)
-            {
-                var fetch = Task.Run(() => Fetch(end));
-
-                // A piece passed over by a seek may fail unseen.
-                _ = fetch.ContinueWith(task => task.Exception, TaskContinuationOptions.OnlyOnFaulted);
-                _next = (end, fetch);
-            }
-
-            var count = (int)Math.Min(buffer.Length, end - _position);
-            _piece.AsSpan((int)(_position - _pieceStart), count).CopyTo(buffer);
-            _position += count;
-            return count;
+            if (!Readable(buffer.Length)) return 0;
+            if (!Holds) Use(Next().GetAwaiter().GetResult());
+            return Copy(buffer);
         }
 
         public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken ct) => ReadAsync(buffer.AsMemory(offset, count), ct).AsTask();
 
-        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken ct = default) => new(Task.Run(() => Read(buffer.Span), ct));
+        public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken ct = default)
+        {
+            if (!Readable(buffer.Length)) return 0;
+            if (!Holds) Use(await Next().WaitAsync(ct));
+            return Copy(buffer.Span);
+        }
 
         public override void Write(byte[] buffer, int offset, int count) => Write(buffer.AsSpan(offset, count));
 
         public override void Write(ReadOnlySpan<byte> buffer)
         {
-            ObjectDisposedException.ThrowIf(_closed, this);
-            if (!_writable) throw new NotSupportedException();
+            Writable();
             while (buffer.Length > 0)
             {
-                var position = _position;
                 var chunk = buffer[..Math.Min(buffer.Length, PieceBytes)].ToArray();
-                var written = _lane.Run(store =>
-                {
-                    var part = chunk.Length <= store.MaxWriteSize ? chunk : chunk[..(int)store.MaxWriteSize];
-                    SmbShare.Check(store.WriteFile(out var count, _handle, position, part));
-                    return count;
-                }, _generation);
-                if (written <= 0) throw new IOException("The SMB server wrote nothing.");
-                buffer = buffer[written..];
-                _position += written;
-                _length = Math.Max(_length, _position);
+                buffer = buffer[Advance(Send(chunk, CancellationToken.None).GetAwaiter().GetResult())..];
             }
         }
 
         public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken ct) => WriteAsync(buffer.AsMemory(offset, count), ct).AsTask();
 
-        public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken ct = default) => new(Task.Run(() => Write(buffer.Span), ct));
+        public override async ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken ct = default)
+        {
+            Writable();
+            while (buffer.Length > 0)
+            {
+                var chunk = buffer[..Math.Min(buffer.Length, PieceBytes)].ToArray();
+                buffer = buffer[Advance(await Send(chunk, ct))..];
+            }
+        }
 
         public override long Seek(long offset, SeekOrigin origin)
         {
@@ -126,41 +108,128 @@ namespace Jularr.Integrations.Logic.Storage
 
         protected override void Dispose(bool disposing)
         {
-            if (!_closed)
+            // On the lane's own thread (a file its caller no longer wanted) nothing waits for the lane.
+            if (Release() is { } closing && !_lane.IsCurrent)
             {
-                _closed = true;
                 try
                 {
-                    // A piece still on its way finishes before the handle closes.
-                    _next?.Data.Wait();
+                    closing.Wait(CloseWait);
                 }
                 catch (AggregateException)
                 {
-                }
-
-                try
-                {
-                    _lane.Run(store => store.CloseFile(_handle), _generation);
-                }
-                catch (Exception exception) when (exception is IOException or Data.Nas.NasMountException or UnauthorizedAccessException)
-                {
-                    // A renewed or lost session closed the handle already.
-                }
-                finally
-                {
-                    _lane.Closed();
                 }
             }
 
             base.Dispose(disposing);
         }
 
-        private byte[] Fetch(long position) => _lane.Run(store =>
+        public override async ValueTask DisposeAsync()
+        {
+            if (Release() is { } closing)
+            {
+                try
+                {
+                    await closing.WaitAsync(CloseWait);
+                }
+                catch (Exception)
+                {
+                    // Not confirmed in time, or the session that held the handle is gone.
+                }
+            }
+
+            await base.DisposeAsync();
+        }
+
+        private bool Readable(int count)
+        {
+            ObjectDisposedException.ThrowIf(_closed, this);
+            if (_writable) throw new NotSupportedException();
+            return count > 0 && _position < _length;
+        }
+
+        private void Writable()
+        {
+            ObjectDisposedException.ThrowIf(_closed, this);
+            if (!_writable) throw new NotSupportedException();
+        }
+
+        private bool Holds => _position >= _pieceStart && _position < _pieceStart + _piece.Length;
+
+        // The piece at the position: the one fetched ahead when it starts there, else a new request.
+        private Task<byte[]> Next()
+        {
+            var next = _next;
+            _next = null;
+            return next is { } ahead && ahead.Start == _position ? ahead.Data : Fetch(_position);
+        }
+
+        // Only a piece that arrived replaces the current one, so a failed request never leaves old bytes at the new position.
+        private void Use(byte[] piece) => (_pieceStart, _piece) = (_position, piece);
+
+        private int Copy(Span<byte> buffer)
+        {
+            if (!Holds) return 0;
+
+            // The next piece follows while this one is read; one passed over by a seek may fail unseen.
+            var end = _pieceStart + _piece.Length;
+            if (_next is null && end < _length)
+            {
+                var fetch = Fetch(end);
+                _ = fetch.ContinueWith(static task => task.Exception, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+                    TaskScheduler.Default);
+                _next = (end, fetch);
+            }
+
+            var count = (int)Math.Min(buffer.Length, end - _position);
+            _piece.AsSpan((int)(_position - _pieceStart), count).CopyTo(buffer);
+            _position += count;
+            return count;
+        }
+
+        private Task<byte[]> Fetch(long position) => _lane.RunAsync(store =>
         {
             var status = store.ReadFile(out var bytes, _handle, position, (int)Math.Min(Math.Min(PieceBytes, store.MaxReadSize), _length - position));
             if (status == NTStatus.STATUS_END_OF_FILE) return [];
             SmbShare.Check(status);
             return bytes;
-        }, _generation);
+        }, SmbLane.PieceTime, CancellationToken.None, _generation);
+
+        // One chunk at the position, as much of it as the server takes at once.
+        private Task<int> Send(byte[] chunk, CancellationToken ct)
+        {
+            var position = _position;
+            return _lane.RunAsync(store =>
+            {
+                var part = chunk.Length <= store.MaxWriteSize ? chunk : chunk[..(int)store.MaxWriteSize];
+                SmbShare.Check(store.WriteFile(out var count, _handle, position, part));
+                return count;
+            }, SmbLane.PieceTime, ct, _generation);
+        }
+
+        private int Advance(int written)
+        {
+            if (written <= 0) throw new IOException("The SMB server wrote nothing.");
+            _position += written;
+            _length = Math.Max(_length, _position);
+            return written;
+        }
+
+        // Hands the handle back on the file's session after any piece still on its way, and returns the lane; null once closed.
+        private Task? Release()
+        {
+            if (_closed)
+            {
+                return null;
+            }
+
+            _closed = true;
+            var closing = _lane.RunAsync(store => store.CloseFile(_handle), SmbLane.RequestTime, CancellationToken.None, _generation);
+
+            // A renewed or lost session closed the handle already.
+            _ = closing.ContinueWith(static task => task.Exception, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+                TaskScheduler.Default);
+            _lane.Closed();
+            return closing;
+        }
     }
 }

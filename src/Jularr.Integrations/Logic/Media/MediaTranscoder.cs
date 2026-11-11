@@ -12,8 +12,12 @@ namespace Jularr.Integrations.Logic.Media
         private const string ReadRate = "1.5";
         private const string InitialBurstSeconds = "30";
 
+        // A read from the loopback stream server (a file on a direct share) that stalls this long, such as on a NAS that stopped answering, ends the run.
+        internal static readonly TimeSpan DefaultInputTimeout = TimeSpan.FromSeconds(30);
+
         public string? ExecutablePath { get; set; }
         public bool IsAvailable => !string.IsNullOrWhiteSpace(ExecutablePath);
+        public TimeSpan InputTimeout { get; set; } = DefaultInputTimeout;
 
         public Process Start(TranscodeRequest request)
         {
@@ -30,7 +34,7 @@ namespace Jularr.Integrations.Logic.Media
                 UseShellExecute = false,
                 CreateNoWindow = true
             };
-            foreach (var argument in BuildArguments(request))
+            foreach (var argument in BuildArguments(request, InputTimeout))
             {
                 start.ArgumentList.Add(argument);
             }
@@ -67,7 +71,8 @@ namespace Jularr.Integrations.Logic.Media
                 UseShellExecute = false,
                 CreateNoWindow = true
             };
-            foreach (var argument in (string[])["-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-protocol_whitelist", InputProtocols(inputPath), "-skip_frame", "nokey", "-i", inputPath,
+            foreach (var argument in (string[])["-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-protocol_whitelist", InputProtocols(inputPath), .. ReadTimeout(inputPath, InputTimeout),
+                "-skip_frame", "nokey", "-i", inputPath,
                 "-an", "-sn", "-dn", "-vf", string.Create(CultureInfo.InvariantCulture, $"fps=1/{intervalSeconds},scale={width}:{height},tile={columns}x{rows}"),
                 "-q:v", "5", Path.Combine(folder, "%03d.jpg")])
             {
@@ -79,6 +84,7 @@ namespace Jularr.Integrations.Logic.Media
             try
             {
                 using var process = Process.Start(start) ?? throw new ProviderUnavailableException();
+                YieldToPlayback(process);
                 var output = process.StandardOutput.ReadToEndAsync(timeout.Token);
                 var errors = process.StandardError.ReadToEndAsync(timeout.Token);
                 try
@@ -128,6 +134,7 @@ namespace Jularr.Integrations.Logic.Media
             try
             {
                 using var process = Process.Start(start) ?? throw new ProviderUnavailableException();
+                YieldToPlayback(process);
                 var output = process.StandardOutput.ReadToEndAsync(timeout.Token);
                 var errors = process.StandardError.ReadToEndAsync(timeout.Token);
                 try
@@ -166,7 +173,7 @@ namespace Jularr.Integrations.Logic.Media
                 CreateNoWindow = true
             };
             // Only local files; a subtitle file is read as what its name says, never sniffed.
-            foreach (var argument in (string[])["-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-protocol_whitelist", InputProtocols(inputPath)])
+            foreach (var argument in (string[])["-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-protocol_whitelist", InputProtocols(inputPath), .. ReadTimeout(inputPath, InputTimeout)])
             {
                 start.ArgumentList.Add(argument);
             }
@@ -234,7 +241,7 @@ namespace Jularr.Integrations.Logic.Media
                 UseShellExecute = false,
                 CreateNoWindow = true
             };
-            foreach (var argument in (string[])["-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-protocol_whitelist", InputProtocols(inputPath),
+            foreach (var argument in (string[])["-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-protocol_whitelist", InputProtocols(inputPath), .. ReadTimeout(inputPath, InputTimeout),
                 "-dump_attachment:" + streamIndex.ToString(CultureInfo.InvariantCulture), outputPath, "-i", inputPath])
             {
                 start.ArgumentList.Add(argument);
@@ -266,11 +273,28 @@ namespace Jularr.Integrations.Logic.Media
 
         // Direct SMB inputs are exposed only through Jularr's loopback stream server.
         // FFmpeg must permit that HTTP transport, but never arbitrary remote URLs.
-        private static string InputProtocols(string inputPath) =>
-            Uri.TryCreate(inputPath, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttp && uri.Host == "127.0.0.1"
-                ? "file,http,tcp" : "file";
+        private static string InputProtocols(string inputPath) => IsLoopback(inputPath) ? "file,http,tcp" : "file";
 
-        internal static IReadOnlyList<string> BuildArguments(TranscodeRequest request)
+        private static bool IsLoopback(string inputPath) =>
+            Uri.TryCreate(inputPath, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttp && uri.Host == "127.0.0.1";
+
+        // In front of a loopback input only: how long one read may stall, in the microseconds FFmpeg and ffprobe count. A local file needs no limit.
+        internal static IReadOnlyList<string> ReadTimeout(string inputPath, TimeSpan timeout) =>
+            IsLoopback(inputPath) ? ["-rw_timeout", ((long)timeout.TotalMicroseconds).ToString(CultureInfo.InvariantCulture)] : [];
+
+        // Background pictures yield to playback; the HLS conversion a viewer waits for keeps its priority.
+        private static void YieldToPlayback(Process process)
+        {
+            try
+            {
+                process.PriorityClass = ProcessPriorityClass.BelowNormal;
+            }
+            catch (Exception exception) when (exception is InvalidOperationException or Win32Exception)
+            {
+            }
+        }
+
+        internal static IReadOnlyList<string> BuildArguments(TranscodeRequest request, TimeSpan? inputTimeout = null)
         {
             var offset = (request.StartSegment * request.SegmentSeconds).ToString(CultureInfo.InvariantCulture);
             var segment = request.SegmentSeconds.ToString(CultureInfo.InvariantCulture);
@@ -278,7 +302,8 @@ namespace Jularr.Integrations.Logic.Media
 
             // Input seeking and pacing.
             if (request.VideoStreamIndex is not null && !request.CopyVideo) arguments.AddRange(request.HardwareAccelerationArguments);
-            arguments.AddRange(["-readrate", ReadRate, "-readrate_initial_burst", InitialBurstSeconds, "-ss", offset, "-i", request.InputPath]);
+            arguments.AddRange(["-readrate", ReadRate, "-readrate_initial_burst", InitialBurstSeconds, .. ReadTimeout(request.InputPath, inputTimeout ?? DefaultInputTimeout), "-ss", offset,
+                "-i", request.InputPath]);
             // No video stream means audio-only: never let FFmpeg automatically pick attached cover art.
             if (request.VideoStreamIndex is { } video) arguments.AddRange(["-map", "0:" + video.ToString(CultureInfo.InvariantCulture)]);
             else arguments.Add("-vn");

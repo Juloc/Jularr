@@ -1,11 +1,18 @@
 using Jularr.Backend.Data.Enums.Sql;
 using Jularr.Backend.Data.Enums.Service;
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Enums.Storage;
+using Jularr.Backend.Data.Logic.Storage;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Service.Core;
 using Jularr.Backend.Tests.Infrastructure;
 using Jularr.Backend.Data;
+using Jularr.Integrations.Logic.Storage;
+using Microsoft.AspNetCore.DataProtection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Hosting.Internal;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Npgsql;
 
 namespace Jularr.Backend.Tests
@@ -509,6 +516,98 @@ namespace Jularr.Backend.Tests
             await logged.ExecuteAsync<AccountResult>(new AccountParameters(1), default(NoData));
             await logged.ExecuteAsync<AccountResult>(new AccountParameters(1), default(NoData));
             Assert.AreEqual(1, logger.Messages.Count(message => message.Contains("System/CallingService calls example.test", StringComparison.Ordinal)));
+        }
+
+        [TestMethod]
+        public async Task Storage_InsideATransaction_FailsInTests_AndIsLoggedOncePerServiceInProduction()
+        {
+            await using var database = CreateDataSource();
+            var runtime = new ServiceRuntime(new SqlDatabase(database), new TestGate { Area = ServiceArea.System }, new ServiceTimings(TimeProvider.System));
+            using var folder = new LibraryTests.TemporaryDirectory();
+            using var shares = new SmbShares(TimeProvider.System);
+            using var streams = new StorageStreamServer();
+            var strict = new StorageAccess(Options.Create(new StorageOptions()), shares, streams, new EphemeralDataProtectionProvider());
+
+            // An update holds its transaction for the whole hook, so opening its storage fails.
+            var update = runtime.Create(new StorageService(strict, folder.Path, ServiceOperationType.Update));
+            var refused = await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => update.ExecuteAsync<AccountResult>(new AccountParameters(1), default(NoData)));
+            StringAssert.Contains(refused.Message, "storage_in_transaction: System/StorageService opens storage NAS");
+
+            // A read reaches the storage once it has ended its read (FFmpeg's input included); an Execute service between its batches, never inside one.
+            var read = runtime.Create(new StorageService(strict, folder.Path, ServiceOperationType.Read));
+            Assert.AreEqual("opened", (await read.ExecuteAsync<AccountResult>(new AccountParameters(1), default(NoData))).Name);
+            Assert.AreEqual(2, read.Refusals);
+            var execute = runtime.Create(new StorageService(strict, folder.Path, ServiceOperationType.Execute));
+            Assert.AreEqual("opened", (await execute.ExecuteAsync<AccountResult>(new AccountParameters(1), default(NoData))).Name);
+            Assert.AreEqual(2, execute.Refusals);
+
+            // Production lets it go ahead and logs it once for the service.
+            var logger = new ListLogger();
+            var lenient = new StorageAccess(Options.Create(new StorageOptions()), shares, streams, new EphemeralDataProtectionProvider(),
+                new HostingEnvironment { EnvironmentName = Environments.Production }, new TypedLogger<StorageAccess>(logger));
+            var logged = runtime.Create(new StorageService(lenient, folder.Path, ServiceOperationType.Update));
+            await logged.ExecuteAsync<AccountResult>(new AccountParameters(1), default(NoData));
+            await logged.ExecuteAsync<AccountResult>(new AccountParameters(1), default(NoData));
+            Assert.AreEqual(1, logger.Messages.Count(message => message.Contains("System/StorageService opens storage NAS", StringComparison.Ordinal)));
+        }
+
+        private sealed class TypedLogger<T>(ILogger inner) : ILogger<T>
+        {
+            public IDisposable? BeginScope<TState>(TState state) where TState : notnull => inner.BeginScope(state);
+            public bool IsEnabled(LogLevel logLevel) => inner.IsEnabled(logLevel);
+            public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
+                inner.Log(logLevel, eventId, state, exception, formatter);
+        }
+
+        private sealed class StorageService(StorageAccess storage, string folder, ServiceOperationType operation) : SystemService<AccountParameters, NoData>
+        {
+            private readonly StorageMountData _mount = new(1, "NAS", StorageProtocolType.Local, null, folder, null, null, null, false, null, null, null, false, 1);
+
+            public int Refusals { get; private set; }
+            protected override ServiceOperationType GetOperationType() => operation;
+            protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<AccountResult>()];
+            protected override ModuleRequirement GetInstanceModules(AccountParameters parameters) => ModuleRequirement.None;
+            protected override ServicePermission GetPermission(AccountParameters parameters, Type resultType) =>
+                new(operation == ServiceOperationType.Read ? "account.read" : operation == ServiceOperationType.Execute ? "account.system.execute" : "account.update");
+
+            protected override Task<IServiceOutput> OnUpdate()
+            {
+                _ = storage.Open(_mount);
+                return Task.FromResult<IServiceOutput>(new AccountResult(Parameters.AccountId, "opened"));
+            }
+
+            protected override async Task<IServiceOutput> OnRead()
+            {
+                await Context.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "SELECT 1" }, CancellationToken);
+                Refuse();
+                await Context.EndReadAsync(CancellationToken);
+                return Reach();
+            }
+
+            protected override async Task<IServiceOutput> OnExecute()
+            {
+                await Context.ExecuteBatchAsync((_, _) =>
+                {
+                    Refuse();
+                    return Task.FromResult(true);
+                }, CancellationToken);
+                return Reach();
+            }
+
+            private void Refuse()
+            {
+                Assert.ThrowsExactly<InvalidOperationException>(() => storage.Open(_mount));
+                Assert.ThrowsExactly<InvalidOperationException>(() => storage.Input(new LocalStorageFiles(folder), "film.mkv"));
+                Refusals += 2;
+            }
+
+            private AccountResult Reach()
+            {
+                File.WriteAllText(Path.Combine(folder, "film.mkv"), "film");
+                using var input = storage.Input(storage.Open(_mount), "film.mkv");
+                Assert.AreEqual(Path.Combine(folder, "film.mkv"), input.Location);
+                return new AccountResult(Parameters.AccountId, "opened");
+            }
         }
 
         private sealed class Answering : HttpMessageHandler

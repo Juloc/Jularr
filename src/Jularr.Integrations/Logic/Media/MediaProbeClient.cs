@@ -29,7 +29,8 @@ namespace Jularr.Integrations.Logic.Media
                 UseShellExecute = false,
                 CreateNoWindow = true
             };
-            foreach (var argument in new[] { "-v", "error", "-print_format", "json", "-show_format", "-show_streams", "-show_chapters", "--", path })
+            foreach (var argument in (string[])["-v", "error", "-print_format", "json", "-show_format", "-show_streams", "-show_chapters",
+                .. MediaTranscoder.ReadTimeout(path, MediaTranscoder.DefaultInputTimeout), "--", path])
             {
                 start.ArgumentList.Add(argument);
             }
@@ -93,7 +94,8 @@ namespace Jularr.Integrations.Logic.Media
                 UseShellExecute = false,
                 CreateNoWindow = true
             };
-            foreach (var argument in new[] { "-v", "error", "-print_format", "json", "-show_entries", "stream=index,codec_type:stream_tags=filename,mimetype", "--", location })
+            foreach (var argument in (string[])["-v", "error", "-print_format", "json", "-show_entries", "stream=index,codec_type:stream_tags=filename,mimetype",
+                .. MediaTranscoder.ReadTimeout(location, MediaTranscoder.DefaultInputTimeout), "--", location])
             {
                 start.ArgumentList.Add(argument);
             }

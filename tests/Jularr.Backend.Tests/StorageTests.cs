@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text;
@@ -10,11 +11,15 @@ using Jularr.Backend.Data.Logic.Storage;
 using Jularr.Backend.Data.Public.Authentication.V1;
 using Jularr.Backend.Logic.Storage;
 using Jularr.Backend.Data.System.Storage.V1;
+using Jularr.Backend.Service.Core;
 using Jularr.Backend.Service.System.Storage.V1;
+using Jularr.Integrations.Data.Nas;
 using Jularr.Integrations.Data.Synology;
+using Jularr.Integrations.Logic.Storage;
 using Jularr.Integrations.Logic.Synology;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.AspNetCore.Hosting.Server;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.TestHost;
 using Host = Jularr.Backend.Tests.AuthenticationTests.Host;
 
@@ -112,6 +117,159 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Gate_CallPastItsDeadline_ClosesTheConnectionForThirtySecondsThenOneCallTries()
+        {
+            var clock = new WorkerJobTests.ManualTime(DateTimeOffset.UtcNow);
+            var gate = new StorageGate(clock);
+            var other = new StorageGate(clock);
+            var calls = 0;
+            Task<bool> Answer(Task<bool> answer)
+            {
+                calls++;
+                return answer;
+            }
+
+            // The storage does not answer: the caller fails at the deadline, which lies above SMB's own 30 s.
+            var hanging = new TaskCompletionSource<bool>();
+            var first = gate.RunAsync(_ => Answer(hanging.Task), true, CancellationToken.None);
+            await clock.WaitForTimerAsync(StorageGate.CallTime);
+            Assert.IsGreaterThan(TimeSpan.FromSeconds(30), StorageGate.CallTime);
+            Assert.IsFalse(first.IsCompleted);
+            clock.Advance(StorageGate.CallTime);
+            var timedOut = await Assert.ThrowsExactlyAsync<NasMountException>(() => first);
+            Assert.AreEqual("storage_unavailable", timedOut.Code);
+            Assert.AreEqual(StorageGate.ClosedTime, timedOut.RetryAfter);
+
+            // For 30 s every call fails at once without reaching the storage and says how long; another connection is not affected.
+            var started = Stopwatch.GetTimestamp();
+            var closed = await Assert.ThrowsExactlyAsync<NasMountException>(() => gate.RunAsync(_ => Answer(Task.FromResult(true)), true, CancellationToken.None));
+            Assert.IsLessThan(TimeSpan.FromMilliseconds(100), Stopwatch.GetElapsedTime(started));
+            Assert.AreEqual(StorageGate.ClosedTime, closed.RetryAfter);
+            Assert.AreEqual(1, calls);
+            Assert.IsTrue(await other.RunAsync(_ => Task.FromResult(true), true, CancellationToken.None));
+
+            // Then one call tries while the others still fail at once; its answer opens the connection again.
+            clock.Advance(StorageGate.ClosedTime);
+            var trialAnswer = new TaskCompletionSource<bool>();
+            var trial = gate.RunAsync(_ => Answer(trialAnswer.Task), true, CancellationToken.None);
+            await Assert.ThrowsExactlyAsync<NasMountException>(() => gate.RunAsync(_ => Answer(Task.FromResult(true)), true, CancellationToken.None));
+            Assert.AreEqual(2, calls);
+            trialAnswer.SetResult(true);
+            Assert.IsTrue(await trial);
+            Assert.IsTrue(await gate.RunAsync(_ => Answer(Task.FromResult(true)), true, CancellationToken.None));
+
+            // An error is an answer too; an SMB session past its own deadline closes the connection like a call past the gate's.
+            await Assert.ThrowsExactlyAsync<NasMountException>(() => gate.RunAsync<bool>(_ => throw new NasMountException("storage_unavailable"), true, CancellationToken.None));
+            Assert.IsTrue(await gate.RunAsync(_ => Task.FromResult(true), true, CancellationToken.None));
+            var session = await Assert.ThrowsExactlyAsync<NasMountException>(() => gate.RunAsync(_ =>
+                Task.FromException<bool>(new NasMountException("storage_unavailable", new TimeoutException())), true, CancellationToken.None));
+            Assert.AreEqual(StorageGate.ClosedTime, session.RetryAfter);
+            calls = 0;
+            await Assert.ThrowsExactlyAsync<NasMountException>(() => gate.RunAsync(_ => Answer(Task.FromResult(true)), true, CancellationToken.None));
+            Assert.AreEqual(0, calls);
+            hanging.SetResult(true);
+        }
+
+        [TestMethod]
+        public async Task Gate_SixteenCallsAtATime_APersonWaitsTwoSecondsForAPlace_AndAGivenUpCallKeepsItsPlace()
+        {
+            var clock = new WorkerJobTests.ManualTime(DateTimeOffset.UtcNow);
+            var gate = new StorageGate(clock);
+            var answers = Enumerable.Range(0, StorageGate.MaximumCalls).Select(_ => new TaskCompletionSource<bool>()).ToArray();
+            using var stop = new CancellationTokenSource();
+            var running = answers.Select((answer, index) => gate.RunAsync(_ => answer.Task, true, index == 1 ? stop.Token : CancellationToken.None)).ToArray();
+
+            // The 17th: a person waits two seconds and then hears the storage is busy, which leaves the connection open; background work waits on.
+            var person = gate.RunAsync(_ => Task.FromResult(true), true, CancellationToken.None);
+            var background = gate.RunAsync(_ => Task.FromResult(true), false, CancellationToken.None);
+            await clock.WaitForTimerAsync(StorageGate.InteractiveWait);
+            clock.Advance(StorageGate.InteractiveWait);
+            var busy = await Assert.ThrowsExactlyAsync<NasMountException>(() => person);
+            Assert.AreEqual("storage_unavailable", busy.Code);
+            Assert.IsNull(busy.InnerException);
+            Assert.IsFalse(background.IsCompleted);
+
+            // A place that comes free goes to the waiting work.
+            answers[0].SetResult(true);
+            Assert.IsTrue(await running[0]);
+            Assert.IsTrue(await background.WaitAsync(TimeSpan.FromSeconds(5)));
+
+            // A caller that gives up is free at once, but its call keeps the place until the storage returns: a hanging mount ties up 16 threads at most.
+            await stop.CancelAsync();
+            await Assert.ThrowsAsync<OperationCanceledException>(() => running[1]);
+            var last = new TaskCompletionSource<bool>();
+            var taken = gate.RunAsync(_ => last.Task, true, CancellationToken.None);
+            var waiting = gate.RunAsync(_ => Task.FromResult(true), true, CancellationToken.None);
+            await clock.WaitForTimerAsync(StorageGate.InteractiveWait);
+            Assert.IsFalse(waiting.IsCompleted);
+            answers[1].SetResult(true);
+            Assert.IsTrue(await waiting.WaitAsync(TimeSpan.FromSeconds(5)));
+
+            last.SetResult(true);
+            foreach (var answer in answers) answer.TrySetResult(true);
+            await Task.WhenAll(running.Skip(2).Append(taken));
+        }
+
+        [TestMethod]
+        public async Task Files_StorageThatRefusesJularr_FailsAsUnavailableStorage_NeverAsTheCallersSignIn()
+        {
+            if (OperatingSystem.IsWindows() || Environment.UserName == "root")
+            {
+                Assert.Inconclusive("File modes do not refuse this user.");
+                return;
+            }
+
+            using var folder = new LibraryTests.TemporaryDirectory();
+            var file = Path.Combine(folder.Path, "Film.mkv");
+            File.WriteAllText(file, "film");
+            File.SetUnixFileMode(file, UnixFileMode.None);
+            try
+            {
+                var refused = await Assert.ThrowsExactlyAsync<NasMountException>(() => new LocalStorageFiles(folder.Path).OpenReadAsync("Film.mkv", CancellationToken.None));
+                Assert.AreEqual(NasMountException.AccessDenied, refused.Code);
+                Assert.IsInstanceOfType<UnauthorizedAccessException>(refused.InnerException);
+
+                // A 503 with its own text, never the 401 that signs the caller out.
+                var error = ServiceError.FromException(refused);
+                Assert.AreEqual(StatusCodes.Status503ServiceUnavailable, error.StatusCode);
+                Assert.AreEqual("errors.storage_access_denied", error.ResourceKey);
+                Assert.AreEqual("Der Speicher hat Jularrs Anmeldung oder Zugriff abgelehnt. Prüfe das Konto und die Freigaberechte auf dem NAS.",
+                    Jularr.Frontend.Localization.UiCatalogs.Load().Single(catalog => catalog.Locale == "de").Texts[error.ResourceKey].Item2);
+            }
+            finally
+            {
+                File.SetUnixFileMode(file, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+            }
+        }
+
+        [TestMethod]
+        public void ServiceError_EveryServiceUnavailable_SaysWhenToTryAgain()
+        {
+            // As long as the storage stays closed, rounded up; else a few seconds. Other failures say nothing.
+            var closed = ServiceError.FromException(new NasMountException("storage_unavailable", null, TimeSpan.FromSeconds(29.2)));
+            var context = new DefaultHttpContext();
+            closed.Answer(context.Response);
+            Assert.AreEqual(StatusCodes.Status503ServiceUnavailable, context.Response.StatusCode);
+            Assert.AreEqual("30", context.Response.Headers.RetryAfter.ToString());
+
+            Assert.AreEqual(TimeSpan.FromSeconds(5), ServiceError.FromException(new NasMountException(NasMountException.AccessDenied)).RetryAfter);
+            Assert.AreEqual(TimeSpan.FromSeconds(5), ServiceError.FromException(new ServiceUnavailableException("storage_waking")).RetryAfter);
+            var missing = ServiceError.FromException(new KeyNotFoundException());
+            Assert.IsNull(missing.RetryAfter);
+            context = new DefaultHttpContext();
+            missing.Answer(context.Response);
+            Assert.AreEqual(StatusCodes.Status404NotFound, context.Response.StatusCode);
+            Assert.IsFalse(context.Response.Headers.ContainsKey("Retry-After"));
+
+            // A page that reloads after a failed form answers its last failure: a 503 before it leaves no Retry-After behind.
+            context = new DefaultHttpContext();
+            closed.Answer(context.Response);
+            missing.Answer(context.Response);
+            Assert.AreEqual(StatusCodes.Status404NotFound, context.Response.StatusCode);
+            Assert.IsFalse(context.Response.Headers.ContainsKey("Retry-After"));
+        }
+
+        [TestMethod]
         public void Volume_ComposeBlock_MountsTheShareWhereJularrLooksAndKeepsThePasswordAVariable()
         {
             var smb = new StorageMountData(7, "NAS", StorageProtocolType.Smb, "nas.test", "/Media $hare", "3.1.1", "ju\"loc", "HOME", false, null, null, null, false, 1);
@@ -119,7 +277,7 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(block, "      - nas-7:/mnt/jularr/7");
             StringAssert.Contains(block, "type: cifs");
             StringAssert.Contains(block, "device: \"//nas.test/Media $$hare\"");
-            StringAssert.Contains(block, "o: \"username=ju\\\"loc,password=${JULARR_NAS_7_PASSWORD},domain=HOME,vers=3.1.1,uid=1654,gid=1654\"");
+            StringAssert.Contains(block, "o: \"username=ju\\\"loc,password=${JULARR_NAS_7_PASSWORD},domain=HOME,vers=3.1.1,uid=1654,gid=1654,soft,echo_interval=15\"");
 
             var nfs = new StorageMountData(8, "NFS", StorageProtocolType.Nfs, "nas.test", "/exports/media", "4.1", null, null, true, null, null, null, false, 1);
             block = StorageVolumeLogic.ComposeBlock(nfs, "/mnt/jularr");

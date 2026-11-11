@@ -40,7 +40,7 @@ namespace Jularr.Integrations.Logic.Storage
             return full;
         }
 
-        public override Task<StorageEntry?> GetAsync(string path, CancellationToken ct) => Task.Run(() =>
+        protected override Task<StorageEntry?> GetCoreAsync(string path, CancellationToken ct) => Run(() =>
         {
             var full = Full(path);
             FileSystemInfo info = Directory.Exists(full) ? new DirectoryInfo(full) : new FileInfo(full);
@@ -53,16 +53,16 @@ namespace Jularr.Integrations.Logic.Storage
             return IsInside(full) ? Entry(info) : null;
         }, ct);
 
-        public override Task<IReadOnlyList<StorageEntry>> ListAsync(string directory, CancellationToken ct) => Task.Run<IReadOnlyList<StorageEntry>>(() =>
+        protected override Task<IReadOnlyList<StorageEntry>> ListCoreAsync(string directory, CancellationToken ct) => Run<IReadOnlyList<StorageEntry>>(() =>
         {
             var full = ResolveDirectory(directory);
             return new DirectoryInfo(full).GetFileSystemInfos("*", Options).Select(Entry).ToArray();
         }, ct);
 
-        public override Task<Stream> OpenReadAsync(string path, CancellationToken ct) => Task.Run<Stream>(() =>
+        protected override Task<Stream> OpenReadCoreAsync(string path, CancellationToken ct) => Run<Stream>(() =>
             new FileStream(ResolveFile(path), FileMode.Open, FileAccess.Read, FileShare.Read, 81920, FileOptions.Asynchronous), ct);
 
-        public override Task<Stream?> CreateAsync(string path, CancellationToken ct) => Task.Run<Stream?>(() =>
+        protected override Task<Stream?> CreateCoreAsync(string path, CancellationToken ct) => Run<Stream?>(() =>
         {
             var full = Prepare(path);
             try
@@ -75,7 +75,7 @@ namespace Jularr.Integrations.Logic.Storage
             }
         }, ct);
 
-        public override Task<bool> MoveAsync(string source, string target, CancellationToken ct) => Task.Run(() =>
+        protected override Task<bool> MoveCoreAsync(string source, string target, CancellationToken ct) => Run(() =>
         {
             var from = Full(source);
             if (!IsInside(from) || !File.Exists(from) && !Directory.Exists(from))
@@ -101,9 +101,9 @@ namespace Jularr.Integrations.Logic.Storage
             }
         }, ct);
 
-        public override Task DeleteFileAsync(string path, CancellationToken ct) => Task.Run(() => File.Delete(ResolveFile(path)), ct);
+        protected override Task DeleteFileCoreAsync(string path, CancellationToken ct) => Run(() => File.Delete(ResolveFile(path)), ct);
 
-        public override Task<bool> DeleteDirectoryAsync(string path, CancellationToken ct) => Task.Run(() =>
+        protected override Task<bool> DeleteDirectoryCoreAsync(string path, CancellationToken ct) => Run(() =>
         {
             var full = Full(path);
             if (!Directory.Exists(full))
@@ -120,7 +120,7 @@ namespace Jularr.Integrations.Logic.Storage
             return true;
         }, ct);
 
-        public override Task CreateDirectoryAsync(string path, CancellationToken ct) => Task.Run(() =>
+        protected override Task CreateDirectoryCoreAsync(string path, CancellationToken ct) => Run(() =>
         {
             RequireRoot();
             var full = Full(path);
@@ -128,18 +128,8 @@ namespace Jularr.Integrations.Logic.Storage
             if (!IsInside(full)) throw new NasMountException("storage_unavailable");
         }, ct);
 
-        public override async Task<StorageProbe> ProbeAsync(CancellationToken ct)
-        {
-            // Hanging mounts time out.
-            try
-            {
-                return await Task.Run(Probe, ct).WaitAsync(TimeSpan.FromSeconds(5), ct);
-            }
-            catch (TimeoutException)
-            {
-                return new StorageProbe(false, "probe_timeout", null, null);
-            }
-        }
+        // A hanging mount keeps its thread until it answers; the caller stops waiting after five seconds.
+        protected override Task<StorageProbe> ProbeCoreAsync(CancellationToken ct) => Run(Probe, ct);
 
         private StorageProbe Probe()
         {
@@ -176,6 +166,13 @@ namespace Jularr.Integrations.Logic.Storage
                 return new StorageProbe(false, "storage_unavailable", null, null);
             }
         }
+
+        // A blocking call runs on the connection's own threads when StorageAccess opened it, so a hanging mount never holds the thread pool's.
+        private Task<T> Run<T>(Func<T> call, CancellationToken ct) =>
+            Gate is { } gate ? Task.Factory.StartNew(call, ct, TaskCreationOptions.DenyChildAttach, gate.Threads) : Task.Run(call, ct);
+
+        private Task Run(Action call, CancellationToken ct) =>
+            Gate is { } gate ? Task.Factory.StartNew(call, ct, TaskCreationOptions.DenyChildAttach, gate.Threads) : Task.Run(call, ct);
 
         private string Full(string path)
         {
