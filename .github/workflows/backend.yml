@@ -34,14 +34,14 @@ env:
 
 jobs:
   # The only compile of the run, the frontend unit tests and the shard plans (ci-plan/*.json, shipped in
-  # the build): seconds per test from the last green Backend Full runs on main, else tests/ci-durations.json.
+  # the build): seconds per test from the last 3 finished Backend Full runs on main, else tests/ci-durations.json.
   build:
     name: build
     runs-on: ubuntu-24.04
     timeout-minutes: 12
     permissions:
       contents: read
-      actions: read  # the timings artifacts of the last green Backend Full runs
+      actions: read  # the timings artifacts of the last finished Backend Full runs on main
     steps:
       - uses: actions/checkout@v7
         with:

@@ -289,25 +289,27 @@ def units_of(kind: str, tests: dict[str, list[str]], measured: Measured, only: l
     classes = list(tests) if only is None else resolve(only, list(tests), kind)
     excluded_classes, excluded_methods = parse_exclude(exclude or [], tests, kind)
     totals, per_method, unmeasured = weigh(tests, measured)
-    # A [TestClass] without a test method that never ran (an assembly fixture holder) is no unit.
-    excluded_classes |= {name for name in unmeasured if not tests[name]}
+    # A [TestClass] in which the scan sees no test method and that never ran (an assembly fixture holder, or
+    # tests the scan cannot read, such as inherited ones) still runs as a whole class, planned at 0 s.
+    hollow = {name for name in unmeasured if not tests[name]}
     units: list[Unit] = []
     for name in classes:
         if name in excluded_classes:
             continue
         dropped = excluded_methods.get(name, set())
         weights = {method: value for method, value in per_method[name].items() if method not in dropped}
-        total = sum(weights.values()) if tests[name] else totals[name]
+        total = sum(weights.values()) if tests[name] else 0.0 if name in hollow else totals[name]
         if total <= CLASS_LIMIT or len(weights) < 2:
             units.append(Unit(name, total, class_filter(name, dropped)))
             continue
-        groups = pack(weights, min(len(weights), math.ceil(total / GROUP_LIMIT)))
+        # Methods measured at 0 s can leave a bin of the packing empty: an empty group is no unit.
+        groups = [group for group in pack(weights, min(len(weights), math.ceil(total / GROUP_LIMIT))) if group]
         rest = max(range(len(groups)), key=lambda index: (len(groups[index]), -index))
         taken = set(dropped).union(*(group for index, group in enumerate(groups) if index != rest))
         for index, group in enumerate(groups):
             units.append(Unit(f"{name}[{index + 1}/{len(groups)}]", sum(weights[method] for method in group),
                               class_filter(name, taken) if index == rest else method_filter(name, group)))
-    return units, unmeasured & set(name for name in classes if name not in excluded_classes)
+    return units, (unmeasured - hollow) & set(name for name in classes if name not in excluded_classes)
 
 
 def pack(items: dict[str, float], bins: int, reserve: dict[int, float] | None = None) -> list[list[str]]:
@@ -592,8 +594,15 @@ def self_test() -> None:
     names = [f"N.Big.{name}" for name in big] + ["N.Big.Unseen", "N.Small.S1", "N.Small.S2", "N.Boot.B1",
                                                  "N.Mixed.Keep", "N.Mixed.Smoke", "N.Mixed.Smoke_More"]
     assert_exactly_once(units, names, absent={"N.Boot.B1", "N.Mixed.Smoke"})
-    assert [unit.name for unit in units_of("backend", {"N.Fixture": [], "N.T": ["M"]}, Measured())[0]] == ["N.T"], \
-        "a class without tests is no unit"
+    hollow, unknown = units_of("backend", {"N.Fixture": [], "N.T": ["M"]}, Measured())
+    assert [(unit.name, unit.seconds) for unit in hollow] == [("N.Fixture", 0.0), ("N.T", DEFAULT_WEIGHT)] and unknown == {"N.T"}, \
+        "a class without seen tests still runs, at 0 s"
+    assert_exactly_once(hollow, ["N.Fixture.Inherited", "N.T.M"])
+    # methods measured at 0 s never leave a method group empty
+    lopsided, _ = units_of("backend", {"N.L": ["Long", "Quick", "Skipped"]},
+                           Measured({"N.L": {"Long": 300.0, "Quick": 0.0, "Skipped": 0.0}}))
+    assert len(lopsided) == 2 and all(unit.filter for unit in lopsided), lopsided
+    assert_exactly_once(lopsided, ["N.L.Long", "N.L.Quick", "N.L.Skipped", "N.L.Unseen"])
     for shards, lanes in ((1, 1), (2, 2), (3, 2), (5, 1)):
         plan = plan_lanes(units, shards, lanes)
         lane_units = [Unit(f"lane{index}", 0, lane_filter(lane) or "FullyQualifiedName=none")

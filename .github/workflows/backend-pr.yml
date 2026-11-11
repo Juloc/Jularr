@@ -30,7 +30,7 @@ jobs:
     timeout-minutes: 12
     permissions:
       contents: read
-      actions: read  # the timings artifacts of the last green Backend Full runs
+      actions: read  # the timings artifacts of the last finished Backend Full runs on main
     outputs:
       backend: ${{ steps.paths.outputs.backend }}
       classes: ${{ steps.select.outputs.classes }}
@@ -290,4 +290,4 @@ jobs:
     uses: ./.github/workflows/backend.yml
     permissions:
       contents: read
-      actions: read  # its build job plans the shards from the timings of the last green runs
+      actions: read  # its build job plans the shards from the timings of the last finished main runs
