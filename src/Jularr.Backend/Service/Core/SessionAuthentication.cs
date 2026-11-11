@@ -14,9 +14,9 @@ namespace Jularr.Backend.Service.Core
 {
     internal sealed class SessionAuthentication
     {
-        private readonly NpgsqlDataSource _database;
+        private readonly SqlDatabase _database;
 
-        public SessionAuthentication(NpgsqlDataSource database)
+        public SessionAuthentication(SqlDatabase database)
         {
             _database = database;
         }

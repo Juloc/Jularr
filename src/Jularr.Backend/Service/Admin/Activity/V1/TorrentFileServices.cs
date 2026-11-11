@@ -31,11 +31,13 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
 
         protected override async Task<IServiceOutput> OnRead()
         {
-            var download = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadDownloadActionAsync(Parameters.OperationId, ct), CancellationToken);
+            var download = await Context.ReadDownloadActionAsync(Parameters.OperationId, CancellationToken);
             if (download is null || download.AcquisitionConnectionTypeId != AcquisitionConnectionType.Qbittorrent || download.ExternalId is null)
                 return new BaseDataList<TorrentFileV1>([]);
 
-            var connection = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadAcquisitionConnectionAsync(download.AcquisitionConnectionId, ct), CancellationToken);
+            // qBittorrent is asked after the read gives its connection back.
+            var connection = await Context.ReadAcquisitionConnectionAsync(download.AcquisitionConnectionId, CancellationToken);
+            await Context.EndReadAsync(CancellationToken);
             try
             {
                 var files = await _client.GetFilesAsync(DownloadActions.TorrentConnection(connection, _protector), download.ExternalId, CancellationToken);

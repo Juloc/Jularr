@@ -1,4 +1,5 @@
 using System.Net;
+using Npgsql;
 using Host = Jularr.Backend.Tests.AuthenticationTests.Host;
 using TemporaryDirectory = Jularr.Backend.Tests.LibraryTests.TemporaryDirectory;
 
@@ -29,6 +30,37 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(html, "Added:");
             using var next = await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Sources");
             Assert.IsFalse((await next.Content.ReadAsStringAsync()).Contains("action-toast--show", StringComparison.Ordinal));
+        }
+
+        [TestMethod]
+        public async Task Action_OnABusyDatabase_SaysSoInTheHint()
+        {
+            using var storage = new TemporaryDirectory();
+            await using var host = await LibraryTests.CreateHostAsync(storage.Path, razor: true, settings: new Dictionary<string, string> { ["Database:WebStatementTimeout"] = "00:00:00.300" });
+            using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Sources");
+            var token = LibraryTests.Token(await page.Content.ReadAsStringAsync());
+
+            // Another session holds the sources against writes: adding them runs past the statement limit.
+            await using var connection = await host.Fixture.Database.OpenConnectionAsync();
+            await using var transaction = await connection.BeginTransactionAsync();
+            await using (var hold = new NpgsqlCommand("LOCK TABLE \"AcquisitionConnections\" IN SHARE MODE", connection, transaction))
+            {
+                await hold.ExecuteNonQueryAsync();
+            }
+
+            using var request = new HttpRequestMessage(HttpMethod.Post, "/Admin/Acquisition/Sources?handler=SetUp")
+            {
+                Content = new FormUrlEncodedContent(new Dictionary<string, string> { ["__RequestVerificationToken"] = token })
+            };
+            request.Headers.Add("Cookie", string.Join("; ", host.Cookies.Select(cookie => cookie.Key + "=" + cookie.Value)));
+            request.Headers.Add("HX-Request", "true");
+            using var answer = await host.Client.SendAsync(request);
+
+            Assert.AreEqual(HttpStatusCode.ServiceUnavailable, answer.StatusCode);
+            var trigger = answer.Headers.GetValues("HX-Trigger").Single();
+            StringAssert.Contains(trigger, "\"jularr:hint\"");
+            StringAssert.Contains(trigger, "The database is busy right now.");
+            StringAssert.Contains(trigger, "\"failed\":true");
         }
 
         // Posts the form of the sources page and follows the redirect with or without the header of a script's request.

@@ -123,6 +123,41 @@ namespace Jularr.E2E.Tests
             await WaitUntilReadyAsync();
         }
 
+        // Stops the host as docker stop does (SIGTERM, then a kill after the limit) and tells its exit code and how long it took.
+        public async Task<(int ExitCode, TimeSpan Took)> StopGracefullyAsync(TimeSpan limit)
+        {
+            var process = _process ?? throw new InvalidOperationException("The host is not running.");
+            var clock = Stopwatch.StartNew();
+            using (var signal = Process.Start("kill", ["-TERM", process.Id.ToString(System.Globalization.CultureInfo.InvariantCulture)])!)
+            {
+                await signal.WaitForExitAsync();
+            }
+
+            using var timeout = new CancellationTokenSource(limit);
+            try
+            {
+                await process.WaitForExitAsync(timeout.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                await StopHostAsync();
+                throw new TimeoutException("The host did not stop within " + limit + ".");
+            }
+
+            var took = clock.Elapsed;
+            var exitCode = process.ExitCode;
+            process.Dispose();
+            _process = null;
+            return (exitCode, took);
+        }
+
+        // Starts the host again on the same database after it stopped.
+        public async Task StartAgainAsync()
+        {
+            StartHost();
+            await WaitUntilReadyAsync();
+        }
+
         // Ends every connection to the instance's database, as a PostgreSQL restart does, and counts them.
         public async Task<long> DropConnectionsAsync()
         {

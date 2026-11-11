@@ -8,6 +8,7 @@ namespace Jularr.Backend.Infrastructure.Sql
     internal sealed class SqlContext : IAsyncDisposable
     {
         private readonly NpgsqlDataSource _database;
+        private readonly SqlDatabase? _lane;
         private readonly SqlLogicCommands _logicSql;
         private NpgsqlConnection? _connection;
         private NpgsqlTransaction? _transaction;
@@ -15,16 +16,30 @@ namespace Jularr.Backend.Infrastructure.Sql
         private IsolationLevel? _pendingReadIsolation;
         private bool _finished;
         private bool _jitDisabled;
+        private TimeSpan? _statementTimeout;
         private int _shortBatchActive;
+        private bool _readEnded;
         private bool _disposed;
 
         public SqlReadCommands ReadSql { get; }
+
+        // A connection is held with its transaction open: work outside the database must not wait now.
+        internal bool InTransaction => _transaction is not null && !_finished;
+
+        // A short batch runs; its transaction belongs to the batch's own call path (TransactionMarker).
+        internal bool InShortBatch => Volatile.Read(ref _shortBatchActive) != 0;
 
         public SqlContext(NpgsqlDataSource database)
         {
             _database = database;
             ReadSql = new SqlReadCommands(this);
             _logicSql = new SqlLogicCommands(this);
+        }
+
+        // A lane counts the connections it lends.
+        public SqlContext(SqlDatabase database) : this(database.DataSource)
+        {
+            _lane = database;
         }
 
         public async Task BeginAsync(SqlAccessMode mode, IsolationLevel isolationLevel = IsolationLevel.ReadCommitted, CancellationToken cancellationToken = default)
@@ -41,7 +56,7 @@ namespace Jularr.Backend.Infrastructure.Sql
                 throw new InvalidOperationException("A SQL transaction has already been started or completed.");
             }
 
-            var connection = await _database.OpenConnectionAsync(cancellationToken);
+            var connection = _lane is null ? await _database.OpenConnectionAsync(cancellationToken) : await _lane.OpenAsync(cancellationToken);
 
             try
             {
@@ -59,6 +74,7 @@ namespace Jularr.Backend.Infrastructure.Sql
                     _transaction = transaction;
                     _mode = mode;
                     _jitDisabled = false;
+                    _statementTimeout = null;
                 }
                 catch
                 {
@@ -69,6 +85,7 @@ namespace Jularr.Backend.Infrastructure.Sql
             catch
             {
                 await connection.DisposeAsync();
+                _lane?.Release();
                 throw;
             }
         }
@@ -109,9 +126,33 @@ namespace Jularr.Backend.Infrastructure.Sql
                 return;
             }
 
+            if (_readEnded)
+            {
+                return;
+            }
+
             RequireActive();
             await _transaction!.CommitAsync(cancellationToken);
             _finished = true;
+        }
+
+        // A read service that has read everything ends its transaction early and gives the connection back before slow work; no SQL may follow.
+        internal async Task EndReadAsync(CancellationToken cancellationToken)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            if (_mode != SqlAccessMode.ReadOnly || _finished || Volatile.Read(ref _shortBatchActive) != 0)
+            {
+                throw new InvalidOperationException("Only an open read transaction can end early.");
+            }
+
+            if (_transaction is not null)
+            {
+                await _transaction.CommitAsync(cancellationToken);
+            }
+
+            await CloseTransactionAsync();
+            _finished = true;
+            _readEnded = true;
         }
 
         internal async Task<TResult> RunShortBatchAsync<TResult>(
@@ -132,10 +173,12 @@ namespace Jularr.Backend.Infrastructure.Sql
 
             try
             {
-                if (_connection is not null || _transaction is not null || _finished)
+                if (_connection is not null || _transaction is not null || _mode is not null || _finished)
                 {
                     throw new InvalidOperationException("An Execute batch cannot start inside another transaction.");
                 }
+
+                TransactionMarker.EnterBatch(this);
 
                 using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                 timeout.CancelAfter(TimeSpan.FromSeconds(30));
@@ -183,6 +226,7 @@ namespace Jularr.Backend.Infrastructure.Sql
                 if (connection is not null)
                 {
                     await connection.DisposeAsync();
+                    _lane?.Release();
                 }
             }
         }
@@ -218,6 +262,10 @@ namespace Jularr.Backend.Infrastructure.Sql
             ArgumentNullException.ThrowIfNull(sql);
             ArgumentException.ThrowIfNullOrWhiteSpace(sql.Statement);
             ObjectDisposedException.ThrowIf(_disposed, this);
+            if (_readEnded)
+            {
+                throw new InvalidOperationException("The read transaction has ended; no SQL may follow EndReadAsync.");
+            }
 
             // Open lazy read transactions.
             if (_pendingReadIsolation is { } isolation)
@@ -245,9 +293,29 @@ namespace Jularr.Backend.Infrastructure.Sql
                 _jitDisabled = true;
             }
 
+            // A statement's own limit holds for this statement; Npgsql waits a little longer than the server.
+            if (sql.StatementTimeout is { } requested)
+            {
+                ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(requested, TimeSpan.Zero, nameof(sql));
+            }
+
+            if (sql.StatementTimeout != _statementTimeout)
+            {
+                await using var limit = sql.StatementTimeout is { } own
+                    ? new NpgsqlCommand("SELECT set_config('statement_timeout', @Timeout, TRUE)", _connection!, _transaction) { Parameters = { new("Timeout", SqlDatabase.Milliseconds(own)) } }
+                    : new NpgsqlCommand("SET LOCAL statement_timeout TO DEFAULT", _connection!, _transaction);
+                await limit.ExecuteNonQueryAsync(cancellationToken);
+                _statementTimeout = sql.StatementTimeout;
+            }
+
             var command = new NpgsqlCommand(sql.Statement, _connection!, _transaction);
             try
             {
+                if (sql.StatementTimeout is { } timeout)
+                {
+                    command.CommandTimeout = SqlDatabase.CommandTimeout(timeout);
+                }
+
                 command.Parameters.AddRange(SqlExecutor.Bind(sql));
                 return command;
             }

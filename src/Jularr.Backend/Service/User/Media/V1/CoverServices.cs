@@ -30,7 +30,9 @@ namespace Jularr.Backend.Service.User.Media.V1
 
         protected override async Task<IServiceOutput> OnRead()
         {
+            // The image server is asked after the read gives its connection back.
             var settings = await Context.ReadCoverCacheSettingsAsync(CancellationToken);
+            await Context.EndReadAsync(CancellationToken);
             var accepts = CoverPaths.Accepts(_http.HttpContext?.Request.Headers.Accept.ToString());
             var found = await _covers.ReadExternalAsync(Parameters.U, Parameters.W, accepts, settings.FormatId, settings.MaximumMegabytes > 0, CancellationToken);
             Stream content = found.Path is { } path ? File.OpenRead(path) : new MemoryStream(found.Bytes!);

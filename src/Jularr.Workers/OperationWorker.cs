@@ -22,6 +22,9 @@ namespace Jularr.Workers
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
+            // From the host's stop no lane claims another operation; one still running is queued again at the next start.
+            using var stop = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken, runner.Stopping);
+            stoppingToken = stop.Token;
             try
             {
                 await RecoverAsync(stoppingToken);
@@ -75,6 +78,11 @@ namespace Jularr.Workers
         // Claims the oldest queued operation of the lane's kind and runs it; false when none waits. The round's token stops it at its time limit, stopping at shutdown.
         internal static async Task<bool> RunNextAsync(IServiceProvider services, ILogger logger, OperationType operationType, CancellationToken ct, CancellationToken stopping)
         {
+            if (stopping.IsCancellationRequested)
+            {
+                return false;
+            }
+
             var claimed = await services.GetRequiredService<ClaimOperationV1>().ExecuteAsync<ClaimOperationResultV1>(new ClaimOperationParametersV1(operationType), default, ct);
             if (claimed.OperationId is not { } operationId)
             {
@@ -110,6 +118,11 @@ namespace Jularr.Workers
                 logger.LogWarning(exception, "Operation {OperationId} failed.", operationId);
                 await services.GetRequiredService<FailOperationV1>().ExecuteAsync<UpdateResult>(new OperationParametersV1(operationId),
                     new FailOperationDataV1(ServiceError.FromException(exception).Code), ct);
+            }
+            catch (Exception) when (stopping.IsCancellationRequested)
+            {
+                logger.LogWarning("Operation {OperationId} was interrupted by the stop; the next start queues it again.", operationId);
+                throw;
             }
             catch (Exception) when (!stopping.IsCancellationRequested)
             {

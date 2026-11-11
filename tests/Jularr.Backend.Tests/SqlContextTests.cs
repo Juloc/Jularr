@@ -1,5 +1,6 @@
 using Jularr.Backend.Data.Enums.Sql;
 using Jularr.Backend.Infrastructure.Sql;
+using Jularr.Backend.Service.Core;
 using Jularr.Backend.Tests.Infrastructure;
 using Npgsql;
 
@@ -168,6 +169,121 @@ namespace Jularr.Backend.Tests
             await context.CommitAsync();
             await Assert.ThrowsExactlyAsync<InvalidOperationException>(
                 () => context.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "SELECT 1" }));
+        }
+
+        [TestMethod]
+        public async Task Lanes_NameTheirConnections_AndAFullPoolBlocksOnlyItsOwnLane()
+        {
+            var connectionString = new NpgsqlConnectionStringBuilder(TestPostgres.ResolveConnectionString($"Data Source=sql-lanes-{Guid.NewGuid():N}")) { Pooling = true, Timeout = 1 }.ConnectionString;
+            await using var web = SqlDatabase.Create(connectionString, SqlLane.Web, 1, SqlLanes.WebIdleInTransaction, SqlLanes.WebStatementTimeout);
+            await using var worker = SqlDatabase.Create(connectionString, SqlLane.Worker, 1, SqlLanes.WorkerIdleInTransaction, SqlLanes.WorkerStatementTimeout);
+
+            // Each lane is named in pg_stat_activity and carries its statement limit, the client waiting a little longer, and the last resort for an idle transaction.
+            Assert.AreEqual(20, new NpgsqlConnectionStringBuilder(web.DataSource.ConnectionString).CommandTimeout);
+            Assert.AreEqual(65, new NpgsqlConnectionStringBuilder(worker.DataSource.ConnectionString).CommandTimeout);
+            await using (var request = new SqlContext(web))
+            {
+                await request.BeginAsync(SqlAccessMode.ReadOnly);
+                Assert.AreEqual("jularr-web", await request.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "SELECT current_setting('application_name')" }));
+                Assert.AreEqual("10min", await request.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "SELECT current_setting('idle_in_transaction_session_timeout')" }));
+                Assert.AreEqual("15s", await request.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "SELECT current_setting('statement_timeout')" }));
+
+                // The web pool is full: background work still gets its connection, a second request fails as a busy database.
+                await using (var background = new SqlContext(worker))
+                {
+                    await background.BeginAsync(SqlAccessMode.ReadOnly);
+                    Assert.AreEqual("jularr-worker", await background.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "SELECT current_setting('application_name')" }));
+                    Assert.AreEqual("30min", await background.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "SELECT current_setting('idle_in_transaction_session_timeout')" }));
+                    Assert.AreEqual("1min", await background.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "SELECT current_setting('statement_timeout')" }));
+                }
+
+                await using var waiting = new SqlContext(web);
+                var full = await Assert.ThrowsAsync<NpgsqlException>(() => waiting.BeginAsync(SqlAccessMode.ReadOnly));
+                var error = ServiceError.FromException(full);
+                Assert.AreEqual(503, error.StatusCode);
+                Assert.AreEqual("database_busy", error.Code);
+            }
+
+            // The most connections in use since the last look; the next count starts from those in use now.
+            Assert.AreEqual(1, web.TakePeak());
+            Assert.AreEqual(0, web.TakePeak());
+            Assert.AreEqual(1, worker.TakePeak());
+        }
+
+        [TestMethod]
+        public async Task StatementTimeout_OwnLimitHoldsForItsStatement_ThenTheLaneLimitAgain()
+        {
+            var connectionString = TestPostgres.ResolveConnectionString($"Data Source=sql-statement-timeout-{Guid.NewGuid():N}");
+            await using var lane = SqlDatabase.Create(connectionString, SqlLane.Worker, 2, SqlLanes.WorkerIdleInTransaction, TimeSpan.FromMilliseconds(300));
+
+            // Past the lane's limit the server cancels the statement.
+            await using (var plain = new SqlContext(lane))
+            {
+                await plain.BeginAsync(SqlAccessMode.ReadOnly);
+                var cancelled = await Assert.ThrowsExactlyAsync<PostgresException>(() => plain.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "SELECT pg_sleep(0.5)::text" }));
+                Assert.AreEqual(PostgresErrorCodes.QueryCanceled, cancelled.SqlState);
+            }
+
+            // A statement with its own limit runs through; the next one in the transaction has the lane's limit again.
+            await using (var known = new SqlContext(lane))
+            {
+                await known.BeginAsync(SqlAccessMode.ReadOnly);
+                Assert.AreEqual("", await known.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "SELECT pg_sleep(0.5)::text", StatementTimeout = TimeSpan.FromSeconds(2) }));
+                Assert.AreEqual("300ms", await known.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "SELECT current_setting('statement_timeout')" }));
+            }
+
+            // Npgsql waits past its own command limit for a statement with a longer one.
+            var impatient = new NpgsqlConnectionStringBuilder(connectionString) { CommandTimeout = 1 }.ConnectionString;
+            await using var client = new NpgsqlDataSourceBuilder(impatient).Build();
+            await using var waiting = new SqlContext(client);
+            await waiting.BeginAsync(SqlAccessMode.ReadOnly);
+            Assert.AreEqual("", await waiting.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "SELECT pg_sleep(1.2)::text", StatementTimeout = TimeSpan.FromSeconds(3) }));
+        }
+
+        [TestMethod]
+        public async Task EndRead_CommitsAndGivesTheConnectionBack_AndNoSqlMayFollow()
+        {
+            var connectionString = TestPostgres.ResolveConnectionString($"Data Source=sql-end-read-{Guid.NewGuid():N}");
+            await using var lane = new SqlDatabase(new NpgsqlDataSourceBuilder(new NpgsqlConnectionStringBuilder(connectionString) { Pooling = true, MaxPoolSize = 1 }.ConnectionString).Build());
+            await using var read = new SqlContext(lane);
+            read.PrepareReadTransaction(System.Data.IsolationLevel.ReadCommitted);
+            Assert.IsFalse(read.InTransaction, "A prepared read holds nothing until its first statement.");
+            Assert.AreEqual(1, await read.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "SELECT 1" }));
+            Assert.IsTrue(read.InTransaction);
+
+            await read.EndReadAsync(CancellationToken.None);
+            Assert.IsFalse(read.InTransaction);
+
+            // The pool's only connection is free again for others.
+            await using (var other = new SqlContext(lane))
+            {
+                await other.BeginAsync(SqlAccessMode.ReadOnly);
+                Assert.AreEqual(2, await other.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "SELECT 2" }));
+            }
+
+            await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => read.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "SELECT 1" }));
+            await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => read.RunShortBatchAsync(SqlAccessMode.ReadOnly, _ => Task.FromResult(true), _ => Task.CompletedTask, CancellationToken.None));
+            await read.CommitAsync();
+
+            // Only a read ends early.
+            await using var write = new SqlContext(lane);
+            await write.BeginAsync(SqlAccessMode.ReadWrite);
+            await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => write.EndReadAsync(CancellationToken.None));
+
+            // A committed transaction is no longer open, even before the context gives its connection back.
+            await write.CommitAsync();
+            Assert.IsFalse(write.InTransaction);
+        }
+
+        [TestMethod]
+        [DataRow(PostgresErrorCodes.QueryCanceled)]
+        [DataRow(PostgresErrorCodes.LockNotAvailable)]
+        public void ServerCancelOrLockTimeout_IsDatabaseBusy(string sqlState)
+        {
+            var error = ServiceError.FromException(new PostgresException("canceled", "ERROR", "ERROR", sqlState));
+            Assert.AreEqual(503, error.StatusCode);
+            Assert.AreEqual("database_busy", error.Code);
+            Assert.AreEqual("errors.database_busy", error.ResourceKey);
         }
 
         private static NpgsqlDataSource CreateDataSource()

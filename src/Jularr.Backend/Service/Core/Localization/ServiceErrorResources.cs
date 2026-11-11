@@ -39,6 +39,7 @@ namespace Jularr.Backend.Service.Core.Localization
             new("errors.invalid_antiforgery_token", "Please reload the page and try again."),
             new("errors.invalid_request", "The request could not be processed."),
             new("errors.provider_unavailable", "The external provider is currently unavailable."),
+            new("errors.database_busy", "The database is busy right now. Please reload in a few seconds."),
             new("errors.storage_unavailable", "The storage is not reachable. Check that the NAS is on and the share is mounted."),
             new("errors.download_storage_mount_required", "Choose writable folders on storage mounted inside Jularr. A direct SMB library connection alone cannot run the native downloader and unpack tools."),
             new("errors.download_storage_unavailable", "The download storage cannot be read or written. Check its mount and permissions."),

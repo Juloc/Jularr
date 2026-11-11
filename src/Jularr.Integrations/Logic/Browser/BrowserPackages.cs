@@ -4,6 +4,7 @@ using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using Jularr.Integrations.Logic.Common;
 
 namespace Jularr.Integrations.Logic.Browser
 {
@@ -241,7 +242,9 @@ namespace Jularr.Integrations.Logic.Browser
         {
             var platform = Platform();
             var url = new Uri("https://storage.googleapis.com/chrome-for-testing-public/" + version + "/" + platform + "/chrome-" + platform + ".zip");
-            using var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false, UseProxy = false }) { Timeout = TimeSpan.FromMinutes(10) };
+            // The archive may take long, as long as data keeps coming.
+            using var client = new HttpClient(new CallLimitHandler(ExternalCallLimits.Download(600, TimeSpan.FromHours(6)), TimeProvider.System)
+                { InnerHandler = new SocketsHttpHandler { AllowAutoRedirect = false, UseProxy = false, ConnectTimeout = ExternalCallLimits.ConnectLimit } }) { Timeout = Timeout.InfiniteTimeSpan };
             using var response = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct);
             if (response.StatusCode != System.Net.HttpStatusCode.OK) throw new HttpRequestException("Chrome download was not available.");
             if (response.Content.Headers.ContentLength is { } length && (length <= 0 || length > MaximumArchiveBytes))

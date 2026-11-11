@@ -11,6 +11,7 @@ using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Enums.Instance;
 using Jularr.Backend.Data.System.Instance.V1;
 using Jularr.Backend.Service.Core;
+using Jularr.Integrations.Logic.Common;
 using Jularr.Backend.Service.System.Instance.V1;
 using Jularr.Backend.Tests.Infrastructure;
 using Jularr.Integrations.Logic.MediaServer;
@@ -162,9 +163,11 @@ namespace Jularr.Backend.Tests
         [TestMethod]
         public async Task ProviderObservation_AProviderThatNeverAnswers_FailsWhenTheClientsTimeIsUp_AndACallerThatGivesUpSaysNothing()
         {
-            var limit = TimeSpan.FromMilliseconds(300);
+            // Built as AddClient builds a provider's client: the observation sees what the call limits end.
+            var limits = new ExternalCallLimits(TimeSpan.FromMilliseconds(300), TimeSpan.FromMilliseconds(300), TimeSpan.FromMilliseconds(300), TimeSpan.FromMilliseconds(300));
             HttpClient Client(ProviderObservations observations) =>
-                new(new ProviderObservationHandler(observations, "tmdb", limit, TimeProvider.System) { InnerHandler = SilentServer.NeverAnswers() }) { Timeout = limit };
+                new(new ProviderObservationHandler(observations, "tmdb") { InnerHandler = new CallLimitHandler(limits, TimeProvider.System) { InnerHandler = SilentServer.NeverAnswers() } })
+                    { Timeout = Timeout.InfiniteTimeSpan };
 
             // The client's own timeout: the provider did not answer, so the health check shows it failing.
             var observed = new ProviderObservations(TimeProvider.System);

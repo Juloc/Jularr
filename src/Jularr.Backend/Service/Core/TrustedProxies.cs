@@ -20,7 +20,7 @@ namespace Jularr.Backend.Service.Core
         {
             try
             {
-                await using var sql = new SqlContext(database.DataSource);
+                await using var sql = new SqlContext(database);
                 await sql.BeginAsync(SqlAccessMode.ReadOnly, cancellationToken: cancellationToken);
                 Use(await new LogicContext(sql).ReadTrustedProxiesAsync(cancellationToken));
             }

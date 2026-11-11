@@ -92,3 +92,23 @@ jobs:
         run: |
           docker compose cp "${RUNNER_TEMP}/jularr-chrome/chrome-linux64" jularr:/tmp/chrome-runtime-check
           docker compose exec -T jularr sh -c 'test "$(id -u)" -ne 0 && /tmp/chrome-runtime-check/chrome --version'
+      - name: Healthy only once it serves, tini as PID 1, and a clean stop within the budget
+        env:
+          JULARR_VERSION: ci
+          JULARR_DB_PASSWORD: ci-only-database-password
+        run: |
+          container=$(docker compose ps -q jularr)
+          for _ in $(seq 1 60); do
+            health=$(docker inspect --format '{{.State.Health.Status}}' "$container")
+            if [ "$health" = "healthy" ]; then break; fi
+            sleep 2
+          done
+          test "$health" = "healthy"
+          curl --fail --silent --show-error http://127.0.0.1:8097/health/live
+          test "$(docker compose exec -T jularr cat /proc/1/comm)" = "tini"
+          start=$(date +%s)
+          docker compose stop jularr
+          took=$(( $(date +%s) - start ))
+          docker compose logs jularr | tail -20
+          test "$(docker inspect --format '{{.State.ExitCode}}' "$container")" = "0"
+          test "$took" -lt 20

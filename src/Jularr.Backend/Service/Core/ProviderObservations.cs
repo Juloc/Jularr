@@ -15,20 +15,18 @@ namespace Jularr.Backend.Service.Core
     }
 
     // Watches a provider's client: no answer, a server fault or a refused key is a failure, anything else shows the provider works. A caller that gives up says nothing about it.
-    // The client's timeout cancels the same token as the caller does, so a request still unanswered when the client's time is up counts as no answer
-    // (its timer starts just before this handler, hence the small margin).
-    internal sealed class ProviderObservationHandler(ProviderObservations observations, string provider, TimeSpan timeout, TimeProvider time) : DelegatingHandler
+    // The client's limits end a call with a TaskCanceledException around a TimeoutException, the caller's own token with a plain cancellation.
+    internal sealed class ProviderObservationHandler(ProviderObservations observations, string provider) : DelegatingHandler
     {
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
-            var started = time.GetTimestamp();
             HttpResponseMessage response;
             try
             {
                 response = await base.SendAsync(request, cancellationToken);
             }
-            catch (Exception exception) when (exception is HttpRequestException
-                || exception is OperationCanceledException && (!cancellationToken.IsCancellationRequested || time.GetElapsedTime(started) >= timeout - timeout / 20))
+            catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException { InnerException: TimeoutException }
+                || exception is OperationCanceledException && !cancellationToken.IsCancellationRequested)
             {
                 observations.Record(provider, false);
                 throw;

@@ -3,7 +3,9 @@ using Jularr.Backend.Data.Admin.Media.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Logic.Media;
+using Jularr.Backend.Data.Logic.Provider;
 using Jularr.Backend.Infrastructure.Sql;
+using Jularr.Backend.Logic.Provider;
 using Jularr.Backend.Service.Core;
 
 namespace Jularr.Backend.Service.Admin.Media.V1
@@ -48,7 +50,31 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             var imdbId = identities.FirstOrDefault(identity => identity.Namespace == "imdb")?.Value;
             var tvdb = identities.FirstOrDefault(identity => identity.Namespace == "tvdb")?.Value;
 
-            var session = await _tvdb.ConnectAsync(Context, CancellationToken);
+            // Everything Jularr knows is read first; TheTVDB is asked after the read gives its connection back.
+            sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    episode."Id",
+                    season."Number"::integer AS "SeasonNumber",
+                    episode."Number"::integer AS "EpisodeNumber",
+                    episode."Title"
+                FROM
+                    "WorkUnits" AS episode
+                    JOIN "WorkUnits" AS season ON season."Id" = episode."ParentWorkUnitId"
+                WHERE
+                    episode."WorkId" = @Id
+                    AND episode."WorkUnitTypeId" = 2
+                    AND season."WorkUnitTypeId" = 1
+                    AND season."Number" = trunc(season."Number")
+                    AND episode."Number" = trunc(episode."Number");
+                """;
+            sql.Parameters.Add(new WorkIdData(work.Id));
+            var local = await Context.ReadSql.ReadListAsync<TvdbLocalEpisodeData>(sql, CancellationToken);
+            var credential = await Context.ReadProviderCredentialAsync(new ProviderParameters("tvdb"), CancellationToken);
+            await Context.EndReadAsync(CancellationToken);
+
+            var session = await _tvdb.LoginAsync(credential, CancellationToken);
             int? tvdbId = tvdb is null
                 ? imdbId is null ? null : await _tvdb.FindSeriesByImdbAsync(session, imdbId, CancellationToken)
                 : int.TryParse(tvdb, NumberStyles.None, CultureInfo.InvariantCulture, out var knownId) && knownId > 0
@@ -71,26 +97,6 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                 throw new DataValidationException("TvdbId", "in_use");
             }
 
-            sql = new SqlStatement();
-            sql.Statement =
-                """
-                SELECT
-                    episode."Id",
-                    season."Number"::integer AS "SeasonNumber",
-                    episode."Number"::integer AS "EpisodeNumber",
-                    episode."Title"
-                FROM
-                    "WorkUnits" AS episode
-                    JOIN "WorkUnits" AS season ON season."Id" = episode."ParentWorkUnitId"
-                WHERE
-                    episode."WorkId" = @Id
-                    AND episode."WorkUnitTypeId" = 2
-                    AND season."WorkUnitTypeId" = 1
-                    AND season."Number" = trunc(season."Number")
-                    AND episode."Number" = trunc(episode."Number");
-                """;
-            sql.Parameters.Add(new WorkIdData(work.Id));
-            var local = await Context.ReadSql.ReadListAsync<TvdbLocalEpisodeData>(sql, CancellationToken);
             var indexed = local.ToDictionary(item => (item.SeasonNumber, item.EpisodeNumber));
             var compared = remote.Select(item =>
             {

@@ -21,6 +21,9 @@ namespace Jularr.Backend.Infrastructure.Sql
         public Task<T?> ReadOptionalAsync<T>(SqlStatement sql, CancellationToken cancellationToken = default) where T : class =>
             _sql.LogicReads.ReadOptionalAsync<T>(sql, cancellationToken);
 
+        // A read service that has read everything gives its connection back before slow work outside the database; SQL afterwards throws.
+        public Task EndReadAsync(CancellationToken cancellationToken = default) => _sql.EndReadAsync(cancellationToken);
+
         public Task<int> ExecuteAsyncForAffectedRows(SqlStatement sql, CancellationToken cancellationToken = default) =>
             _sql.RequireLogicSql().ExecuteAsync(sql, cancellationToken);
 

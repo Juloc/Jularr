@@ -8,6 +8,7 @@ using Jularr.Frontend.Framework;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Npgsql;
 
 namespace Jularr.Backend.Tests
 {
@@ -166,6 +167,70 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(body, "Datenbank-Update fehlgeschlagen");
             StringAssert.Contains(body, "0002_probe");
             Assert.DoesNotContain("data-startup-phase", body);
+        }
+
+        // The container's probes while the update runs: the process is alive but does not serve yet, also after a failed update.
+        [TestMethod]
+        public async Task Server_HealthProbes_AliveButNotReady_AlsoAfterAFailure()
+        {
+            var address = "http://127.0.0.1:" + FreePort().ToString(CultureInfo.InvariantCulture);
+            await using var server = await StartupStatusServer.StartAsync(["--urls", address]);
+            using var client = new HttpClient { BaseAddress = new Uri(address) };
+
+            server.Status.Report(new DatabaseUpgradeProgress(DatabaseUpgradePhase.Migrating, 1, 2));
+            await AssertProbeAsync(client, Health.LivePath, HttpStatusCode.OK, "Healthy");
+            await AssertProbeAsync(client, Health.ReadyPath, HttpStatusCode.ServiceUnavailable, "Unhealthy");
+
+            server.Status.Fail(new DatabaseUpgradeFailure("0002_probe", "reason"));
+            await AssertProbeAsync(client, Health.LivePath, HttpStatusCode.OK, "Healthy");
+            await AssertProbeAsync(client, Health.ReadyPath, HttpStatusCode.ServiceUnavailable, "Unhealthy");
+        }
+
+        // The application's probes: anonymous and without details. Ready only while the application serves, with this release's schema and a
+        // database that answers within the limit on a connection of its own; a lock or a stop makes it 503, never a hanging answer.
+        [TestMethod]
+        public async Task Application_HealthProbes_ReadyFollowsTheDatabaseAndTheStop()
+        {
+            await using var host = await AuthenticationTests.Host.CreateAsync(library: true, endpoints: endpoints => endpoints.MapJularrHealth());
+            await AssertProbeAsync(host.Client, Health.LivePath, HttpStatusCode.OK, "Healthy");
+            await AssertProbeAsync(host.Client, Health.ReadyPath, HttpStatusCode.OK, "Healthy");
+
+            // Another session holds the version table: the probe gives up at its limit.
+            await using (var holder = new NpgsqlConnection(host.Fixture.ConnectionString))
+            {
+                await holder.OpenAsync();
+                await using var transaction = await holder.BeginTransactionAsync();
+                await using (var hold = new NpgsqlCommand("LOCK TABLE \"DatabaseSchemaVersions\" IN ACCESS EXCLUSIVE MODE", holder, transaction))
+                {
+                    await hold.ExecuteNonQueryAsync();
+                }
+
+                var clock = Stopwatch.StartNew();
+                await AssertProbeAsync(host.Client, Health.ReadyPath, HttpStatusCode.ServiceUnavailable, "Unhealthy");
+                Assert.IsLessThan(DatabaseReadyCheck.Limit + TimeSpan.FromSeconds(3), clock.Elapsed);
+                await AssertProbeAsync(host.Client, Health.LivePath, HttpStatusCode.OK, "Healthy");
+            }
+
+            await AssertProbeAsync(host.Client, Health.ReadyPath, HttpStatusCode.OK, "Healthy");
+
+            // A schema of another release is not ready.
+            await host.Fixture.RunSqlAsync("UPDATE \"DatabaseSchemaVersions\" SET \"Version\" = \"Version\" + 1000 WHERE \"Version\" = (SELECT max(\"Version\") FROM \"DatabaseSchemaVersions\")");
+            await AssertProbeAsync(host.Client, Health.ReadyPath, HttpStatusCode.ServiceUnavailable, "Unhealthy");
+            await host.Fixture.RunSqlAsync("UPDATE \"DatabaseSchemaVersions\" SET \"Version\" = \"Version\" - 1000 WHERE \"Version\" > 1000");
+            await AssertProbeAsync(host.Client, Health.ReadyPath, HttpStatusCode.OK, "Healthy");
+
+            // From the stop on the application is no longer ready; it still lives.
+            host.Services.GetRequiredService<IHostApplicationLifetime>().StopApplication();
+            await AssertProbeAsync(host.Client, Health.ReadyPath, HttpStatusCode.ServiceUnavailable, "Unhealthy");
+            await AssertProbeAsync(host.Client, Health.LivePath, HttpStatusCode.OK, "Healthy");
+        }
+
+        private static async Task AssertProbeAsync(HttpClient client, string path, HttpStatusCode status, string body)
+        {
+            using var response = await client.GetAsync(path);
+            Assert.AreEqual(status, response.StatusCode, path);
+            Assert.AreEqual(body, await response.Content.ReadAsStringAsync(), path);
+            Assert.IsTrue(response.Headers.CacheControl!.NoStore, path);
         }
 
         // The hand-over: the status page keeps answering for as long as the application needs before its own server binds (here a hosted service

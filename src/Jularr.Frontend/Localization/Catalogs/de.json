@@ -8844,6 +8844,10 @@
    "The external provider is currently unavailable.",
    "Der externe Anbieter ist derzeit nicht verfügbar."
   ],
+  "errors.database_busy": [
+   "The database is busy right now. Please reload in a few seconds.",
+   "Die Datenbank ist gerade ausgelastet. Bitte in ein paar Sekunden neu laden."
+  ],
   "errors.storage_unavailable": [
    "The storage is not reachable. Check that the NAS is on and the share is mounted.",
    "Der Speicher ist nicht erreichbar. Prüfe, ob das NAS an ist und die Freigabe eingebunden ist."

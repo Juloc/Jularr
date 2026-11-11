@@ -158,16 +158,22 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
-        public async Task SabConnection_DiscoversItsCategoryFolderWithoutAManualRemotePath()
+        public async Task SabConnection_DiscoversItsCategoryFolderWithoutAManualRemotePath_AndNoTransactionWaitsMeanwhile()
         {
             using var storage = new TemporaryDirectory();
             using var downloads = new TemporaryDirectory();
-            await using var host = await CreateHostAsync(storage.Path, downloads.Path, new FakeUsenet());
+            var usenet = new FakeUsenet();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, usenet);
 
+            // While SABnzbd answers, no request of Jularr holds a transaction open in the database.
+            var waiting = new List<long>();
+            usenet.WhileAskedForCategories = async () => waiting.Add((long)(await host.ScalarAsync(
+                "SELECT count(*) FROM pg_stat_activity WHERE datname = current_database() AND application_name = 'jularr-web' AND state LIKE 'idle in transaction%'"))!);
             using var saved = await host.SendAsync(HttpMethod.Put, Connections + "/2",
                 new SaveAcquisitionConnectionDataV1("SAB", AcquisitionConnectionType.Sabnzbd, "https://sab.example.test",
                     null, true, 10, [], "movies", null, downloads.Path));
             Assert.AreEqual(HttpStatusCode.OK, saved.StatusCode, await saved.Content.ReadAsStringAsync());
+            CollectionAssert.AreEqual(new[] { 0L }, waiting);
             using var result = await host.SendAsync(HttpMethod.Get, Connections + "/2");
             Assert.AreEqual("/downloads/complete/movies", (await result.Content.ReadFromJsonAsync<AcquisitionConnectionDetailsV1>())!.RemotePath);
         }
@@ -4531,6 +4537,9 @@ namespace Jularr.Backend.Tests
             public string Status { get; set; } = """{"status":{"completedir":"/downloads/complete"}}""";
             public string CategoryConfig { get; set; } = """{"config":{"categories":[{"name":"*","dir":""},{"name":"movies","dir":"movies"},{"name":"tv","dir":"tv"}]}}""";
 
+            // Runs while SABnzbd is asked for its categories, as a slow SABnzbd would keep the caller waiting.
+            public Func<Task>? WhileAskedForCategories { get; set; }
+
             public const string PlexToken = "plex-server-token";
             public List<string> PlexRequests { get; } = [];
             public bool PlexShowsFail { get; set; }
@@ -4622,6 +4631,7 @@ namespace Jularr.Backend.Tests
                     case "status":
                         return Json(Status);
                     case "get_config":
+                        if (WhileAskedForCategories is { } waiting) await waiting();
                         return Json(CategoryConfig);
                     default:
                         return Json("""{"version":"4.5.0"}""");

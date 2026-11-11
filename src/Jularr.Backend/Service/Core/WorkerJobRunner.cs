@@ -4,6 +4,7 @@ using Jularr.Backend.Data.Enums.Worker;
 using Jularr.Backend.Data.System.Worker.V1;
 using Jularr.Backend.Service.System.Worker.V1;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 namespace Jularr.Backend.Service.Core
@@ -11,7 +12,8 @@ namespace Jularr.Backend.Service.Core
     // Runs one pass of a job for its worker: asks the registry whether the job may run, runs it in its own scope and reports how it went.
     // A switched-off module is no failure; anything else is told to the registry and, as a notice, to the Owner.
     // Every round runs under its job's time limit, so a round that hangs ends as a failure and frees its group.
-    public sealed class WorkerJobRunner(IServiceScopeFactory scopes, WorkerJobs jobs, TimeProvider time, ILogger<WorkerJobRunner> logger)
+    // From the host's stop no pass, round or claim begins; a round still running gets a short grace and is then cancelled, and the log names it.
+    public sealed class WorkerJobRunner(IServiceScopeFactory scopes, WorkerJobs jobs, TimeProvider time, ILogger<WorkerJobRunner> logger, IHostApplicationLifetime? lifetime = null)
     {
         // A pass that keeps finding work is kept after this long and goes on at the next tick.
         internal static readonly TimeSpan PassLimit = TimeSpan.FromMinutes(10);
@@ -20,6 +22,12 @@ namespace Jularr.Backend.Service.Core
         internal static readonly TimeSpan StopGrace = TimeSpan.FromSeconds(30);
         internal static readonly TimeSpan ReportLimit = TimeSpan.FromSeconds(10);
         internal static readonly TimeSpan ReportRetry = TimeSpan.FromSeconds(2);
+
+        // How long a round may go on after the host began to stop (or the caller's token was cancelled) before it is cancelled.
+        internal static readonly TimeSpan ShutdownGrace = TimeSpan.FromSeconds(5);
+
+        // The host's stop as the workers see it: their waits end and they begin nothing new.
+        public CancellationToken Stopping => lifetime?.ApplicationStopping ?? CancellationToken.None;
 
         // Null when the job did not run: it is paused, waits while Jularr is used, is not due or its choices could not be read yet.
         public Task<WorkerJobResultType?> RunAsync(string key, Func<IServiceProvider, CancellationToken, Task> step, CancellationToken ct) =>
@@ -46,7 +54,7 @@ namespace Jularr.Backend.Service.Core
             var result = await RunPassAsync(key, async token =>
             {
                 var startedAt = time.GetTimestamp();
-                while (!token.IsCancellationRequested)
+                while (!IsStopping(ct))
                 {
                     var busy = await RunRoundAsync(key, async round =>
                     {
@@ -64,9 +72,9 @@ namespace Jularr.Backend.Service.Core
                         break;
                     }
 
-                    if (pause > TimeSpan.Zero)
+                    if (pause > TimeSpan.Zero && !await PauseAsync(pause, ct))
                     {
-                        await Task.Delay(pause, time, token);
+                        break;
                     }
                 }
 
@@ -82,13 +90,14 @@ namespace Jularr.Backend.Service.Core
         }
 
         // One round under its job's limit. Past the limit the round is asked to stop and fails with job_round_timeout; one that ignores it
-        // is named in the log after the grace and still awaited, never abandoned.
+        // is named in the log after the grace and still awaited, never abandoned. The pass's shutdown token cancels it after the shutdown grace.
         private async Task<T> RunRoundAsync<T>(string key, Func<CancellationToken, Task<T>> round, CancellationToken ct)
         {
             var roundLimit = WorkerJobs.Definition(key).RoundLimit;
             using var limit = new CancellationTokenSource(roundLimit, time);
             using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, limit.Token);
             using var watch = new CancellationTokenSource();
+            using var interrupted = ct.Register(() => logger.LogWarning("{Job} was cancelled: the stop's grace of {Grace} ran out while it was running.", key, ShutdownGrace));
             var running = round(linked.Token);
             var overdue = Task.Delay(roundLimit + StopGrace, time, watch.Token);
             if (await Task.WhenAny(running, overdue) == overdue)
@@ -116,16 +125,18 @@ namespace Jularr.Backend.Service.Core
 
         private async Task<WorkerJobResultType?> RunPassAsync(string key, Func<CancellationToken, Task<bool>> pass, CancellationToken ct)
         {
-            if (!await EnsureLoadedAsync(ct) || jobs.Begin(key) != WorkerJobGate.Run)
+            if (IsStopping(ct) || !await EnsureLoadedAsync(ct) || IsStopping(ct) || jobs.Begin(key) != WorkerJobGate.Run)
             {
                 return null;
             }
 
+            // The rounds and the record of the pass see the stop only after the grace.
+            using var shutdown = new ShutdownGraceSource(Stopping, ct, time);
             var result = WorkerJobResultType.Succeeded;
             string? errorKey = null;
             try
             {
-                if (!await pass(ct))
+                if (!await pass(shutdown.Token))
                 {
                     result = WorkerJobResultType.Skipped;
                 }
@@ -135,7 +146,13 @@ namespace Jularr.Backend.Service.Core
                 logger.LogDebug("{Job} skipped: its module is switched off.", key);
                 result = WorkerJobResultType.Skipped;
             }
-            catch (Exception exception) when (!ct.IsCancellationRequested)
+            catch (Exception exception) when (IsStopping(ct))
+            {
+                // Cut by the stop: no failure and nothing kept; the job runs again after the start, and an operation it held is queued again.
+                logger.LogDebug(exception, "{Job} ended with the stop.", key);
+                return null;
+            }
+            catch (Exception exception)
             {
                 errorKey = ServiceError.FromException(exception).Code;
 
@@ -152,8 +169,59 @@ namespace Jularr.Backend.Service.Core
                 result = WorkerJobResultType.Failed;
             }
 
-            await ReportAsync(key, jobs.Finish(key, result, errorKey), ct);
+            await ReportAsync(key, jobs.Finish(key, result, errorKey), shutdown.Token);
             return result;
+        }
+
+        private bool IsStopping(CancellationToken ct) => ct.IsCancellationRequested || Stopping.IsCancellationRequested;
+
+        // The pause between rounds; false when the stop came first.
+        private async Task<bool> PauseAsync(TimeSpan pause, CancellationToken ct)
+        {
+            using var stop = CancellationTokenSource.CreateLinkedTokenSource(ct, Stopping);
+            try
+            {
+                await Task.Delay(pause, time, stop.Token);
+                return true;
+            }
+            catch (OperationCanceledException) when (stop.IsCancellationRequested)
+            {
+                return false;
+            }
+        }
+
+        // Cancelled the shutdown grace after the host began to stop or the caller's token was cancelled, whichever came first. All passes hear the
+        // host's stop at the same moment, so the workers, stopped one after the other, still end within one grace.
+        private sealed class ShutdownGraceSource : IDisposable
+        {
+            private readonly CancellationTokenSource _source;
+            private readonly CancellationTokenRegistration _stopping;
+            private readonly CancellationTokenRegistration _caller;
+            private int _isStarted;
+
+            public ShutdownGraceSource(CancellationToken stopping, CancellationToken caller, TimeProvider time)
+            {
+                _source = new CancellationTokenSource(Timeout.InfiniteTimeSpan, time);
+                _stopping = stopping.Register(Start);
+                _caller = caller.Register(Start);
+            }
+
+            public CancellationToken Token => _source.Token;
+
+            private void Start()
+            {
+                if (Interlocked.Exchange(ref _isStarted, 1) == 0)
+                {
+                    _source.CancelAfter(ShutdownGrace);
+                }
+            }
+
+            public void Dispose()
+            {
+                _stopping.Dispose();
+                _caller.Dispose();
+                _source.Dispose();
+            }
         }
 
         // The Owner's choices are read before the first pass, so a paused job does not run once after a restart.

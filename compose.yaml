@@ -19,6 +19,8 @@ services:
   jularr:
     image: ghcr.io/juloc/jularr:${JULARR_VERSION:?Set JULARR_VERSION in .env}
     restart: unless-stopped
+    # Jularr stops within 15 seconds; a few more before it is killed.
+    stop_grace_period: 20s
     depends_on:
       postgres:
         condition: service_healthy

@@ -37,12 +37,13 @@ namespace Jularr.Backend.Service.Core.Localization
             public UiTextCatalog[] Catalogs { get; } = catalogs;
         }
 
-        private sealed class UiResourceSynchronization(SqlDatabase database, UiResourceSource source) : IHostedService
+        // Bulk work at start, without a request: the worker lane.
+        private sealed class UiResourceSynchronization([FromKeyedServices(SqlLane.Worker)] SqlDatabase database, UiResourceSource source) : IHostedService
         {
             public async Task StartAsync(CancellationToken cancellationToken)
             {
                 // Synchronize resources, never install or migrate the schema.
-                await using var sql = new SqlContext(database.DataSource);
+                await using var sql = new SqlContext(database);
                 await sql.BeginAsync(SqlAccessMode.ReadWrite, cancellationToken: cancellationToken);
                 var context = new LogicContext(sql);
                 await context.SynchronizeUiResourcesAsync(source.Resources, cancellationToken);

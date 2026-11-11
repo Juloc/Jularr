@@ -6,7 +6,7 @@ namespace Jularr.Frontend.Framework
     // plain status and Problem Details body.
     public static class ErrorPages
     {
-        private static readonly string[] NotPages = ["/api", "/live", "/build", "/emulator"];
+        private static readonly string[] NotPages = ["/api", "/live", "/build", "/emulator", "/health"];
 
         // Whether the client navigates to a page: an address of the application's pages that accepts HTML, or an in-place (htmx) request.
         public static bool WantsPage(HttpContext context)

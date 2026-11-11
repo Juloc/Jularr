@@ -9,9 +9,11 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Options;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Service;
+using Jularr.Backend.Data.Enums.Sql;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Integrations.Data.Common;
 using Jularr.Integrations.Data.Browser;
@@ -65,7 +67,9 @@ using Jularr.Integrations.Logic.Subtitles;
 using Jularr.Integrations.Logic.Synology;
 using Jularr.Integrations.Logic.Ocr;
 using Jularr.Integrations.Logic.Translation;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Npgsql;
 using Jularr.Backend.Data.Public.Authentication.V1;
 using Jularr.Backend.Service.Public.Authentication.V1;
@@ -108,10 +112,17 @@ namespace Jularr.Backend.Service.Core
                 throw new InvalidOperationException("JULARR_DB must be configured explicitly.");
             }
 
-            services.AddSingleton(_ => new SqlDatabase(new NpgsqlDataSourceBuilder(connectionString).Build()));
+            // Web requests and background work draw on pools of their own.
+            var webStatementTimeout = configuration.GetValue<TimeSpan?>("Database:WebStatementTimeout") ?? SqlLanes.WebStatementTimeout;
+            var workerStatementTimeout = configuration.GetValue<TimeSpan?>("Database:WorkerStatementTimeout") ?? SqlLanes.WorkerStatementTimeout;
+            services.AddSingleton(_ => SqlDatabase.Create(connectionString, SqlLane.Web, SqlLanes.WebPoolSize, SqlLanes.WebIdleInTransaction, webStatementTimeout));
+            services.AddKeyedSingleton(SqlLane.Worker, (_, _) => SqlDatabase.Create(connectionString, SqlLane.Worker, SqlLanes.WorkerPoolSize, SqlLanes.WorkerIdleInTransaction, workerStatementTimeout));
+            services.AddHostedService<SqlLaneMonitor>();
             services.AddSingleton(provider => new DatabaseBaseline(connectionString, provider.GetRequiredService<IOptions<BackupOptions>>().Value, provider.GetRequiredService<PostgresBackupTools>(),
                 logger: provider.GetRequiredService<ILoggerFactory>().CreateLogger<DatabaseBaseline>()));
             services.AddHostedService(provider => provider.GetRequiredService<DatabaseBaseline>());
+            services.AddHealthChecks().Add(new HealthCheckRegistration("database",
+                provider => new DatabaseReadyCheck(provider.GetRequiredService<DatabaseBaseline>(), provider.GetRequiredService<IHostApplicationLifetime>()), HealthStatus.Unhealthy, null));
 
             // Persistent state lives under one folder, /data in the image; every feature works without further settings.
             var data = configuration["DataPath"] is { Length: > 0 } dataPath ? dataPath
@@ -191,8 +202,9 @@ namespace Jularr.Backend.Service.Core
 
         internal static IServiceCollection AddJularrServices(this IServiceCollection services, NpgsqlDataSource database, params Assembly[] assemblies)
         {
-            // Tests own isolated data sources.
+            // Tests own isolated data sources; both lanes share one.
             services.AddSingleton(new SqlDatabase(database));
+            services.AddKeyedSingleton(SqlLane.Worker, new SqlDatabase(database, SqlLane.Worker));
             return RegisterServices(services, assemblies, new ProviderOptions());
         }
 
@@ -309,13 +321,13 @@ namespace Jularr.Backend.Service.Core
             services.TryAddSingleton<TranslationProviders>();
             services.TryAddSingleton<LocalTranslationDownloads>();
             services.AddHostedService(provider => provider.GetRequiredService<LocalTranslationDownloads>());
-            // Ollama's own limits bound each question, translation and download; the client's covers the longest wait for an answer.
-            AddClient<OllamaLocalModels>(services, 600, null, handler: () => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false, UseProxy = false });
+            // Ollama's own limits bound each question and translation; a model download may take hours, as long as progress keeps coming.
+            AddClient<OllamaLocalModels>(services, ExternalCallLimits.Download(600, TimeSpan.FromHours(12)), null, handler: () => new SocketsHttpHandler { AllowAutoRedirect = false, UseCookies = false, UseProxy = false });
             services.TryAddSingleton<SpeechFiles>();
-            AddClient<Jularr.Integrations.Logic.Speech.SpeechCatalogClient>(services, 25, null, agent: true,
-                handler: () => new HttpClientHandler { AllowAutoRedirect = true, MaxAutomaticRedirections = 3, UseCookies = false });
-            AddClient<Jularr.Integrations.Logic.Speech.SpeechModelClient>(services, 300, null, agent: true,
-                handler: () => new HttpClientHandler { AllowAutoRedirect = true, MaxAutomaticRedirections = 3, UseCookies = false });
+            AddClient<Jularr.Integrations.Logic.Speech.SpeechCatalogClient>(services, ExternalCallLimits.Answer(25), null, agent: true,
+                handler: () => new SocketsHttpHandler { AllowAutoRedirect = true, MaxAutomaticRedirections = 3, UseCookies = false });
+            AddClient<Jularr.Integrations.Logic.Speech.SpeechModelClient>(services, ExternalCallLimits.Download(300, TimeSpan.FromMinutes(5)), null, agent: true,
+                handler: () => new SocketsHttpHandler { AllowAutoRedirect = true, MaxAutomaticRedirections = 3, UseCookies = false });
             services.TryAddSingleton<IPageRecognizer, OcrFiles>();
             services.AddMemoryCache(options => options.SizeLimit = 20_000);
             services.TryAddSingleton<UiLocalizationCache>();
@@ -327,7 +339,7 @@ namespace Jularr.Backend.Service.Core
             services.Configure<RouteHandlerOptions>(options => options.ThrowOnBadRequest = true);
             services.ConfigureHttpJsonOptions(options => options.SerializerOptions.RespectRequiredConstructorParameters = true);
             services.AddScoped<IServiceGate, ServiceGate>();
-            services.AddScoped(provider => new SessionAuthentication(provider.GetRequiredService<SqlDatabase>().DataSource));
+            services.AddScoped(provider => new SessionAuthentication(provider.GetRequiredService<SqlDatabase>()));
             services.AddScoped<SessionCookieEvents>();
             services.AddSingleton<TrustedProxies>();
             services.AddHostedService(provider => provider.GetRequiredService<TrustedProxies>());
@@ -385,43 +397,44 @@ namespace Jularr.Backend.Service.Core
                 options.Cookie.SameSite = SameSiteMode.Strict;
             });
 
-            // Bound external communication; pasted source links reach public addresses only.
-            AddClient<PlexClient>(services, 10, 1);
-            AddClient<GutenbergClient>(services, 60, null, agent: true);
-            AddClient<MozillaTranslationsClient>(services, 600, null, agent: true);
-            AddClient<OcrModelClient>(services, 600, null, agent: true, baseAddress: providers.OcrModels,
-                handler: () => new HttpClientHandler { AllowAutoRedirect = true, MaxAutomaticRedirections = 3, UseCookies = false });
-            AddClient<OpdsClient>(services, 60, null, agent: true);
+            // Bound external communication; pasted source links reach public addresses only. Files and long lists keep coming for a long time,
+            // as long as data keeps coming; answers arrive whole within their time.
+            AddClient<PlexClient>(services, ExternalCallLimits.Answer(10), 1);
+            AddClient<GutenbergClient>(services, ExternalCallLimits.Download(60, FileTotal), null, agent: true);
+            AddClient<MozillaTranslationsClient>(services, ExternalCallLimits.Download(600, FileTotal), null, agent: true);
+            AddClient<OcrModelClient>(services, ExternalCallLimits.Download(600, FileTotal), null, agent: true, baseAddress: providers.OcrModels,
+                handler: () => new SocketsHttpHandler { AllowAutoRedirect = true, MaxAutomaticRedirections = 3, UseCookies = false });
+            AddClient<OpdsClient>(services, ExternalCallLimits.Download(60, FileTotal), null, agent: true);
             services.TryAddSingleton<AnnasArchiveMirrors>();
-            AddClient<AnnasArchiveClient>(services, 60, null, agent: true, handler: PublicNetwork.CreateHandler);
-            AddClient<OpenLibraryClient>(services, 15, 4, agent: true, baseAddress: providers.OpenLibrary, provider: "openlibrary");
-            AddClient<HardcoverClient>(services, 15, 4, agent: true, baseAddress: providers.Hardcover, provider: "hardcover");
-            AddClient<AcoustIdClient>(services, 15, 1, agent: true, baseAddress: providers.AcoustId, provider: "acoustid");
+            AddClient<AnnasArchiveClient>(services, ExternalCallLimits.Download(60, FileTotal), null, agent: true, handler: PublicNetwork.CreateHandler);
+            AddClient<OpenLibraryClient>(services, ExternalCallLimits.Answer(15), 4, agent: true, baseAddress: providers.OpenLibrary, provider: "openlibrary");
+            AddClient<HardcoverClient>(services, ExternalCallLimits.Answer(15), 4, agent: true, baseAddress: providers.Hardcover, provider: "hardcover");
+            AddClient<AcoustIdClient>(services, ExternalCallLimits.Answer(15), 1, agent: true, baseAddress: providers.AcoustId, provider: "acoustid");
             services.TryAddSingleton(providers);
-            AddClient<AniListClient>(services, 15, 4, agent: true, baseAddress: providers.AniList, provider: "anilist");
-            AddClient<AniBridgeClient>(services, 60, null, agent: true, baseAddress: providers.AnimeMappings,
-                handler: () => new HttpClientHandler { AllowAutoRedirect = true, MaxAutomaticRedirections = 3, UseCookies = false });
-            AddClient<MusicBrainzClient>(services, 20, 4, agent: true, baseAddress: providers.MusicBrainz, provider: "musicbrainz");
-            AddClient<IgdbClient>(services, 20, 8, agent: true, provider: "igdb");
-            AddClient<LibretroClient>(services, 60, 16, agent: true, baseAddress: providers.Libretro);
-            AddClient<SynologyClient>(services, 30, 4, handler: SynologyClient.CreateHandler);
-            AddClient<ServarrApiClient>(services, 60, 32);
-            AddClient<PlexServerClient>(services, 20, 16);
-            AddClient<MediaServerClient>(services, 30, 32);
-            AddClient<NewznabClient>(services, 30, 16);
-            AddClient<TmdbClient>(services, 15, 4, baseAddress: providers.Tmdb, provider: "tmdb");
-            AddClient<TvdbClient>(services, 15, 4, baseAddress: providers.Tvdb, provider: "tvdb");
-            AddClient<SabnzbdClient>(services, 15, 16);
-            AddClient<QbittorrentClient>(services, 15, 16);
-            AddClient<OpenSubtitlesClient>(services, 30, 12, agent: true);
-            AddClient<SubDlClient>(services, 30, 12, agent: true);
-    AddClient<NyaaClient>(services, 30, 16, agent: true, handler: PublicNetwork.CreateHandler);
-            AddClient<NarouClient>(services, 60, null, agent: true, handler: PublicNetwork.CreateHandler);
+            AddClient<AniListClient>(services, ExternalCallLimits.Answer(15), 4, agent: true, baseAddress: providers.AniList, provider: "anilist");
+            AddClient<AniBridgeClient>(services, ExternalCallLimits.Download(60, FileTotal), null, agent: true, baseAddress: providers.AnimeMappings,
+                handler: () => new SocketsHttpHandler { AllowAutoRedirect = true, MaxAutomaticRedirections = 3, UseCookies = false });
+            AddClient<MusicBrainzClient>(services, ExternalCallLimits.Answer(20), 4, agent: true, baseAddress: providers.MusicBrainz, provider: "musicbrainz");
+            AddClient<IgdbClient>(services, ExternalCallLimits.Answer(20), 8, agent: true, provider: "igdb");
+            AddClient<LibretroClient>(services, ExternalCallLimits.Answer(60), 16, agent: true, baseAddress: providers.Libretro);
+            AddClient<SynologyClient>(services, ExternalCallLimits.Answer(30), 4, handler: SynologyClient.CreateHandler);
+            AddClient<ServarrApiClient>(services, ExternalCallLimits.Download(60, ListTotal), 32);
+            AddClient<PlexServerClient>(services, ExternalCallLimits.Download(20, ListTotal), 16);
+            AddClient<MediaServerClient>(services, ExternalCallLimits.Download(30, ListTotal), 32);
+            AddClient<NewznabClient>(services, ExternalCallLimits.Download(30, ListTotal), 16);
+            AddClient<TmdbClient>(services, ExternalCallLimits.Answer(15), 4, baseAddress: providers.Tmdb, provider: "tmdb");
+            AddClient<TvdbClient>(services, ExternalCallLimits.Answer(15), 4, baseAddress: providers.Tvdb, provider: "tvdb");
+            AddClient<SabnzbdClient>(services, ExternalCallLimits.Answer(15), 16);
+            AddClient<QbittorrentClient>(services, ExternalCallLimits.Answer(15), 16);
+            AddClient<OpenSubtitlesClient>(services, ExternalCallLimits.Answer(30), 12, agent: true);
+            AddClient<SubDlClient>(services, ExternalCallLimits.Answer(30), 12, agent: true);
+            AddClient<NyaaClient>(services, ExternalCallLimits.Answer(30), 16, agent: true, handler: PublicNetwork.CreateHandler);
+            AddClient<NarouClient>(services, ExternalCallLimits.Download(60, ListTotal), null, agent: true, handler: PublicNetwork.CreateHandler);
 
             // Covers come from the providers' image hosts only, over public addresses.
             var covers = new CoverMirrors(new Dictionary<string, Uri>(providers.Images, StringComparer.OrdinalIgnoreCase));
             services.AddSingleton(covers);
-            AddClient<CoverClient>(services, 30, null, agent: true, handler: () => CoverClient.CreateHandler(covers));
+            AddClient<CoverClient>(services, ExternalCallLimits.Answer(30), null, agent: true, handler: () => CoverClient.CreateHandler(covers));
             services.TryAddTransient<CoverStore>();
 
             // Throttle public requests.
@@ -498,8 +511,9 @@ namespace Jularr.Backend.Service.Core
             });
 
             // Bind each service runtime.
-            services.AddScoped(provider => new ServiceRuntime(provider.GetRequiredService<SqlDatabase>().DataSource, provider.GetRequiredService<IServiceGate>(),
-                provider.GetRequiredService<ServiceTimings>()));
+            services.AddScoped<SqlLaneChoice>();
+            services.AddScoped(provider => new ServiceRuntime(SqlLanes.Database(provider), provider.GetRequiredService<IServiceGate>(), provider.GetRequiredService<ServiceTimings>(),
+                provider.GetRequiredService<ILogger<ServiceRuntime>>()));
             foreach (var type in serviceTypes)
             {
                 // Compile internal constructor activation.
@@ -614,14 +628,18 @@ namespace Jularr.Backend.Service.Core
             return endpoints;
         }
 
-        // No automatic redirects, cookies or request logs.
-        // A metadata provider's client also reports how its requests ended, for the health check.
-        private static void AddClient<TClient>(IServiceCollection services, int timeoutSeconds, int? bufferMegabytes, bool agent = false, Func<HttpMessageHandler>? handler = null,
+        // A whole file or long list may take this long, as long as data keeps coming.
+        private static readonly TimeSpan FileTotal = TimeSpan.FromHours(6);
+        private static readonly TimeSpan ListTotal = TimeSpan.FromMinutes(10);
+
+        // No automatic redirects, cookies or request logs. The call limits own every timeout, and a SocketsHttpHandler connects within their Connect.
+        // No call goes out while its service holds a SQL transaction open; a metadata provider's client also reports how its requests ended, for the health check.
+        private static void AddClient<TClient>(IServiceCollection services, ExternalCallLimits limits, int? bufferMegabytes, bool agent = false, Func<HttpMessageHandler>? handler = null,
             Uri? baseAddress = null, string? provider = null) where TClient : class
         {
             var client = services.AddHttpClient<TClient>(http =>
             {
-                http.Timeout = TimeSpan.FromSeconds(timeoutSeconds);
+                http.Timeout = Timeout.InfiniteTimeSpan;
                 http.BaseAddress = baseAddress;
                 if (bufferMegabytes is { } megabytes)
                 {
@@ -632,12 +650,26 @@ namespace Jularr.Backend.Service.Core
                 {
                     http.DefaultRequestHeaders.UserAgent.ParseAdd("Jularr/1.0 (+https://github.com/Juloc/Jularr)");
                 }
-            }).ConfigurePrimaryHttpMessageHandler(handler ?? (() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false })).RemoveAllLoggers();
+            }).ConfigurePrimaryHttpMessageHandler(() =>
+            {
+                var primary = handler?.Invoke() ?? new SocketsHttpHandler { AllowAutoRedirect = false, UseCookies = false };
+                if (primary is SocketsHttpHandler sockets)
+                {
+                    sockets.ConnectTimeout = limits.Connect;
+                }
+
+                return primary;
+            }).RemoveAllLoggers();
+
+            // No call while the calling service holds its transaction open.
+            client.AddHttpMessageHandler(services => new ExternalCallGuard(ExternalCallGuard.IsStrict(services.GetService<IHostEnvironment>()),
+                (ILogger?)services.GetService<ILoggerFactory>()?.CreateLogger<ExternalCallGuard>() ?? NullLogger.Instance));
             if (provider is not null)
             {
-                client.AddHttpMessageHandler(services => new ProviderObservationHandler(services.GetRequiredService<ProviderObservations>(), provider, TimeSpan.FromSeconds(timeoutSeconds),
-                    services.GetRequiredService<TimeProvider>()));
+                client.AddHttpMessageHandler(services => new ProviderObservationHandler(services.GetRequiredService<ProviderObservations>(), provider));
             }
+
+            client.AddHttpMessageHandler(services => new CallLimitHandler(limits, services.GetRequiredService<TimeProvider>()));
         }
 
         private static Delegate CreateParameterHandler<TService, TParameters, TData>() where TService : Service<TParameters, TData> =>
@@ -756,7 +788,9 @@ namespace Jularr.Backend.Service.Core
         // Razor shares committed auth effects.
         public static async Task ApplyAuthenticationAsync(HttpContext http, IServiceOutput result, IAntiforgery antiforgery)
         {
-            http.Response.Headers.CacheControl = "no-store";
+            // Never cached, with the values an antiforgery token sets itself: a page shown again after this would otherwise log a warning.
+            http.Response.Headers.CacheControl = "no-cache, no-store";
+            http.Response.Headers.Pragma = "no-cache";
 
             // Apps receive tokens, not cookies.
             if (IsAppRequest(http))

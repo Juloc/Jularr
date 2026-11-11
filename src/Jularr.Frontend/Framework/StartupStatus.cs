@@ -123,7 +123,8 @@ namespace Jularr.Frontend.Framework
 
     // The listener that answers on the configured addresses from the moment the process starts until the application takes them over: every
     // request gets 503 with the status page (or, after a failed update, the maintenance page), so a reverse proxy never sees a closed port while
-    // the backup and the migrations run before the application can serve. It needs neither the database nor the built frontend.
+    // the backup and the migrations run before the application can serve; the container's probes hear "alive, not ready". It needs neither the
+    // database nor the built frontend.
     public sealed class StartupStatusServer : IAsyncDisposable
     {
         private readonly WebApplication _app;
@@ -149,6 +150,11 @@ namespace Jularr.Frontend.Framework
             var assets = new Lazy<FrontendAssets>(() => new FrontendAssets(app.Environment));
             app.Run(async context =>
             {
+                if (await Health.AnswerStartingAsync(context))
+                {
+                    return;
+                }
+
                 var snapshot = status.Snapshot();
                 context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
                 context.Response.Headers.RetryAfter = snapshot.Failure is null ? "5" : "120";
