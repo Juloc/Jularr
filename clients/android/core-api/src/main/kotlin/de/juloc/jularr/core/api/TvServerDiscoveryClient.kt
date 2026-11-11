@@ -16,8 +16,8 @@ import java.net.SocketTimeoutException
 /**
  * Best-effort LAN discovery for #489: broadcasts [ProbeMessage] to [Port] and collects unique
  * replies from Jularr servers for [timeoutMs]. This is a plain UDP broadcast/reply protocol, not
- * real mDNS/DNS-SD (`_jularr._tcp.local`) — see docs/ANDROID_CLIENTS.md "Discovery" for why, and
- * what a full mDNS responder would need. A server that never replies (blocked broadcast, no
+ * real mDNS/DNS-SD (`_jularr._tcp.local`).
+ * A server that never replies (blocked broadcast, no
  * server running, firewalled) simply yields an empty list; the caller falls back to manual setup.
  */
 class TvServerDiscoveryClient {

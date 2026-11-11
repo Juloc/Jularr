@@ -19,7 +19,7 @@ import java.io.File
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * Offline-neural TTS via sherpa-onnx (docs/TTS.md, Phase 3). This module is only built
+ * Offline-neural TTS via sherpa-onnx. This module is only built
  * when explicitly opted into (see core-tts-sherpa/build.gradle.kts): it depends on a
  * manually downloaded AAR that is not part of this repository or CI.
  *

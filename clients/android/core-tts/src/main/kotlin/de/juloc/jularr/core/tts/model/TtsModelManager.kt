@@ -26,7 +26,7 @@ fun interface TtsModelFileDownloader {
 }
 
 /**
- * Explicit-download model manager for offline-neural voice packs (docs/TTS.md, Phase 3).
+ * Explicit-download model manager for offline-neural voice packs.
  * Activation is strictly download -> verify every SHA-256 -> atomically activate: a
  * partially downloaded or checksum-failed model is never selectable, because it only ever
  * exists under a staging directory name until every file is verified.

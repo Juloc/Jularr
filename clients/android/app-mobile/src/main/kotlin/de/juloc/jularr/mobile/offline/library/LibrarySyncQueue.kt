@@ -10,7 +10,7 @@ import de.juloc.jularr.core.model.OfflineLibraryProgressResult
  * yet. Mirrors `OfflineProgressQueue` (bounded offline playback, #341): these
  * are pure queue-bookkeeping functions, not a progress/bookmark store. The
  * server applies the actual forward-only/last-writer-wins rules
- * (`OfflineLibrarySyncRules`, see docs/OFFLINE_LIBRARY.md); the client only
+ * (`OfflineLibrarySyncRules`); the client only
  * has to replay events and adopt whatever canonical value the server answers
  * with, which is why `applyReconciliation` below always adopts the server's
  * returned position/outcome rather than computing one locally.
