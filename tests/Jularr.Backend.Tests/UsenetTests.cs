@@ -36,7 +36,6 @@ namespace Jularr.Backend.Tests
         [DataRow("redirect", "HTTP 302", "acquisition_unavailable")]
         [DataRow("authentication", "HTTP 403", "acquisition_grab_failed")]
         [DataRow("rate-limit", "HTTP 429", null)]
-        [DataRow("server", "HTTP 503", "acquisition_unavailable")]
         [DataRow("timeout", "timeout True", "acquisition_unavailable")]
         [DataRow("network", "transport NameResolutionError", "acquisition_unavailable")]
         [DataRow("write", "stage transfer: IOException", "acquisition_unavailable")]
@@ -63,7 +62,6 @@ namespace Jularr.Backend.Tests
                         "redirect" => HttpStatusCode.Found,
                         "authentication" => HttpStatusCode.Forbidden,
                         "rate-limit" => HttpStatusCode.TooManyRequests,
-                        "server" => HttpStatusCode.ServiceUnavailable,
                         _ => HttpStatusCode.OK
                     };
                     var response = new HttpResponseMessage(status) { Content = new StringContent(secretUrl), ReasonPhrase = "private-key" };

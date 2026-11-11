@@ -4184,7 +4184,7 @@ namespace Jularr.Backend.Tests
             using var downloads = new TemporaryDirectory();
             var usenet = new FakeUsenet();
             await using var host = await CreateHostAsync(storage.Path, downloads.Path, usenet);
-            var wantedId = await CreateWantedMovieAsync(host);
+            await CreateWantedMovieAsync(host);
             await host.Fixture.RunSqlAsync("""
                 UPDATE "Works" SET "OriginalLanguage" = 'ja';
                 UPDATE "WantedItems" SET "NextSearchAt" = 'infinity';
@@ -4208,9 +4208,6 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(0, usenet.Grabbed.Count);
             usenet.Results = FeedOf(("Example.Movie.2020.720p.WEB-DL.H264-SEEN", "seen"), ("Example.Movie.2020.1080p.WEB-DL.H264-AGAIN", "again"), ("Example.Movie.2020.German.1080p.WEB-DL.H264-DUB", "dub"));
             await RunAsync<SyncFeedsV1>(host);
-            using var dbg = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/wanted/" + wantedId + "/search", new SearchWantedDataV1());
-            Console.WriteLine("DBG " + string.Join(" | ", (await dbg.Content.ReadFromJsonAsync<BaseDataList<WantedReleaseCandidateV1>>())!.Select(c => c.Title + " " + c.ReleaseDecisionTypeId + " " + c.ReasonCode + " " + string.Join(",", c.Languages))));
-            Console.WriteLine("DBG grabbed " + usenet.Grabbed.Count);
             CollectionAssert.AreEqual(new[] { "https://indexer.example.test/getnzb/dub" }, usenet.Grabbed);
         }
 
@@ -4642,19 +4639,15 @@ namespace Jularr.Backend.Tests
                 </channel></rss>
                 """;
 
-            // One series: two seasons, the last episode still unaired.
+            // One series: a special and two seasons; TheTVDB names their episodes.
             private static HttpResponseMessage Tmdb(HttpRequestMessage request)
             {
                 if (request.Headers.Authorization?.Parameter != TmdbToken) return new HttpResponseMessage(HttpStatusCode.Unauthorized);
                 var path = request.RequestUri!.AbsolutePath;
-                var future = DateTime.UtcNow.AddDays(30).ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
                 return path switch
                 {
                     "/3/search/tv" => Json("""{"results":[{"id":1399,"name":"Example Show","original_name":"Beispiel Serie","first_air_date":"2020-04-01","overview":"A show."}]}"""),
                     "/3/tv/1399" => Json("""{"id":1399,"name":"Example Show","original_name":"Beispiel Serie","first_air_date":"2020-04-01","external_ids":{"tvdb_id":81189,"imdb_id":"tt0903747"},"seasons":[{"season_number":0,"name":"Specials","episode_count":1},{"season_number":1,"name":"Season 1","air_date":"2020-04-01","episode_count":3,"poster_path":"/s1.jpg"},{"season_number":2,"name":"Season 2","air_date":"2021-04-01","episode_count":2}]}"""),
-                    "/3/tv/1399/season/0" => Json("""{"episodes":[{"season_number":0,"episode_number":1,"name":"Pilot extra","air_date":"2020-01-01"}]}"""),
-                    "/3/tv/1399/season/1" => Json("""{"episodes":[{"season_number":1,"episode_number":1,"name":"One","air_date":"2020-04-01","overview":"The first.","still_path":"/one.jpg","runtime":42,"guest_stars":[{"id":77,"name":"Guest Example","character":"Visitor"}],"crew":[{"id":78,"name":"Episode Director","job":"Director"},{"id":79,"name":"Grip","job":"Key Grip"}]},{"season_number":1,"episode_number":2,"name":"Two","air_date":"2020-04-08"},{"season_number":1,"episode_number":3,"name":"Three","air_date":"2020-04-15"}]}"""),
-                    "/3/tv/1399/season/2" => Json($$$"""{"episodes":[{"season_number":2,"episode_number":1,"name":"Four","air_date":"2021-04-01"},{"season_number":2,"episode_number":2,"name":"Five","air_date":"{{{future}}}"}]}"""),
                     _ => new HttpResponseMessage(HttpStatusCode.NotFound)
                 };
             }
