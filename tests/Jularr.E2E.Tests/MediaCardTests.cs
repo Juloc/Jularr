@@ -44,7 +44,8 @@ namespace Jularr.E2E.Tests
                 Assert.AreEqual(before.Height, image.Height, .5f);
 
                 // A small cover, its progress a thin capsule inside the cover's foot, the text below it in single lines.
-                Assert.IsTrue(before.Width is >= 133 and <= 150, "cover width " + before.Width);
+                // Every cover has the one size; a phone's is smaller.
+                Assert.IsTrue(width > 640 ? before.Width is >= 133 and <= 150 : before.Width is >= 104 and <= 116, "cover width " + before.Width);
                 Assert.IsTrue(progress.Y + progress.Height <= before.Y + before.Height - 4 && progress.Y >= before.Y + before.Height - 14);
                 Assert.IsTrue(textBox.Y >= before.Y + before.Height - .5f);
                 Assert.IsTrue(textBox.Height <= 48, "details height " + textBox.Height);
@@ -53,7 +54,7 @@ namespace Jularr.E2E.Tests
 
                 await poster.FocusAsync();
                 await Assertions.Expect(action).ToBeVisibleAsync();
-                await Assertions.Expect(badge.Locator(".media-availability-badge__body")).ToHaveCSSAsync("max-width", "96px");
+                await Assertions.Expect(badge.Locator(".media-availability-badge__body")).ToHaveCSSAsync("max-width", width > 640 ? "96px" : "64px"); // the badge keeps to the cover: its width less 48 px
                 var after = await poster.BoundingBoxAsync();
                 Assert.IsNotNull(after);
                 Assert.AreEqual(before.Width, after.Width, .5f);
