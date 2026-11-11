@@ -119,6 +119,11 @@
     .discover-results .media-shelf__controls { display: none; }
 }
 
+@media (max-width: 640px) {
+    .discover-results .media-shelf__heading { margin: 16px 0 8px; h2 { font-size: 17px; } }
+    .discover-results .media-shelf__items { gap: 8px; padding: 2px 1px 8px; }
+}
+
 @media (scripting: none) { [data-discover-layout] { display: none; } }
 
 html[data-discover-layout="grid"] {

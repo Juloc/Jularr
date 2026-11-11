@@ -578,7 +578,7 @@ html[data-skin="original"] .sidebar-secondary {
 .app-sidebar-overlay { position: fixed; inset: 0; z-index: calc(var(--z-menu) - 1); background: #16122577; }
 @media (max-width: 640px) {
     .app-layout { --side: 0px; --shell-header-offset: calc(65px + env(safe-area-inset-top)); display: block; }
-    .app-main { --main-end: 40px; padding: 22px max(13px, env(safe-area-inset-right)) calc(var(--main-end) + env(safe-area-inset-bottom)) max(13px, env(safe-area-inset-left)); }
+    .app-main { --main-end: 40px; padding: 14px max(12px, env(safe-area-inset-right)) calc(var(--main-end) + env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)); }
 
     .app-sidebar {
         position: fixed;

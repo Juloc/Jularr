@@ -15,9 +15,6 @@
     container-type: inline-size;
     scroll-snap-align: start;
 
-    // A card to continue is a little wider so that where the profile stands stays readable.
-    &--resume { --card-width: 176px; }
-
     &__surface {
         position: relative;
         aspect-ratio: 2 / 3;
@@ -68,6 +65,11 @@
     }
     &__type, &__lead { flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; }
     &__detail { flex: 0 0 auto; }
+    // A small cover (a phone) keeps the one fact of a card to continue: what is left.
+    @container (max-width: 130px) {
+        &__info--resume &__lead { display: none; }
+        &__info--resume > * + *::before { content: none; }
+    }
     &__rating { display: inline-flex; align-items: center; gap: 3px; .ui-icon { color: var(--accent-text); fill: currentColor; } }
 
     // Shown over the cover when a clipped text is hovered or focused.
@@ -520,6 +522,19 @@
     justify-items: center;
     gap: 18px 14px;
     .media-card { width: 100%; max-width: 150px; }
+
+    // Phones: three small covers in a row; the columns fill the width.
+    @media (max-width: 640px) {
+        grid-template-columns: repeat(auto-fill, minmax(min(100%, 96px), 1fr));
+        gap: 14px 8px;
+        .media-card { max-width: none; }
+    }
+}
+
+// Phones: the covers of a row are smaller, so that a row shows more of them.
+@media (max-width: 640px) {
+    .media-card { --card-width: 112px; --card-radius: 10px; }
+    .media-shelf__items .media-skeleton { flex-basis: 112px; }
 }
 
 // A grey card where the next page arrives (endless grids, Discover's rankings): a cover and a title line.

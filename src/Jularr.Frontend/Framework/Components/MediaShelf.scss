@@ -38,3 +38,9 @@
     .ui-icon { transform: rotate(180deg); }
     &--next .ui-icon { transform: none; }
 }
+
+@media (max-width: 640px) {
+    .media-shelf { margin-bottom: 14px; }
+    .media-shelf__heading { gap: 10px; margin-bottom: 8px; h2 { font-size: 17px; } }
+    .media-shelf__items { gap: 8px; }
+}
