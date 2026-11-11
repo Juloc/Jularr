@@ -83,6 +83,18 @@ namespace Jularr.Backend.Service.Admin.Browser.V1
         }
     }
 
+    // What the browser is doing for a view that is opening, and how it ended; the page asks for it every second until the view is ready.
+    [ServiceEndpoint("GET", "/api/v1/admin/browser/assistance/{leaseId:guid}/state")]
+    public sealed class ReadBrowserAssistanceStateV1 : AdminService<BrowserLeaseParametersV1>
+    {
+        private readonly BrowserAssistance _assistance;
+        internal ReadBrowserAssistanceStateV1(BrowserAssistance assistance) => _assistance = assistance;
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<BrowserViewV1>()];
+        protected override ModuleRequirement GetInstanceModules(BrowserLeaseParametersV1 parameters) => ModuleRequirement.All("Acquisition", "Browser");
+        protected override ServicePermission GetPermission(BrowserLeaseParametersV1 parameters, Type resultType) => new("acquisition.manage");
+        protected override async Task<IServiceOutput> OnRead() => await _assistance.StateAsync(Auth.SessionPublicId ?? throw new SecurityException(), Parameters.LeaseId, CancellationToken);
+    }
+
     [ServiceEndpoint("GET", "/api/v1/admin/browser/assistance/{leaseId:guid}/frame")]
     public sealed class ReadBrowserFrameV1 : AdminService<BrowserLeaseParametersV1>
     {

@@ -19,11 +19,20 @@ namespace Jularr.Frontend.Framework
             var reconnect = new Div(new Form<BrowserParametersV1>(form => form.Submit("admin.browser.manualReconnect"),
                 reopen, csrf, new BrowserParametersV1()))
                 .Attribute("data-browser-reconnect", "");
-            if (view.IsActive) reconnect.Attribute("hidden", "");
+
+            // The browser may still be starting: the view then says at once what it is waiting for, and the page follows it until it is ready.
+            var opening = view.Phase is "checking" or "waiting" or "starting";
+            var failed = view.Phase == "failed";
+            if (view.IsActive || opening) reconnect.Attribute("hidden", "");
+            var feedback = opening ? texts["admin.browser.manualPhase." + view.Phase]
+                : failed ? texts[texts.Has("admin.browser.manualError." + view.Error) ? "admin.browser.manualError." + view.Error : "admin.browser.manualError.failed"]
+                : texts[view.IsActive ? "admin.browser.manualLoading" : "admin.browser.manualFailed"];
             var content = new Div(
                 new P(new Text("admin.browser.manualHint")),
-                new P(new Text(view.IsActive ? "admin.browser.manualLoading" : "admin.browser.manualFailed")).Attribute("data-browser-feedback", "").Attribute("aria-live", "polite"),
+                new P(new ValueText(feedback)).Attribute("data-browser-feedback", "").Attribute("aria-live", "polite"),
+                new Div(new Span()).Class("remote-browser__progress").Attribute("data-browser-progress", "").Attribute("aria-hidden", "true"),
                 reconnect,
+                new Div().Class("remote-browser__placeholder").Attribute("data-browser-placeholder", "").Attribute("aria-hidden", "true"),
                 image,
                 new BrowserLabel(new Text("admin.browser.manualText")).Attribute("for", "remote-browser-text"),
                 new BrowserTextArea().Attribute("id", "remote-browser-text").Attribute("data-browser-text", "").Attribute("maxlength", "1000").Attribute("rows", "2")
@@ -38,9 +47,15 @@ namespace Jularr.Frontend.Framework
                 new BrowserNoScript(new P(new Text("admin.browser.manualJavascript"))))
                 .Class("remote-browser").Attribute("data-remote-browser", address).Attribute("data-csrf", csrf ?? "")
                 .Attribute("data-width", view.Width.ToString(CultureInfo.InvariantCulture)).Attribute("data-height", view.Height.ToString(CultureInfo.InvariantCulture))
-                .Attribute("data-active", view.IsActive ? "true" : "false").Attribute("data-retrying", texts["admin.browser.manualRetrying"])
+                .Attribute("data-active", view.IsActive ? "true" : "false").Attribute("data-phase", opening || failed ? view.Phase : "ready")
+                .Attribute("data-retrying", texts["admin.browser.manualRetrying"])
+                .Attribute("data-phase-checking", texts["admin.browser.manualPhase.checking"]).Attribute("data-phase-waiting", texts["admin.browser.manualPhase.waiting"])
+                .Attribute("data-phase-starting", texts["admin.browser.manualPhase.starting"])
+                .Attribute("data-error-timeout", texts["admin.browser.manualError.timeout"]).Attribute("data-error-unsupported", texts["admin.browser.manualError.unsupported"])
+                .Attribute("data-error-not_installed", texts["admin.browser.manualError.not_installed"]).Attribute("data-error-no_start", texts["admin.browser.manualError.no_start"])
+                .Attribute("data-error-failed", texts["admin.browser.manualError.failed"])
                 .Attribute("data-denied", texts["admin.browser.manualDenied"])
-                .Attribute("data-failed", texts["admin.browser.manualFailed"]).Attribute("data-ready", texts["admin.browser.manualReady"]);
+                .Attribute("data-loading", texts["admin.browser.manualLoading"]).Attribute("data-failed", texts["admin.browser.manualFailed"]).Attribute("data-ready", texts["admin.browser.manualReady"]);
             content.WriteTo(writer, encoder, texts);
         }
 

@@ -7,12 +7,14 @@ export function initializeRemoteBrowser(): void {
         const text = root.querySelector<HTMLTextAreaElement>('[data-browser-text]');
         if (!image || !feedback || !text) return;
         const api = root.dataset.remoteBrowser!;
-        const width = Number(root.dataset.width);
-        const height = Number(root.dataset.height);
+        let width = Number(root.dataset.width);
+        let height = Number(root.dataset.height);
         const controller = new AbortController();
         const reconnect = root.querySelector<HTMLElement>('[data-browser-reconnect]');
         const controls = root.querySelectorAll<HTMLButtonElement | HTMLTextAreaElement>('[data-browser-input]');
-        let stopped = root.dataset.active === 'false';
+        const opening = ['checking', 'waiting', 'starting'].includes(root.dataset.phase ?? '');
+        // A view that is still opening is not stopped: it is followed until the browser is ready (or says why not).
+        let stopped = root.dataset.active === 'false' && !opening;
         let connected = false;
         let picture: string | undefined;
         let inputs = Promise.resolve();
@@ -130,6 +132,7 @@ export function initializeRemoteBrowser(): void {
                         if (stopped || !root.isConnected) break;
                         failures = 0;
                         connection(true);
+                        root.dataset.phase = 'ready';
                         feedback.textContent = root.dataset.ready ?? '';
                     } catch {
                         if (stopped || !root.isConnected) break;
@@ -145,11 +148,51 @@ export function initializeRemoteBrowser(): void {
             controller.abort();
             if (picture) URL.revokeObjectURL(picture);
         };
+        // The browser may still be starting: its state is asked for every second and shown with the seconds that have passed.
+        const follow = async () => {
+            const begun = performance.now();
+            let failures = 0;
+            while (!stopped && root.isConnected) {
+                try {
+                    const response = await fetch(`${api}/state`, { cache: 'no-store', credentials: 'same-origin',
+                        signal: AbortSignal.any([controller.signal, AbortSignal.timeout(10_000)]) });
+                    if (response.status === 401 || response.status === 403) { fail(true); return false; }
+                    if (response.status === 404 || response.status === 410) { fail(); return false; }
+                    if (response.ok) {
+                        failures = 0;
+                        const state = await response.json() as { phase: string; error?: string | null; width: number; height: number };
+                        if (state.phase !== 'ready') root.dataset.phase = state.phase;
+                        if (state.phase === 'ready') {
+                            width = state.width;
+                            height = state.height;
+                            root.dataset.width = String(width);
+                            root.dataset.height = String(height);
+                            root.dataset.active = 'true';
+                            feedback.textContent = root.dataset.loading ?? '';
+                            return true;
+                        }
+                        if (state.phase === 'failed') {
+                            fail();
+                            feedback.textContent = root.getAttribute(`data-error-${state.error ?? 'failed'}`) ?? root.getAttribute('data-error-failed') ?? '';
+                            return false;
+                        }
+                        const seconds = Math.round((performance.now() - begun) / 1000);
+                        feedback.textContent = `${root.getAttribute(`data-phase-${state.phase}`) ?? ''} ${seconds} s`;
+                    } else if (++failures >= 5) { fail(); return false; }
+                } catch {
+                    if (stopped || !root.isConnected) return false;
+                    if (++failures >= 5) { fail(); return false; }
+                }
+                await new Promise(resolve => setTimeout(resolve, 1000));
+            }
+            return false;
+        };
         window.addEventListener('pagehide', () => {
             stopped = true;
             controller.abort();
             if (picture) URL.revokeObjectURL(picture);
         }, { once: true, signal: controller.signal });
-        void frames();
+        if (opening) void follow().then(ready => { if (ready) void frames(); });
+        else void frames();
     });
 }
