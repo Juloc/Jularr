@@ -14,6 +14,11 @@ name: Backend Full
 on:
   push:
     branches: [main]
+    # A docs-only commit runs nothing here; a release of one needs a manual run (docs/DEVELOPMENT.md, Release).
+    paths-ignore:
+      - 'docs/**'
+      - 'AGENTS.md'
+      - 'README.md'
   workflow_dispatch:
   workflow_call:
 
