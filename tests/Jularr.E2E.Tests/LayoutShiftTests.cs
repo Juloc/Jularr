@@ -32,7 +32,7 @@ namespace Jularr.E2E.Tests
                 await document.fonts.ready;
                 await frame();
                 await frame();
-                while (performance.now() - began < 2500 && (document.querySelector('.htmx-request') || performance.now() - active < 1200)) {
+                while (performance.now() - began < 2800 && (document.querySelector('.htmx-request') || performance.now() - active < 1200)) {
                     await new Promise(resolve => setTimeout(resolve, 50));
                 }
                 shifts.disconnect();
