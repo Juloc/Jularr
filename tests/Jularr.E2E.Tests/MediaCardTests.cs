@@ -54,7 +54,7 @@ namespace Jularr.E2E.Tests
 
                 await poster.FocusAsync();
                 await Assertions.Expect(action).ToBeVisibleAsync();
-                await Assertions.Expect(badge.Locator(".media-availability-badge__body")).ToHaveCSSAsync("max-width", "96px");
+                await Assertions.Expect(badge.Locator(".media-availability-badge__body")).ToHaveCSSAsync("max-width", width > 640 ? "96px" : "64px"); // the badge keeps to the cover: its width less 48 px
                 var after = await poster.BoundingBoxAsync();
                 Assert.IsNotNull(after);
                 Assert.AreEqual(before.Width, after.Width, .5f);
