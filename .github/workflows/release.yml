@@ -1,7 +1,7 @@
 name: Release
 
 # A release is a git tag `v<MAJOR>.<MINOR>.<PATCH>[-prerelease]` on a commit of main. Nothing here runs on branches.
-# The tag builds the image from the tagged commit, pushes it to GHCR and creates the GitHub release; see docs/RELEASE.md.
+# The tag builds the image from the tagged commit, pushes it to GHCR and creates the GitHub release; see docs/DEVELOPMENT.md.
 # The TV app is released on its own by a `tv-v*` tag (tv-release.yml); this workflow never waits for it.
 # workflow_dispatch rehearses everything except the push and the release: with dry_run the image is built and not published.
 
@@ -99,7 +99,7 @@ jobs:
               --json status,conclusion,createdAt,url \
               --jq 'map(select(.status == "completed")) | sort_by(.createdAt) | last // empty | [.conclusion, .url] | @tsv')"
             if [[ -z "${run}" ]]; then
-              echo "::error::No completed ${workflow} run for ${sha}. Let it finish or start it (see docs/RELEASE.md)."
+              echo "::error::No completed ${workflow} run for ${sha}. Let it finish or start it (see docs/DEVELOPMENT.md)."
               failed=true
             elif [[ "${run%%$'\t'*}" != "success" ]]; then
               if [[ "${workflow}" == "Backend Full" && -n "${override}" ]]; then

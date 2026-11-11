@@ -91,8 +91,8 @@ data class AnimeSummary(
 )
 
 /**
- * One row of `GET /continue-watching` (docs/ANDROID_CLIENTS.md, "Playback continuity
- * endpoints"): the profile's in-progress episodes, most recently played first.
+ * One row of `GET /continue-watching`:
+ * the profile's in-progress episodes, most recently played first.
  */
 data class ContinueWatchingItem(
     val kind: String,
@@ -129,8 +129,8 @@ data class PlaybackHistoryItem(
 )
 
 /**
- * One entry of `GET /watchlist`: a followed work from the signed-in profile's watchlist
- * (docs/ANDROID_CLIENTS.md, "Playback continuity endpoints"). `availability` is
+ * One entry of `GET /watchlist`: a followed work from the signed-in profile's watchlist.
+ * `availability` is
  * `in_library` when the work is matched to a local library entry (`detailsUrl` then points
  * at that library page) or `external` when it is only known through its provider.
  * `addedAtUtc` is null for works only included through a followed franchise, never
@@ -392,7 +392,7 @@ data class TermStateResult(
 
 /**
  * Profile-level TTS preferences (server: `ClientTtsPreferences`, backed by the canonical
- * Reader preference "default" scope row; docs/TTS.md). "auto" means the deterministic
+ * Reader preference "default" scope row). "auto" means the deterministic
  * resolver order picks the provider; voiceIds maps a normalized BCP-47 tag to a provider
  * voice id. Device-only facts (which offline models are installed) are never part of this
  * profile-scoped model; see `de.juloc.jularr.core.tts.model.TtsModelManager`.
@@ -427,8 +427,8 @@ data class SpeechModelFileDescriptor(
 )
 
 /**
- * One offline-neural voice pack an owner has pinned in the server's model manifest
- * (docs/TTS.md, Phase 3). Never infer support for a language or voice this entry does not
+ * One offline-neural voice pack an owner has pinned in the server's model manifest.
+ * Never infer support for a language or voice this entry does not
  * list.
  */
 data class SpeechModel(

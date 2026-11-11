@@ -2,7 +2,7 @@ package de.juloc.jularr.core.tts
 
 /**
  * Provider-neutral TTS contract. This is the Android mirror of the server contract in
- * docs/TTS.md / `Jularr.Web.Features.Speech.SpeechModels`: same semantics and field
+ * `Jularr.Web.Features.Speech.SpeechModels`: same semantics and field
  * names, ported rather than reused because device voices and platform TTS engines only
  * exist on the client.
  */

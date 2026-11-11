@@ -20,7 +20,7 @@ import org.json.JSONObject
 
 /**
  * Additive v1 offline Book/Novel library endpoints, advertised by the
- * `offlineLibrary` capability (`docs/OFFLINE_LIBRARY.md`). Shares the same
+ * `offlineLibrary` capability. Shares the same
  * server contract as the PWA download manager (part 1, PR #359); Android only
  * replays the same event shapes, it does not reimplement the conflict rules
  * (forward-only progress, last-writer-wins bookmarks with tombstones).

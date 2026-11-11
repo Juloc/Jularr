@@ -2,7 +2,7 @@ name: TV Release
 
 # A TV release is a git tag `tv-v<MAJOR>.<MINOR>.<PATCH>` on a commit of main, independent of server releases.
 # It tests, lints and signs the TV app and swaps Jularr-TV-<version>.apk (+ .sha256) into the latest GitHub release,
-# which is the only release the TV app checks for updates; see docs/RELEASE.md.
+# which is the only release the TV app checks for updates; see docs/DEVELOPMENT.md.
 # workflow_dispatch with dry_run runs the tests and lint only: nothing is signed or published.
 
 on:

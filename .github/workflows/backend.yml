@@ -3,7 +3,7 @@ name: Backend Full
 # Full regression after merges or manual runs. Opt-in PRs call this reusable
 # workflow through Backend, without a separate skipped PR run.
 #
-# Job graph (details in docs/CI.md):
+# Job graph:
 #   smoke  ->  shards (4 backend + 4 browser, run in parallel, each to its end)  ->  gate
 # `smoke` compiles everything once, runs the quick critical checks and publishes the build;
 # a shard only unpacks it. No job is meant to run longer than about 10 minutes.

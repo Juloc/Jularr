@@ -3,7 +3,7 @@ name: CI retry
 # Starts a failed Backend or Backend Full run once more when only the infrastructure failed: GitHub created
 # no job or lost one, or a job broke in a set-up step (runner, checkout, toolchain, tool download, shared build).
 # A failed test, compile or check step is never re-run, nor is attempt 2 or later. scripts/ci-classify-failure.py
-# decides; the job summary names the decision and the reason. Details: docs/CI.md.
+# decides; the job summary names the decision and the reason.
 on:
   workflow_run:
     workflows: [Backend, Backend Full]

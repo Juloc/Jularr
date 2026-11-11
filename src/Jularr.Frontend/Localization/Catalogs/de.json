@@ -16376,6 +16376,50 @@
    "The update {0} could not be applied. See the log; the previous version can be started again.",
    "Das Update {0} konnte nicht angewendet werden. Siehe Log; die vorherige Version kann wieder gestartet werden."
   ],
+  "maintenance.startup.title.starting": [
+   "Jularr is starting",
+   "Jularr startet"
+  ],
+  "maintenance.startup.title.updating": [
+   "Jularr is being updated",
+   "Jularr wird aktualisiert"
+  ],
+  "maintenance.startup.text.checking": [
+   "The database is being checked.",
+   "Die Datenbank wird geprüft."
+  ],
+  "maintenance.startup.text.backup": [
+   "The database is being backed up before the update. With a large database this can take a few minutes.",
+   "Sicherung läuft: Vor dem Update wird die Datenbank gesichert. Bei einer großen Datenbank kann das einige Minuten dauern."
+  ],
+  "maintenance.startup.text.migrating": [
+   "The database is being brought to the new version. Step {0} of {1}.",
+   "Datenbank-Update läuft: Die Datenbank wird auf die neue Version gebracht. Schritt {0} von {1}."
+  ],
+  "maintenance.startup.text.starting": [
+   "Almost done: Jularr is starting now.",
+   "Fast geschafft: Jularr startet jetzt."
+  ],
+  "maintenance.startup.step.backup": [
+   "Backup",
+   "Sicherung"
+  ],
+  "maintenance.startup.step.migrate": [
+   "Database update",
+   "Datenbank-Update"
+  ],
+  "maintenance.startup.step.start": [
+   "Start",
+   "Start"
+  ],
+  "maintenance.startup.elapsed": [
+   "Running for {0}",
+   "Läuft seit {0}"
+  ],
+  "maintenance.startup.reload": [
+   "This page reloads itself. You do not need to do anything.",
+   "Diese Seite lädt sich selbst neu. Du musst nichts tun."
+  ],
   "translation.local.title": [
    "Local translation models",
    "Lokale Übersetzungsmodelle"

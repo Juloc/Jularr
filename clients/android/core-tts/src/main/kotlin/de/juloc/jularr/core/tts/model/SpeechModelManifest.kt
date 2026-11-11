@@ -5,7 +5,7 @@ import org.json.JSONArray
 import org.json.JSONException
 import org.json.JSONObject
 
-/** One downloadable file belonging to a model pack; see docs/TTS.md (Phase 3). */
+/** One downloadable file belonging to a model pack. */
 data class SpeechModelFile(
     val name: String,
     val url: String,

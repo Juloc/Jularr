@@ -27,7 +27,7 @@ import java.io.IOException
  * ready. Chapters are treated as one atomic unit (not sub-file Range/resume
  * like episode media, #341): they are bounded-size text, and the *job* is the
  * resumable unit via WorkManager's own retry/backoff, exactly like the PWA
- * download queue (docs/OFFLINE_LIBRARY.md).
+ * download queue.
  */
 class LibraryChapterDownloadWorker(
     context: Context,
@@ -96,7 +96,7 @@ class LibraryChapterDownloadWorker(
         val payload = chapterPackage.payload
         if (payload.hash != chapter.hash) {
             // The chapter changed again between the manifest and this fetch: retry later
-            // rather than mark a mismatched hash as verified (docs/OFFLINE_LIBRARY.md).
+            // rather than mark a mismatched hash as verified.
             downloads.transitionChapter(chapter, DownloadEvent.Interrupted)
             return Result.retry()
         }

@@ -16,8 +16,8 @@ sealed interface ManifestChapterDiff {
 
 /**
  * Differential detection between what is already stored for a book and its
- * current manifest (mirrors the PWA engine's `diffManifest`, see
- * docs/OFFLINE_LIBRARY.md): a chapter whose hash is unchanged is left alone
+ * current manifest (mirrors the PWA engine's `diffManifest`):
+ * a chapter whose hash is unchanged is left alone
  * regardless of its local download state; a new or changed hash is queued for
  * (re)download; a chapter no longer wanted is queued for removal. Unchanged
  * chapters are never re-fetched.
