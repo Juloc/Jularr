@@ -193,7 +193,6 @@ namespace Jularr.Backend.Tests
                 {
                     "/3/tv/1399" => """{"id":1399,"name":"Example Show","first_air_date":"2020-01-01","vote_average":8.9,"vote_count":15000,"external_ids":{"imdb_id":"tt39551287","tvdb_id":81189},"seasons":[{"season_number":1,"name":"Season 1","episode_count":1}]}""",
                     "/3/tv/1400" => """{"id":1400,"name":"Unknown Show","external_ids":{}}""",
-                    "/3/tv/1399/season/1" => """{"episodes":[{"season_number":1,"episode_number":7,"name":"Night"}]}""",
                     _ => null
                 };
                 return Task.FromResult(response is null ? new HttpResponseMessage(HttpStatusCode.NotFound) :

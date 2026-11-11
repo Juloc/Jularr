@@ -1133,14 +1133,10 @@ namespace Jularr.Backend.Tests
                 {
                     json = $$"""{"movie_results":[],"tv_results":[{"id":{{int.Parse(path[^2..])}}}]}""";
                 }
-                else if (path.StartsWith("/3/tv/", StringComparison.Ordinal) && !path.Contains("/season/", StringComparison.Ordinal))
+                else if (path.StartsWith("/3/tv/", StringComparison.Ordinal))
                 {
                     var id = int.Parse(path["/3/tv/".Length..]);
                     json = $$"""{"id":{{id}},"name":"Show {{id}}","first_air_date":"2020-01-01","external_ids":{"imdb_id":"tt{{2000000 + id}}","tvdb_id":{{7000 + id}}},"seasons":[{"season_number":1,"name":"Season 1","episode_count":1}]}""";
-                }
-                else if (path.EndsWith("/season/1", StringComparison.Ordinal))
-                {
-                    json = """{"episodes":[{"season_number":1,"episode_number":1,"name":"Pilot"}]}""";
                 }
 
                 return Task.FromResult(json is null ? new HttpResponseMessage(HttpStatusCode.NotFound) :
