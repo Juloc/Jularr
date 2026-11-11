@@ -6,6 +6,8 @@ namespace Jularr.Backend.Data.Fields.Reading
     public static class ReadingFields
     {
         public static readonly LongField DocumentId = new() { Minimum = 1 };
+        // A batch of documents counted together, in Id order.
+        public static readonly LongArrayField DocumentIds = new() { Minimum = 1, MaximumLength = 1000, IsSet = true };
         public static readonly ByteArrayField ContentHash = new() { MinimumLength = 32, MaximumLength = 32 };
         // Stable source fingerprint plus completed extraction revision for client layout caches.
         public static readonly StringField Revision = new(NpgsqlDbType.Varchar) { MaximumLength = 160, AllowBlank = false };

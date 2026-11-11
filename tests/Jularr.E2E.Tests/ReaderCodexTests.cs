@@ -36,6 +36,7 @@ namespace Jularr.E2E.Tests
                 var page = session.Page;
                 await ReadingPathTests.AddBookAsync(page, folders, "Codex Reader");
                 await jularr.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'Translation'");
+                await ReaderTranslationTests.CheckMachinesAsync(page);
 
                 // The Owner reads the chapter in German (Ollama translates), and the language panel offers Codex.
                 await page.GotoAsync("/Read/1");
@@ -154,6 +155,7 @@ namespace Jularr.E2E.Tests
                 var page = session.Page;
                 await ReadingPathTests.AddBookAsync(page, folders, "Codex Alone");
                 await jularr.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'Translation'");
+                await ReaderTranslationTests.CheckMachinesAsync(page);
                 await jularr.RunSqlAsync("UPDATE \"InstanceSettings\" SET \"CodexEffort\" = 'low' WHERE \"Id\" = 1");
 
                 // Choosing German shows the original text and the button; Codex is asked for nothing.
@@ -247,6 +249,7 @@ namespace Jularr.E2E.Tests
                 var page = session.Page;
                 await ReadingPathTests.AddBookAsync(page, folders, "Codex Fails");
                 await jularr.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'Translation'");
+                await ReaderTranslationTests.CheckMachinesAsync(page);
                 await page.GotoAsync("/Read/1");
                 await page.Locator("[data-action=language]").ClickAsync();
                 await page.Locator("[data-language-choice=de]").ClickAsync();

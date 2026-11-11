@@ -9,8 +9,9 @@ namespace Jularr.Backend.Service.Core
     public sealed class WorkerJobDefinition
     {
         internal WorkerJobDefinition(string key, WorkerGroupType group, TimeSpan? interval, TimeSpan startDelay, bool canRunNow = true, bool canPauseWhileUsed = false, bool pausesWhileUsedByDefault = false,
-            WorkerIntervalSettingType intervalSetting = WorkerIntervalSettingType.None, string? parentKey = null)
+            WorkerIntervalSettingType intervalSetting = WorkerIntervalSettingType.None, string? parentKey = null, TimeSpan? roundLimit = null)
         {
+            RoundLimit = roundLimit ?? GroupRoundLimit(group);
             IntervalSetting = intervalSetting;
             ParentKey = parentKey;
             Key = key;
@@ -39,6 +40,20 @@ namespace Jularr.Backend.Service.Core
         public string? ParentKey { get; }
         public bool CanPauseWhileUsed { get; }
         public bool PausesWhileUsedByDefault { get; }
+
+        // How long one round may run before it is asked to stop and fails with a time limit.
+        public TimeSpan RoundLimit { get; }
+
+        // An operation (a first scan of a large library reads and probes every file, an import list or a search goes title by title) is not resumed after its
+        // limit, so it gets the longest; the catalogs and the media servers' libraries are long; a download's round copies a finished download into the library
+        // (a season pack onto the NAS), so it gets as long; quick looks are short; the rest gets an hour.
+        private static TimeSpan GroupRoundLimit(WorkerGroupType group) => group switch
+        {
+            WorkerGroupType.Operation => TimeSpan.FromHours(12),
+            WorkerGroupType.Catalog or WorkerGroupType.Provider or WorkerGroupType.Download or WorkerGroupType.Usenet => TimeSpan.FromHours(3),
+            WorkerGroupType.Storage or WorkerGroupType.Health or WorkerGroupType.Sampler or WorkerGroupType.TranslationMachines => TimeSpan.FromMinutes(10),
+            _ => TimeSpan.FromHours(1)
+        };
     }
 
     public enum WorkerJobGate
@@ -110,6 +125,9 @@ namespace Jularr.Backend.Service.Core
             new("readingCopies", WorkerGroupType.Derivation, TimeSpan.FromMinutes(1), TimeSpan.FromSeconds(25), canPauseWhileUsed: true, pausesWhileUsedByDefault: true),
             // Translates the library ahead of reading into the languages profiles use; it keeps going while Jularr is used, as readers profit from it.
             new("bookTranslations", WorkerGroupType.Translation, TimeSpan.FromMinutes(1), TimeSpan.FromSeconds(50), canPauseWhileUsed: true),
+            // Asks the translation machines how they are, beside the long translation rounds, so pages and the Reader read their state instead of asking them.
+            // Due 25 seconds after a check, it runs at each of its worker's ticks: every thirty seconds.
+            new("translationMachines", WorkerGroupType.TranslationMachines, TimeSpan.FromSeconds(25), TimeSpan.FromSeconds(3)),
 
             // Each catalog decides for itself whether it waits while Jularr is used.
             new("discoverFeeds", WorkerGroupType.Catalog, TimeSpan.FromMinutes(1), TimeSpan.FromSeconds(8)),
@@ -261,6 +279,15 @@ namespace Jularr.Backend.Service.Core
                 state.PersistedErrorKey = errorKey;
                 state.PersistedAt = now;
                 return new RecordWorkerJobDataV1(state.LastStartedAt, now, result, errorKey, Cadence(definition) is null ? null : state.NextRunAt);
+            }
+        }
+
+        // The last record could not be written: the next pass keeps its state again, whatever it is.
+        internal void ForgetKept(string key)
+        {
+            lock (_gate)
+            {
+                _states[key].PersistedAt = null;
             }
         }
 

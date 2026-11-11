@@ -14,6 +14,6 @@ namespace Jularr.Workers
 
         protected override async Task RunOnceAsync(CancellationToken ct) =>
             await Runner.RunWhileBusyAsync("subtitles", async (services, token) =>
-                (await services.GetRequiredService<FetchSubtitlesV1>().ExecuteAsync<UpdateResult>(new SubtitleParametersV1(), default, token)).Success, Pause, Time, ct);
+                (await services.GetRequiredService<FetchSubtitlesV1>().ExecuteAsync<UpdateResult>(new SubtitleParametersV1(), default, token)).Success, Pause, ct);
     }
 }

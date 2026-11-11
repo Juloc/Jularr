@@ -26,100 +26,36 @@ namespace Jularr.Backend.Service.Admin.Translation.V1
 
         protected override async Task<IServiceOutput> OnRead()
         {
+            // The counts kept per book and language ("BookTranslationProgress"): finished means complete in the model and version the job translates with,
+            // and before its first round since the start complete in any model.
             var sql = new SqlStatement();
             sql.Statement =
                 """
-                WITH targets AS (
-                    SELECT DISTINCT lower(split_part(split_part(locale."Locale", '-', 1), '_', 1)) AS "Language"
-                    FROM "Profiles" AS profile
-                        JOIN "UiLocales" AS locale ON locale."Id" = profile."UiLocaleId"
-                    UNION
-                    SELECT DISTINCT lower(split_part(split_part(preference."Language", '-', 1), '_', 1))
-                    FROM "ReadingPreferences" AS preference
-                    WHERE preference."Language" IS NOT NULL AND preference."Language" <> 'original'
-                ),
-                books AS (
-                    SELECT
-                        document."Id",
-                        work."Id" AS "WorkId",
-                        work."CanonicalTitle" AS "Title",
-                        trim_scale(unit."Number")::text AS "Volume",
-                        lower(split_part(split_part(coalesce(document."Language", work."OriginalLanguage"), '-', 1), '_', 1)) AS "SourceLanguage",
-                        jsonb_array_length(document."Structure" -> 'Sections') AS "Sections"
-                    FROM
-                        "ReadingDocuments" AS document
-                        JOIN "StoredFiles" AS file ON file."Id" = document."StoredFileId"
-                        JOIN "MediaAssets" AS asset ON asset."Id" = file."MediaAssetId"
-                        JOIN "Works" AS work ON work."Id" = asset."WorkId"
-                        LEFT JOIN "WorkUnits" AS unit ON unit."Id" = asset."WorkUnitId"
-                    WHERE
-                        coalesce(document."Language", work."OriginalLanguage") IS NOT NULL
-                        AND jsonb_typeof(document."Structure" -> 'Sections') = 'array'
-                )
-                , sections AS MATERIALIZED (
-                    -- The blocks of every section, read from the structure once for each book: a structure is megabytes, and picking one section out of it again and again is slow.
-                    SELECT
-                        book."Id" AS "DocumentId",
-                        (section.ordinal - 1)::integer AS "Section",
-                        coalesce(section.value ->> 'Blocks', '0')::integer AS "Blocks"
-                    FROM
-                        books AS book
-                        JOIN "ReadingDocuments" AS document ON document."Id" = book."Id"
-                        CROSS JOIN LATERAL jsonb_array_elements(document."Structure" -> 'Sections') WITH ORDINALITY AS section (value, ordinal)
-                ),
-                totals AS (
-                    -- The blocks per section as an array, so a finished section's blocks are one lookup: searching "sections" (no index) for every one took seconds.
-                    SELECT
-                        section."DocumentId",
-                        sum(section."Blocks")::integer AS "TotalBlocks",
-                        array_agg(section."Blocks" ORDER BY section."Section") AS "SectionBlocks"
-                    FROM sections AS section
-                    GROUP BY section."DocumentId"
-                )
                 SELECT
-                    book."Id" AS "DocumentId",
-                    book."WorkId",
-                    book."Title",
-                    book."Volume",
-                    target."Language",
-                    book."Sections" AS "Total",
-                    finished."Done",
-                    coalesce(total."TotalBlocks", 0) AS "TotalBlocks",
-                    finished."DoneBlocks"
+                    progress."ReadingDocumentId" AS "DocumentId",
+                    work."Id" AS "WorkId",
+                    work."CanonicalTitle" AS "Title",
+                    trim_scale(unit."Number")::text AS "Volume",
+                    progress."Language",
+                    progress."Sections" AS "Total",
+                    CASE WHEN @Model IS NULL THEN progress."DoneSections" ELSE coalesce(model."DoneSections", 0) END AS "Done",
+                    progress."Blocks" AS "TotalBlocks",
+                    CASE WHEN @Model IS NULL THEN progress."DoneBlocks" ELSE coalesce(model."DoneBlocks", 0) END AS "DoneBlocks"
                 FROM
-                    books AS book
-                    CROSS JOIN targets AS target
-                    LEFT JOIN totals AS total ON total."DocumentId" = book."Id"
-                    CROSS JOIN LATERAL (
-                        SELECT
-                            count(*)::integer AS "Done",
-                            coalesce(sum(total."SectionBlocks"[keys."Section" + 1]), 0)::integer AS "DoneBlocks"
-                        FROM (
-                            SELECT substring(cache."Path" FROM '[0-9]{5}$')::integer AS "Section"
-                            FROM "ReadingResources" AS cache
-                            -- Parsed once (OFFSET 0), not again for every condition on it.
-                            CROSS JOIN LATERAL (
-                                SELECT convert_from(cache."Bytes", 'UTF8')::jsonb AS value
-                                OFFSET 0
-                            ) AS stored
-                            WHERE cache."ReadingDocumentId" = book."Id"
-                                AND cache."Path" ~ ('^:localtranslation/v4/[^/]+/' || target."Language" || '/[0-9]{5}$')
-                                AND (@Model IS NULL OR split_part(cache."Path", '/', 3) = @Model)
-                                AND (@Digest IS NULL OR stored.value ->> 'ModelDigest' = @Digest)
-                                AND jsonb_typeof(stored.value -> 'Stale') IS DISTINCT FROM 'object'
-                                AND NOT EXISTS (
-                                    SELECT 1 FROM jsonb_array_elements(stored.value -> 'Texts') AS block (value)
-                                    WHERE block.value = 'null'::jsonb
-                                )
-                            GROUP BY 1
-                        ) AS keys
-                    ) AS finished
+                    "BookTranslationProgress" AS progress
+                    JOIN "ReadingDocuments" AS document ON document."Id" = progress."ReadingDocumentId"
+                    JOIN "StoredFiles" AS file ON file."Id" = document."StoredFileId"
+                    JOIN "MediaAssets" AS asset ON asset."Id" = file."MediaAssetId"
+                    JOIN "Works" AS work ON work."Id" = asset."WorkId"
+                    LEFT JOIN "WorkUnits" AS unit ON unit."Id" = asset."WorkUnitId"
+                    LEFT JOIN "BookTranslationProgress" AS model ON model."ReadingDocumentId" = progress."ReadingDocumentId"
+                        AND model."Language" = progress."Language"
+                        AND model."ModelKey" = @Model
+                        AND model."Digest" = @Digest
                 WHERE
-                    length(target."Language") BETWEEN 2 AND 3
-                    AND length(book."SourceLanguage") BETWEEN 2 AND 3
-                    AND target."Language" <> book."SourceLanguage";
+                    progress."ModelKey" = ''
+                    AND progress."Digest" = '';
                 """;
-            // Finished means complete in the model and version the job translates with; before its first round any complete cache counts.
             var snapshot = _progress.Snapshot();
             sql.Parameters.Add(new BookTranslationCurrentModelData(snapshot.ModelKey, snapshot.Digest));
             var rows = await Context.ReadSql.ReadListAsync<BookTranslationProgressRowData>(sql, CancellationToken);
@@ -142,7 +78,7 @@ namespace Jularr.Backend.Service.Admin.Translation.V1
             var remainingSections = rows.Sum(row => (long)Math.Max(0, row.Total - row.Done));
             var remainingBlocks = rows.Sum(row => (long)Math.Max(0, row.TotalBlocks - row.DoneBlocks));
             long? secondsRemaining = remainingSections > 0 && snapshot.BlocksPerMinute >= 1 ? (long)Math.Round(remainingBlocks / snapshot.BlocksPerMinute * 60) : null;
-            return new BookTranslationProgressV1(languages, books, current, snapshot.BlocksPerMinute, secondsRemaining, remainingSections == 0 ? null : snapshot.IssueKey);
+            return new BookTranslationProgressV1(languages, books, current, snapshot.BlocksPerMinute, secondsRemaining, remainingSections == 0 ? null : snapshot.IssueKey, snapshot.Counting);
         }
     }
 

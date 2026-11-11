@@ -78,6 +78,7 @@ namespace Jularr.Backend.Service.Core.Localization
             new("errors.backup_version_mismatch", "pg_dump or pg_restore is older than the PostgreSQL server."),
             new("errors.backup_disk_full", "The backup folder is full."),
             new("errors.backup_timeout", "The backup tool ran too long and was stopped."),
+            new("errors.job_round_timeout", "The job ran past its time limit and was stopped."),
             new("errors.backup_running", "A restore is already running."),
             new("errors.metadata_unavailable", "The metadata source is not configured or cannot be reached."),
             new("errors.metadata_authentication_failed", "TMDB rejected the stored key."),

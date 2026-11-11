@@ -26,6 +26,7 @@ namespace Jularr.E2E.Tests
 
             await ReadingPathTests.AddBookAsync(page, folders, "Translation Reader");
             await jularr.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'Translation'");
+            await CheckMachinesAsync(page);
 
             // Benchmarks and model download state now live on the Setup tab.
             // Admin: model availability, benchmark and live status on the same
@@ -126,6 +127,7 @@ namespace Jularr.E2E.Tests
             var page = session.Page;
             await ReadingPathTests.AddBookAsync(page, folders, "Retranslation Reader");
             await jularr.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'Translation'");
+            await CheckMachinesAsync(page);
             await jularr.RunSqlAsync("UPDATE \"InstanceSettings\" SET \"TranslationModel\" = 'ollama:translategemma:4b' WHERE \"Id\" = 1");
 
             // The book in German, with the Owner's default model; the re-translation shows only while the server's translation does.
@@ -186,6 +188,14 @@ namespace Jularr.E2E.Tests
                 Assert.IsTrue(size is { Height: >= 32 } && size.X + size.Width <= 390, "A re-translation button fits the phone.");
             }
             await Evidence.SaveAsync(page, "reader-retranslate-menu-phone");
+        }
+
+        // The machines are checked every thirty seconds; Check now on the translation page asks them at once.
+        internal static async Task CheckMachinesAsync(IPage page)
+        {
+            await page.GotoAsync("/Admin/Instance/Translation?tab=setup");
+            await page.Locator("form[data-translation-submit=check] button[type=submit]").ClickAsync();
+            await Assertions.Expect(page.Locator("[data-translation-machine]").First).ToContainTextAsync("Checked at");
         }
 
         // A private loopback Ollama fixture: the test executes the real Reader UI,

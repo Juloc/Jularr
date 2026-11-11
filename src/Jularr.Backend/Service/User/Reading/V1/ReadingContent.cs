@@ -732,7 +732,16 @@ namespace Jularr.Backend.Service.User.Reading.V1
             {
                 await ctx.CompleteReadingDocumentAsync(complete, token);
                 var budget = await ReadBudgetAsync(ctx, token);
-                return (await ctx.EvictReadingCacheAsync(budget, token), budget.CacheBudgetBytes);
+                var evicted = await ctx.EvictReadingCacheAsync(budget, token);
+
+                // The prepared book and those that left the cache count their translation again, together and in Id order, so the counts' locks are
+                // taken in the order the job's full count takes them.
+                foreach (var books in evicted.Append(complete.DocumentId).Distinct().Order().Chunk(500))
+                {
+                    await ctx.RecountBookTranslationProgressAsync(new BookTranslationRecountData(books, null), token);
+                }
+
+                return (evicted, budget.CacheBudgetBytes);
             }, ct);
             _files.Delete(evicted);
             _files.Trim(budget);

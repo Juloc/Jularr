@@ -411,6 +411,44 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task BookTranslationProgress_UpgradeKeepsTheBooksAndAddsAnEmptyTable_WhoseRowsLeaveWithTheirBook()
+        {
+            using var folder = new LibraryTests.TemporaryDirectory();
+            var cs = TestPostgres.ResolveConnectionString(nameof(BookTranslationProgress_UpgradeKeepsTheBooksAndAddsAnEmptyTable_WhoseRowsLeaveWithTheirBook));
+            var options = Backup(folder.Path, out _);
+            var tools = Tools(cs, FakeDump(folder.Path, true), null);
+            var version = DatabaseBaseline.Migrations.Single(migration => migration.Name == "0056_book_translation_progress").Version;
+            await new DatabaseBaseline(cs, migrations: DatabaseBaseline.Migrations.Where(migration => migration.Version < version).ToArray()).StartAsync(CancellationToken.None);
+            await ExecuteAsync(cs,
+                """
+                INSERT INTO "ReadingDocuments" ("Id", "SourceSizeBytes", "SourceModifiedAt", "ContentHash", "AnalyzerVersion", "ReadingFormatTypeId", "Structure", "TotalCharacters")
+                VALUES (900, 10, now(), decode(repeat('ab', 32), 'hex'), 1, 1, '{}', 0);
+                """);
+            await new DatabaseBaseline(cs, options, tools).StartAsync(CancellationToken.None);
+
+            // Nothing is counted in the update: the job counts the books after the start.
+            Assert.AreEqual(1L, await ScalarAsync(cs, """SELECT count(*) FROM "ReadingDocuments" """));
+            Assert.AreEqual(0L, await ScalarAsync(cs, """SELECT count(*) FROM "BookTranslationProgress" """));
+
+            // One row per book, language, model and version; a model always with its version; the rows leave with their book.
+            await ExecuteAsync(cs, """
+                INSERT INTO "BookTranslationProgress" ("ReadingDocumentId", "Language", "ModelKey", "Digest", "Sections", "DoneSections", "Blocks", "DoneBlocks")
+                VALUES (900, 'de', '', '', 4, 1, 40, 10), (900, 'de', 'translategemma:4b', 'abc', 4, 1, 40, 10)
+                """);
+            await Assert.ThrowsExactlyAsync<PostgresException>(() => ExecuteAsync(cs, """
+                INSERT INTO "BookTranslationProgress" ("ReadingDocumentId", "Language", "ModelKey", "Digest", "Sections", "DoneSections", "Blocks", "DoneBlocks")
+                VALUES (900, 'de', 'translategemma:4b', '', 4, 1, 40, 10)
+                """));
+            await Assert.ThrowsExactlyAsync<PostgresException>(() => ExecuteAsync(cs, """
+                INSERT INTO "BookTranslationProgress" ("ReadingDocumentId", "Language", "ModelKey", "Digest", "Sections", "DoneSections", "Blocks", "DoneBlocks")
+                VALUES (900, 'de', '', '', 4, 1, 40, 10)
+                """));
+            await ExecuteAsync(cs, """DELETE FROM "ReadingDocuments" WHERE "Id" = 900""");
+            Assert.AreEqual(0L, await ScalarAsync(cs, """SELECT count(*) FROM "BookTranslationProgress" """));
+            Assert.AreEqual(version, await ScalarAsync(cs, """SELECT "Version" FROM "DatabaseSchemaVersions" WHERE "Name" = '0056_book_translation_progress'"""));
+        }
+
+        [TestMethod]
         public async Task ManualImportReleaseNames_UpgradeGivesAssignedFilmsAndEpisodesTheirReleaseName_AndLeavesEveryOtherFileAlone()
         {
             using var folder = new LibraryTests.TemporaryDirectory();

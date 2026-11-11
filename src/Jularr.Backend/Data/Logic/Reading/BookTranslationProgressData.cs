@@ -48,4 +48,48 @@ namespace Jularr.Backend.Data.Logic.Reading
         [DataField(typeof(TranslationFields), nameof(TranslationFields.BlockCount))]
         public int DoneBlocks { get; }
     }
+
+    // Books whose progress is counted again, in every language a profile reads or only in the given one.
+    internal sealed class BookTranslationRecountData : BaseData
+    {
+        public BookTranslationRecountData(long[] documentIds, string? language)
+        {
+            DocumentIds = documentIds;
+            Language = language;
+        }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.DocumentIds))]
+        public long[] DocumentIds { get; }
+
+        [DataField(typeof(TranslationFields), nameof(TranslationFields.Language), false)]
+        public string? Language { get; }
+    }
+
+    // The next books of the full count: from this document on, at most Count of them.
+    internal sealed class BookTranslationBatchData : BaseData
+    {
+        public BookTranslationBatchData(long documentId, int count)
+        {
+            DocumentId = documentId;
+            Count = count;
+        }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.DocumentId))]
+        public long DocumentId { get; }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.Count))]
+        public int Count { get; }
+    }
+
+    // A language books are translated into.
+    internal sealed class BookTranslationLanguageData : BaseData
+    {
+        public BookTranslationLanguageData(string language)
+        {
+            Language = language;
+        }
+
+        [DataField(typeof(TranslationFields), nameof(TranslationFields.Language))]
+        public string Language { get; }
+    }
 }

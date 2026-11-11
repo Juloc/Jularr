@@ -2,11 +2,16 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Jularr.Backend.Data;
+using Jularr.Backend.Data.Admin.Media.V1;
 using Jularr.Backend.Data.Admin.Translation.V1;
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Enums.Sql;
+using Jularr.Backend.Data.Logic.Reading;
 using Jularr.Backend.Data.System.Reading.V1;
 using Jularr.Backend.Data.User.Reading.V1;
 using Jularr.Backend.Data.User.Translation.V1;
+using Jularr.Backend.Infrastructure.Sql;
+using Jularr.Backend.Logic.Reading;
 using Jularr.Backend.Service.Core;
 using Jularr.Backend.Service.System.Reading.V1;
 using Jularr.Integrations.Logic.Translation;
@@ -218,6 +223,7 @@ namespace Jularr.Backend.Tests
 
             // A new version of the model, and one section of the book read earlier is missing.
             ollama.Digest = new string('b', 64);
+            await LocalReadingTranslationIntegrationTests.CheckMachinesAsync(host);
             await host.Fixture.RunSqlAsync("DELETE FROM \"ReadingResources\" WHERE \"Path\" = ':localtranslation/v4/translategemma:4b/de/00001' AND \"ReadingDocumentId\" = " + earlier.DocumentId);
 
             // The Reader keeps showing the earlier version's text, marked stale, without asking the model.
@@ -448,6 +454,7 @@ namespace Jularr.Backend.Tests
 
             // A new version of the model: the earlier texts still make the EPUB, and the list counts them as stale.
             ollama.Digest = new string('c', 64);
+            await LocalReadingTranslationIntegrationTests.CheckMachinesAsync(host);
             Assert.IsTrue(await Translate(scope));
             var renewing = (await ReadBooksAsync(host)).Items.Single(book => book.DocumentId == document.DocumentId && book.Language == "de");
             Assert.IsTrue(renewing.Stale[Array.IndexOf(renewing.Models, "ollama:translategemma:4b")] > 0, string.Join(",", renewing.Stale));
@@ -551,8 +558,21 @@ namespace Jularr.Backend.Tests
             await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'Translation'");
             await host.Fixture.RunSqlAsync("UPDATE \"Profiles\" SET \"UiLocaleId\" = (SELECT \"Id\" FROM \"UiLocales\" WHERE \"Locale\" LIKE 'de%' ORDER BY \"Locale\" LIMIT 1)");
 
-            // Before the first round: every section of both books waits, nothing is in work, nothing can be estimated.
+            // Before the job's first round the books are still to be counted, and the page says so.
+            Assert.IsTrue((await ReadProgressAsync(host)).Counting);
+            using (var counting = await host.SendAsync(HttpMethod.Get, "/Admin/Instance/Translation?handler=Progress"))
+                StringAssert.Contains(await counting.Content.ReadAsStringAsync(), "Being counted");
+
+            // The first round counts them; without a machine for the default model it translates nothing: every section of both books waits, nothing is in work,
+            // nothing can be estimated.
+            await host.Fixture.RunSqlAsync("UPDATE \"InstanceSettings\" SET \"TranslationModel\" = 'ollama:translategemma:27b' WHERE \"Id\" = 1");
+            await using (var scope = host.Services.CreateAsyncScope())
+            {
+                Assert.IsFalse(await Translate(scope));
+            }
+            await host.Fixture.RunSqlAsync("UPDATE \"InstanceSettings\" SET \"TranslationModel\" = NULL WHERE \"Id\" = 1");
             var before = await ReadProgressAsync(host);
+            Assert.IsFalse(before.Counting);
             Assert.AreEqual(1, before.Languages.Length);
             Assert.AreEqual("de", before.Languages[0].Language);
             Assert.AreEqual(0, before.Languages[0].Done);
@@ -569,13 +589,14 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(2.0, estimated.BlocksPerMinute);
             Assert.AreEqual((long)Math.Round(totalBlocks / 2.0 * 60), estimated.SecondsRemaining);
 
-            // One round: the section it picked is named.
+            // One round: the section it picked is named, and once finished it counts before the next one is.
             await using (var scope = host.Services.CreateAsyncScope())
             {
                 Assert.IsTrue(await Translate(scope));
             }
             var during = await ReadProgressAsync(host);
             Assert.IsNotNull(during.Current);
+            Assert.AreEqual(1, during.Languages[0].Done);
             Assert.IsTrue(during.Current.Title is "First Book" or "Second Book");
             Assert.IsTrue(during.Current.Section >= 1);
             Assert.AreEqual("de", during.Current.Language);
@@ -615,6 +636,7 @@ namespace Jularr.Backend.Tests
             using var fragment = await host.SendAsync(HttpMethod.Get, "/Admin/Instance/Translation?handler=Progress");
             var part = await fragment.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, fragment.StatusCode, part);
+            Assert.IsFalse(part.Contains("Being counted", StringComparison.Ordinal));
             Assert.IsTrue(part.TrimStart().StartsWith("<div", StringComparison.Ordinal) && part.Contains("data-translation-progress", StringComparison.Ordinal), part);
             // The page has two tabs: the progress (first) and the setup, each only with its own part.
             Assert.IsFalse(html.Contains("data-translation-machine", StringComparison.Ordinal), "The progress tab holds no machine cards.");
@@ -630,6 +652,162 @@ namespace Jularr.Backend.Tests
             using var jobs = await host.SendAsync(HttpMethod.Get, "/Admin/Jobs");
             Assert.AreEqual(HttpStatusCode.OK, jobs.StatusCode, await jobs.Content.ReadAsStringAsync());
         }
+
+        [TestMethod]
+        public async Task Progress_KeptByTheJobTheReaderANewVersionAndADeletion_EqualsAFullCount()
+        {
+            using var storage = new TemporaryDirectory();
+            var ollama = new FakeOllama();
+            await using var host = await CreateHostAsync(storage.Path, ollama);
+            var (first, second) = await ReadingTests.CreateBooksAsync(host, storage.Path, "First Book", "Second Book");
+            var firstDocument = await ReadingTests.OpenAsync(host, first);
+            var secondDocument = await ReadingTests.OpenAsync(host, second);
+            await PrepareGermanReadersAsync(host);
+            await ReadAsync(host, first, "s0/b0", "1 hour");
+
+            // The job counts the books and translates a few sections; the Reader translates a block of the other book; a new model version translates a section.
+            await using (var scope = host.Services.CreateAsyncScope())
+            {
+                for (var round = 0; round < 3; round++) Assert.IsTrue(await Translate(scope));
+            }
+            using (var block = await host.SendAsync(HttpMethod.Post, "/api/v1/reading/documents/" + secondDocument.DocumentId + "/sections/1/local-translations/de/ollama:translategemma:4b/blocks/0",
+                new LocalReadingBlockDataV1("en")))
+                Assert.AreEqual(HttpStatusCode.OK, block.StatusCode, await block.Content.ReadAsStringAsync());
+            ollama.Digest = new string('b', 64);
+            await LocalReadingTranslationIntegrationTests.CheckMachinesAsync(host);
+            await using (var scope = host.Services.CreateAsyncScope())
+            {
+                Assert.IsTrue(await Translate(scope));
+            }
+            var kept = await ProgressRowsAsync(host);
+            var shown = JsonSerializer.Serialize(await ReadProgressAsync(host));
+            StringAssert.Contains(kept, new string('b', 64));
+
+            // Counting every book again from its caches gives the same figures.
+            await RecountAllAsync(host);
+            Assert.AreEqual(kept, await ProgressRowsAsync(host));
+            Assert.AreEqual(shown, JsonSerializer.Serialize(await ReadProgressAsync(host)));
+
+            // The progress, its page and the Jobs page read the kept counts (the median of a few warm reads).
+            foreach (var path in new[] { "/api/v1/admin/translation/progress", "/Admin/Instance/Translation?handler=Progress", "/Admin/Instance/Translation", "/Admin/Jobs" })
+            {
+                using (var warm = await host.SendAsync(HttpMethod.Get, path)) Assert.AreEqual(HttpStatusCode.OK, warm.StatusCode, path + ": " + await warm.Content.ReadAsStringAsync());
+                var times = new List<TimeSpan>();
+                for (var read = 0; read < 9; read++)
+                {
+                    var watch = System.Diagnostics.Stopwatch.StartNew();
+                    using var response = await host.SendAsync(HttpMethod.Get, path);
+                    times.Add(watch.Elapsed);
+                    Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, path);
+                }
+                var median = times.Order().ElementAt(times.Count / 2);
+                Console.WriteLine(path + ": " + median.TotalMilliseconds.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture) + " ms");
+                Assert.IsTrue(median < TimeSpan.FromSeconds(1), path + " took " + median);
+            }
+
+            // Deleting a book's translation counts it again at once.
+            using (var deleted = await host.SendAsync(HttpMethod.Delete, "/api/v1/admin/library/documents/" + firstDocument.DocumentId + "/translations/de", new DeleteTranslationDataV1(true)))
+                Assert.AreEqual(HttpStatusCode.OK, deleted.StatusCode, await deleted.Content.ReadAsStringAsync());
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT coalesce(sum(\"DoneSections\"), 0) FROM \"BookTranslationProgress\" WHERE \"ReadingDocumentId\" = " + firstDocument.DocumentId));
+            Assert.IsTrue(await host.ScalarAsync("SELECT \"Sections\" FROM \"BookTranslationProgress\" WHERE \"ModelKey\" = '' AND \"ReadingDocumentId\" = " + firstDocument.DocumentId) is > 0);
+        }
+
+        [TestMethod]
+        public async Task Progress_ABookLeavingTheCacheOrClearedWaitsForTheJobsCount_AndIsCountedAgainNotDropped()
+        {
+            using var storage = new TemporaryDirectory();
+            var ollama = new FakeOllama();
+            await using var host = await CreateHostAsync(storage.Path, ollama);
+            var (first, second) = await ReadingTests.CreateBooksAsync(host, storage.Path, "First Book", "Second Book");
+            var book = (await ReadingTests.OpenAsync(host, first)).DocumentId;
+            await PrepareGermanReadersAsync(host);
+            await ReadAsync(host, first, "s0/b0", "1 hour");
+            var doneSql = "SELECT coalesce(sum(\"DoneSections\"), 0) FROM \"BookTranslationProgress\" WHERE \"ModelKey\" = '' AND \"ReadingDocumentId\" = " + book;
+            await using (var scope = host.Services.CreateAsyncScope())
+            {
+                // The job counts the book and translates it until a section of it is finished.
+                for (var round = 0; await host.ScalarAsync(doneSql) is not > 0L; round++)
+                {
+                    Assert.IsTrue(round < 20 && await Translate(scope), "The job finished no section of the book.");
+                }
+            }
+
+            // The first book leaves the cache when the second is prepared (its file changed, the budget is spent) while the job's count holds the first book's
+            // lock and rows: the preparation waits for that lock, never for the rows in a circle.
+            await host.Fixture.RunSqlAsync($"""
+                UPDATE "ReadingDocuments" SET "LastReadAt" = now() - interval '30 days' WHERE "Id" = {book};
+                UPDATE "StoredFiles" SET "SizeBytes" = "SizeBytes" + 1 WHERE "Id" = (SELECT "StoredFileId" FROM "ReadingDocuments" WHERE "Id" = {book});
+                UPDATE "InstanceSettings" SET "ReadingCacheBytes" = 0;
+                """);
+            await using (var count = await HoldCountAsync(host, book))
+            {
+                var preparing = ReadingTests.OpenAsync(host, second);
+                await LocalReadingTranslationIntegrationTests.UntilWaitingAsync(host);
+                Assert.IsFalse(preparing.IsCompleted);
+                await count.CommitAsync();
+                await preparing.WaitAsync(TimeSpan.FromSeconds(30));
+            }
+
+            // It is counted again with nothing translated, not dropped: what a full count gives.
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"ReadingResources\" WHERE \"ReadingDocumentId\" = " + book));
+            Assert.AreEqual(0L, await host.ScalarAsync(doneSql));
+            var evicted = await ProgressRowsAsync(host);
+            StringAssert.Contains(evicted, book + "|de|||");
+            await RecountAllAsync(host);
+            Assert.AreEqual(evicted, await ProgressRowsAsync(host));
+
+            // Clearing the book, as a preparation starting over does, waits for the count's lock the same way and counts it again.
+            await using (var count = await HoldCountAsync(host, book))
+            {
+                var clearing = Task.Run(async () =>
+                {
+                    await using var sql = new SqlContext(host.Fixture.Database);
+                    await sql.BeginAsync(SqlAccessMode.ReadWrite);
+                    var ctx = new LogicContext(sql);
+                    await ctx.ExecuteAsyncForAffectedRows(new SqlStatement { Statement = "SET LOCAL lock_timeout = '10s';" });
+                    await ctx.ClearReadingResourcesAsync(new ReadingDocumentIdData(book), default);
+                    await sql.CommitAsync();
+                });
+                await LocalReadingTranslationIntegrationTests.UntilWaitingAsync(host);
+                Assert.IsFalse(clearing.IsCompleted);
+                await count.CommitAsync();
+                await clearing.WaitAsync(TimeSpan.FromSeconds(10));
+            }
+
+            Assert.AreEqual(evicted, await ProgressRowsAsync(host));
+        }
+
+        // The job's count of a book while it runs: the book's count lock and every kept row of the book, held in an open transaction.
+        private static async Task<SqlContext> HoldCountAsync(AuthenticationTests.Host host, long documentId)
+        {
+            var sql = new SqlContext(host.Fixture.Database);
+            await sql.BeginAsync(SqlAccessMode.ReadWrite);
+            await new LogicContext(sql).ExecuteAsyncForAffectedRows(new SqlStatement
+            {
+                Statement = $"""
+                    SELECT pg_advisory_xact_lock(hashtextextended('book-translation-progress:' || {documentId}::text, 0));
+                    UPDATE "BookTranslationProgress" SET "UpdatedAt" = now() WHERE "ReadingDocumentId" = {documentId};
+                    """
+            });
+            return sql;
+        }
+
+        // The job's full count of every book, at once.
+        private static async Task RecountAllAsync(AuthenticationTests.Host host)
+        {
+            await using var sql = new SqlContext(host.Fixture.Database);
+            await sql.BeginAsync(SqlAccessMode.ReadWrite);
+            Assert.IsNull(await new LogicContext(sql).RecountBookTranslationBatchAsync(new BookTranslationBatchData(1, 1000), default));
+            await sql.CommitAsync();
+        }
+
+        // Every kept count, in a fixed order.
+        private static async Task<string> ProgressRowsAsync(AuthenticationTests.Host host) =>
+            Convert.ToString(await host.ScalarAsync("""
+                SELECT string_agg(concat_ws('|', "ReadingDocumentId", "Language", "ModelKey", "Digest", "Sections", "DoneSections", "Blocks", "DoneBlocks"), ';'
+                    ORDER BY "ReadingDocumentId", "Language", "ModelKey", "Digest")
+                FROM "BookTranslationProgress"
+                """), System.Globalization.CultureInfo.InvariantCulture)!;
 
         [TestMethod]
         public void Progress_TracksTheSectionPaceAndWhyNothingHappens()
@@ -671,6 +849,7 @@ namespace Jularr.Backend.Tests
             await host.Fixture.RunSqlAsync("UPDATE \"ReadingDocuments\" SET \"Language\" = 'en'");
             await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'Translation'");
             await host.Fixture.RunSqlAsync("UPDATE \"Profiles\" SET \"UiLocaleId\" = (SELECT \"Id\" FROM \"UiLocales\" WHERE \"Locale\" LIKE 'de%' ORDER BY \"Locale\" LIMIT 1)");
+            await LocalReadingTranslationIntegrationTests.CheckMachinesAsync(host);
         }
 
         // Every profile is reading the book at the locator, last read that long ago.

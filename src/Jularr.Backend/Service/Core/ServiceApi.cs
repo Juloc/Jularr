@@ -293,7 +293,7 @@ namespace Jularr.Backend.Service.Core
             services.TryAddSingleton<ReadingActivity>();
             services.TryAddSingleton<ReadingFiles>();
             services.TryAddSingleton<TranslationFiles>();
-            services.TryAddSingleton<LocalTranslationGate>();
+            services.TryAddSingleton<TranslationLanes>();
             services.TryAddSingleton<BookTranslationProgress>();
             services.TryAddSingleton<LocalTranslationMachines>();
             // Every server translation provider registers here; model ids name it as "<Key>:<model>".
@@ -302,11 +302,13 @@ namespace Jularr.Backend.Service.Core
             services.TryAddSingleton<TranslationProviders>();
             services.TryAddSingleton<LocalTranslationDownloads>();
             services.AddHostedService(provider => provider.GetRequiredService<LocalTranslationDownloads>());
-            services.AddHttpClient<OllamaLocalModels>(http => http.Timeout = TimeSpan.FromMinutes(65))
-                .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false, UseProxy = false });
+            // Ollama's own limits bound each question, translation and download; the client's covers the longest wait for an answer.
+            AddClient<OllamaLocalModels>(services, 600, null, handler: () => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false, UseProxy = false });
             services.TryAddSingleton<SpeechFiles>();
-            services.AddHttpClient<Jularr.Integrations.Logic.Speech.SpeechCatalogClient>(http => http.Timeout = TimeSpan.FromSeconds(25));
-            services.AddHttpClient<Jularr.Integrations.Logic.Speech.SpeechModelClient>(http => http.Timeout = TimeSpan.FromMinutes(5));
+            AddClient<Jularr.Integrations.Logic.Speech.SpeechCatalogClient>(services, 25, null, agent: true,
+                handler: () => new HttpClientHandler { AllowAutoRedirect = true, MaxAutomaticRedirections = 3, UseCookies = false });
+            AddClient<Jularr.Integrations.Logic.Speech.SpeechModelClient>(services, 300, null, agent: true,
+                handler: () => new HttpClientHandler { AllowAutoRedirect = true, MaxAutomaticRedirections = 3, UseCookies = false });
             services.TryAddSingleton<IPageRecognizer, OcrFiles>();
             services.AddMemoryCache(options => options.SizeLimit = 20_000);
             services.TryAddSingleton<UiLocalizationCache>();
@@ -620,7 +622,8 @@ namespace Jularr.Backend.Service.Core
             }).ConfigurePrimaryHttpMessageHandler(handler ?? (() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false })).RemoveAllLoggers();
             if (provider is not null)
             {
-                client.AddHttpMessageHandler(services => new ProviderObservationHandler(services.GetRequiredService<ProviderObservations>(), provider));
+                client.AddHttpMessageHandler(services => new ProviderObservationHandler(services.GetRequiredService<ProviderObservations>(), provider, TimeSpan.FromSeconds(timeoutSeconds),
+                    services.GetRequiredService<TimeProvider>()));
             }
         }
 

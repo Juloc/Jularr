@@ -4007,7 +4007,7 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(0, usenet.Grabbed.Count);
             await using (var scope = host.Services.CreateAsyncScope())
             {
-                await OperationWorker.RunNextAsync(scope.ServiceProvider, NullLogger.Instance, OperationType.AcquisitionSearch, CancellationToken.None);
+                await OperationWorker.RunNextAsync(scope.ServiceProvider, NullLogger.Instance, OperationType.AcquisitionSearch, CancellationToken.None, CancellationToken.None);
             }
 
             Assert.AreEqual(1, usenet.Grabbed.Count);

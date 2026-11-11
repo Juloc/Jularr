@@ -27,7 +27,7 @@ namespace Jularr.Integrations.Logic.Translation
                 || bytes[0] == 192 && bytes[1] == 168 ? address : null;
         }
 
-        // A machine that accepts the connection and then never answers must not hold a translation for the client's 65 minutes (model downloads need them):
+        // A machine that accepts the connection and then never answers must not hold a translation for the client's 10 minutes (its longest wait for an answer):
         // a question (tags, running models) gets seconds, a translation minutes. The client sees the same TaskCanceledException as for its own timeout.
         internal TimeSpan QuestionLimit { get; init; } = TimeSpan.FromSeconds(15);
         internal TimeSpan GenerateLimit { get; init; } = TimeSpan.FromMinutes(8);
@@ -67,23 +67,6 @@ namespace Jularr.Integrations.Logic.Translation
             return await JsonDocument.ParseAsync(buffer, new JsonDocumentOptions { MaxDepth = 16 }, ct);
         }
 
-        // Model tags are mutable: the digest participates in the cache identity.
-        internal async Task<string> DigestAsync(Uri server, string model, CancellationToken ct)
-        {
-            if (!Supported(model)) throw new ArgumentException("Unknown approved model.", nameof(model));
-            using var response = await JsonAsync(server, "api/tags", null, ct);
-            if (!response.RootElement.TryGetProperty("models", out var models) || models.ValueKind != JsonValueKind.Array)
-                throw new InvalidDataException("Model catalog unavailable.");
-            foreach (var item in models.EnumerateArray())
-            {
-                if (!item.TryGetProperty("name", out var name) || name.ValueKind != JsonValueKind.String || name.GetString() != model
-                    || !item.TryGetProperty("digest", out var digest) || digest.ValueKind != JsonValueKind.String) continue;
-                var value = digest.GetString()!;
-                if (value.Length == 64 && value.All(Uri.IsHexDigit)) return value.ToLowerInvariant();
-            }
-            throw new InvalidDataException("Model digest unavailable; refusing unversioned inference.");
-        }
-
         // Split long paragraphs without generating standalone output blocks.
         // Prefer a sentence/space boundary; preserve source order and block identity.
         internal static IReadOnlyList<string> Segments(string value)
@@ -112,13 +95,22 @@ namespace Jularr.Integrations.Logic.Translation
             return parts;
         }
 
-        internal async Task<string[]> InstalledAsync(Uri server, CancellationToken ct)
+        // The approved models the machine has, each with the digest of its version (null when Ollama names none). Model tags are mutable: the digest
+        // participates in the cache identity.
+        internal async Task<IReadOnlyDictionary<string, string?>> InstalledAsync(Uri server, CancellationToken ct)
         {
             using var response = await JsonAsync(server, "api/tags", null, ct);
             if (!response.RootElement.TryGetProperty("models", out var models) || models.ValueKind != JsonValueKind.Array)
                 throw new InvalidDataException("Ollama returned no model catalog.");
-            return models.EnumerateArray().Where(x => x.TryGetProperty("name", out var name) && name.ValueKind == JsonValueKind.String)
-                .Select(x => x.GetProperty("name").GetString()!).Where(Supported).Distinct(StringComparer.Ordinal).ToArray();
+            var installed = new Dictionary<string, string?>(StringComparer.Ordinal);
+            foreach (var item in models.EnumerateArray())
+            {
+                if (!item.TryGetProperty("name", out var name) || name.ValueKind != JsonValueKind.String || !Supported(name.GetString()!) || installed.ContainsKey(name.GetString()!)) continue;
+                var digest = item.TryGetProperty("digest", out var value) && value.ValueKind == JsonValueKind.String ? value.GetString()! : "";
+                installed[name.GetString()!] = digest.Length == 64 && digest.All(Uri.IsHexDigit) ? digest.ToLowerInvariant() : null;
+            }
+
+            return installed;
         }
 
         internal async Task<string[]> RunningAsync(Uri server, CancellationToken ct)
@@ -130,33 +122,47 @@ namespace Jularr.Integrations.Logic.Translation
                 .Select(x => x.GetProperty("name").GetString()!).Where(Supported).Distinct(StringComparer.Ordinal).ToArray();
         }
 
+        // A download that sends nothing for this long has stalled: it fails and is started again by hand.
+        internal TimeSpan PullIdleLimit { get; init; } = TimeSpan.FromMinutes(2);
+
         internal async Task PullAsync(Uri server, string model, CancellationToken ct, Action<int>? progress = null)
         {
             if (!Supported(model)) throw new ArgumentException("Unknown approved model.", nameof(model));
-            using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(server, "api/pull"))
+            using var idle = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            idle.CancelAfter(PullIdleLimit);
+            try
             {
-                Content = JsonContent.Create(new { model, stream = true })
-            };
-            using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
-            response.EnsureSuccessStatusCode();
-            await using var stream = await response.Content.ReadAsStreamAsync(ct);
-            using var reader = new StreamReader(stream);
-            string? line;
-            while ((line = await reader.ReadLineAsync(ct)) is not null)
-            {
-                if (line.Length > 8192) throw new InvalidDataException("Ollama progress event too large.");
-                using var step = JsonDocument.Parse(line);
-                if (step.RootElement.TryGetProperty("total", out var total)
-                    && step.RootElement.TryGetProperty("completed", out var completed)
-                    && total.ValueKind == JsonValueKind.Number && completed.ValueKind == JsonValueKind.Number
-                    && total.TryGetInt64(out var bytes) && bytes > 0 && completed.TryGetInt64(out var done))
+                using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(server, "api/pull"))
                 {
-                    progress?.Invoke((int)Math.Clamp(done * 100.0 / bytes, 0, 100));
+                    Content = JsonContent.Create(new { model, stream = true })
+                };
+                using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, idle.Token);
+                response.EnsureSuccessStatusCode();
+                await using var stream = await response.Content.ReadAsStreamAsync(idle.Token);
+                using var reader = new StreamReader(stream);
+                string? line;
+                while ((line = await reader.ReadLineAsync(idle.Token)) is not null)
+                {
+                    // Every progress event is new data: the limit starts again.
+                    idle.CancelAfter(PullIdleLimit);
+                    if (line.Length > 8192) throw new InvalidDataException("Ollama progress event too large.");
+                    using var step = JsonDocument.Parse(line);
+                    if (step.RootElement.TryGetProperty("total", out var total)
+                        && step.RootElement.TryGetProperty("completed", out var completed)
+                        && total.ValueKind == JsonValueKind.Number && completed.ValueKind == JsonValueKind.Number
+                        && total.TryGetInt64(out var bytes) && bytes > 0 && completed.TryGetInt64(out var done))
+                    {
+                        progress?.Invoke((int)Math.Clamp(done * 100.0 / bytes, 0, 100));
+                    }
+                    if (step.RootElement.TryGetProperty("error", out var error))
+                        throw new InvalidDataException("Ollama model download failed: " + error.GetString());
                 }
-                if (step.RootElement.TryGetProperty("error", out var error))
-                    throw new InvalidDataException("Ollama model download failed: " + error.GetString());
             }
-            if (!(await InstalledAsync(server, ct)).Contains(model, StringComparer.Ordinal))
+            catch (OperationCanceledException) when (idle.IsCancellationRequested && !ct.IsCancellationRequested)
+            {
+                throw new TaskCanceledException("Ollama sent no download data in time: " + model);
+            }
+            if (!(await InstalledAsync(server, ct)).ContainsKey(model))
                 throw new InvalidDataException("Ollama did not register the downloaded model.");
         }
 

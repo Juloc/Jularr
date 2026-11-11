@@ -21,6 +21,7 @@ namespace Jularr.E2E.Tests
                     UPDATE "InstanceModules" SET "IsEnabled" = TRUE WHERE "Key" = 'Translation';
                     UPDATE "InstanceSettings" SET "TranslationMachines" = ARRAY['http://127.0.0.1:9/', '{{ollama.Address}}'] WHERE "Id" = 1;
                     """);
+                await ReaderTranslationTests.CheckMachinesAsync(page);
 
                 foreach (var (width, height) in new[] { (1440, 900), (768, 1024), (375, 812) })
                 {
@@ -75,6 +76,7 @@ namespace Jularr.E2E.Tests
             {
                 await ReadingPathTests.AddBookAsync(page, folders, "Progress Book");
                 await jularr.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'Translation'");
+                await ReaderTranslationTests.CheckMachinesAsync(page);
                 await page.GotoAsync("/Read/1");
                 await Assertions.Expect(page.Locator("[data-role=content]")).ToContainTextAsync("Chapter One");
                 await jularr.RunSqlAsync("""

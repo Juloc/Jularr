@@ -2,12 +2,18 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Jularr.Backend.Data.Admin.Library.V1;
+using Jularr.Backend.Data.Admin.Translation.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.User.Playback.V1;
 using Jularr.Backend.Logic.Playback;
+using Jularr.Backend.Service.Core;
+using Jularr.Backend.Service.User.Playback.V1;
 using Jularr.Integrations.Logic.Translation;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 
 namespace Jularr.Backend.Tests
 {
@@ -119,6 +125,86 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.NotFound, other.StatusCode);
         }
 
+        [TestMethod]
+        public async Task Translation_WaitsForTheLaneAtMostItsWait_AndEndsWhenJularrStops()
+        {
+            using var cache = new LibraryTests.TemporaryDirectory();
+            var provider = new HangingProvider();
+            var lanes = new TranslationLanes(TimeProvider.System);
+            var lifetime = new Lifetime();
+            var translations = new SubtitleTranslations(new TranslationProviders([provider]), lanes, Options.Create(new MediaOptions { TranscodeCachePath = cache.Path }), lifetime,
+                NullLogger<SubtitleTranslations>.Instance) { LaneWait = TimeSpan.FromMilliseconds(200) };
+            var machine = new TranslationMachine(provider, "model", new Uri("hanging://local/"));
+            const string vtt = "WEBVTT\n\n00:00:01.000 --> 00:00:02.000\nHello.\n";
+
+            // A reader holds the lane longer than the subtitle waits: it gives up without asking the model, and can be started again.
+            using (await lanes.TryEnterAsync(provider.Key, TimeSpan.Zero, default))
+            {
+                translations.Start("busy", vtt, "en", "de", machine);
+                await StateAsync(translations, "busy", SubtitleTranslations.Failed);
+            }
+            Assert.AreEqual(0, provider.Calls);
+
+            // Jularr stops while the model translates: the translation ends at once instead of waiting for the answer, and frees the lane.
+            translations.Start("stopped", vtt, "en", "de", machine);
+            await provider.Started.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            lifetime.StopApplication();
+            await StateAsync(translations, "stopped", SubtitleTranslations.Failed);
+            Assert.IsTrue(provider.Cancelled);
+            using var free = await lanes.TryEnterAsync(provider.Key, TimeSpan.Zero, default);
+            Assert.IsNotNull(free);
+        }
+
+        private static async Task StateAsync(SubtitleTranslations translations, string key, string state)
+        {
+            for (var attempt = 0; attempt < 200 && translations.Status(key).State != state; attempt++) await Task.Delay(25);
+            Assert.AreEqual(state, translations.Status(key).State);
+        }
+
+        private sealed class Lifetime : IHostApplicationLifetime
+        {
+            private readonly CancellationTokenSource _stopping = new();
+            public CancellationToken ApplicationStarted => CancellationToken.None;
+            public CancellationToken ApplicationStopping => _stopping.Token;
+            public CancellationToken ApplicationStopped => CancellationToken.None;
+            public void StopApplication() => _stopping.Cancel();
+        }
+
+        // A model that answers only when its request is cancelled.
+        private sealed class HangingProvider : ITranslationProvider
+        {
+            public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            public int Calls { get; private set; }
+            public bool Cancelled { get; private set; }
+
+            public string Key => "hanging";
+            public IReadOnlyList<string> Models => ["model"];
+            public bool IsAdminOnly => false;
+            public IReadOnlyList<string> Available(TranslationSetupV1 setup) => Models;
+            public TranslationMachine? Choose(TranslationSetupV1 setup, string? model) => null;
+            public Task<TranslationMachine?> ChooseAsync(TranslationSetupV1 setup, string? model, CancellationToken ct) => Task.FromResult<TranslationMachine?>(null);
+            public Task<string> DigestAsync(TranslationMachine machine, CancellationToken ct) => Task.FromResult("hanging-1");
+            public Task<string?> TranslateBlockAsync(TranslationMachine machine, string source, string target, string text, string? context, CancellationToken ct) => Task.FromResult<string?>(null);
+            public void Fail(TranslationMachine machine) { }
+
+            public async Task<string> TranslateAsync(TranslationMachine machine, string source, string target, string text, CancellationToken ct)
+            {
+                Calls++;
+                Started.TrySetResult();
+                try
+                {
+                    await Task.Delay(Timeout.Infinite, ct);
+                }
+                catch (OperationCanceledException)
+                {
+                    Cancelled = true;
+                    throw;
+                }
+
+                return text;
+            }
+        }
+
         private sealed class FakeOllama : HttpMessageHandler
         {
             public int GenerationCount { get; private set; }
@@ -129,6 +215,10 @@ namespace Jularr.Backend.Tests
                 if (request.RequestUri!.AbsolutePath == "/api/tags")
                 {
                     body = JsonSerializer.Serialize(new { models = new[] { new { name = "translategemma:4b", digest = new string('a', 64) } } });
+                }
+                else if (request.RequestUri.AbsolutePath == "/api/ps")
+                {
+                    body = """{"models":[]}""";
                 }
                 else if (request.RequestUri.AbsolutePath == "/api/generate")
                 {

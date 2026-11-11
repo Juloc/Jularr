@@ -12,7 +12,7 @@ namespace Jularr.Frontend.Pages.Admin.Translation
 {
     public sealed class TranslationModelPage(ReadLocalTranslationModelsV1 read, ReadBookTranslationProgressV1 readProgress, ReadTranslatedBooksV1 readBooks, PullLocalTranslationModelV1 pull,
         BenchmarkLocalTranslationModelV1 benchmark, SaveTranslationMachinesV1 saveMachines, SaveTranslationFreeBytesV1 saveFreeBytes, SaveTranslationModelV1 saveModel,
-        IAntiforgery antiforgery, FrontendAssets assets, UiText texts) : JularrPage
+        CheckTranslationMachinesV1 check, IAntiforgery antiforgery, FrontendAssets assets, UiText texts) : JularrPage
     {
         private const string Home = "/Admin/Instance/Translation";
         private LocalTranslationModelsV1? _models;
@@ -112,10 +112,14 @@ namespace Jularr.Frontend.Pages.Admin.Translation
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
             var translating = Array.FindIndex(models.Machines, machine => machine.Reachable && machine.Installed.Any(models.Approved.Contains));
 
-            // The Ollama machines in order: the first that answers with a model translates, the next takes over when it drops out.
+            // The Ollama machines in order: the first that answers with a model translates, the next takes over when it drops out. Their state is that of the
+            // last check (every thirty seconds); Check now asks them at once.
             var machines = new List<IUiComponent> { new P(new Text("translation.setup.machinesHelp")).Class("translation-help") };
             if (!models.Configured) machines.Add(new P(new Text("translation.local.configure")).Attribute("role", "status"));
             machines.AddRange(models.Machines.Select((machine, place) => MachineCard(machine, place, translating, models, csrf)));
+            if (models.Configured)
+                machines.Add(new Div(new PostForm(Home + "?handler=Check", csrf, [], new Button(new Text("translation.machines.check")).Soft().Submit())
+                    .Attribute("data-translation-submit", "check")).Class("page-actions"));
             machines.Add(new Form<TranslationMachinesDataV1>(form =>
             {
                 form.Multiline(item => item.Machines, "translation.local.machines");
@@ -208,7 +212,8 @@ namespace Jularr.Frontend.Pages.Admin.Translation
         {
             var installed = machine.Installed.Where(models.Approved.Contains).ToArray();
             var resting = !machine.Reachable && machine.RestingUntil is not null;
-            var (stateKey, tone, icon) = resting ? ("translation.machine.resting", UiTone.Warning, "clock")
+            var (stateKey, tone, icon) = machine.CheckedAt is null ? ("translation.machine.unchecked", UiTone.Neutral, "clock")
+                : resting ? ("translation.machine.resting", UiTone.Warning, "clock")
                 : !machine.Reachable ? ("translation.local.machine.offline", UiTone.Danger, "alert")
                 : place == translating ? ("translation.local.machine.translating", UiTone.Success, "check")
                 : installed.Length == 0 ? ("translation.machine.noModel", UiTone.Warning, "alert")
@@ -220,6 +225,7 @@ namespace Jularr.Frontend.Pages.Admin.Translation
                 Fact("translation.machine.answers", machine.Reachable ? installed.Length > 0 ? new ValueText(string.Join(", ", installed)) : new Text("translation.machine.noApproved") : new Text("translation.machine.none"))
             };
             if (machine.Running.Length > 0) facts.Add(Fact("translation.machine.loaded", new ValueText(string.Join(", ", machine.Running))));
+            if (machine.CheckedAt is { } checkedAt) facts.Add(Fact("translation.machine.checkedAt", new LocalTime(checkedAt, "time")));
             if (machine.RestingUntil is { } until && resting) facts.Add(Fact("translation.machine.restingUntil", new LocalTime(until, "time")));
             facts.Add(Fact("translation.machine.lastError", machine.LastError is { } reason
                 ? new Span(new Text("translation.machine.error." + reason), machine.LastErrorAt is { } at ? new LocalTime(at) : new Span())
@@ -267,6 +273,12 @@ namespace Jularr.Frontend.Pages.Admin.Translation
         public async Task<IActionResult> OnPostPullAsync(string model, int machine)
         {
             await pull.ExecuteAsync<UpdateResult>(new LocalTranslationPullParametersV1(model, machine), new NoData(), HttpContext.RequestAborted);
+            return LocalRedirect(SetupAddress);
+        }
+
+        public async Task<IActionResult> OnPostCheckAsync()
+        {
+            await check.ExecuteAsync<UpdateResult>(new LocalTranslationModelsParametersV1(), new NoData(), HttpContext.RequestAborted);
             return LocalRedirect(SetupAddress);
         }
 

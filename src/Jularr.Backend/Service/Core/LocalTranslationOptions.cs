@@ -20,24 +20,97 @@ namespace Jularr.Backend.Service.Core
         public long OperatorVerifiedFreeBytes { get; set; }
     }
 
-    internal sealed class LocalTranslationGate
+    // Who translates now: one lane per provider (its Key). Every Ollama machine shares one, so only one machine translates at a time, a failover included;
+    // Codex has its own and translates while Ollama does. A model download takes no lane. A person waiting (the Reader, subtitles, the Owner) goes before
+    // background work: the book job waits behind everyone, gives up after its short wait, and the lane is handed to the next person first.
+    internal sealed class TranslationLanes(TimeProvider time)
     {
-        public SemaphoreSlim HeavyWork { get; } = new(1, 1);
+        private readonly ConcurrentDictionary<string, Lane> _lanes = new(StringComparer.Ordinal);
 
         // How long a chunk of a chapter waits for the lane, held by another translation for one request at most, before the Reader is told it is busy.
         public TimeSpan ChunkWait { get; set; } = TimeSpan.FromSeconds(30);
+
+        // The lane once it is free within the wait, else null (at once without a wait); disposing the result hands it on. Cancelling throws.
+        public async Task<IDisposable?> TryEnterAsync(string key, TimeSpan wait, CancellationToken ct, bool background = false)
+        {
+            ct.ThrowIfCancellationRequested();
+            var lane = _lanes.GetOrAdd(key, _ => new Lane());
+            TaskCompletionSource<bool> turn;
+            LinkedListNode<TaskCompletionSource<bool>> waiting;
+            lock (lane.Guard)
+            {
+                if (!lane.Held)
+                {
+                    lane.Held = true;
+                    return new Hold(lane);
+                }
+
+                if (wait <= TimeSpan.Zero) return null;
+                turn = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                waiting = (background ? lane.Background : lane.People).AddLast(turn);
+            }
+
+            // Given up after the wait or on cancel, unless the lane was handed over first.
+            using var timeout = new CancellationTokenSource(wait, time);
+            using var stop = CancellationTokenSource.CreateLinkedTokenSource(ct, timeout.Token);
+            using (stop.Token.Register(() =>
+            {
+                lock (lane.Guard)
+                {
+                    if (waiting.List is null) return;
+                    waiting.List.Remove(waiting);
+                    turn.TrySetResult(false);
+                }
+            }))
+            {
+                if (await turn.Task) return new Hold(lane);
+            }
+
+            ct.ThrowIfCancellationRequested();
+            return null;
+        }
+
+        private sealed class Lane
+        {
+            public readonly Lock Guard = new();
+            public readonly LinkedList<TaskCompletionSource<bool>> People = new();
+            public readonly LinkedList<TaskCompletionSource<bool>> Background = new();
+            public bool Held;
+        }
+
+        private sealed class Hold(Lane lane) : IDisposable
+        {
+            private int _released;
+
+            public void Dispose()
+            {
+                if (Interlocked.Exchange(ref _released, 1) == 1) return;
+                lock (lane.Guard)
+                {
+                    var next = lane.People.First ?? lane.Background.First;
+                    if (next is null)
+                    {
+                        lane.Held = false;
+                        return;
+                    }
+
+                    next.List!.Remove(next);
+                    next.Value.TrySetResult(true);
+                }
+            }
+        }
     }
 
-    // The Ollama machines in the Owner's order (Admin, `InstanceSettings.TranslationMachines`), else the configured endpoint alone. The first
-    // that answers with an approved model translates; one that fails rests a minute, so the next takes over and the first returns by itself.
-    // After its rest a machine is asked again in the background: no request waits for one that may still be away.
+    // The Ollama machines in the Owner's order (Admin, `InstanceSettings.TranslationMachines`), else the configured endpoint alone. A check asks every one of them
+    // outside any transaction (the translationMachines job every thirty seconds, Check now on the translation page) and keeps what each answered; choices, the
+    // Reader and the pages read only that. The first that answered with an approved model translates; one that fails a block rests a minute, so the next takes over.
     internal sealed class LocalTranslationMachines(OllamaLocalModels models, IOptions<LocalTranslationOptions> options, TimeProvider time)
     {
         private static readonly TimeSpan Rest = TimeSpan.FromMinutes(1);
         private static readonly TimeSpan Answer = TimeSpan.FromSeconds(3);
         private readonly ConcurrentDictionary<Uri, DateTimeOffset> _resting = new();
-        private readonly ConcurrentDictionary<Uri, Task> _waking = new();
         private readonly ConcurrentDictionary<Uri, (DateTimeOffset At, string Reason)> _lastFailure = new();
+        private readonly ConcurrentDictionary<Uri, TranslationMachineCheck> _checks = new();
 
         // The free space the Owner typed on the translation page, else the configured value; 0 means no model download is allowed.
         public static async Task<long> FreeBytesAsync(LogicContext ctx, long configured, CancellationToken ct)
@@ -52,53 +125,64 @@ namespace Jularr.Backend.Service.Core
         public Uri[] Order(string[] saved) =>
             [.. (saved.Length > 0 ? saved : [options.Value.Endpoint]).Select(OllamaLocalModels.Endpoint).OfType<Uri>().Distinct()];
 
-        // The machine that translates now with this model, or with the first approved one it has.
-        public async Task<(Uri Server, string Model)?> ChooseAsync(string[] saved, CancellationToken ct, string? model = null)
+        // Asks the machines of the order at once for their models and the ones loaded now, each within a few seconds; with onlyNew only those never asked yet.
+        // One that does not answer is kept as unreachable with its reason and does not rest: it counts again with the first check it answers.
+        public async Task CheckAsync(string[] saved, CancellationToken ct, bool onlyNew = false)
+        {
+            await Task.WhenAll(Order(saved).Where(server => !onlyNew || !_checks.ContainsKey(server)).Select(async server =>
+            {
+                using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                timeout.CancelAfter(Answer);
+                try
+                {
+                    var installed = models.InstalledAsync(server, timeout.Token);
+                    var running = models.RunningAsync(server, timeout.Token);
+                    await Task.WhenAll(installed, running);
+                    _checks[server] = new TranslationMachineCheck(time.GetUtcNow(), await installed, await running, null);
+                }
+                catch (Exception exception) when (exception is HttpRequestException or JsonException or InvalidDataException
+                    || exception is OperationCanceledException && !ct.IsCancellationRequested)
+                {
+                    var reason = ReasonOf(exception);
+                    _checks[server] = new TranslationMachineCheck(time.GetUtcNow(), null, [], reason);
+                    _lastFailure[server] = (time.GetUtcNow(), reason);
+                }
+            }));
+        }
+
+        // What the machine answered at its last check; null before its first.
+        public TranslationMachineCheck? CheckOf(Uri server) => _checks.GetValueOrDefault(server);
+
+        // The machine that translates now with this model, or with the largest approved one it has, by the last check: the first of the order that
+        // answered with it and does not rest.
+        public (Uri Server, string Model)? Choose(string[] saved, string? model = null)
         {
             foreach (var server in Order(saved))
             {
-                if (IsAway(server)) continue;
-                try
-                {
-                    using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                    timeout.CancelAfter(Answer);
-                    var installed = await models.InstalledAsync(server, timeout.Token);
-                    var chosen = model is null ? OllamaLocalModels.Candidates.Reverse().FirstOrDefault(candidate => installed.Contains(candidate, StringComparer.Ordinal))
-                        : installed.Contains(model, StringComparer.Ordinal) ? model : null;
-                    if (chosen is not null) return (server, chosen);
-                }
-                catch (Exception exception) when (exception is HttpRequestException or JsonException or InvalidDataException
-                    || exception is OperationCanceledException && !ct.IsCancellationRequested)
-                {
-                    Fail(server, ReasonOf(exception));
-                }
+                if (IsResting(server) || CheckOf(server)?.Installed is not { } installed) continue;
+                var chosen = model is null ? OllamaLocalModels.Candidates.Reverse().FirstOrDefault(installed.ContainsKey) : installed.ContainsKey(model) ? model : null;
+                if (chosen is not null) return (server, chosen);
             }
+
             return null;
         }
 
-        // Every model the machines that answer now have installed, asked together; a machine that does not answer rests.
-        public async Task<string[]> InstalledAsync(string[] saved, CancellationToken ct)
+        // The same for a translation about to run: a machine never asked yet (just after the start or a new order) is asked first.
+        public async Task<(Uri Server, string Model)?> ChooseAsync(string[] saved, CancellationToken ct, string? model = null)
         {
-            var awake = Order(saved).Where(server => !IsAway(server)).ToArray();
-            var answers = await Task.WhenAll(awake.Select(async server =>
-            {
-                try
-                {
-                    using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                    timeout.CancelAfter(Answer);
-                    return await models.InstalledAsync(server, timeout.Token);
-                }
-                catch (Exception exception) when (exception is HttpRequestException or JsonException or InvalidDataException
-                    || exception is OperationCanceledException && !ct.IsCancellationRequested)
-                {
-                    Fail(server, ReasonOf(exception));
-                    return [];
-                }
-            }));
-            return [.. answers.SelectMany(installed => installed).Distinct(StringComparer.Ordinal)];
+            await CheckAsync(saved, ct, onlyNew: true);
+            return Choose(saved, model);
         }
 
-        // A machine that did not answer or failed a block rests; the next in the order takes its work. The reason is what the Owner reads as its last error.
+        // Every approved model the machines that answered their last check and do not rest have installed.
+        public string[] Installed(string[] saved) =>
+            [.. Order(saved).Where(server => !IsResting(server)).SelectMany(server => CheckOf(server)?.Installed?.Keys ?? []).Distinct(StringComparer.Ordinal)];
+
+        // The version of the model on the machine by its last check; a translation counts as current only while it matches.
+        public string Digest(Uri server, string model) =>
+            CheckOf(server)?.Installed?.GetValueOrDefault(model) ?? throw new InvalidDataException("Model digest unavailable; refusing unversioned inference.");
+
+        // A machine that failed a block rests; the next in the order takes its work. The reason is what the Owner reads as its last error.
         public void Fail(Uri server, string reason = "unreachable")
         {
             _resting[server] = time.GetUtcNow() + Rest;
@@ -120,40 +204,15 @@ namespace Jularr.Backend.Service.Core
             _ => "invalid_answer"
         };
 
-        // Machines are set up, and every one of them rests after it did not answer.
-        public bool AllResting(string[] saved) => Order(saved) is { Length: > 0 } order && order.All(_resting.ContainsKey);
+        // Machines are set up, and none of them answered its last check without resting since.
+        public bool AllAway(string[] saved) => Order(saved) is { Length: > 0 } order && order.All(server => IsResting(server) || CheckOf(server)?.Installed is null);
 
-        // The background questions still open.
-        internal Task WakingAsync() => Task.WhenAll(_waking.Values);
-
-        // Resting, or asked again in the background once its rest is over: it counts again when it has answered.
-        private bool IsAway(Uri server)
-        {
-            if (!_resting.TryGetValue(server, out var until)) return false;
-            var now = time.GetUtcNow();
-            if (until <= now && _resting.TryUpdate(server, now + Rest, until))
-            {
-                _waking[server] = Task.Run(() => WakeAsync(server, now + Rest));
-            }
-
-            return true;
-        }
-
-        // A machine that failed again meanwhile keeps its new rest.
-        private async Task WakeAsync(Uri server, DateTimeOffset rest)
-        {
-            try
-            {
-                using var timeout = new CancellationTokenSource(Answer);
-                await models.InstalledAsync(server, timeout.Token);
-                _resting.TryRemove(KeyValuePair.Create(server, rest));
-            }
-            catch (Exception exception) when (exception is HttpRequestException or JsonException or InvalidDataException or OperationCanceledException)
-            {
-                Fail(server, ReasonOf(exception));
-            }
-        }
+        private bool IsResting(Uri server) => _resting.TryGetValue(server, out var until) && until > time.GetUtcNow();
     }
+
+    // What a machine answered at its last check: its approved models with the digest of their version and those loaded now, or why it did not answer
+    // (Installed is null then).
+    internal sealed record TranslationMachineCheck(DateTimeOffset CheckedAt, IReadOnlyDictionary<string, string?>? Installed, string[] Running, string? Reason);
 
     // Persist only the explicitly requested model and its last observed status, never
     // credentials or Ollama responses. The translation cache directory is already a
@@ -164,7 +223,6 @@ namespace Jularr.Backend.Service.Core
 
         private readonly OllamaLocalModels _models;
         private readonly IOptions<LocalTranslationOptions> _settings;
-        private readonly LocalTranslationGate _gate;
         private readonly string _statePath;
         private readonly Channel<(string Model, Uri Server)> _queue = Channel.CreateBounded<(string Model, Uri Server)>(new BoundedChannelOptions(1)
         {
@@ -178,12 +236,10 @@ namespace Jularr.Backend.Service.Core
         private int _progress;
         private bool _storageHealthy = true;
 
-        public LocalTranslationDownloads(OllamaLocalModels models, IOptions<LocalTranslationOptions> settings,
-            IOptions<MediaOptions> media, LocalTranslationGate gate)
+        public LocalTranslationDownloads(OllamaLocalModels models, IOptions<LocalTranslationOptions> settings, IOptions<MediaOptions> media)
         {
             _models = models;
             _settings = settings;
-            _gate = gate;
             _statePath = Path.Combine(media.Value.TranslationPath, "ollama-pull-state.json");
             RestorePreviousStatus();
         }
@@ -285,22 +341,17 @@ namespace Jularr.Backend.Service.Core
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            // Do not auto-resume on reboot: work only starts from an explicit admin pull.
+            // Do not auto-resume on reboot: work only starts from an explicit admin pull. One download at a time, beside any translation.
             await foreach (var (model, server) in _queue.Reader.ReadAllAsync(stoppingToken))
             {
                 try
                 {
-                    await _gate.HeavyWork.WaitAsync(stoppingToken);
-                    try
+                    if (!Set("downloading", 0)) throw new IOException("Model status storage is unavailable.");
+                    await _models.PullAsync(server, model, stoppingToken, fraction =>
                     {
-                        if (!Set("downloading", 0)) throw new IOException("Model status storage is unavailable.");
-                        await _models.PullAsync(server, model, stoppingToken, fraction =>
-                        {
-                            if (!Set("downloading", fraction)) throw new IOException("Model status storage is unavailable.");
-                        });
-                        if (!Set("installed", 100)) throw new IOException("Model status storage is unavailable.");
-                    }
-                    finally { _gate.HeavyWork.Release(); }
+                        if (!Set("downloading", fraction)) throw new IOException("Model status storage is unavailable.");
+                    });
+                    if (!Set("installed", 100)) throw new IOException("Model status storage is unavailable.");
                 }
                 catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
                 {

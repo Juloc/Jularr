@@ -16,10 +16,10 @@ namespace Jularr.Workers
         protected override async Task RunOnceAsync(CancellationToken ct)
         {
             await Runner.RunWhileBusyAsync("readingPreparation", async (services, token) =>
-                (await services.GetRequiredService<PrepareReadingBooksV1>().ExecuteAsync<UpdateResult>(new ReadingPreparationParametersV1(), default, token)).Success, Pause, Time, ct);
+                (await services.GetRequiredService<PrepareReadingBooksV1>().ExecuteAsync<UpdateResult>(new ReadingPreparationParametersV1(), default, token)).Success, Pause, ct);
 
             await Runner.RunWhileBusyAsync("readingCopies", async (services, token) =>
-                (await services.GetRequiredService<DeriveReadingEbooksV1>().ExecuteAsync<UpdateResult>(new ReadingDerivationParametersV1(), default, token)).Success, Pause, Time, ct);
+                (await services.GetRequiredService<DeriveReadingEbooksV1>().ExecuteAsync<UpdateResult>(new ReadingDerivationParametersV1(), default, token)).Success, Pause, ct);
         }
     }
 }
