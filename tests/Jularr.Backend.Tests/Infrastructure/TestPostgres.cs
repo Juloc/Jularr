@@ -45,37 +45,6 @@ namespace Jularr.Backend.Tests.Infrastructure
             }
         }
 
-        // Drops a copy as soon as its test is done with it, ending what is still connected; a copy that cannot be dropped now is left to the cleanup.
-        public static async Task DropAsync(string connectionString)
-        {
-            var name = new NpgsqlConnectionStringBuilder(connectionString).Database!;
-            string maintenance;
-            lock (Gate)
-            {
-                if (_maintenance is null || !Copies.Remove(name))
-                {
-                    return;
-                }
-
-                maintenance = _maintenance;
-            }
-
-            try
-            {
-                await using var connection = new NpgsqlConnection(maintenance);
-                await connection.OpenAsync();
-                await using var command = new NpgsqlCommand($"DROP DATABASE IF EXISTS \"{name}\" WITH (FORCE)", connection) { CommandTimeout = 120 };
-                await command.ExecuteNonQueryAsync();
-            }
-            catch (NpgsqlException)
-            {
-                lock (Gate)
-                {
-                    Copies.Add(name);
-                }
-            }
-        }
-
         // Runs at the end of the test assembly and again, harmlessly, at process exit.
         public static void Cleanup()
         {
@@ -118,15 +87,8 @@ namespace Jularr.Backend.Tests.Infrastructure
                     Copies.Add(new NpgsqlConnectionStringBuilder(connectionString).Database!);
                 }
 
-                try
-                {
-                    await build(connectionString);
-                }
-                catch
-                {
-                    await DropAsync(connectionString);
-                    throw;
-                }
+                // A failed build stays a copy, dropped by the cleanup.
+                await build(connectionString);
 
                 // A database is copied only while nobody is connected to it: the build has closed its pools, and nothing opens the template again.
                 var name = new NpgsqlConnectionStringBuilder(connectionString).Database!;

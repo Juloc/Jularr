@@ -274,7 +274,7 @@ namespace Jularr.Backend.Tests
                 : CreateAsync("profile-without-migrations", _ => Task.CompletedTask);
 
             // A copy of the named template, built once per test process: the account schema and rows below, then what prepare adds, the same for every copy.
-            // Each copy gets a session of its own and is dropped when the fixture is disposed.
+            // Each copy gets a session of its own.
             internal static async Task<ProfileFixture> CreateAsync(string template, Func<ProfileFixture, Task> prepare)
             {
                 var cs = await TestPostgres.CopyAsync(template, async connectionString =>
@@ -360,14 +360,21 @@ namespace Jularr.Backend.Tests
                 await command.ExecuteNonQueryAsync();
             }
 
-            // Closes the pools; a copy is dropped with them, a template stays for the next copies.
+            // Closes the pools. A copy also drops its schema, which frees its space at once without the checkpoint that dropping a database forces;
+            // the empty database goes with the cleanup at the end of the run. A template stays for the next copies.
             public async ValueTask DisposeAsync()
             {
                 await Database.DisposeAsync();
-                await _setup.DisposeAsync();
-                if (_isCopy)
+                try
                 {
-                    await TestPostgres.DropAsync(ConnectionString);
+                    if (_isCopy)
+                    {
+                        await RunBootstrapAsync("DROP SCHEMA IF EXISTS \"ProfileReference\" CASCADE");
+                    }
+                }
+                finally
+                {
+                    await _setup.DisposeAsync();
                 }
             }
         }

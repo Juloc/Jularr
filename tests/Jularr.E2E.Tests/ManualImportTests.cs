@@ -158,16 +158,12 @@ namespace Jularr.E2E.Tests
                 await Steps.RequestAsync(page, "Test Series", FakeServices.SeriesTitle);
                 await Steps.RequestAsync(page, "Bunny", FakeServices.MovieTitle);
 
-                ILocator? waiting = null;
-                var deadline = System.Diagnostics.Stopwatch.StartNew();
-                while (waiting is null)
+                var waiting = Steps.ListRow(page, "does not clearly match the film").First;
+                await Steps.WaitForDownloadMonitorAsync(page, async () =>
                 {
-                    Assert.IsTrue(deadline.Elapsed < TimeSpan.FromMinutes(6), "The download did not wait in the queue within six minutes.");
                     await page.GotoAsync("/Admin/Queue");
-                    var row = Steps.ListRow(page, "does not clearly match the film");
-                    if (await row.CountAsync() > 0) waiting = row.First;
-                    else await page.WaitForTimeoutAsync(3000);
-                }
+                    return await waiting.CountAsync() > 0;
+                }, "The download did not wait in the queue", TimeSpan.FromMinutes(6));
 
                 await Steps.FollowAsync(page, waiting.GetByRole(AriaRole.Link, new() { Name = "Import", Exact = true }));
                 var rows = page.Locator(".manual-import-files .list-row");
@@ -264,16 +260,12 @@ namespace Jularr.E2E.Tests
                 await Steps.RequestAsync(page, "Bunny", FakeServices.MovieTitle);
 
                 // The doubt shows in the queue with its reason and the way to settle it.
-                ILocator? waiting = null;
-                var deadline = System.Diagnostics.Stopwatch.StartNew();
-                while (waiting is null)
+                var waiting = Steps.ListRow(page, "does not clearly match the film").First;
+                await Steps.WaitForDownloadMonitorAsync(page, async () =>
                 {
-                    Assert.IsTrue(deadline.Elapsed < TimeSpan.FromMinutes(6), "The download did not wait in the queue within six minutes.");
                     await page.GotoAsync("/Admin/Queue");
-                    var row = Steps.ListRow(page, "does not clearly match the film");
-                    if (await row.CountAsync() > 0) waiting = row.First;
-                    else await page.WaitForTimeoutAsync(3000);
-                }
+                    return await waiting.CountAsync() > 0;
+                }, "The download did not wait in the queue", TimeSpan.FromMinutes(6));
 
                 await Steps.FollowAsync(page, waiting.GetByRole(AriaRole.Link, new() { Name = "Import", Exact = true }));
                 var file = page.Locator(".manual-import-files .list-row").First;
@@ -331,16 +323,12 @@ namespace Jularr.E2E.Tests
                 await Steps.GrabAsync(page, book);
 
                 // The download waits with its reason; the drawer names the file and why.
-                ILocator? waiting = null;
-                var deadline = System.Diagnostics.Stopwatch.StartNew();
-                while (waiting is null)
+                var waiting = Steps.ListRow(page, "Nothing in the download could be placed").First;
+                await Steps.WaitForDownloadMonitorAsync(page, async () =>
                 {
-                    Assert.IsTrue(deadline.Elapsed < TimeSpan.FromMinutes(6), "The download did not wait in the queue within six minutes.");
                     await page.GotoAsync("/Admin/Queue");
-                    var row = Steps.ListRow(page, "Nothing in the download could be placed");
-                    if (await row.CountAsync() > 0) waiting = row.First;
-                    else await page.WaitForTimeoutAsync(3000);
-                }
+                    return await waiting.CountAsync() > 0;
+                }, "The download did not wait in the queue", TimeSpan.FromMinutes(6));
 
                 await Steps.FollowAsync(page, waiting.GetByRole(AriaRole.Link, new() { Name = "Import", Exact = true }));
 

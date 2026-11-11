@@ -503,12 +503,15 @@ namespace Jularr.Backend.Service.Core
             foreach (var type in serviceTypes)
             {
                 // Compile internal constructor activation.
-                var constructor = type.GetConstructors(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).Single();
-                var providerParameter = Expression.Parameter(typeof(IServiceProvider), "provider");
-                var dependencies = constructor.GetParameters().Select(parameter => Expression.Convert(
-                    Expression.Call(typeof(ServiceProviderServiceExtensions), nameof(ServiceProviderServiceExtensions.GetRequiredService),
-                        Type.EmptyTypes, providerParameter, Expression.Constant(parameter.ParameterType)), parameter.ParameterType));
-                var create = Expression.Lambda<Func<IServiceProvider, Service>>(Expression.New(constructor, dependencies), providerParameter).Compile();
+                var create = Activators.GetOrAdd(type, static type =>
+                {
+                    var constructor = type.GetConstructors(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).Single();
+                    var providerParameter = Expression.Parameter(typeof(IServiceProvider), "provider");
+                    var dependencies = constructor.GetParameters().Select(parameter => Expression.Convert(
+                        Expression.Call(typeof(ServiceProviderServiceExtensions), nameof(ServiceProviderServiceExtensions.GetRequiredService),
+                            Type.EmptyTypes, providerParameter, Expression.Constant(parameter.ParameterType)), parameter.ParameterType));
+                    return Expression.Lambda<Func<IServiceProvider, Service>>(Expression.New(constructor, dependencies), providerParameter).Compile();
+                });
 
                 // Bind the authorized runtime.
                 services.AddScoped(type, provider =>
@@ -521,6 +524,9 @@ namespace Jularr.Backend.Service.Core
 
             return services;
         }
+
+        // Each service type's activation, compiled once per process (a host that registers the services again, as every test host does, reuses it).
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<Type, Func<IServiceProvider, Service>> Activators = new();
 
         public static IEndpointRouteBuilder MapJularrServices(this IEndpointRouteBuilder endpoints)
         {

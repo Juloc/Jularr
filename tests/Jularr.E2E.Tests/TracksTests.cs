@@ -437,30 +437,17 @@ namespace Jularr.E2E.Tests
                     throw new TimeoutException("The episode's tracks were not read within two minutes.");
                 }
 
-                await Task.Delay(2000);
+                await Task.Delay(500);
                 await page.GotoAsync(player);
             }
         }
 
-        private static async Task WaitForPlayableAsync(IPage page, string details, ILocator play)
-        {
-            var deadline = DateTime.UtcNow.AddMinutes(2);
-            while (true)
+        private static async Task WaitForPlayableAsync(IPage page, string details, ILocator play) =>
+            await Steps.WaitForDownloadMonitorAsync(page, async () =>
             {
                 await page.GotoAsync(details);
-                if (await play.CountAsync() > 0)
-                {
-                    return;
-                }
-
-                if (DateTime.UtcNow > deadline)
-                {
-                    throw new AssertFailedException("Not both episodes became playable within two minutes.");
-                }
-
-                await Task.Delay(3000);
-            }
-        }
+                return await play.CountAsync() > 0;
+            }, "Not both episodes became playable", TimeSpan.FromMinutes(2));
 
         // A WebM with an English and a German tone track and an English subtitle file beside it.
         private static async Task WriteEpisodeAsync(string ffmpeg, string folder, string name)
