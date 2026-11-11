@@ -366,6 +366,7 @@ namespace Jularr.Backend.Tests
             var now = DateTime.UtcNow;
             timings.Record("Probe/Service", TimeSpan.FromMilliseconds(40), false);
             timings.Record("Probe/Service", TimeSpan.FromMilliseconds(10), true);
+            timings.RecordPage("/Probe/Page", TimeSpan.FromMilliseconds(25), false);
             history.Add(new ResourceSample(now.AddMinutes(-1), 12.5m, 300_000_000));
             history.Add(new ResourceSample(now, 20.0m, 310_000_000));
             await host.Fixture.RunSqlAsync("INSERT INTO \"PerformanceSamples\" (\"SampledAt\", \"ProcessorPercent\", \"MemoryBytes\") VALUES (now() - interval '30 hours', 1, 1)");
@@ -377,6 +378,7 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(2L, await host.ScalarAsync("SELECT \"Calls\" FROM \"ServiceTimings\" WHERE \"Service\" = 'Probe/Service'"));
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT \"Errors\" FROM \"ServiceTimings\" WHERE \"Service\" = 'Probe/Service'"));
             Assert.AreEqual(40L, await host.ScalarAsync("SELECT \"MaximumMilliseconds\" FROM \"ServiceTimings\" WHERE \"Service\" = 'Probe/Service'"));
+            Assert.AreEqual(25L, await host.ScalarAsync("SELECT \"TotalMilliseconds\" FROM \"ServiceTimings\" WHERE \"Service\" = 'Page/Probe/Page'"));
 
             // What was written is not written again; a later call changes the same row.
             Assert.IsFalse(timings.ReadUnsaved().Any(slice => slice.Service == "Probe/Service"));
@@ -397,6 +399,7 @@ namespace Jularr.Backend.Tests
             }
 
             var read = timings.Read(100).Single(timing => timing.Service == "Probe/Service");
+            Assert.AreEqual(1L, timings.ReadPages().Single(page => page.Service == "/Probe/Page").Count);
             Assert.AreEqual(4L, read.Count);
             Assert.AreEqual(1L, read.Errors);
             Assert.AreEqual(70d, read.MaxMilliseconds);

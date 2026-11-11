@@ -226,6 +226,13 @@ namespace Jularr.Backend.Service.Core
             services.TryAddSingleton<ServiceTimings>();
             services.TryAddSingleton<ProviderObservations>();
             services.TryAddSingleton(new NewznabGate(NewznabGate.DefaultSpacing));
+
+            // Each provider's own request spacing, shared by every caller of the process.
+            services.TryAddSingleton(new RequestPace<OpenLibraryClient>(OpenLibraryClient.DefaultSpacing));
+            services.TryAddSingleton(new RequestPace<AniListClient>(AniListClient.DefaultSpacing));
+            services.TryAddSingleton(new RequestPace<MusicBrainzClient>(MusicBrainzClient.DefaultSpacing));
+            services.TryAddSingleton(new RequestPace<IgdbClient>(IgdbClient.DefaultSpacing));
+            services.TryAddSingleton(new NarouPace(NarouClient.RequestInterval));
             services.TryAddSingleton<HealthChecks>();
             services.TryAddSingleton<ResourceHistory>();
             services.AddHostedService(provider => provider.GetRequiredService<ResourceHistory>());
@@ -510,12 +517,15 @@ namespace Jularr.Backend.Service.Core
             foreach (var type in serviceTypes)
             {
                 // Compile internal constructor activation.
-                var constructor = type.GetConstructors(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).Single();
-                var providerParameter = Expression.Parameter(typeof(IServiceProvider), "provider");
-                var dependencies = constructor.GetParameters().Select(parameter => Expression.Convert(
-                    Expression.Call(typeof(ServiceProviderServiceExtensions), nameof(ServiceProviderServiceExtensions.GetRequiredService),
-                        Type.EmptyTypes, providerParameter, Expression.Constant(parameter.ParameterType)), parameter.ParameterType));
-                var create = Expression.Lambda<Func<IServiceProvider, Service>>(Expression.New(constructor, dependencies), providerParameter).Compile();
+                var create = Activators.GetOrAdd(type, static type =>
+                {
+                    var constructor = type.GetConstructors(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).Single();
+                    var providerParameter = Expression.Parameter(typeof(IServiceProvider), "provider");
+                    var dependencies = constructor.GetParameters().Select(parameter => Expression.Convert(
+                        Expression.Call(typeof(ServiceProviderServiceExtensions), nameof(ServiceProviderServiceExtensions.GetRequiredService),
+                            Type.EmptyTypes, providerParameter, Expression.Constant(parameter.ParameterType)), parameter.ParameterType));
+                    return Expression.Lambda<Func<IServiceProvider, Service>>(Expression.New(constructor, dependencies), providerParameter).Compile();
+                });
 
                 // Bind the authorized runtime.
                 services.AddScoped(type, provider =>
@@ -528,6 +538,9 @@ namespace Jularr.Backend.Service.Core
 
             return services;
         }
+
+        // Each service type's activation, compiled once per process (a host that registers the services again, as every test host does, reuses it).
+        private static readonly global::System.Collections.Concurrent.ConcurrentDictionary<Type, Func<IServiceProvider, Service>> Activators = new();
 
         public static IEndpointRouteBuilder MapJularrServices(this IEndpointRouteBuilder endpoints)
         {

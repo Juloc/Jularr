@@ -162,7 +162,8 @@ jobs:
             type=raw,value=latest,enable=${{ needs.guard.outputs.prerelease == 'false' }}
           labels: |
             org.opencontainers.image.version=${{ needs.guard.outputs.version }}
-      # Without dry_run this pushes; with it the image is only built.
+      # Without dry_run this pushes; with it the image is only built. The tool layers come from the cache image.yml
+      # writes on main (stage runtime-base; a tag reads caches of main only); a release writes no cache.
       - name: Build the image
         uses: docker/build-push-action@v7
         with:
@@ -172,8 +173,7 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: JULARR_VERSION=${{ needs.guard.outputs.version }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=jularr-runtime-base
       - name: Verify the published image
         if: needs.guard.outputs.dry_run != 'true'
         env:

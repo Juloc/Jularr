@@ -1133,14 +1133,10 @@ namespace Jularr.Backend.Tests
                 {
                     json = $$"""{"movie_results":[],"tv_results":[{"id":{{int.Parse(path[^2..])}}}]}""";
                 }
-                else if (path.StartsWith("/3/tv/", StringComparison.Ordinal) && !path.Contains("/season/", StringComparison.Ordinal))
+                else if (path.StartsWith("/3/tv/", StringComparison.Ordinal))
                 {
                     var id = int.Parse(path["/3/tv/".Length..]);
                     json = $$"""{"id":{{id}},"name":"Show {{id}}","first_air_date":"2020-01-01","external_ids":{"imdb_id":"tt{{2000000 + id}}","tvdb_id":{{7000 + id}}},"seasons":[{"season_number":1,"name":"Season 1","episode_count":1}]}""";
-                }
-                else if (path.EndsWith("/season/1", StringComparison.Ordinal))
-                {
-                    json = """{"episodes":[{"season_number":1,"episode_number":1,"name":"Pilot"}]}""";
                 }
 
                 return Task.FromResult(json is null ? new HttpResponseMessage(HttpStatusCode.NotFound) :
@@ -1383,6 +1379,8 @@ namespace Jularr.Backend.Tests
             using var own = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/library/renames?WorkId=" + workId);
             var ownPlan = (await own.Content.ReadFromJsonAsync<LibraryRenamePlanV1>())!;
             Assert.AreEqual(2, ownPlan.Items.Count);
+            CollectionAssert.AreEqual(plan.Items.Select(item => item.StoredFileId + " " + item.TargetPath).ToArray(), ownPlan.Items.Select(item => item.StoredFileId + " " + item.TargetPath).ToArray());
+            Assert.AreEqual(plan.Fingerprint, ownPlan.Fingerprint);
             using var other = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/library/renames?WorkId=" + (workId + 1000));
             var otherPlan = (await other.Content.ReadFromJsonAsync<LibraryRenamePlanV1>())!;
             Assert.AreEqual(0, otherPlan.Items.Count);
@@ -1507,7 +1505,7 @@ namespace Jularr.Backend.Tests
 
             await using var sql = new SqlContext(host.Fixture.Database);
             await sql.BeginAsync(SqlAccessMode.ReadOnly);
-            var files = await new LogicContext(sql).ReadLibraryRenameFilesAsync(default);
+            var files = await new LogicContext(sql).ReadLibraryRenameFilesAsync(null, default);
             await sql.CommitAsync();
 
             CollectionAssert.AreEqual(new[]

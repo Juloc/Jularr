@@ -222,6 +222,55 @@ namespace Jularr.E2E.Tests
             await Assertions.Expect(button).ToHaveAttributeAsync("data-phase", new System.Text.RegularExpressions.Regex(".+"));
         }
 
+        // Runs a background job now, as the Owner's Run now on the Jobs page does, instead of waiting for its schedule; a pass already running is followed by
+        // another. For tests whose subject is what the job does, not when it runs.
+        public static async Task RunJobAsync(IPage page, string key) => await PostJobAsync(page, key, "run", null);
+
+        // Pauses a background job, as the Owner's Pause on the Jobs page does, and waits until a pass that was running has ended: for tests whose subject the
+        // job would otherwise change behind their back.
+        public static async Task PauseJobAsync(IPage page, string key)
+        {
+            await PostJobAsync(page, key, "pause", new { isPaused = true });
+            await WaitUntilAsync(async () => await JobStateAsync(page, key) == 2, "The job " + key + " did not stop", TimeSpan.FromSeconds(60));
+        }
+
+        // Waits for a condition the page or the database shows, looking again every quarter of a second until the deadline.
+        public static async Task WaitUntilAsync(Func<Task<bool>> condition, string failure, TimeSpan within)
+        {
+            var waited = Stopwatch.StartNew();
+            while (!await condition())
+            {
+                if (waited.Elapsed > within)
+                {
+                    throw new AssertFailedException(failure + " within " + within.TotalSeconds + " seconds.");
+                }
+
+                await Task.Delay(250);
+            }
+        }
+
+        // The job's state as the Jobs API reports it (1 running, 2 paused).
+        private static async Task<int> JobStateAsync(IPage page, string key)
+        {
+            var response = await page.APIRequest.GetAsync("/api/v1/admin/jobs");
+            Assert.AreEqual(200, response.Status, await response.TextAsync());
+            using var jobs = System.Text.Json.JsonDocument.Parse(await response.TextAsync());
+            return jobs.RootElement.EnumerateArray().Single(job => job.GetProperty("key").GetString() == key).GetProperty("workerJobStateTypeId").GetInt32();
+        }
+
+        // The service API's write of the Jobs page; every read of the API hands out the request token a write needs.
+        private static async Task PostJobAsync(IPage page, string key, string action, object? data)
+        {
+            var jobs = await page.APIRequest.GetAsync("/api/v1/admin/jobs");
+            Assert.AreEqual(200, jobs.Status, await jobs.TextAsync());
+            var response = await page.APIRequest.PostAsync("/api/v1/admin/jobs/" + key + "/" + action, new()
+            {
+                Headers = new Dictionary<string, string> { ["RequestVerificationToken"] = jobs.Headers["requestverificationtoken"] },
+                DataObject = data
+            });
+            Assert.AreEqual(200, response.Status, key + " " + action + ": " + await response.TextAsync());
+        }
+
         // A row of the admin list on the page (the list kit): the one whose text holds this.
         public static ILocator ListRow(IPage page, string text) => page.Locator(".list-body .list-row", new() { HasText = text });
 
@@ -265,29 +314,43 @@ namespace Jularr.E2E.Tests
                 .Filter(new() { Has = page.GetByRole(AriaRole.Button, new() { Name = "In queue" }) }));
         }
 
-        // The details page of a work once something of it can be played or read.
-        public static async Task<string> WaitForAvailableAsync(IPage page, string title, string action = "Play")
+        // The details page of a work once something of it can be played or read. A test of the automatic path (or a page without the Owner's rights)
+        // leaves the download monitor to its own ticks.
+        public static async Task<string> WaitForAvailableAsync(IPage page, string title, string action = "Play", bool asksMonitor = true)
         {
-            var deadline = Stopwatch.StartNew();
-            while (deadline.Elapsed < TimeSpan.FromMinutes(2))
+            string? details = null;
+            await WaitForDownloadMonitorAsync(page, async () =>
             {
                 await page.GotoAsync("/Library");
                 var card = page.GetByRole(AriaRole.Link, new() { Name = title });
-                if (await card.CountAsync() > 0)
+                if (await card.CountAsync() == 0) return false;
+                await FollowAsync(page, card.First);
+
+                // The primary action may name the unit it opens ("Read · Volume 1").
+                if (await page.GetByRole(AriaRole.Link, new() { NameRegex = new System.Text.RegularExpressions.Regex("^" + System.Text.RegularExpressions.Regex.Escape(action) + "( · .*)?$") }).CountAsync() == 0) return false;
+                details = new Uri(page.Url).PathAndQuery;
+                return true;
+            }, title + " did not become available", TimeSpan.FromMinutes(2), asksMonitor);
+            return details!;
+        }
+
+        // Waits until the page shows what the download monitor brings (an import, a waiting or failed download). The monitor looks now, and again every
+        // five seconds, instead of at its next tick (a minute, or fifteen seconds while a download runs).
+        public static async Task WaitForDownloadMonitorAsync(IPage page, Func<Task<bool>> shown, string failure, TimeSpan within, bool asksMonitor = true)
+        {
+            if (asksMonitor) await RunJobAsync(page, "downloads");
+            var asked = Stopwatch.StartNew();
+            await WaitUntilAsync(async () =>
+            {
+                if (await shown()) return true;
+                if (asksMonitor && asked.Elapsed > TimeSpan.FromSeconds(5))
                 {
-                    await FollowAsync(page, card.First);
-                    // The primary action may name the unit it opens ("Read · Volume 1").
-                    if (await page.GetByRole(AriaRole.Link, new() { NameRegex = new System.Text.RegularExpressions.Regex("^" + System.Text.RegularExpressions.Regex.Escape(action) + "( · .*)?$") }).CountAsync() > 0)
-                    {
-                        return new Uri(page.Url).PathAndQuery;
-                    }
+                    await RunJobAsync(page, "downloads");
+                    asked.Restart();
                 }
 
-                // The download monitor runs every fifteen seconds.
-                await page.WaitForTimeoutAsync(3000);
-            }
-
-            throw new AssertFailedException(title + " did not become available within two minutes.");
+                return false;
+            }, failure, within);
         }
 
         // An album of the given tracks as FLAC, a tone each; without FFmpeg only bytes for the import.
@@ -351,7 +414,7 @@ namespace Jularr.E2E.Tests
         public static async Task ReadNextSectionAsync(IPage page)
         {
             await page.Locator("[data-role=next]").First.ClickAsync();
-            await page.WaitForURLAsync(url => url.Contains("s=1", StringComparison.Ordinal));
+            await Assertions.Expect(page).ToHaveURLAsync(new System.Text.RegularExpressions.Regex("s=1"));
             await page.Locator(".reader__canvas").HoverAsync();
             await page.RunAndWaitForResponseAsync(() => page.Mouse.WheelAsync(0, 800),
                 response => response.Request.Method == "PUT" && response.Ok, new() { Timeout = MediaTimeout });

@@ -28,7 +28,9 @@ namespace Jularr.Frontend.Pages.Admin.System
                 ("system.profiles", new ValueText(health.Profiles.ToString(CultureInfo.CurrentCulture))),
                 ("system.queued", Link(health.QueuedOperations.ToString(CultureInfo.CurrentCulture), "/Admin/Queue")),
                 ("system.failed", Link(health.FailedOperations.ToString(CultureInfo.CurrentCulture), "/Admin/Queue")),
-                ("system.catalogTitles", new ValueText(health.CatalogWorks.ToString("N0", CultureInfo.CurrentCulture))),
+                ("system.catalogTitles", health.CatalogCountedAt is { } countedAt
+                    ? new Span(new ValueText(health.CatalogWorks.ToString("N0", CultureInfo.CurrentCulture) + " · "), new Text("admin.catalog.countedAt"), new ValueText(" "), new LocalTime(countedAt, "time"))
+                    : new Text("admin.catalog.counting")),
                 ("system.storageOffline", Link(health.StorageOffline.ToString(CultureInfo.CurrentCulture), "/Admin/Storage")),
                 ("system.lastBackup", Link(health.LastBackupAt is { } backedUp ? new LocalTime(backedUp) : new ValueText(texts["system.never"]), "/Admin/Backup"))]));
             page.Content.Add(new UiSection("system.tools", [new Table<ToolStateV1>(health.Tools)

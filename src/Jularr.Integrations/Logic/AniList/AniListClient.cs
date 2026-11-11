@@ -5,15 +5,15 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using Jularr.Integrations.Data.AniList;
 using Jularr.Integrations.Data.Common;
+using Jularr.Integrations.Logic.Common;
 
 namespace Jularr.Integrations.Logic.AniList
 {
     // AniList: keyless anime and manga metadata through its public GraphQL endpoint.
-    internal sealed partial class AniListClient(HttpClient http)
+    internal sealed partial class AniListClient(HttpClient http, RequestPace<AniListClient>? pace = null)
     {
-        private static readonly TimeSpan Spacing = TimeSpan.FromMilliseconds(700);
-        private static readonly SemaphoreSlim Pace = new(1, 1);
-        private static DateTimeOffset _last = DateTimeOffset.MinValue;
+        public static readonly TimeSpan DefaultSpacing = TimeSpan.FromMilliseconds(700);
+        private readonly RequestPace<AniListClient> _pace = pace ?? new(DefaultSpacing);
         private static long _blockedUntilTicks;
 
         private const string Fields =
@@ -249,16 +249,10 @@ namespace Jularr.Integrations.Logic.AniList
             }
 
             HttpResponseMessage response;
-            await Pace.WaitAsync(ct);
+            await _pace.Gate.WaitAsync(ct);
             try
             {
-                var wait = _last + Spacing - DateTimeOffset.UtcNow;
-                if (wait > TimeSpan.Zero)
-                {
-                    await Task.Delay(wait, ct);
-                }
-
-                _last = DateTimeOffset.UtcNow;
+                await _pace.WaitForTurnAsync(ct);
                 using var request = new HttpRequestMessage(HttpMethod.Post, endpoint) { Content = JsonContent.Create(body) };
                 if (token is not null)
                 {
@@ -273,7 +267,7 @@ namespace Jularr.Integrations.Logic.AniList
             }
             finally
             {
-                Pace.Release();
+                _pace.Gate.Release();
             }
 
             using (response)

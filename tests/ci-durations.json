@@ -1,53 +1,53 @@
 {
  "backend": {
-  "Jularr.Backend.Tests.AccountSchemaTests": 1.2,
+  "Jularr.Backend.Tests.AccountSchemaTests": 1.3,
   "Jularr.Backend.Tests.AcquisitionPolicyTests": 19.9,
-  "Jularr.Backend.Tests.AcquisitionTests": 481.8,
+  "Jularr.Backend.Tests.AcquisitionTests": 484.8,
   "Jularr.Backend.Tests.ActionHintTests": 8.1,
-  "Jularr.Backend.Tests.AdminAccountTests": 81.8,
-  "Jularr.Backend.Tests.AdminLocaleTests": 22.5,
-  "Jularr.Backend.Tests.AdminLocalizationTests": 29.1,
+  "Jularr.Backend.Tests.AdminAccountTests": 82.4,
+  "Jularr.Backend.Tests.AdminLocaleTests": 19.6,
+  "Jularr.Backend.Tests.AdminLocalizationTests": 29.4,
   "Jularr.Backend.Tests.AdminMenuTests": 28.0,
-  "Jularr.Backend.Tests.AdminProviderTests": 44.4,
+  "Jularr.Backend.Tests.AdminProviderTests": 43.4,
   "Jularr.Backend.Tests.AllMediaNamingTests": 0.1,
-  "Jularr.Backend.Tests.AniListRelationTests": 21.7,
+  "Jularr.Backend.Tests.AniListRelationTests": 21.4,
   "Jularr.Backend.Tests.AniListSyncTests": 40.3,
-  "Jularr.Backend.Tests.AniListTests": 28.0,
+  "Jularr.Backend.Tests.AniListTests": 27.2,
   "Jularr.Backend.Tests.AnimeMappingTests": 6.2,
   "Jularr.Backend.Tests.AnnasArchiveSearchTests": 0.2,
-  "Jularr.Backend.Tests.ArrAdminTests": 47.9,
-  "Jularr.Backend.Tests.ArrQualityTests": 0.0,
-  "Jularr.Backend.Tests.AuthenticationTests": 128.9,
+  "Jularr.Backend.Tests.ArrAdminTests": 45.6,
+  "Jularr.Backend.Tests.ArrQualityTests": 0.1,
+  "Jularr.Backend.Tests.AuthenticationTests": 126.8,
   "Jularr.Backend.Tests.AutoApprovalTests": 11.8,
   "Jularr.Backend.Tests.BackgroundWorkTests": 23.7,
-  "Jularr.Backend.Tests.BackupTests": 29.1,
+  "Jularr.Backend.Tests.BackupTests": 29.0,
   "Jularr.Backend.Tests.BookFormatTests": 10.6,
   "Jularr.Backend.Tests.BookLanguageFromTitleTests": 0.1,
   "Jularr.Backend.Tests.BookLanguagePerEditionTests": 0.1,
   "Jularr.Backend.Tests.BookLanguageSelectionTests": 0.1,
   "Jularr.Backend.Tests.BookReleaseCorpusTests": 0.1,
   "Jularr.Backend.Tests.BookReleaseIdentityTests": 0.0,
-  "Jularr.Backend.Tests.BookTests": 194.5,
-  "Jularr.Backend.Tests.BookTranslationTests": 122.4,
-  "Jularr.Backend.Tests.BrowserAssistanceTests": 7.5,
+  "Jularr.Backend.Tests.BookTests": 187.9,
+  "Jularr.Backend.Tests.BookTranslationTests": 113.8,
+  "Jularr.Backend.Tests.BrowserAssistanceTests": 7.3,
   "Jularr.Backend.Tests.BrowserTimeZoneTests": 0.0,
-  "Jularr.Backend.Tests.CalendarTests": 8.0,
+  "Jularr.Backend.Tests.CalendarTests": 7.8,
   "Jularr.Backend.Tests.CatalogCleanupTests": 13.2,
   "Jularr.Backend.Tests.CodexConnectionTests": 11.8,
   "Jularr.Backend.Tests.CodexTranslationTests": 0.5,
   "Jularr.Backend.Tests.CollectionTests": 15.9,
-  "Jularr.Backend.Tests.CompanionTests": 40.5,
-  "Jularr.Backend.Tests.CompressionTests": 0.0,
-  "Jularr.Backend.Tests.ContinueDetailTests": 0.0,
+  "Jularr.Backend.Tests.CompanionTests": 40.8,
+  "Jularr.Backend.Tests.CompressionTests": 0.1,
+  "Jularr.Backend.Tests.ContinueDetailTests": 0.1,
   "Jularr.Backend.Tests.CoverTests": 44.8,
-  "Jularr.Backend.Tests.DashboardTests": 52.5,
+  "Jularr.Backend.Tests.DashboardTests": 52.4,
   "Jularr.Backend.Tests.DataFieldTests": 0.1,
-  "Jularr.Backend.Tests.DatabaseBaselineTests": 13.5,
-  "Jularr.Backend.Tests.DatabaseMigrationTests": 135.9,
+  "Jularr.Backend.Tests.DatabaseBaselineTests": 13.7,
+  "Jularr.Backend.Tests.DatabaseMigrationTests": 133.9,
   "Jularr.Backend.Tests.DetailsPageTests": 8.1,
-  "Jularr.Backend.Tests.DeviceTests": 23.7,
-  "Jularr.Backend.Tests.DiscoverTests": 258.9,
-  "Jularr.Backend.Tests.DjvuTests": 19.3,
+  "Jularr.Backend.Tests.DeviceTests": 22.2,
+  "Jularr.Backend.Tests.DiscoverTests": 318.8,
+  "Jularr.Backend.Tests.DjvuTests": 12.8,
   "Jularr.Backend.Tests.DownloadCleanupSafetyTests": 0.0,
   "Jularr.Backend.Tests.DownloadClientFileSafetyTests": 0.1,
   "Jularr.Backend.Tests.DownloadClientSelectionTests": 0.0,
@@ -55,97 +55,97 @@
   "Jularr.Backend.Tests.DownloadStorageTests": 14.7,
   "Jularr.Backend.Tests.DumpCompressionTests": 0.0,
   "Jularr.Backend.Tests.EditionLanguageFilterTests": 0.0,
-  "Jularr.Backend.Tests.ExternalFeedTests": 36.3,
+  "Jularr.Backend.Tests.ExternalFeedTests": 37.0,
   "Jularr.Backend.Tests.ExternalWorkSyncTests": 42.8,
   "Jularr.Backend.Tests.FeatureCardTests": 0.0,
-  "Jularr.Backend.Tests.FrontendAuthenticationTests": 155.8,
+  "Jularr.Backend.Tests.FrontendAuthenticationTests": 153.5,
   "Jularr.Backend.Tests.GameFileNameTests": 0.0,
-  "Jularr.Backend.Tests.GameTests": 38.3,
-  "Jularr.Backend.Tests.HomeLayoutTests": 7.4,
+  "Jularr.Backend.Tests.GameTests": 38.4,
+  "Jularr.Backend.Tests.HomeLayoutTests": 7.6,
   "Jularr.Backend.Tests.ImportJudgementTests": 0.0,
   "Jularr.Backend.Tests.ImportTransferTests": 0.0,
-  "Jularr.Backend.Tests.InstanceCapabilitiesTests": 13.8,
-  "Jularr.Backend.Tests.InstanceModuleDependencyTests": 63.6,
+  "Jularr.Backend.Tests.InstanceCapabilitiesTests": 13.7,
+  "Jularr.Backend.Tests.InstanceModuleDependencyTests": 62.6,
   "Jularr.Backend.Tests.InstanceSettingsTests": 11.6,
   "Jularr.Backend.Tests.LanDiscoveryTests": 0.0,
   "Jularr.Backend.Tests.LanguageRuleTests": 6.5,
   "Jularr.Backend.Tests.LibraryPerformanceTests": 37.5,
-  "Jularr.Backend.Tests.LibraryTests": 188.1,
-  "Jularr.Backend.Tests.LiveTests": 19.9,
-  "Jularr.Backend.Tests.LocalReadingTranslationIntegrationTests": 52.4,
-  "Jularr.Backend.Tests.LocalTranslationModelTests": 7.0,
-  "Jularr.Backend.Tests.MangaTests": 76.2,
-  "Jularr.Backend.Tests.ManualImportLogicTests": 0.2,
-  "Jularr.Backend.Tests.MediaImportJobTests": 66.0,
-  "Jularr.Backend.Tests.MediaImportTests": 236.7,
-  "Jularr.Backend.Tests.MediaMarkerTests": 8.7,
-  "Jularr.Backend.Tests.MediaServerTests": 25.6,
+  "Jularr.Backend.Tests.LibraryTests": 193.0,
+  "Jularr.Backend.Tests.LiveTests": 15.8,
+  "Jularr.Backend.Tests.LocalReadingTranslationIntegrationTests": 17.7,
+  "Jularr.Backend.Tests.LocalTranslationModelTests": 6.3,
+  "Jularr.Backend.Tests.MangaTests": 76.8,
+  "Jularr.Backend.Tests.ManualImportLogicTests": 0.1,
+  "Jularr.Backend.Tests.MediaImportJobTests": 59.5,
+  "Jularr.Backend.Tests.MediaImportTests": 240.3,
+  "Jularr.Backend.Tests.MediaMarkerTests": 8.2,
+  "Jularr.Backend.Tests.MediaServerTests": 25.2,
   "Jularr.Backend.Tests.MediaTests": 86.2,
-  "Jularr.Backend.Tests.MetadataFillTests": 31.2,
+  "Jularr.Backend.Tests.MetadataFillTests": 31.1,
   "Jularr.Backend.Tests.MusicTests": 32.6,
-  "Jularr.Backend.Tests.NamingPatternTests": 32.1,
-  "Jularr.Backend.Tests.NarouAcquisitionTests": 25.4,
+  "Jularr.Backend.Tests.NamingPatternTests": 31.6,
+  "Jularr.Backend.Tests.NarouAcquisitionTests": 24.9,
   "Jularr.Backend.Tests.NarouClientTests": 11.0,
   "Jularr.Backend.Tests.NewznabThrottleTests": 0.8,
   "Jularr.Backend.Tests.NotificationTests": 9.7,
   "Jularr.Backend.Tests.NyaaCategoriesTests": 0.0,
   "Jularr.Backend.Tests.NyaaClientTests": 0.0,
-  "Jularr.Backend.Tests.OcrTests": 78.6,
+  "Jularr.Backend.Tests.OcrTests": 77.0,
   "Jularr.Backend.Tests.PagingTests": 0.0,
-  "Jularr.Backend.Tests.PdfBookTests": 2.8,
+  "Jularr.Backend.Tests.PdfBookTests": 2.9,
   "Jularr.Backend.Tests.PdfCorpusTests": 0.0,
-  "Jularr.Backend.Tests.PlaybackPreferenceTests": 33.6,
-  "Jularr.Backend.Tests.PlaybackTests": 42.4,
+  "Jularr.Backend.Tests.PlaybackPreferenceTests": 31.6,
+  "Jularr.Backend.Tests.PlaybackTests": 39.1,
   "Jularr.Backend.Tests.ProfileReferenceVerticalTests": 2.3,
-  "Jularr.Backend.Tests.ProfileServiceGateTests": 33.5,
-  "Jularr.Backend.Tests.ProgressTests": 40.0,
-  "Jularr.Backend.Tests.PwaAppearanceTests": 15.5,
-  "Jularr.Backend.Tests.PwaTests": 12.6,
+  "Jularr.Backend.Tests.ProfileServiceGateTests": 33.1,
+  "Jularr.Backend.Tests.ProgressTests": 39.8,
+  "Jularr.Backend.Tests.PwaAppearanceTests": 14.7,
+  "Jularr.Backend.Tests.PwaTests": 12.7,
   "Jularr.Backend.Tests.QbittorrentClientTests": 0.0,
   "Jularr.Backend.Tests.ReaderSettingsTests": 6.5,
   "Jularr.Backend.Tests.ReadingBlocksTests": 0.0,
   "Jularr.Backend.Tests.ReadingDerivationTests": 18.5,
   "Jularr.Backend.Tests.ReadingFilesTests": 0.0,
-  "Jularr.Backend.Tests.ReadingRetranslationTests": 78.4,
-  "Jularr.Backend.Tests.ReadingTests": 128.5,
+  "Jularr.Backend.Tests.ReadingRetranslationTests": 62.8,
+  "Jularr.Backend.Tests.ReadingTests": 138.0,
   "Jularr.Backend.Tests.ReleaseFactsTests": 0.0,
   "Jularr.Backend.Tests.ReleaseGroupTests": 0.0,
   "Jularr.Backend.Tests.ReleaseSelectionTests": 0.0,
-  "Jularr.Backend.Tests.RequestTests": 70.4,
+  "Jularr.Backend.Tests.RequestTests": 70.8,
   "Jularr.Backend.Tests.SearchReassessmentTests": 0.0,
   "Jularr.Backend.Tests.SeriesCatalogTests": 30.4,
   "Jularr.Backend.Tests.SeriesTitleIdentityTests": 0.0,
-  "Jularr.Backend.Tests.ServiceApiTests": 4.9,
+  "Jularr.Backend.Tests.ServiceApiTests": 4.5,
   "Jularr.Backend.Tests.ServiceArchitectureTests": 0.2,
-  "Jularr.Backend.Tests.ServiceFoundationTests": 0.9,
+  "Jularr.Backend.Tests.ServiceFoundationTests": 1.1,
   "Jularr.Backend.Tests.ServiceTimingsTests": 0.0,
   "Jularr.Backend.Tests.SessionLockTests": 1.7,
-  "Jularr.Backend.Tests.SetupTests": 68.1,
-  "Jularr.Backend.Tests.SmbStorageTests": 13.6,
-  "Jularr.Backend.Tests.SourceBrowserTests": 7.0,
-  "Jularr.Backend.Tests.SourceTests": 179.0,
-  "Jularr.Backend.Tests.SpeechDiscoveryTests": 11.6,
+  "Jularr.Backend.Tests.SetupTests": 67.0,
+  "Jularr.Backend.Tests.SmbStorageTests": 13.5,
+  "Jularr.Backend.Tests.SourceBrowserTests": 7.1,
+  "Jularr.Backend.Tests.SourceTests": 182.2,
+  "Jularr.Backend.Tests.SpeechDiscoveryTests": 11.5,
   "Jularr.Backend.Tests.SpeechTests": 20.4,
-  "Jularr.Backend.Tests.SqlContextTests": 0.6,
+  "Jularr.Backend.Tests.SqlContextTests": 0.5,
   "Jularr.Backend.Tests.SqlExecutorTests": 1.0,
-  "Jularr.Backend.Tests.StartupStatusTests": 3.0,
-  "Jularr.Backend.Tests.StatisticsTests": 5.8,
-  "Jularr.Backend.Tests.StorageTests": 33.5,
-  "Jularr.Backend.Tests.SubtitleTests": 13.8,
-  "Jularr.Backend.Tests.SubtitleTranslationTests": 6.0,
-  "Jularr.Backend.Tests.TakeoverTests": 39.9,
+  "Jularr.Backend.Tests.StartupStatusTests": 3.2,
+  "Jularr.Backend.Tests.StatisticsTests": 6.1,
+  "Jularr.Backend.Tests.StorageTests": 33.3,
+  "Jularr.Backend.Tests.SubtitleTests": 18.8,
+  "Jularr.Backend.Tests.SubtitleTranslationTests": 6.8,
+  "Jularr.Backend.Tests.TakeoverTests": 40.0,
   "Jularr.Backend.Tests.TorrentClientTests": 7.0,
   "Jularr.Backend.Tests.TorrentEngineTests": 4.6,
   "Jularr.Backend.Tests.TorrentOutboundWireTests": 0.0,
   "Jularr.Backend.Tests.TorrentResumeTests": 0.0,
-  "Jularr.Backend.Tests.TranscodeTests": 49.0,
-  "Jularr.Backend.Tests.TranslationTests": 42.5,
-  "Jularr.Backend.Tests.TrustedProxyTests": 5.6,
+  "Jularr.Backend.Tests.TranscodeTests": 47.9,
+  "Jularr.Backend.Tests.TranslationTests": 41.9,
+  "Jularr.Backend.Tests.TrustedProxyTests": 7.8,
   "Jularr.Backend.Tests.TvdbSeriesPreviewTests": 23.9,
   "Jularr.Backend.Tests.TvdbTests": 0.0,
-  "Jularr.Backend.Tests.UiLocalizationTests": 5.3,
-  "Jularr.Backend.Tests.UsenetTests": 118.8,
-  "Jularr.Backend.Tests.VideoIdentityImportTests": 45.9,
+  "Jularr.Backend.Tests.UiLocalizationTests": 6.5,
+  "Jularr.Backend.Tests.UsenetTests": 155.9,
+  "Jularr.Backend.Tests.VideoIdentityImportTests": 43.2,
   "Jularr.Backend.Tests.VideoLanguageSelectionTests": 0.0,
   "Jularr.Backend.Tests.VideoLanguageUpgradeTests": 0.0,
   "Jularr.Backend.Tests.VolumeUploadTests": 6.9,
@@ -154,83 +154,2112 @@
   "Jularr.Backend.Tests.WantedBookEntriesTests": 8.1,
   "Jularr.Backend.Tests.WantedPerformanceTests": 0.0,
   "Jularr.Backend.Tests.WorkGradeLogicTests": 0.0,
-  "Jularr.Backend.Tests.WorkListTests": 105.2,
-  "Jularr.Backend.Tests.WorkRelationTests": 15.4,
-  "Jularr.Backend.Tests.WorkSearchRunTests": 46.2,
+  "Jularr.Backend.Tests.WorkListTests": 105.5,
+  "Jularr.Backend.Tests.WorkRelationTests": 16.4,
+  "Jularr.Backend.Tests.WorkSearchRunTests": 43.8,
   "Jularr.Backend.Tests.WorkUnitGroupTests": 17.8,
-  "Jularr.Backend.Tests.WorkerJobTests": 39.4
+  "Jularr.Backend.Tests.WorkerJobTests": 24.3
  },
  "e2e": {
-  "Jularr.E2E.Tests.AdminMenuTests": 45.4,
-  "Jularr.E2E.Tests.AiPageTests": 16.0,
-  "Jularr.E2E.Tests.AniListTests": 26.1,
-  "Jularr.E2E.Tests.ArrSettingsTests": 22.5,
-  "Jularr.E2E.Tests.AutomaticPathTests": 142.5,
-  "Jularr.E2E.Tests.CatalogSettingsTests": 34.4,
-  "Jularr.E2E.Tests.ContentAvailabilityTests": 11.4,
-  "Jularr.E2E.Tests.CoverDeliveryTests": 10.6,
-  "Jularr.E2E.Tests.DashboardTests": 10.7,
-  "Jularr.E2E.Tests.DetailsTabsTests": 11.0,
-  "Jularr.E2E.Tests.DevicePairingTests": 22.6,
-  "Jularr.E2E.Tests.DiscoverCatalogTests": 31.1,
-  "Jularr.E2E.Tests.DiscoverFilterTests": 17.4,
-  "Jularr.E2E.Tests.DiscoverLayoutTests": 21.6,
-  "Jularr.E2E.Tests.DownloadMappingTests": 24.5,
-  "Jularr.E2E.Tests.DownloadPagesTests": 14.4,
-  "Jularr.E2E.Tests.DownloadStorageTests": 24.6,
-  "Jularr.E2E.Tests.ErrorPageTests": 37.7,
-  "Jularr.E2E.Tests.FailureTests": 112.1,
-  "Jularr.E2E.Tests.FileInputTests": 9.9,
-  "Jularr.E2E.Tests.FilmPathTests": 53.0,
-  "Jularr.E2E.Tests.FirstRunTests": 17.3,
-  "Jularr.E2E.Tests.FolderPickerTests": 30.2,
-  "Jularr.E2E.Tests.HoverPreviewTests": 53.6,
-  "Jularr.E2E.Tests.JobsTests": 17.4,
-  "Jularr.E2E.Tests.LayoutShiftTests": 81.2,
-  "Jularr.E2E.Tests.LibraryChangesTests": 26.5,
-  "Jularr.E2E.Tests.LibraryFiltersTests": 15.1,
-  "Jularr.E2E.Tests.ListFilterTests": 11.5,
-  "Jularr.E2E.Tests.ManualBookSearchTests": 35.1,
-  "Jularr.E2E.Tests.ManualImportTests": 94.5,
-  "Jularr.E2E.Tests.MatchesTests": 9.0,
-  "Jularr.E2E.Tests.MediaCardTests": 10.4,
-  "Jularr.E2E.Tests.MediaImportDurabilityTests": 29.3,
-  "Jularr.E2E.Tests.MediaImportTests": 66.0,
-  "Jularr.E2E.Tests.MusicPathTests": 26.1,
-  "Jularr.E2E.Tests.NamingSettingsTests": 41.5,
-  "Jularr.E2E.Tests.PagingTests": 9.9,
-  "Jularr.E2E.Tests.PhoneGeometryTests": 28.1,
-  "Jularr.E2E.Tests.PhoneLayoutTests": 9.5,
-  "Jularr.E2E.Tests.PhoneShellTests": 9.9,
-  "Jularr.E2E.Tests.PhoneTapTargetsTests": 20.1,
-  "Jularr.E2E.Tests.ProfilesTests": 27.5,
-  "Jularr.E2E.Tests.PwaTests": 28.8,
-  "Jularr.E2E.Tests.ReaderCodexTests": 18.2,
-  "Jularr.E2E.Tests.ReaderTranslationTests": 29.6,
-  "Jularr.E2E.Tests.ReaderV3Tests": 98.9,
-  "Jularr.E2E.Tests.ReadingPathTests": 215.0,
-  "Jularr.E2E.Tests.RemoteBrowserTests": 18.9,
-  "Jularr.E2E.Tests.RequestsPhoneTests": 10.9,
-  "Jularr.E2E.Tests.SavePillTests": 27.4,
-  "Jularr.E2E.Tests.SettingsPagesTests": 66.9,
-  "Jularr.E2E.Tests.SetupFlowTests": 113.8,
-  "Jularr.E2E.Tests.SetupOwnerTests": 37.2,
-  "Jularr.E2E.Tests.SpeechPathTests": 55.3,
-  "Jularr.E2E.Tests.StackingTests": 10.3,
-  "Jularr.E2E.Tests.StorageIntegrationsTests": 45.9,
-  "Jularr.E2E.Tests.TimeZoneTests": 9.6,
-  "Jularr.E2E.Tests.TracksTests": 44.1,
-  "Jularr.E2E.Tests.TranscodingTests": 22.0,
-  "Jularr.E2E.Tests.TranslatedEpubTests": 15.2,
-  "Jularr.E2E.Tests.UserListScrollTests": 15.8,
-  "Jularr.E2E.Tests.UserPanelScrollTests": 26.5,
-  "Jularr.E2E.Tests.WantedSearchDialogTests": 16.2,
-  "Jularr.E2E.Tests.WantedTests": 10.2,
+  "Jularr.E2E.Tests.AdminMenuTests": 31.4,
+  "Jularr.E2E.Tests.AdminPageSmokeTests": 11.8,
+  "Jularr.E2E.Tests.AdminPhoneFitTests": 10.4,
+  "Jularr.E2E.Tests.AiPageTests": 13.3,
+  "Jularr.E2E.Tests.AniListTests": 24.4,
+  "Jularr.E2E.Tests.ArrSettingsTests": 20.7,
+  "Jularr.E2E.Tests.AutomaticPathTests": 124.0,
+  "Jularr.E2E.Tests.CastQueueTests": 27.7,
+  "Jularr.E2E.Tests.CatalogSettingsTests": 27.2,
+  "Jularr.E2E.Tests.ContentAvailabilityTests": 8.2,
+  "Jularr.E2E.Tests.ContinueMenuTests": 12.0,
+  "Jularr.E2E.Tests.CoverDeliveryTests": 8.2,
+  "Jularr.E2E.Tests.DashboardTests": 8.3,
+  "Jularr.E2E.Tests.DetailsTabsTests": 8.2,
+  "Jularr.E2E.Tests.DevicePairingTests": 19.0,
+  "Jularr.E2E.Tests.DiscoverCatalogTests": 26.6,
+  "Jularr.E2E.Tests.DiscoverFilterTests": 14.9,
+  "Jularr.E2E.Tests.DiscoverLayoutTests": 29.1,
+  "Jularr.E2E.Tests.DiscoverRecommendationsTests": 13.5,
+  "Jularr.E2E.Tests.DownloadMappingTests": 19.0,
+  "Jularr.E2E.Tests.DownloadPagesTests": 58.2,
+  "Jularr.E2E.Tests.DownloadStorageTests": 20.4,
+  "Jularr.E2E.Tests.ErrorPageTests": 39.8,
+  "Jularr.E2E.Tests.FailureTests": 101.8,
+  "Jularr.E2E.Tests.FileInputTests": 7.7,
+  "Jularr.E2E.Tests.FilmPathTests": 52.9,
+  "Jularr.E2E.Tests.FirstRunTests": 12.3,
+  "Jularr.E2E.Tests.FolderPickerTests": 22.4,
+  "Jularr.E2E.Tests.GamePathTests": 18.2,
+  "Jularr.E2E.Tests.HoverPreviewTests": 45.1,
+  "Jularr.E2E.Tests.JobsTests": 17.3,
+  "Jularr.E2E.Tests.LayoutShiftTests": 106.6,
+  "Jularr.E2E.Tests.LibraryChangesTests": 23.4,
+  "Jularr.E2E.Tests.LibraryFiltersTests": 11.1,
+  "Jularr.E2E.Tests.ListFilterTests": 8.2,
+  "Jularr.E2E.Tests.ManualBookSearchTests": 35.0,
+  "Jularr.E2E.Tests.ManualImportTests": 86.9,
+  "Jularr.E2E.Tests.MatchesTests": 6.5,
+  "Jularr.E2E.Tests.MediaCardTests": 7.2,
+  "Jularr.E2E.Tests.MediaImportDurabilityTests": 22.2,
+  "Jularr.E2E.Tests.MediaImportTests": 56.9,
+  "Jularr.E2E.Tests.MusicPathTests": 22.5,
+  "Jularr.E2E.Tests.NamingSettingsTests": 35.8,
+  "Jularr.E2E.Tests.PagingTests": 7.3,
+  "Jularr.E2E.Tests.PhoneGeometryTests": 28.0,
+  "Jularr.E2E.Tests.PhoneLayoutTests": 8.2,
+  "Jularr.E2E.Tests.PhoneShellTests": 8.5,
+  "Jularr.E2E.Tests.PhoneTapTargetsTests": 16.8,
+  "Jularr.E2E.Tests.ProfilesTests": 21.9,
+  "Jularr.E2E.Tests.PwaTests": 23.3,
+  "Jularr.E2E.Tests.QueueAndTasksTests": 24.7,
+  "Jularr.E2E.Tests.ReaderCodexTests": 100.1,
+  "Jularr.E2E.Tests.ReaderTranslationTests": 29.1,
+  "Jularr.E2E.Tests.ReaderV3Tests": 101.2,
+  "Jularr.E2E.Tests.ReadingPathTests": 208.5,
+  "Jularr.E2E.Tests.RemoteBrowserTests": 28.1,
+  "Jularr.E2E.Tests.RequestsPhoneTests": 10.1,
+  "Jularr.E2E.Tests.SavePillTests": 23.2,
+  "Jularr.E2E.Tests.SettingsPagesTests": 55.2,
+  "Jularr.E2E.Tests.SetupFlowTests": 92.7,
+  "Jularr.E2E.Tests.SetupOwnerTests": 31.1,
+  "Jularr.E2E.Tests.SpeechPathTests": 54.7,
+  "Jularr.E2E.Tests.StackingTests": 7.3,
+  "Jularr.E2E.Tests.StartupStatusPageTests": 7.8,
+  "Jularr.E2E.Tests.StorageIntegrationsTests": 37.4,
+  "Jularr.E2E.Tests.TimeZoneTests": 8.6,
+  "Jularr.E2E.Tests.TracksTests": 36.1,
+  "Jularr.E2E.Tests.TranscodingTests": 14.9,
+  "Jularr.E2E.Tests.TranslatedEpubTests": 12.8,
+  "Jularr.E2E.Tests.TranslationPageTests": 24.5,
+  "Jularr.E2E.Tests.UserListScrollTests": 10.8,
+  "Jularr.E2E.Tests.UserPanelScrollTests": 17.9,
+  "Jularr.E2E.Tests.WantedSearchDialogTests": 22.8,
+  "Jularr.E2E.Tests.WantedTests": 22.1,
   "Jularr.E2E.Tests.WorkAddTests": 13.2,
-  "Jularr.E2E.Tests.WorkPageTests": 53.0,
-  "Jularr.E2E.Tests.WorkRelationsTests": 27.6,
-  "Jularr.E2E.Tests.WorkSearchRunTests": 16.7,
-  "Jularr.E2E.Tests.WorkTypesTests": 29.5
+  "Jularr.E2E.Tests.WorkDeletionTests": 19.1,
+  "Jularr.E2E.Tests.WorkPageTests": 47.8,
+  "Jularr.E2E.Tests.WorkRelationsTests": 21.7,
+  "Jularr.E2E.Tests.WorkSearchRunTests": 14.5,
+  "Jularr.E2E.Tests.WorkTypesTests": 24.4
+ },
+ "methods": {
+  "backend": {
+   "Jularr.Backend.Tests.AccountSchemaTests": {
+    "Auth_TypedBindingAndConstraints_PreserveIdentityAndSecretRules": 0.57,
+    "Schema_FieldDefinitionsAndCatalogs_MatchPostgres": 0.75
+   },
+   "Jularr.Backend.Tests.AcquisitionPolicyTests": {
+    "Formats_EditAndDelete_RejectStaleAndUsedDefinitions": 5.54,
+    "Policies_MediaManagerAndUser_CannotReadOrChangeConfiguration": 4.59,
+    "Policies_TagReferencesAndMediaScope_ProtectUsedTags": 4.6,
+    "Sizes_OneStaleRow_RollsTheWholeCatalogBack": 5.13
+   },
+   "Jularr.Backend.Tests.AcquisitionTests": {
+    "AClientFault_LeavesTheQueue_AndTheNextSearchTakesTheSameReleaseAgain": 5.61,
+    "ActivityViews_HistoryAndBlocked_FollowTheTypeBar_AndBlockedUnblocks": 6.1,
+    "AutomaticGrab_PausedAfterSearch_DoesNotReserveButManualGrabStillWorks": 5.4,
+    "AutomaticSearch_BelowTheCutoff_TakesOnlyAnUpgrade": 5.19,
+    "AutomaticSearch_GrabsTheBestRelease_AndSkipsItAfterAReleaseFault": 6.01,
+    "AutomaticSearch_OnDemand_TakesTheBestReleaseAtOnce": 5.98,
+    "Blocklist_BlocksAndAllowsReleasesOfTheTarget": 5.7,
+    "CompletedSabImport_AWaitingDownload_TellsTheStaffOnceAndFoldsRepeats": 5.71,
+    "CompletedSabImport_AnUnclearTitle_WaitsWithItsProposalAndIsNotReadAgain": 4.35,
+    "CompletedSabImport_AnotherFilm_IsExcludedAndSearchedAgainAtOnce": 5.13,
+    "CompletedSabImport_DoesNotFinishWhenDatabaseSkipsTheMediaAssignment": 4.51,
+    "CompletedSabImport_KeepsItsJobWhenTheConnectionSaysSo_AndWhenTheClientIsDown": 5.29,
+    "CompletedSabImport_RemovesItsJobFromTheClient_UnlessTheConnectionKeepsIt": 4.85,
+    "Connections_ListByRole_AndATestSearchCountsAsAQuery": 6.27,
+    "Connections_ValidateInputAndStayOwnerOnly": 5.33,
+    "DailyRefresh_ATitleWhoseIdentityConflicts_IsSkippedAndTheOthersStillRefresh": 5.3,
+    "DeleteLibraryFiles_RemovesTheFile_AndSearchesTheTargetAgain": 4.85,
+    "DeleteLibraryFiles_SwitchesTheEpisodeOff_OnlyWhenTheSettingSaysSo": 4.91,
+    "DeleteWork_RemovesTheTitle_WithItsFiles_AndAnExclusionRefusesRequests": 5.12,
+    "DeleteWork_WithoutFiles_LeavesThemOnDisk_AndWithoutExclusion_AddsNone": 4.89,
+    "DownloaderPages_ServersClientsAndSpeed_ShowTheirOwnKind": 5.72,
+    "DownloadsLifecycle_PostProcessingAndImportAttention_AreHistoryWithoutFinishingTheOperation": 5.76,
+    "DownloadsPage_TabsQueueAndHistory_FollowTheClients": 5.98,
+    "FailedDownloads_LeaveTheQueueOnce_IntoTheHistory_WhileADoubtAndALimitedGrabWait": 5.11,
+    "FeedMatcher_MapsReleasesToTargetsByProviderIdsThenByTitle": 0.01,
+    "Feed_IsReadForEveryTypeAnIndexerServes_ByItsOwnFlag_FailureBacksOff_AndTheLimitHolds": 5.79,
+    "Feed_NewReleaseOfAWantedMovie_IsGrabbedFromTheFeed_WithoutASearch_AndASeenReleaseIsNotReprocessed": 6.13,
+    "Feed_ReleaseInTheFirstLanguage_ReplacesAFileInTheOriginalLanguage_ShownInWantedAsALanguage": 5.76,
+    "Feed_SeriesTakesTheSeasonPacksBeforeTheirEpisodes": 5.83,
+    "FormatsAndReleaseProfiles_DriveSearchThroughTheCanonicalContracts": 5.78,
+    "Grab_ConcurrentCallsStartOneDownload_AndArrPlusSwitchesOffSeparately": 5.35,
+    "Import_PathsStayBelowTheMappingAndUrlsStaySafe": 0.0,
+    "Indexers_AFailingOneBacksOffWhileOthersSearch_ScopeManualOnlyLimitsAndKeylessHold": 5.62,
+    "Indexers_RateLimitedWithRetryAfter_RestForTheWaitTheyAskedFor": 5.48,
+    "Judge_SeasonSearch_TakesPacksAndEveryWantedEpisode_EpisodeSearchOnlyItsOwn": 0.02,
+    "ManualImport_FailedMove_LeavesTheSourceIntact": 4.95,
+    "ManualImport_FileWithoutItsTitle_IsRefused": 4.84,
+    "ManualImport_FolderOfSeveralKinds_IsRecognisedFileByFile": 4.72,
+    "ManualImport_LanguagesAPersonChose_SurviveTheScanOfTheStreams": 4.27,
+    "ManualImport_RecognisesTheFilmOfAFolder_AndMovesIt": 4.76,
+    "ManualImport_RefusesWhatItCannotDo_AndTouchesNothing": 5.12,
+    "ManualImport_SortsFilesToTheirOwnTitles_WithTheQualityAPersonGave": 5.47,
+    "ManualSearch_OneSourceAtATime_MergesOffersAndTakesRejectedReleasesOnlyWithOverride": 6.13,
+    "Monitoring_SpecialsStartOff_ASeasonSwitchesItsEpisodes_NewUnitsFollowTheTarget": 6.34,
+    "Movie_ManualSearchGrabMonitorAndImport_CompletesTheRequest": 6.16,
+    "Movie_Upgrade_ReplacesOnlyWorseAutomaticVersionsUntilTheAdministratorKeepsOne": 5.86,
+    "NewRelease_TheDailyRefreshAddsTheEpisode_AndTheNextCycleGrabsIt": 5.64,
+    "Newznab_ParsesCapabilitiesAndKeepsUsenetLinksOnly": 0.0,
+    "Numbering_AbsoluteAndDatedReleases_TakeTheEpisodeTheyMapTo": 0.01,
+    "Plan_AFeedCoversItsTitles_SourcesWithoutOneSearchOncePerInterval_SpreadOverIt": 0.01,
+    "Plex_ConnectSyncsAvailabilityAndRefreshesAfterImport": 6.44,
+    "Profiles_EditKeepsRulesSwitchesDefaultsAndApplyPerTarget": 6.0,
+    "Profiles_GrabFreshAllowedReleaseImmediately_AndNeverAddDisallowedQualities": 5.57,
+    "Profiles_OneDefaultPerType_AnimeFilmsAndSeriesShareIt_AndAProfileJoinsOneQualityList": 5.32,
+    "Profiles_ReleaseGroupScores_DefaultSaveRangeAndEditor": 5.91,
+    "Profiles_TheLanguagesOfTheChoice_AndTheFallback_AreStoredAndReadBack": 4.98,
+    "ProviderSync_Plex_LinksThroughOnePass_AndUnlinksOnlyAfterACompleteOne": 5.03,
+    "QueueAction_ChosenDownloadsAndOneClient_PauseResumeAndRemove": 4.85,
+    "QueueAction_PauseAndResumeTheWholeQueue_TouchesEveryRunningDownload": 4.64,
+    "QueueAction_PauseAndResume_AreForSabnzbdAndShowAtOnce": 4.14,
+    "QueueAction_RemoveAndBlock_TellsSabnzbdFirstExcludesTheReleaseAndSearchesAtOnce": 4.38,
+    "QueueAction_RemoveWithoutBlocking_LeavesTheReleaseAllowedAndSearchesLater": 4.18,
+    "QueueAction_RetryImport_ReadsAWaitingDownloadAgain": 5.35,
+    "QueueAction_SabnzbdPriorityMoveLimitAndAdd_UseItsApi": 4.99,
+    "Queue_FiltersAndTilesFollowTheStatesOfTheJobs": 6.24,
+    "Razor_WantedSearchAndConnections_RenderRealResults": 6.82,
+    "ReleaseFaults_RemoveTheJobAndItsFiles_InEveryClient_WhileAnInterruptionKeepsThem": 5.54,
+    "ReleaseGroups_SearchesCollectThem_ARatingScoresOrBlocksTheirReleases": 5.36,
+    "ReleaseMerge_PreservesTransportAndSourceEvidence": 0.01,
+    "SabConnection_DiscoversItsCategoryFolderWithoutAManualRemotePath": 4.22,
+    "SabConnection_RejectsAmbiguousAndUnsafeCategoryPaths": 0.0,
+    "SabDownload_DirectSmbSourceImportsIntoTheSelectedLibrary": 23.52,
+    "SabDownload_StorageMappingRejectsPathsOutsideTheConnection": 13.02,
+    "Sabnzbd_FailuresOnlyBlameTheReleaseForReleaseFaults": 0.0,
+    "Sabnzbd_IgnoresOtherMediaTypeConnectionAndFallsBackToGeneric": 5.56,
+    "Sabnzbd_MissingOrOfflineImportFolder_PreventsGrabBeforeSendingToClient": 5.36,
+    "Sabnzbd_OnlyOtherMediaTypeDoesNotStartADownload": 5.5,
+    "Sabnzbd_UsesHighestPriorityCompatibleMediaClient": 5.74,
+    "SearchDue_AGrabARunningDownloadHolds_MovesTheTargetOn_AndLaterCyclesAskTheIndexerNothing": 6.33,
+    "Search_AfterItsEventSearch_AFeedCoveredTitleIsLeftToTheFeed_AndWithoutAFeedItSearchesOnTheSourcesRhythm": 6.45,
+    "Selection_NeverLetsAPreferenceRepairAWrongIdentity": 0.0,
+    "Selection_RequestedLanguageWinsAmongEqualQuality": 0.0,
+    "Series_TmdbImportSeasonPackAndEpisodes_CompleteOnlyWhenAllAiredEpisodesExist": 6.81,
+    "Unmonitoring_TheLastMissingEpisode_CompletesTheRequest": 5.21,
+    "UpdateLibraryFileFacts_OverridesQualityAndAudioLanguage": 5.33,
+    "WaitingDownload_ImportedByHandToSeveralTitles_FinishesOnceWhenEveryVideoIsHandled": 4.71,
+    "WaitingDownload_ImportedByHand_FinishesAndLeavesTheClient": 5.26,
+    "WaitingDownload_ImportedInParts_WaitsUntilThePersonFinishesIt": 4.98,
+    "WantedPriority_HighTargetsAreSearchedFirst_AndBulkActionsSetAndStart": 5.77,
+    "WantedSearchAll_FollowsTheChosenMediaTypes": 5.86,
+    "WantedViews_ListMissingAndCutoffUnmetAsTheUpgradePolicyDecides": 5.2,
+    "WantedViews_UnitAvailability_CountsOnlyMissingMonitoredReleasedUnits": 4.96,
+    "WorkManagement_GroupsABooksFilesByEdition_AndAGamesByPlatform": 5.0,
+    "WorkManagement_NumbersAnimeEpisodesTwoWays_AndCountsVolumes": 5.26,
+    "WorkManagement_ShowsAFilmWithItsFile": 5.15,
+    "WorkManagement_ShowsTheStateOfEveryEpisode": 4.74
+   },
+   "Jularr.Backend.Tests.ActionHintTests": {
+    "Action_TellsItsResultAsHintToScriptAndPage": 8.05
+   },
+   "Jularr.Backend.Tests.AdminAccountTests": {
+    "AccountProfiles_AccessRemoval_RevokesAffectedSessionAndPreservesProfile": 4.11,
+    "AccountProfiles_OwnershipAndUnknownReferences_DoNotMutate": 4.34,
+    "Account_OwnerEdits_LastWriteWinsAndLastOwnerIsRetained": 4.57,
+    "Accounts_FullAndEmptyPages_ReturnOnlyRequestedRows": 5.37,
+    "Approval_DisableAndReenable_DoesNotVerifyEmailOrRestoreSessions": 4.28,
+    "Owners_ConcurrentDemotion_AlwaysRetainsAnEnabledOwner": 2.28,
+    "PasswordLink_SetsANewPasswordOnce_AndEndsTheOpenSessions": 5.05,
+    "ProfilePin_FailuresLockAcrossErrorsAndTheOwnerResets": 7.55,
+    "ProfilesModule_Off_EveryAccountUsesItsMainProfileWithoutPickerOrPin": 6.5,
+    "Profiles_AccountCreatesUpToTenAndDeletionCancelsItsOpenRequests": 7.1,
+    "Razor_AccountEditor_UsesRoundTripFieldValuesAndOwnerPolicies": 6.52,
+    "Razor_OwnerRevokesCurrentSession_ClearsAuthentication": 8.35,
+    "Razor_ProfileAssignments_UseServicesAndAntiforgery": 6.49,
+    "ResetPasswordPage_RendersForAVisitor_WithTheTokenAndPasswordFields": 5.6,
+    "Sessions_OwnerRevokesOnlySelectedAccount_AndMediaManagerIsDenied": 4.31
+   },
+   "Jularr.Backend.Tests.AdminLocaleTests": {
+    "Locales_CreationAndVersions_CanonicalizeWithoutOverwritingManualNames": 5.99,
+    "Razor_DisabledProfileLanguage_UsesParentInsteadOfSkippingToEnglish": 6.78,
+    "Razor_LanguageCreation_UsesFieldValidationAndCanonicalService": 6.86
+   },
+   "Jularr.Backend.Tests.AdminLocalizationTests": {
+    "Catalog_MediaManager_CannotReadOrWriteConfiguration": 6.09,
+    "Catalog_OwnerEdits_ContextVersionsAndManualTextAreProtected": 7.95,
+    "Razor_OwnerEdits_UseEncodedFormsAndSharedErrors": 7.74,
+    "Razor_TranslationTable_PagesWithTheSharedPager_NextOnlyOnAFullPage": 7.61
+   },
+   "Jularr.Backend.Tests.AdminMenuTests": {
+    "OldActivityAddresses_LeadToTheQueue": 4.5,
+    "Pages_OfOneEntry_ShareOneChipRow_WithTheirOwnMarked": 6.47,
+    "Sidebar_ListsEntriesByModuleAndRight_AndKeepsEveryOldAddress": 6.48,
+    "Sidebar_ShowsTheThreeFigures_WhereTheyBelong_AndHidesZero": 5.14,
+    "UserMenu_HasOneLinkPerArea_FromTheSameMenu_ByModuleAndRight": 5.45
+   },
+   "Jularr.Backend.Tests.AdminProviderTests": {
+    "PlexServerPin_ForeignOrExpiredProof_CannotConnect": 19.79,
+    "PlexServerPin_GrantedByItsBrowser_ConnectsOnceWithoutExposingTheToken": 5.77,
+    "PlexSignIn_Read_ListsTheLastKnownLibrariesWithoutAskingTheServer": 9.03,
+    "Provider_OwnerToggle_ChangesLoginAvailabilityAndRejectsStaleOrIncompleteInput": 3.16,
+    "Razor_ProviderForms_HaveUniqueLabelsAndRequireBooleanInput": 5.63
+   },
+   "Jularr.Backend.Tests.AllMediaNamingTests": {
+    "AnimeMultiEpisodeStyles_RenderAbsoluteNumbers": 0.0,
+    "BooksAndManga_ImportAndRenameUseTheirConfiguredIdentities": 0.08,
+    "DailyFormats_ApplyOnlyToDatedReleasesAndKeepTheEpisodeTitle": 0.0,
+    "GameNaming_RenamesOneRomButPreservesAllPathsInsideAReleaseBundle": 0.0,
+    "GameRename_UsesIdsForALoneRomAndLeavesCueBundlesIntact": 0.0,
+    "KnownIdentities_AreAvailableToEveryPatternWithoutProviderCalls": 0.0,
+    "MultiDiscMusic_NamesTracksByTaggedDiscAndTrackAndIncludesMusicBrainz": 0.01,
+    "MultipleEpisodeImport_RetainsCoverageAndUsesTheSelectedStyle": 0.04,
+    "OpenLibraryDefault_DropsMissingIdAndLanguageWithTheirDecoration": 0.0,
+    "RenameDisabled_StillUsesConfiguredFoldersAndKeepsTheOriginalFileStem": 0.0,
+    "SonarrMultiEpisodeStyles_RenderAllNumbers": 0.0
+   },
+   "Jularr.Backend.Tests.AniListRelationTests": {
+    "Relations_AniListModuleOff_NothingIsAskedAndNothingIsSaved": 5.91,
+    "Relations_AniListUnavailable_EndsThePassAndTheWorkStaysDue": 6.65,
+    "Relations_MatchedAnimeSeries_AreSavedFromItsSeasonsAndFollowTheProvider": 8.82
+   },
+   "Jularr.Backend.Tests.AniListSyncTests": {
+    "Account_ConnectImportPushRetryAndDisconnect_FollowTheOwnersSetupAndNeverShowTheToken": 23.83,
+    "FinishedInARow_StopsAtTheFirstGap": 0.0,
+    "Lists_ShowTheProfilesEntriesWithTheirTitles_AndTheWorkStandsAgainstItsEntry": 8.61,
+    "PlanImport_TakesOverWhatAniListCountsAsDone_AndNeverMore": 0.0,
+    "PlanPush_SendsOnlyFurtherProgressMadeSinceSwitchedOn_AndNeverTheLastOne": 0.0,
+    "ProblemOf_NamesOnlyWhatTheNextPassDoesNotSettle": 0.0,
+    "RetryDelay_DoublesFromAMinuteUpToSixHours": 0.0,
+    "StateOf_ComparesWhatIsFinishedHereWithWhatAniListCounts": 0.0,
+    "Sync_CachesPlannedTitlesOnlyWhenInstanceCachingIsEnabled": 7.87
+   },
+   "Jularr.Backend.Tests.AniListTests": {
+    "Align_SplitSeasonsAndRunningEntries_MapInOrder": 0.02,
+    "Choose_OneFittingTitleAndYear_IsTheMatch": 0.01,
+    "FromMappings_SeasonsOffsetsSpecialsAndConflicts": 0.02,
+    "LinkWebNovel_JapaneseTitleAndWriter_LinkOnlyTogether": 0.01,
+    "Matching_SeasonOfAPlaceholder_MovesItsFavoriteRelationsListPlaceAndRequestToTheSeries": 8.65,
+    "Matching_SeriesSeasonsAndReviews_FollowTheSequelChain": 11.37,
+    "Matching_TvdbSeriesTheMappingsName_TakesTheirSeasons_ConflictsWaitForAPerson_AndAPersonsChoiceOutlastsANewRelease": 7.1
+   },
+   "Jularr.Backend.Tests.AnimeMappingTests": {
+    "Parse_Release_TakesAniListEntriesInTheirTvdbSeasons": 0.01,
+    "Parse_UnknownSchemaOrNoTvdbSeason_IsRefused": 0.0,
+    "Sync_LoadsTheRelease_KeepsItWhenUnchangedFailedOrOdd_AndReloadsTheSameRows": 6.21
+   },
+   "Jularr.Backend.Tests.AnnasArchiveSearchTests": {
+    "Search_CommonChallenge_UsesOneBrowserPassPerOperation": 0.0,
+    "Search_ConfirmedEmpty_DoesNotTryOtherMirrors": 0.0,
+    "Search_CooldownExpires_ProbeCanRecover": 0.0,
+    "Search_HttpFailure_PreservesReason": 0.0,
+    "Search_ObservedLayouts_PreserveMetadata": 0.15,
+    "Search_ParkedMirror_UsesAndRemembersHealthyMirror": 0.0,
+    "Search_ProtectionMentionOnFinishedPage_DoesNotStartBrowser": 0.0,
+    "Search_RunningBrowserSession_SkipsSeparateHttpRequestsAcrossQueries": 0.0,
+    "Search_SameOperationSharesAnswers_NextOperationFetchesAgain": 0.0,
+    "Search_Timeout_IsDistinctFromCallerCancellation": 0.0,
+    "Search_UnreadablePage_IsNotReportedAsEmpty": 0.01,
+    "Search_UntrustedFinalOrigin_IsRejected": 0.0,
+    "SlowDownload_RunningBrowserCannotRead_DoesNotRepeatRequestsOutsideItsSession": 0.0,
+    "SlowDownload_RunningBrowserSession_KeepsCountdownAndFileLinkWithoutHttpProbe": 0.01
+   },
+   "Jularr.Backend.Tests.ArrAdminTests": {
+    "AdminTabs_RenderOneNavigation_AndNativeFormsPersistChanges": 6.82,
+    "FormatCutoff_TracksStoredEvidenceAndConditionChanges_WithinQualityGroups": 6.02,
+    "Groups_RenameKeepsIdentity_AndUnknownFormatsAreRefused": 5.41,
+    "JsonFormats_KeepEveryCondition_AndImportAtomically": 5.76,
+    "ProfileEditor_ScoresEveryFormat_AndKeepsOnlyScoresThatCount": 6.68,
+    "ProfilesPage_OneListWithItsTypesAndDefaults_OldAddressesLeadOn_AndNoAddressIsRefused": 8.19,
+    "ReleaseGroupsSection_ListsEveryTypeNotRatedFirst_AndSavesARatingFromItsSegments": 6.68
+   },
+   "Jularr.Backend.Tests.ArrQualityTests": {
+    "CustomFormats_MatchAsSonarrDecides": 0.01,
+    "Groups_RankAsOne_AndUpgradeByFormatScoreUntilTheCutoff": 0.0,
+    "InvalidFormatPatterns_RejectTheCandidate_EvenWhenNegatedOrScoredNegatively": 0.02,
+    "Profile_ScoresFormats_AndRefusesBelowTheMinimum": 0.0,
+    "QualitySizes_LimitByRuntime": 0.0,
+    "ReleaseProfiles_RequireAndIgnoreTerms": 0.0,
+    "Release_GetsTheQualityNameOfSonarrAndRadarr": 0.02,
+    "Release_StatesItsLanguagesBehindTheTitle": 0.0
+   },
+   "Jularr.Backend.Tests.AuthenticationTests": {
+    "BrowserDevice_SurvivesSignOut_AndKeepsTheDevicesPlaybackQuality": 4.06,
+    "ChangePassword_NeedsTheCurrentPassword_TheNewOneSignsIn_AndTheOldOneStops": 5.22,
+    "Login_ByUsernameOrEmail_AnyCase_AndFailureStaysUniform": 5.05,
+    "Login_ProfilePinAndConfirmedSecondFactor_AreNotBypassed": 4.01,
+    "Login_RealCookieAndRevocation_WorkWithoutExposingSessionSecrets": 3.98,
+    "Logout_AccountSessionWithoutProfile_RevokesCookieAndDatabaseSession": 3.33,
+    "Plex_BrowserBoundLibraryGateApprovalAndReplay_UseStableIdentityOnly": 3.63,
+    "Plex_InvalidProofOrProvider_NoAccountOrSessionIsCreated": 16.59,
+    "Registration_PasswordPolicy_TwelveCharactersAndThreeOfFourKinds": 42.74,
+    "Registration_PendingAndDuplicateRequests_DoNotCreateSessionsOrReplacePasswords": 4.02,
+    "Registration_UsernameRule_ThreeToThirtyTwoLettersDigitsDotsUnderscoresHyphens": 17.54,
+    "RevokeSession_ForeignAndMissingSession_AreHidden": 3.13,
+    "Session_ActiveAfterHalfLife_RenewsDatabaseAndPersistentCookie": 3.46,
+    "Session_ExpiredOrRevoked_IsNotRenewed": 7.91,
+    "Session_NewDeploymentRoot_PreservesCookieAndProtectedSecrets": 2.15
+   },
+   "Jularr.Backend.Tests.AutoApprovalTests": {
+    "ApprovedRequest_WakesATargetThatWaitsForTheFeed": 5.65,
+    "OwnerRequest_IsApprovedAtOnce_ForEveryType_AndTheTargetIsDueNow": 6.19
+   },
+   "Jularr.Backend.Tests.BackgroundWorkTests": {
+    "DownloadWorker_LooksAtOnceForANewDownload_AndSlowsDownWithoutOne": 5.41,
+    "OperationWorker_WakesForAQueuedScanWithoutWaitingForItsSafetyTick": 7.02,
+    "Queue_ScansAndBackups_AreClaimedApart_SoABackupRunsWhileAScanDoes": 5.27,
+    "Registry_FollowsTheOwnersIntervals_ForSearchProviderSyncAndBackup": 0.01,
+    "Settings_SavedByTheOwner_ReachTheRegistryTheJobsPageAndAFreshProcess": 5.91,
+    "WorkSignal_WakesAWaitingWorkerAtOnce_OtherwiseTheSafetyTickDoes": 0.06
+   },
+   "Jularr.Backend.Tests.BackupTests": {
+    "Backups_Folder_ListsCopiesOfThisSchemaAndRestoresOnlyBeforeSetupCompletes": 5.94,
+    "Backups_ManualOnesAreNeverPruned_AutomaticOnesKeepTheNewestThree": 5.78,
+    "Backups_Queue_RunOneAtATimeAndFailWithoutPgDumpLeavingNothingBehind": 5.71,
+    "Backups_SealedKeyRing_ComesBackOnlyWithThePassphrase": 6.12,
+    "Schedule_FollowsTheOwnersInterval_ZeroSwitchesItOff_AndRunNowQueuesAnyway": 5.48
+   },
+   "Jularr.Backend.Tests.BookFormatTests": {
+    "ContentCheck_NewFormats_TakeTheirContentAndNameTheFailedCheck": 0.02,
+    "Converters_HostileInputs_EndQuicklyWithAReasonOrTheirText": 1.15,
+    "Placement_NewFormats_PlaceOneFilePerFormatAndLeaveTheReleaseNote": 0.04,
+    "Reader_OpensConvertedBooksAndNamesAProtectedOne": 8.6,
+    "ReadingCopy_Fb2_HasItsSectionsNotesPicturesAndTitle": 0.11,
+    "ReadingCopy_KindleFormats_ReadPalmDocMobiAndKf8": 0.03,
+    "ReadingCopy_ProtectedUnsupportedAndBrokenBooks_SayWhy": 0.67,
+    "ReadingCopy_TextRtfAndDocx_KeepParagraphsHeadingsAndEmphasis": 0.02
+   },
+   "Jularr.Backend.Tests.BookLanguageFromTitleTests": {
+    "EditionTitleOfTheOriginalLanguage_IsTakenWhereTheProfileAllowsTheOriginal": 0.0,
+    "LocalizedEditionTitle_CountsAsThatLanguage_AndIsTakenWhenItIsRequested": 0.05,
+    "MainTitleAlone_SaysNothingAboutTheLanguage": 0.0,
+    "NamedLanguage_IsNeverReplacedByTheTitle": 0.0,
+    "OriginalTitle_CountsAsTheOriginalLanguage_AllowedWhereTheProfileSaysSo": 0.01,
+    "TitleIsCompared_WholeAfterTheSameCleaning_AsTheSeriesMatcher": 0.0,
+    "TitleKnownInSeveralLanguages_IsAmbiguous_ManualReview": 0.01,
+    "TitleOfNoKnownLanguage_StaysUnknown_ManualReview": 0.0
+   },
+   "Jularr.Backend.Tests.BookLanguagePerEditionTests": {
+    "GrabTargetLanguage_ASecondLanguageOrTheOriginalStandsInForTheFirstLanguageOfItsChain": 0.0,
+    "GrabTargetLanguage_IsTheFirstMissingLanguageTheReleaseCarries_OrTheFirstMissingOneWhenItNamesNone": 0.01,
+    "Import_AFileOfAnotherWantedLanguageIsKept_OnlyAFileInANeitherWantedLanguageGoes": 0.0,
+    "MissingLanguage_IsSearchedOnItsOwn_TheFileOfAnotherLanguageIsNoUpgradeToCompareWith": 0.08,
+    "ProfileLanguages_AreTheChainsOfTheMissingLanguages_FirstThenSecond_OriginalOnlyWhereAChainAllowsIt": 0.02
+   },
+   "Jularr.Backend.Tests.BookLanguageSelectionTests": {
+    "DirectSourceLanguages_AFileInSeveralLanguagesCountsForEach": 0.01,
+    "Flexible_OnlyOtherKnownLanguages_NothingIsTakenAutomatically_EveryRowSaysWhy": 0.04,
+    "Flexible_TheAskedLanguageWinsOverEveryOtherAndOverUnknown_WhateverTheSourcePriority": 0.0,
+    "Flexible_TheOriginalLanguageIsAllowed_AfterTheAskedOne": 0.0,
+    "NoAskedLanguage_NoLanguageRule": 0.0,
+    "OriginalFallback_AllowsOnlyTheOriginal_EnglishFallback_OnlyEnglish_StrictNeither": 0.0,
+    "SeveralAskedLanguages_FollowTheOrderOfTheProfile": 0.0,
+    "UnknownLanguage_IsTheLastResort_OnlyWhenNothingInTheChainIsFound_AndNeverForAStrictProfile": 0.01
+   },
+   "Jularr.Backend.Tests.BookReleaseCorpusTests": {
+    "Corpus_AnyInputOrder_GivesTheSameScoresAndOrder": 0.01,
+    "Corpus_EveryRow_ParsesAndDecidesAsExpected": 0.05,
+    "Corpus_ObservedNyaaAnswers_HaveAScoreOrANamedRejection": 0.0,
+    "ManualSearch_SizeOutsideTheLimits_IsMarkedForAPersonInsteadOfRejected": 0.0,
+    "SingleVolume_BeatsAPackOfTheSameQuality": 0.0
+   },
+   "Jularr.Backend.Tests.BookReleaseIdentityTests": {
+    "AuthorNamedGuide_IsNotADerivativeMarker": 0.0,
+    "DerivativeOfRequestedOriginal_IsRejected": 0.0,
+    "ExplicitlyRequestedDerivative_IsEligibleForItself": 0.0,
+    "GuideAboutAnExplicitlyRequestedGuide_IsStillAnotherWork": 0.0,
+    "ObservedDerivative_IsNotTheOriginalEvenWithAuthorOrIdentifierSearch": 0.01,
+    "OriginalAndOrdinarySubtitleOrEdition_RemainEligible": 0.0,
+    "RequestedSummaryAlias_IsRespectedButDoesNotPermitAnotherDerivative": 0.0,
+    "UnnamedAuthor_DoesNotMakeASummaryEligible": 0.0
+   },
+   "Jularr.Backend.Tests.BookTests": {
+    "BookDocumentLanguages_VerifiesExplicitEpubMetadataWithoutGuessing": 0.01,
+    "Book_ContentCheck_TakesTolerantEpubsAndNamesTheFailedCheck": 0.02,
+    "Book_ContentThatIsNoEbook_WaitsForManualReviewAndStaysOutOfTheLibrary": 9.08,
+    "Book_Editions_KeepLanguageFormatAndIsbn_AndARequestFindsItsLanguagesTitle": 8.67,
+    "Book_FeedRelease_IsJudgedAndGrabbedDirectly_WithoutASearch": 8.54,
+    "Book_GroupedFormats_UpgradeByLanguageWithoutOverridingProfileScores": 0.0,
+    "Book_OpenLibraryGutenbergAndNewznab_ImportOnlyTheRightVerifiedBook": 9.86,
+    "Book_OriginalArrivesImmediately_AndALaterRequestedLanguageReplacesIt": 9.96,
+    "Book_ReadsInTheProfilesLanguage_AndWithoutAnEditionInItTakesTheOriginalImmediately": 8.75,
+    "Book_RulesForNamesCategoriesAndContent": 0.0,
+    "Book_Series_FromOpenLibraryThenHardcover_AndAnAdministratorsChoiceStays": 17.37,
+    "Book_SlowDirectSource_RespectsSearchBudgetAndRetainsOtherResults": 66.45,
+    "Book_TheIndexerAndTheDirectSource_AreAskedAtTheSameTime": 8.56,
+    "Discover_ABookIsFoundInItsCatalog_AndRequestedByAUser": 12.98,
+    "Scan_BookFolders_TakeTheWorkOfTheirTitle_FromTheCatalogOrFromHere": 17.14,
+    "StrictEpubWithoutLanguageMetadata_RequiresManualReview": 0.0,
+    "Unmatched_FileIsIdentifiedAsACatalogEntry_ThroughTheWorkSearch": 10.49
+   },
+   "Jularr.Backend.Tests.BookTranslationTests": {
+    "Job_ABlockWithoutAVerifiableTranslation_KeepsItsOriginalAndIsDone": 8.28,
+    "Job_ABookBeingRead_StartsAtTheChapterTheReaderIsIn_ThenWrapsAround": 9.0,
+    "Job_ABookInAnUnknownLanguage_IsSkippedEvenWhenItIsBeingRead": 8.72,
+    "Job_ANewModelVersion_KeepsTheEarlierTextReadableAndUnfinished_UntilItIsReplacedAfterTheMissingSections": 9.12,
+    "Job_ASectionWithoutText_IsDoneOnceAndTheRoundsMoveOn": 8.16,
+    "Job_BooksNobodyReads_AreTranslatedOneAfterTheOther": 8.95,
+    "Job_TranslatesTheBookBeingReadFirst_IntoTheProfilesLanguages_AndTheReaderGetsItAtOnce": 10.48,
+    "Job_WithACodexDefaultModel_TranslatesASectionInOneRequest_AndStopsAtTheDailyLimit": 7.88,
+    "Job_WithTwoBooksBeingRead_TranslatesTheMostRecentlyReadFirst": 8.8,
+    "Progress_CountsFinishedSectionsPerLanguageAndBook_AndNamesTheSectionInWork": 9.38,
+    "Progress_TracksTheSectionPaceAndWhyNothingHappens": 0.0,
+    "Retranslate_ASectionWithCodex_ShowsToEveryReader_WhileOllamaStaysTheDefault": 8.36,
+    "TranslatedEpub_OnlyOnceEverySectionIsTranslated_ChosenModelsWinPerBlock_AndNamesTheModels": 8.64,
+    "TranslatedEpub_TwoModelsThatTogetherCoverTheBook_AreOffered_AndBothNamed": 8.08
+   },
+   "Jularr.Backend.Tests.BrowserAssistanceTests": {
+    "Api_RequiresPermissionEnabledModuleSessionAndCsrf_FrameIsNeverCached": 7.29,
+    "DownloadLease_RetainsItsTargetAndInvalidatesControlsForThePreviousDownload": 0.0,
+    "ExpiredView_CanBeClosedOrReopenedOnlyByItsOwner": 0.0,
+    "FailedReconnect_KeepsTheOwnersSourceDescriptor": 0.0,
+    "FrameFailure_PreservesOpeningSessionForRecovery": 0.0,
+    "Frames_AreBrieflyReusedAndInputInvalidatesThem": 0.0,
+    "Input_RejectsCommandsKeysAndCoordinatesOutsideSupportedControls": 0.0,
+    "Lease_ExpiresAndBrowserResetInvalidatesIt": 0.0,
+    "Lease_OnlyOpeningSignInSessionCanReadTypeAndClose": 0.01
+   },
+   "Jularr.Backend.Tests.BrowserTimeZoneTests": {
+    "ReleaseCountdown_ChangesAtLocalMidnight_NotAtUtcMidnight": 0.0,
+    "Today_RejectsInvalidCookieAndFallsBackToUtc": 0.0,
+    "Today_RespectsDaylightSavingInBothSeasonsAndAcrossUtcMidnight": 0.0,
+    "Today_UsesBrowserZoneNearMidnightInsteadOfServerUtcDate": 0.0
+   },
+   "Jularr.Backend.Tests.CalendarTests": {
+    "Calendar_UpcomingUnits_OfWatchlistedRequestedOrOwnedWorksByDay": 7.77
+   },
+   "Jularr.Backend.Tests.CatalogCleanupTests": {
+    "Cleanup_KeepsEveryProtectedTitle_DropsOnlyDetailsOfUnusedOnes_AndDeletesUnusedRowsOfCatalogsNotKeptWhole": 5.13,
+    "Cleanup_KeepsTitlesWhoseFilesAreOffline_AndEveryPersonsEdit": 4.58,
+    "Cleanup_WhileDiscoverIsDetailedAhead_KeepsTheDetailsOfEveryDiscoverListTitle_AndNoneWithoutCaching": 3.47
+   },
+   "Jularr.Backend.Tests.CodexConnectionTests": {
+    "Catalog_ListsTheVisibleModelsWithTheirEfforts_AndThePlanUsage": 0.05,
+    "Catalog_WhenTheAppServerCannotAnswer_IsNullInsteadOfAnError": 0.01,
+    "Connection_WithoutTheCli_IsNotInstalled_AndRefusesToStartALogin": 0.0,
+    "Login_AddressOutsideOpenAi_IsNeverShown": 0.01,
+    "Login_Cancelled_OrFailed_ReturnsToNotConnected_AndMayStartAgain": 0.17,
+    "Login_ShowsTheCode_RefusesASecondOne_AndEndsWhenThePersonSignedIn": 0.22,
+    "Services_AdminSavesCodexSettings_ReadsThemBack_AndRefusesWhatCannotWork": 5.73,
+    "Services_AdminStartsAndCancelsALogin_AndASecondStartIsRefused": 5.63
+   },
+   "Jularr.Backend.Tests.CodexTranslationTests": {
+    "Activity_ListsTheRequests_AndTheTokensPerDayAreKeptAcrossARestart": 0.03,
+    "NumberedStream_CutsPartsAsTheAnswerComes_FirstTextOfANumberWins_AndIgnoresOtherNumbers": 0.0,
+    "Provider_KnowsTheModelsTheAccountOffered_NotBefore": 0.06,
+    "Provider_StopsAtTheDailyLimit_AndTheDayCountSurvivesARestart": 0.03,
+    "Provider_StreamsBlocks_HandingEachOneOnWhenItIsComplete_CountsTheTokens_AndNamesAFailure": 0.21,
+    "Provider_TranslatesABlockWithItsContext_CountsTheTokens_AndKeepsTheEffort": 0.03,
+    "Provider_TranslatesNumberedSubtitleCues_SoTheSubtitleParserAcceptsThem": 0.01,
+    "Provider_TranslatesOnlyWhenAskedByName_AndOnlyWhileConnected": 0.02,
+    "Provider_TranslatesSeveralBlocksInOneRequest_AndAsksAgainForAMissingOne": 0.02,
+    "Provider_WhenTheModelFails_TheFallbackModelAnswers": 0.02,
+    "Provider_WhenThePlanLimitIsReached_RestsUntilCodexSaysAndNotesIt": 0.02,
+    "Runs_ARequestOfTheSameChapterSoonAfterwards_AddsToItsRow_AndAnotherModelGetsItsOwn": 0.03
+   },
+   "Jularr.Backend.Tests.CollectionTests": {
+    "Collections_HandPickedAndSmart_ShowOnlyTheProfilesVisibleWorks": 7.71,
+    "Favorites_ScopesOrderAndMembership_NarrowTheTitlesAndAssignThem": 8.23
+   },
+   "Jularr.Backend.Tests.CompanionTests": {
+    "Commands_AreRevisionProtectedSingleDispatchAndTvAcknowledged": 6.91,
+    "ControllerProfileChange_InvalidatesClaimAndCommands": 6.72,
+    "EndAndProfileChange_RevokePhonePermission": 6.82,
+    "Invitation_IsOneUseShortLivedAndBoundToTvAndProfile": 6.88,
+    "QueuedCommand_FromLoggedOutController_IsNeverDispatched": 6.81,
+    "RevokedGrant_ReclaimCannotRevivePendingCommands": 6.66
+   },
+   "Jularr.Backend.Tests.CompressionTests": {
+    "LiveEventsAndMedia_AreNotCompressed": 0.02,
+    "Pages_LeaveWithBrotliOrGzip_AndDecodeToTheSameHtml": 0.07
+   },
+   "Jularr.Backend.Tests.ContinueDetailTests": {
+    "Format_MediaAndPosition_NamesWhereTheProfileIs": 0.05,
+    "Format_PositionBeyondTheEnd_ShowsNoTimeLeft": 0.0
+   },
+   "Jularr.Backend.Tests.CoverTests": {
+    "BookWithoutAnyProvider_GetsTheCoverOfItsOwnFile_AndAFileWithoutOneIsNotAskedAgain": 6.85,
+    "CoverBackfill_ConvertsOnlyWhatIsNotInTheChosenFormat_AndNeverRemovesBeforeTheNewFileExists": 4.73,
+    "CoverBackfill_WithoutFfmpeg_ChangesNothing_AndIsAnOwnerVisibleJob": 4.58,
+    "CoverClient_Signatures_AreRecognizedByTheirBytes": 0.0,
+    "CoverPaths_Accepts_NamesOnlyTheFormatsTheBrowserAsksFor": 0.0,
+    "CoverPaths_NamesAndWidths_FollowOneRule": 0.0,
+    "CoverPaths_StoredFormat_IsServedToBrowsersThatTakeIt_AndDerivedForTheOthers": 0.0,
+    "CoverStore_EffectiveFormat_IsJxlOnlyWhereCjxlIsThere_ElseWebP": 0.0,
+    "CoverStore_WithFfmpeg_ConvertsAWidthToWebP_ServesItAndDerivesForOtherBrowsers": 0.0,
+    "CoverSweep_RemovesFilesNoStoredCoverRefersTo_AndKeepsTheRest": 4.73,
+    "Cover_ChangedAddress_IsFetchedAgain_AndAFailureKeepsTheProviderAddress": 4.94,
+    "Cover_JxlWidth_IsServedOnlyToBrowsersThatNameIt": 4.44,
+    "Cover_StoredOnceForAWork_IsServedLocally_AndLeavesWithIt": 5.09,
+    "Cover_WithFfmpegAndCjxl_KeepsOnlyJxlWidths_AndAnswersOtherBrowsersWithWebPOrJpeg": 0.0,
+    "Cover_WithFfmpeg_KeepsOneWebPWidthBesideTheOriginal_AndConvertsOlderFormats": 0.0,
+    "ExternalCover_FetchedOnceKeptByUse_AndTrimmedByTheOwnersDaysAndSize": 4.71,
+    "ExternalCover_TheTvdbArtwork_IsFetchedAndKeptByJularr": 4.68,
+    "JxlEncoder_Arguments_AreOneListWithDistanceEffortAndProgressive_AndAMissingToolSwitchesItOff": 0.01,
+    "JxlEncoder_WithCjxl_WritesAJxlFile": 0.0
+   },
+   "Jularr.Backend.Tests.DashboardTests": {
+    "HealthJob_AFailingService_FailsThePassOnce_AndTheNoticeClosesOnceItAnswers": 6.31,
+    "Health_AnIndexerInItsBackoff_IsPausedUntilItEnds_AndIsNotAsked": 6.09,
+    "Health_OnlyConfiguredServicesAppear_AreJudgedByTheirOwnTests_AndAnswersAreKept": 6.62,
+    "Health_Permissions_AreTheOwnersAlone": 6.04,
+    "Health_StorageAndProviders_AreJudgedFromWhatIsStoredAndObserved": 6.31,
+    "Logs_ActivityJobsAndTheApplication_AreMergedFilteredAndPaged": 6.4,
+    "Pages_DashboardPerformanceAndLogs_RenderForTheOwner_AndCheckNowAsksAgain": 8.26,
+    "PerformanceHistory_IsWrittenInBatches_PrunedAndReadBackAfterARestart": 6.37,
+    "RecentLogs_KeepOnlyTheNewestThousand_NewestFirst": 0.0
+   },
+   "Jularr.Backend.Tests.DataFieldTests": {
+    "Data_RequiredLengthAndList_ValidateWithoutSql": 0.0,
+    "Field_ConflictingClrType_IsRejected": 0.0,
+    "Field_PostgresBindingAndProjection_EnforceNullability": 0.07,
+    "Field_RequiredAndOptional_ReuseOneDatabaseDefinition": 0.0,
+    "PageResponse_InvalidItem_UsesCanonicalFieldValidation": 0.0,
+    "PageResponse_InvalidJsonBounds_UseExistingValidation": 0.0,
+    "PageResponse_JsonRoundTrip_PreservesWireContract": 0.01,
+    "ServiceInput_Normalization_TrimsAndTreatsBlankOptionalTextAsAbsent": 0.0,
+    "SetData_Lists_MatchEntityIdsAndRejectUnknownRows": 0.0,
+    "SetData_PartialFields_DoNotRenameProfileIdToId": 0.01
+   },
+   "Jularr.Backend.Tests.DatabaseBaselineTests": {
+    "Baselines_AreEachExactlyOneTransactionBlock": 0.0,
+    "BrowserModule_IsOffByDefaultAndDependsOnAcquisition": 0.79,
+    "CatalogWorks_FreshInstallKeepsTheProviderCatalogInWorks": 1.02,
+    "ConcurrentFreshStarts_InstallOneCompleteHistory": 0.89,
+    "EmptyDatabase_GetsEveryBaselineOnce_AndAnExistingOneStaysAsItIs": 0.83,
+    "FreshInstall_FailedMigration_RollsBackTheEntireInstallation": 1.49,
+    "LegacyDatabase_NotMatchingTheBaseline_IsRefusedAndStaysUnchanged": 0.62,
+    "ReleaseUpgrade_BackupRestoreRetryAndConcurrentStarts_PreserveDataAndKeys": 4.26,
+    "UnsupportedVersionHistory_StopsWithoutChangingData": 2.22,
+    "Upgrade_ExistingAccountsAndMissingKeyRing_AbortsBeforeSchemaChanges": 0.84,
+    "Upgrade_MissingBackupTool_LeavesSchemaVersionAndDataUnchanged": 0.78
+   },
+   "Jularr.Backend.Tests.DatabaseMigrationTests": {
+    "AnimeMappings_UpgradeAddsTheEmptyMappingsTheirSource_AndTheTvdbCatalogCard": 1.07,
+    "Baseline_MatchesTheFrozenHash": 0.0,
+    "BookLanguages_AfterTheFeedUpdate_BooksSearchedBeforeWaitForTheRhythmOfSourcesWithoutAFeed_ABatchPerCycle": 54.06,
+    "BookLanguages_UpgradeKeepsEveryTarget_AndEachWantedLanguageIsCoveredByItsOwnFile": 44.39,
+    "BookVolumeSizes_UpgradeAddsTheLimitsPerVolumeOfTheBookKinds": 1.06,
+    "BrowserTranslationRows_UpgradeDeletesOnlyThem_AndKeepsTheServersTranslationsAndEveryOtherResource": 0.9,
+    "CachingModule_UpgradeKeepsTheModuleStates_AndDropsTheChoicesOfEachCatalog": 2.8,
+    "CatalogFilterFacts_UpgradeOnlyAddsColumns_KeepsEveryWork_AndHasTheCatalogsReadAgain": 0.91,
+    "ContentLanguages_UpgradePreservesExistingProfilesWithoutInferringTheirPreferences": 0.83,
+    "DatabaseUpgrade_FailedUpdate_IsReturnedForTheMaintenancePage_AndACurrentDatabaseReturnsNull": 0.54,
+    "DownloadStages_UpgradeKeepsUnresolvedImportsAndSourceWaitsSeparate": 1.1,
+    "FeedReleases_UpgradeKeepsTheIndexersAndAddsAnEmptyTable_ThatLeavesWithItsIndexer": 0.92,
+    "FranchiseAndUnitFileIndexes_AreCreatedOnUpgrade": 0.93,
+    "LanguageChains_UpgradeKeepsWhatEveryBookTargetFollowed_StripsLanguagesFromProfiles_AndMergesProfilesThatOnlyHadLanguages": 0.93,
+    "LegacyBaselineDatabase_WithAMissingColumn_IsRefusedAndNothingIsRecorded": 0.9,
+    "LegacyBaselineDatabase_WithAPendingMigration_BacksUpThenMarksVersionOneAndMigrates": 0.93,
+    "LegacyBaselineDatabase_WithoutVersionTable_IsMarkedVersionOne_WithoutABackup": 0.99,
+    "LibraryTieIndexes_UpgradeKeepsTiesAndIndexesTheirMarkedRows": 0.77,
+    "MaintenanceHost_AnswersEveryRequestWith503AndThePage": 0.24,
+    "MaintenancePage_NamesTheMigration_InGerman_WithoutTheReason": 0.04,
+    "ManualImportReleaseNames_UpgradeGivesAssignedFilmsAndEpisodesTheirReleaseName_AndLeavesEveryOtherFileAlone": 0.91,
+    "MergeExternalWorks_UpgradeKeepsWhatPeopleMadeAsWorksAndDropsTheCache": 1.11,
+    "Migrations_AreEmbeddedFromTheMigrationsFolder_ContiguousFromTwo": 0.0,
+    "ProductionCompanionMigration_UpgradesTheFrozenBaselineWithBackup": 0.8,
+    "ReadingFilesOnDisk_UpgradeDeletesOnlyPicturesAndPages_KeepsTextTranslationsAndChoices_AndRecountsTheCache": 0.86,
+    "ReleaseGroups_UpgradeAddsTheEmptyListWithOneNamePerMediaTypeInAnyCase": 0.79,
+    "SeriesFromTvdb_UpgradeDropsTheTmdbSeriesCatalog_DeletesItsCatalogTitles_AndMakesLibrarySeriesDue": 0.94,
+    "SharedQualityProfiles_UpgradeKeepsTheProfileOfEveryTarget_MergesAlikeProfilesFormatsAndGroups_AndNamesEveryRemuxAlike": 1.05,
+    "TranslationMachines_UpgradeStartsWithAnEmptyOrder_SoTheConfiguredEndpointKeepsTranslating": 0.84,
+    "TranslationVariants_UpgradeKeepsTheAutomaticModel_AndAddsAnEmptyChoiceTable": 0.83,
+    "Upgrade_AppliesNumberedMigrations_AfterABackup_KeepsData_AndIsConcurrencySafe": 0.5,
+    "Upgrade_ChangedChecksumOfAnAppliedMigration_RefusesToStart": 0.54,
+    "Upgrade_FailedBackup_AbortsBeforeAnyMigration": 0.48,
+    "Upgrade_FailingMigration_RollsEverythingBack_KeepsTheBackup_AndRetries": 0.6,
+    "Upgrade_FeedVersionTwoToCompanionVersionFour_PreservesFeedsAndCreatesCompanionSchema": 0.96,
+    "Upgrade_NamingFromVersionEight_PreservesEditedVideoPatternsAndSeedsOtherMediaOnce": 0.89,
+    "Upgrade_ProductionFeedMigration_PreservesVersionOneDataAndBacksUpOnce": 0.89,
+    "Upgrade_PruningFails_StillStartsWithTheUpdateAndKeepsEveryBackup": 0.83,
+    "Upgrade_UpdateBackup_PrunesAutomaticAndUpdateBackupsToTheLimitAndKeepsManualOnes": 1.91,
+    "VideoLanguages_FilesThatLackAFirstLanguage_AreOpen_FilesWithoutAudioNever": 0.76,
+    "WantedProjection_Upgrade_PreservesDataAndRecordsTheReleaseMigration": 2.13,
+    "WorkCatalogColumns_UpgradeKeepsWorksMarksThemDetailedAndAddsDefaults": 0.94
+   },
+   "Jularr.Backend.Tests.DetailsPageTests": {
+    "Work_ReadsRatingProgressEditionsAndUnitFacts_AndTheTabsShowThem": 8.13
+   },
+   "Jularr.Backend.Tests.DeviceTests": {
+    "App_SwitchesProfilesWithTheirPin_ButNeitherCreatesNorDeletesThem": 6.78,
+    "LinkPage_PairsOnlyTheBrowserThatAskedAfterThePhoneSawTheDevice": 8.03,
+    "Pairing_ConfirmedCode_GivesTheDeviceItsOwnSessionOnce": 7.43
+   },
+   "Jularr.Backend.Tests.DiscoverTests": {
+    "AdminImport_MonitorWithAndWithoutSearchNow_StartsTheTargetNowOrADayLater": 5.57,
+    "Anime_AniListSeason_IsItsOwnWorkUntilASeriesMapsIt_ThenOpensTheSeriesAtThatSeason": 11.46,
+    "CacheWorker_PreparesFeedsAndRecommendations_ReadsOverlayCurrentState_AndRetainsListsOnFailure": 7.65,
+    "CardRequest_ClickedOnACatalogCard_RequestsAtOnceAndThenLeadsToTheTitle": 11.29,
+    "Catalog_AniListLists_AskForTheirSeasonCountryAndOrder_AndTheGridOffersEveryOrder": 11.31,
+    "Catalog_CachedRankings_RefreshKnownWorksAndStillCheckProfileAccess": 6.24,
+    "Catalog_KeepsWhatDiscoverLoaded_AndAnswersTrendingWithoutCheckingAge": 6.66,
+    "Catalog_OldAnimeTrending_ReadsStoredTitleWithoutProviderRefresh": 6.28,
+    "Catalog_RankingPages_AskTheProviderForThatPage": 8.36,
+    "Catalog_ReadWholeAniList_AnswersItsListsAndEveryOrderLocally": 6.2,
+    "Catalog_ReadWhole_AnswersEveryShelfAndSuggestsWhileTyping": 7.36,
+    "Catalog_ReadWhole_PreservesIdentityStateOwnedCoverAndBlockedWorkScope": 6.62,
+    "Catalog_ReadWhole_TrendingTiesKeepExactPageBoundaries": 6.07,
+    "Catalog_WithoutTheCachingModule_KeepsNoListsAndAsksTheProviders": 6.67,
+    "Details_FirstOpen_ImportsOnceIntoTheSameWork_ProviderDownShowsTheCatalogRow_AndStaleDetailsRefreshLater": 8.85,
+    "Details_TmdbMovie_ShowsLengthGenresTrailerAndPeople": 7.54,
+    "Discover_FeedsSearchAndRequest_ResolveOneCanonicalWork": 6.88,
+    "Discover_SearchPages_KeepLocalResultsAndRenderOnlyTheRequestedRegion": 8.15,
+    "FeedRefresh_DetailsTheSeriesListsAhead_WithinTheTvdbCatalogsBudget": 10.41,
+    "FeedRefresh_DetailsTheTitlesOfEveryDiscoverListAhead_OnlyWhileTheSwitchIsOn": 6.67,
+    "Feed_AProviderThatJustFailed_IsNotAskedAgainAtOnce": 5.61,
+    "Film_ShowsItsTitleAndSummaryInTheProfilesLanguage": 7.44,
+    "Filter_WholeCatalog_NarrowsLocallyByEveryFacet": 7.96,
+    "Filter_WithoutWholeCatalog_AsksTheProviderWithTheSameChoice": 7.76,
+    "Franchise_TmdbCollection_ListsTheVisibleTitles": 8.14,
+    "Razor_Cards_OfferTheHoverPreview_AndLibraryShowsTheSharedBars": 9.01,
+    "Razor_Discover_KeepsEachTypeApart_AndTheHighlightsKeepTheirPlace": 10.32,
+    "Razor_Filters_ShowAGridUnderTheHighlights_AndOnlyTheTypeKeepsTheShelves": 10.17,
+    "Razor_HomeLibraryAndProviderTitle_RenderRealData": 10.25,
+    "Razor_HomeSeriesSlide_ComesFromDiscoversSeriesList_KeptOrAskedLive": 16.6,
+    "RelatedWork_RequestedFromItsRow_IsTheNormalRequestWithoutLeavingThePage": 9.72,
+    "Rematch_AWronglyMatchedFilm_TakesTheOtherEntryAndKeepsItsFile": 7.75,
+    "Request_OnACatalogTitle_ImportsItsDetailsFirst_AndWhileTheCatalogIsDownTheRequestStaysAndTheJobFillsIt": 7.47,
+    "Request_OnAnAnimeSeasonOfItsOwn_RequestsItsSeries_WhichTakesTheSeasonsWorkIn": 8.88,
+    "Request_OnAnAnimeSeasonTheMappingsName_TakesTheMappedSeriesAndSeasons_WithoutATitleSearch": 7.19,
+    "Series_SearchAsksTheTvdb_AndWithoutItsKeySaysSo_WhileFilmsStillWork": 7.15,
+    "Series_TmdbListsGiveTheOrder_EachEntryIsItsTheTvdbSeries_AndOneWithoutIsLeftOut": 14.95,
+    "Tmdb_NewFeed_OrdersFirstReleasesAndSearchForwardsItsPage": 0.0,
+    "Work_ACatalogTitleWithoutDetails_ShowsWhatItsCatalogKeeps": 6.15
+   },
+   "Jularr.Backend.Tests.DjvuTests": {
+    "ContentCheck_Djvu_TakesOneAndSeveralPagesAndNamesAWrongFile": 0.01,
+    "Encode_PnmPages_BecomeWebPicturesOfTheirSize": 0.01,
+    "Placement_DjvuBookAndMangaVolume_ArePlacedUnderTheirNames": 0.04,
+    "Reader_DjvuBook_OpensAsItsPagesDrawnWhenFirstShown": 6.69,
+    "Reader_DjvuWithoutDjvulibre_SaysWhatTheServerNeeds": 5.35,
+    "Tools_WithDjvulibre_CountMeasureAndDrawBoundedPages": 0.66
+   },
+   "Jularr.Backend.Tests.DownloadCleanupSafetyTests": {
+    "AutomaticSourceCleanup_RequiresAllFiles": 0.0
+   },
+   "Jularr.Backend.Tests.DownloadClientFileSafetyTests": {
+    "AutomaticCleanup_ChangedSourceInventoryPreservesNewFiles": 0.0,
+    "AutomaticImportedSourceCleanup_DeletesOnlyMappedJobOutput": 0.0,
+    "ImportedSabnzbdHistoryCleanup_DoesNotDeleteFilesAgain": 0.0,
+    "KnownQueueAndHistoryFolders_CannotBeDeleted": 0.0,
+    "ManualDeletion_RequiresProviderReportedTopLevelIncompleteOrphan": 0.0,
+    "ManualOrphanDelete_RejectsChangedInventoryAndPreservesFolder": 0.0,
+    "MountRelativePaths_NeverEscapeTheirSelectedStorageRoot": 0.0,
+    "NestedFolder_ListsAllEntriesAcrossPages_AndDeletesOnlyConfirmedSelection": 0.06,
+    "TerminalSabnzbdHistoryCleanup_RemovesDataAndHistoryWithoutArchiving": 0.0,
+    "TraversalAndRootDeletion_AreRejected": 0.0
+   },
+   "Jularr.Backend.Tests.DownloadClientSelectionTests": {
+    "DownloaderSelection_BackoffExcludesUnavailableHighPriorityClient": 0.0,
+    "DownloaderSelection_PriorityBeforeMediaScope": 0.01,
+    "DownloaderSelection_RequiresCompatibleTypeEnabledAndSupportedMedia": 0.0,
+    "DownloaderSelection_TiesResolveByStableConnectionId": 0.0,
+    "JobLayout_UsesOnlyMediaCategoryAndSharedOperationId": 0.0,
+    "TorrentJobFolders_UseDownloaderRootAndSameMediaJobIdentity": 0.0
+   },
+   "Jularr.Backend.Tests.DownloadSpeedTests": {
+    "DirectDownload_ReportsActualBytesAndKnownSize_WithoutInventingAnUnknownSize": 0.01,
+    "NewsServer_PassesAddUpArticles_AndAnOldPassHoldsNoConnections": 0.0,
+    "RateLimiter_BlocksFollowEachOtherAtTheRate_AndNoLimitWaitsNothing": 0.0,
+    "SabnzbdQueue_ReadsPriorityAndPlace": 0.01,
+    "SpeedLine_OneSamplePerInterval_BoundedAndRestartedAfterAGap": 0.0
+   },
+   "Jularr.Backend.Tests.DownloadStorageTests": {
+    "Cleanup_MissingOperationNeedsLongerGracePeriod": 0.0,
+    "Cleanup_PreservesLiveAndRecentFoldersAndNeverTakesForeignNames": 0.0,
+    "Cleanup_RejectsRecentFilesInsideOldOperationDirectory": 0.0,
+    "Cleanup_RotatesAcrossLargeWorkspaces": 0.01,
+    "Complete_OnSameFilesystemMovesPayloadWithoutDuplicatingBudget": 0.01,
+    "DirectCleanupStats_IsAvailableToAuthorizedAdminAndStartsEmpty": 4.52,
+    "DirectWrite_StopsBeforeExceedingWorkspaceAndPreservesExistingJobs": 0.01,
+    "ExpandedPayload_IsIndependentOfDownloadSizeLimitButCountsTowardWorkspace": 0.01,
+    "Extract_StorageViolationStopsAndReapsTheWritingProcess": 0.34,
+    "FilesystemFreeSpace_UsesContainingMountRatherThanRootDriveEnumeration": 0.0,
+    "FilesystemIdentity_AutomountedNas_PreservesExistingFingerprintsAcrossRemounts": 0.0,
+    "FilesystemIdentity_AutomountedNas_UsesVisibleCifsRegardlessOfLineOrder": 0.0,
+    "FilesystemIdentity_ChildOfCoveredAutomount_IsNotVisibleThroughCifs": 0.0,
+    "FilesystemIdentity_CoveredCifs_DoesNotAcceptTheHiddenNas": 0.0,
+    "FilesystemIdentity_UnmountedAutomount_DoesNotFallBackToTheVmDisk": 0.0,
+    "JobWorkspace_LegacyNativeJobsRemainResolvableAndCleanable": 0.01,
+    "JobWorkspace_MediaAndJobIdAreStableAcrossDownloadAndImport": 0.02,
+    "ParallelJobs_EnforcesConfiguredLimitAndRejectsDuplicateExecution": 0.0,
+    "Storage_RequiresExplicitConfirmationAndPersistsSeparateAreas": 4.83,
+    "Storage_TorrentFoldersAreHeldByTheEnginesJobsOnly": 4.88,
+    "WorkspaceLimit_IncludesConcurrentWritesAndHiddenWorkingFiles": 0.04
+   },
+   "Jularr.Backend.Tests.DumpCompressionTests": {
+    "Dump_AsksForZstdLevelOne": 0.01,
+    "Dump_ByAPgDumpWithoutZstd_IsRunAgainWithItsDefaultCompression": 0.01,
+    "Dump_ThatFailsForAnotherReason_IsNotRetried": 0.0
+   },
+   "Jularr.Backend.Tests.EditionLanguageFilterTests": {
+    "Rejects_AReleaseOnlyInTheLanguageOfAnEditionThatIsSwitchedOff": 0.0
+   },
+   "Jularr.Backend.Tests.ExternalFeedTests": {
+    "Cache_FailedAndEmptyRefreshRetainLastGoodList": 4.47,
+    "Cache_FirstFillIsShared_AndCancelledWaiterDoesNotCancelOtherReaders": 4.56,
+    "Cache_RestartAndOldList_NeverFetchOnRead": 4.62,
+    "Cache_WarmReadDoesNotWaitForAnOngoingRefresh": 4.63,
+    "FeedRead_EmptyIsPresentAndDisabledCacheRejectsAccess": 4.47,
+    "FeedRead_RetainsOrderAndReadsCurrentFactsRegardlessOfRefreshDate": 4.51,
+    "FeedSave_FailedReplacementRollsBackProviderFactsAndKeepsPreviousList": 4.69,
+    "RefreshSelection_BootstrapsEnabledScopes_RespectsIntervalsAndFailureRetry": 5.06
+   },
+   "Jularr.Backend.Tests.ExternalWorkSyncTests": {
+    "AniList_WalksItsTitlesByIds_KeepsWhatDiscoverFiltersBy_AndWaitsWhileUsed": 5.36,
+    "CachingTier_ComesFromTheModuleAndItsSubOption_ForTheWholeInstance": 0.0,
+    "CatalogPage_ShowsHowTheModulesKeepEachCatalog_WithoutAChoiceOfItsOwn": 5.29,
+    "FullSync_ListsReadsAndRefreshesTheCatalog_OnlyWhileItsModuleIsOn": 18.59,
+    "Settings_RefuseAnyoneButTheOwner": 4.46,
+    "Settings_SaveChoicesAndWindows_WithTheirVersion": 4.46,
+    "Syncs_ShowEachCatalogsTier_AsTheModulesSetIt": 4.68,
+    "Windows_AndUse_DecideWhetherACatalogSyncs": 0.0
+   },
+   "Jularr.Backend.Tests.FeatureCardTests": {
+    "FeatureCard_EncodesItsTexts_AndWithAnIdIsARegionOfItsOwn": 0.0,
+    "SpaceBar_Percent_IsEmptyWithoutAMeasurement": 0.0,
+    "SpaceBar_Percent_IsTheUsedShareOfAMeasuredVolume": 0.0,
+    "SpaceBar_Unmeasured_SaysWhyInsteadOfShowingAStaleBar": 0.0
+   },
+   "Jularr.Backend.Tests.FrontendAuthenticationTests": {
+    "ApprovedCards_EnvironmentGate_ShowsEightExplicitSamples": 10.35,
+    "ByteSize_Format_UsesDecimalUnits": 0.0,
+    "CardBookmark_Post_RequiresAntiforgeryAndReturnsOnlyLocally": 6.0,
+    "Design_EnvironmentGate_OnlyRendersDevelopmentExamples": 10.55,
+    "Form_Affix_PutsIconAndUnitInsideTheFieldAndKeepsItsMetadata": 4.19,
+    "Form_Color_ReusesTypedValueAndExistingWriteGuard": 8.77,
+    "Form_InvariantNumber_BindsWithoutChangingValue": 0.0,
+    "Form_Local_ReusesMetadataWithoutSubmissionOrServerActions": 4.35,
+    "Form_PasswordMetadataAndBackendError_RenderAutomaticallyWithoutSecrets": 4.03,
+    "Form_Range_PreservesIndexedNamesAndFieldErrors": 4.13,
+    "Form_Range_PreservesNumericMetadataBindingAndWriteGuard": 22.27,
+    "Form_Toggle_UsesCanonicalMetadataAndNativeBooleanPosting": 17.08,
+    "MediaCard_ProgressAndStates_RenderAccessibleActions": 4.07,
+    "Razor_LoginSettingsLogout_UseServicesAndAntiforgery": 7.11,
+    "Razor_NonOwner_HidesProfileWritesAndRejectsForgedPost": 6.25,
+    "Razor_PageFolders_PreservePublicRoutes": 7.06,
+    "Razor_Plex_PublicServices_CompleteApprovalWithoutExposingProof": 5.15,
+    "Razor_ProfileSelection_RotatesSessionAndRejectsPinAndForeignProfiles": 6.15,
+    "Razor_RolePolicies_SeparateManualMediaAndConfiguration": 21.03,
+    "SignedOut_BackgroundRequestsGet401_PageVisitsGoToSignIn": 4.97
+   },
+   "Jularr.Backend.Tests.GameFileNameTests": {
+    "Facts_ReadRegionAndVersionFromTheName": 0.0
+   },
+   "Jularr.Backend.Tests.GameTests": {
+    "Game_FilesOfTheGamesLibrary_PlayWithOrWithoutTheirGame": 7.66,
+    "Game_IgdbApplicationSearchAndImport_KeepsPlatformsAsIdentities": 7.85,
+    "Game_PlaysInTheBrowserWithSavesAndPlayTimeOfTheProfile": 8.09,
+    "Game_ReleaseNames_AreJudgedForTheWantedPlatform": 0.0,
+    "Game_RequestedPlatform_IsSearchedGrabbedAndImportedForThatPlatform": 7.61,
+    "Game_RomNames_NameTheirGame": 0.0,
+    "Game_ScannedRoms_AreIdentifiedByTheirVerifiedDump": 7.14
+   },
+   "Jularr.Backend.Tests.HomeLayoutTests": {
+    "HomeLayout_ProfileOrdersAndHidesShelves": 7.56
+   },
+   "Jularr.Backend.Tests.ImportJudgementTests": {
+    "Movie_TheFilmIsClear_AnotherFilmIsNoUse_AUnclearTitleWaits": 0.01,
+    "OtherMediaTypes_KeepTheirOwnRules": 0.0,
+    "OtherMediaTypes_WithNoFileOfATakenFormat_AreNoUse": 0.0,
+    "Series_AQualityTheProfileDoesNotAllow_Waits": 0.0,
+    "Series_AnotherEpisodeThanWanted_WaitsWithWhatTheNamesSay": 0.0,
+    "Series_AnotherSeriesSamplesAndExtras_AreNoUse": 0.0,
+    "Series_NamesThatSayNothing_WaitAndFollowTheWantedEpisodesInOrder": 0.01,
+    "Series_TheWantedEpisode_IsClear_AndAPackBringsEveryEpisodeAlong": 0.02
+   },
+   "Jularr.Backend.Tests.ImportTransferTests": {
+    "AllNinetyNineNamesAreTaken_DoesNotClaimAnOccupiedTarget": 0.02,
+    "ExistingLibraryFile_IsNotOverwrittenAndDownloadRemains": 0.0,
+    "ImportNameReservation_ChecksEveryExtensionInAGroupAndTheInventory": 0.0,
+    "InterruptedCopy_RemovesTemporaryFileAndRetainsOriginal": 0.0,
+    "Move_LinksOnTheSameFilesystem_AndCopiesToAnother": 0.01,
+    "SuccessfulCopy_PublishesCompleteFileAndRetainsDownload": 0.0
+   },
+   "Jularr.Backend.Tests.InstanceCapabilitiesTests": {
+    "Library_Disabled_BlocksMediaOperationsAndRetainsData": 5.18,
+    "ModuleGate_AllAnyAndWriteLocks_UseTheOperationTransaction": 2.32,
+    "Razor_InstancePresentationAndModules_UpdateBrandLocaleAndNavigation": 6.23
+   },
+   "Jularr.Backend.Tests.InstanceModuleDependencyTests": {
+    "AniList_SwitchedOnWithoutProgressSync_IsAllowedAndLibraryStaysOnWhileItIs": 7.45,
+    "Caching_SettingsSaveWithTheModules_WhetherTheModuleIsOnOrNot_WithinTheirRange": 8.08,
+    "Module_SwitchedOffWhileAnotherNeedsIt_IsRefusedUntilTheOtherIsOff": 7.54,
+    "Module_SwitchedOnWhileWhatItNeedsIsOff_IsRefusedAndChangesNothing": 7.84,
+    "ModulesPage_ShowsCachingWithItsSettingsAndSubOptions_AndSavesThemWithTheSwitches": 8.38,
+    "ModulesPage_ShowsWhatEachNeeds_AndSavesEveryChangedSwitchWithOneRequest": 8.29,
+    "Modules_Read_NameWhatEachNeeds": 7.42,
+    "Modules_SavedTogether_ChangeAModuleAndWhatItNeedsInOneStepOrNotAtAll": 7.65
+   },
+   "Jularr.Backend.Tests.InstanceSettingsTests": {
+    "Razor_SettingsForm_UsesFieldMetadataAndPreservesFailedInput": 5.08,
+    "Settings_NonOwner_ReceivesNoConfigurationOrWriteAccess": 3.18,
+    "Settings_OwnerEdits_RejectInvalidLocaleInputAndStaleChanges": 3.37
+   },
+   "Jularr.Backend.Tests.LanDiscoveryTests": {
+    "OnlyPrivateIpv4NetworksAreEligibleForDiscovery": 0.0
+   },
+   "Jularr.Backend.Tests.LanguageRuleTests": {
+    "Search_ARuleOfAnotherLanguage_ChangesNothing": 0.0,
+    "Search_BlockedGroup_IsRejectedAutomatically_AndOnlyMarkedByHand": 0.0,
+    "Search_PreferredGroupOfTheReleasesLanguage_WinsAndNamesItsPoints": 0.12,
+    "Service_SavesTrimmedEntriesOnce_ReadsThemBack_AndAnEmptyRuleIsRemoved": 6.36
+   },
+   "Jularr.Backend.Tests.LibraryPerformanceTests": {
+    "CatalogScale_LibraryCalendarAdminListAndCleanup_ReportLatency": 0.01,
+    "DiscoverAndWork_MixedInventory_ReportsWarmReadLatency": 0.01,
+    "Favorites_LargeCatalog_ReadsStayIndependentOfCatalogSize": 37.43,
+    "Library_MixedInventory_ReportsWarmReadLatency": 0.01,
+    "SearchAndRequests_CatalogScale_ReportLatency": 0.0,
+    "WorkPage_CatalogScale_ServicesStayWithinBudget": 0.01
+   },
+   "Jularr.Backend.Tests.LibraryTests": {
+    "MultiEpisodeCoverage_RelationalLinksStayWithinTheirWork": 5.0,
+    "Operations_QueueOncePerRootAndResumeAfterRestart": 4.94,
+    "Parser_AmbiguousEpisodePaths_NeedManualReview": 0.0,
+    "Parser_CommonLayouts_SuggestTitleAndUnit": 0.01,
+    "Parser_EpisodeRange_ProvidesAllContiguousEpisodes": 0.0,
+    "Parser_EpisodeRange_RejectsContradictionsAndUnboundedSpans": 0.0,
+    "Parser_MixedSuffixIds_DoNotContaminateTheTitle": 0.0,
+    "Parser_NfoIdentity_RejectsConflictsAndExternalEntities": 0.0,
+    "Parser_PlexMatch_ExplicitInstructionsOverrideFilenameAndSeasonDefaults": 0.0,
+    "Parser_PlexMatch_ReadsSeriesAndExplicitEpisodeHints": 0.0,
+    "Parser_ProviderIds_MatchAcrossFoldersAndRejectConflicts": 0.0,
+    "Probe_FfprobeJson_MapsContainerAndStreams": 0.01,
+    "Probe_FfprobeJson_ReadsBitDepthDynamicRangeAndStereo": 0.0,
+    "Razor_StoragePathsAndLibraryIdentity_UseRealForms": 7.41,
+    "RenameFiles_AbsoluteNumbers_CountTheTitlesRegularEpisodesOnly": 5.62,
+    "Rename_MediaTracks_FillTheMediaInfoTokens": 0.0,
+    "Rename_MovesOnlyTheConfirmedPreviewAndKeepsIdentity": 6.69,
+    "Rename_Plan_SubtitlesFollowTheLongestStemAndGameFoldersIgnoreCase": 0.0,
+    "Rename_Plan_UsesTheImportLayoutPerType": 0.01,
+    "Roots_CreateRenameDelete_RejectOverlapsStaleVersionsAndNonOwners": 4.93,
+    "Scan_CaseDistinctFolders_KeepTheirOwnNfoIdentity": 5.54,
+    "Scan_CatalogLinksAnotherTvdbIdThanTheFolder_TheFolderIdStaysTheWorksOwn": 5.5,
+    "Scan_ConflictingNfoIdentity_DoesNotAssociateMovie": 5.41,
+    "Scan_CountsThePagesOfAComicArchive_Once": 9.75,
+    "Scan_FolderIdTheCatalogDoesNotKnowYet_StillTakesTheFileThroughItsOtherIds": 5.78,
+    "Scan_IndexesAssignsGrowsKnownFoldersAndKeepsInventoryWhenStorageIsOffline": 5.53,
+    "Scan_IsQueuedAgainAfterTheIntervalButNotForOfflineStorage": 5.18,
+    "Scan_ManyUnknownImdbIds_ResolvesEverySeriesInOneScan": 7.24,
+    "Scan_MatchesImportedSeriesAndKeepsAmbiguousFilesUnassigned": 5.46,
+    "Scan_MovieNfoMatchesAnUnrelatedFolderName": 5.35,
+    "Scan_MultiEpisodeFile_CoversEveryEpisodeItHolds": 5.34,
+    "Scan_NfoIdentifiesSeriesWithDifferentFolderTitle": 5.59,
+    "Scan_NoIdTheCatalogKnows_TitleAndYearNameOneEntry_TakeTheFile": 5.65,
+    "Scan_OutOfLookupBudget_QueuesTheNextScanForTheRest": 5.4,
+    "Scan_PlexMatchIdentifiesSeriesAndUnnumberedEpisode": 5.23,
+    "Scan_SeasonPlexMatchOverridesUnnumberedEpisode": 5.08,
+    "Scan_UnknownImdbId_ResolvesViaTvdbOnceAndImportsEpisode": 5.63,
+    "Scan_UnknownSecondProviderId_DoesNotGuessFromTheFirst": 5.65,
+    "Scan_UnsupportedPlexMatchPattern_DoesNotGuessAnEpisode": 5.11,
+    "Scan_WithoutProviderId_MatchesUniqueLocalizedTitle": 5.29,
+    "Scan_WithoutProviderId_PrefersTheLibrarysWork_OverACatalogTitleOfTheSameName": 5.69,
+    "Scan_WorkHoldsTmdbsStaleTvdbId_TakesTheFolderIdAndTheFile": 5.78,
+    "Scan_WorkKnownByTmdbOnly_GetsItsEpisodesFromTvdbThenTakesTheFile": 5.73,
+    "Scan_WorkKnowsOnlyOneOfTheFolderIds_StillTakesTheFile": 5.6,
+    "Scan_WorkWithoutEpisodes_TakesSeasonsAndEpisodesFromTvdb": 5.6,
+    "Storage_ConfiguredLocalPath_IsNotAConnectionUntilConnectedAndThenBrowsable": 4.99,
+    "Storage_LocalPathsWakeAndBrowsing_StayInsideConfiguredConnections": 5.15,
+    "StoredFiles_SubtitleColumn_MatchesTheFileTypes": 5.12
+   },
+   "Jularr.Backend.Tests.LiveTests": {
+    "Combine_RunningDownloads_CountBytesPaceAndUnpacking": 0.01,
+    "LiveChanges_StreamsAreCapped_AndOnlyChangesWakeThem": 0.06,
+    "LiveServices_PersonSeesOwnRequests_AdministratorSeesEverything": 6.53,
+    "LiveStream_SnapshotFirst_ThenHeartbeatAndChanges_ScopedByRole": 9.21,
+    "OfRequest_StatusAndDownload_GiveThePhaseAndPercent": 0.0
+   },
+   "Jularr.Backend.Tests.LocalReadingTranslationIntegrationTests": {
+    "DefaultModel_TheOwnerChoosesAnInstalledModel_AndEveryServerTranslationFollowsIt": 6.77,
+    "Reader_LocalModelCachesAuthorizedBlocksWithoutInventingEpubLanguage": 10.91
+   },
+   "Jularr.Backend.Tests.LocalTranslationModelTests": {
+    "Block_TheModelTranslatesTheContextToo_IsAskedAgainWithoutIt": 0.0,
+    "Cache_RejectsStaleSourceLanguageAndAlgorithm_AndKeepsAnEarlierModelVersionAsStale": 0.0,
+    "Chunker_LongParagraph_KeepsOrderedTextAndBoundedUnits": 0.0,
+    "Client_ListsApprovedModels_AndBenchmarksWithBoundedInput": 0.01,
+    "DownloadQueue_DeniesModelsWithoutOperatorVerifiedVolumeBudget": 0.0,
+    "DownloadStatus_RejectsCorruptPersistentJob_FailsClosed": 0.0,
+    "DownloadStatus_SurvivesRestart_AsInterruptedUntilExplicitRetry": 0.0,
+    "Endpoint_AllowsOnlyLocalOrPrivateTargets": 0.0,
+    "FreeSpace_TypedByTheOwner_IsReadBackAndANegativeValueIsRefused": 6.27,
+    "Machines_AFailure_IsRemembered_WithItsReason_AndRestsForAMinute": 0.0,
+    "ProviderPaths_KeepModelsAndTargetsSeparate": 0.0,
+    "Providers_ResolveQualifiedModelIds_AndOnlyApprovedModels": 0.0,
+    "Providers_TheOwnersDefaultModel_WinsAndIsNeverReplacedByAnother": 0.0,
+    "QualityGate_RejectsEchoedOrMostlyUntranslatedJapanese": 0.0
+   },
+   "Jularr.Backend.Tests.MangaTests": {
+    "AniList_NullFields_ReadAsMissing": 0.7,
+    "Book_FromAnyFolder_IsRecognisedAndMovedByHand": 9.33,
+    "Discover_MangaRankingsComeFromAniList_WithTheirCovers": 9.27,
+    "LightNovel_Fb2AndDocxDownload_IsPlacedByItsFormatsAndReads": 7.82,
+    "LightNovel_JapanesePack_NumbersTheVolumesByTheirFileNames": 0.0,
+    "LightNovel_PackChosenByHand_ImportsVolumeByVolumeAndNamesUnmatchedFiles": 8.39,
+    "LightNovel_SingleVolumeStaysOneBook_PackPlacesEachVolumeOnItsUnit": 0.02,
+    "Manga_AniListVolumesPacksAndSingles_CompleteOnlyWhenEveryVolumeExists": 11.27,
+    "Manga_DownloadWithNothingToAssign_FailsIsBlockedAndTheNextReleaseIsSearchedAtOnce": 14.9,
+    "Manga_NumberedAndChapterFiles_LandOnTheirUnitsAndAreNeverGuessed": 0.01,
+    "Manga_RejectedDownload_IsBlockedDeletedInSabnzbdAndTheNextReleaseIsSearchedAtOnce": 7.61,
+    "Manga_ReleaseNames_NameSeriesVolumesAndFormat": 0.0,
+    "Manga_WaitingDownloadWithNothingToAssign_IsFailedByTheCleanupPassAndOthersKeepWaiting": 7.5,
+    "Manga_WithoutKnownVolumes_OnlyUnnumberedReleasesFillTheSeries": 0.01
+   },
+   "Jularr.Backend.Tests.ManualImportLogicTests": {
+    "Book_ProposesWhatTheImportRecognises_AndPlacesTheVolumeChapterOrWorkAPersonSets": 0.02,
+    "ChosenFiles_FollowTheNumbersAPersonSets_AndSubtitlesComeAlong": 0.0,
+    "ChosenLanguages_AreCheckedAgainstTheCatalog_AndKeptInItsOrder": 0.0,
+    "ChosenLanguages_OverrideTheStreams_OneForEveryTrackSeveralBesideTheNamedOnes": 0.0,
+    "Download_FinishesWhenEveryVideoIsHandled_OrThePersonSaysSo": 0.0,
+    "Episodes_TakeTheNumbersTheirNamesSay_AndALeftOutNameStaysBlank": 0.02,
+    "Film_IsNamedFromItsOwnFileWithoutNumbers": 0.0,
+    "Folder_AnUnnamedFileTakesItsFoldersTitle": 0.01,
+    "Folder_FilesAreRecognisedByTheirNames": 0.01,
+    "ImportProposal_KeepsTheFilesHandledSoFar_AndTheRestOfItself": 0.01,
+    "Leftovers_HoldNoMedia": 0.0,
+    "NameChosen_UsesTheQualityAPersonGave_AndShowsTheLanguagesItsName_States": 0.0,
+    "Problems_NameWhatAPersonMustCheck": 0.01
+   },
+   "Jularr.Backend.Tests.MediaImportJobTests": {
+    "DurableJob_IsOwnedByServer_StreamsSavedResultsAndNeverAutoDownloadsAddOnly": 6.95,
+    "DurableJob_ListBookChoice_KeepsExplicitAuthorsAndSurvivesReprocessing": 7.58,
+    "DurableJob_ReclaimsInterruptedOperation_WithoutDuplicatingACommittedWork": 6.95,
+    "DurableJob_RevokedOwnerCannotImportTheNextWork": 6.98,
+    "DurableJob_SelectedTitleAndAuthor_ResolvesOnlyUnambiguousBooksOnTheServer": 10.54,
+    "DurableJob_SelectedUnresolvedIsbn_NeverSubstitutesAnUnverifiedTitle": 6.5,
+    "DurableJob_ThreeHundredEightEntriesAreVisibleAsWaitingBeforeProcessing": 7.28,
+    "DurableJob_UnselectedItemsCannotBeQueuedToStartAnImplicitImport": 6.68
+   },
+   "Jularr.Backend.Tests.MediaImportTests": {
+    "Example_IsAValidListOfEveryKind": 0.0,
+    "ImportPage_ANormalUser_IsRefused": 6.75,
+    "ImportPage_ApplyOnlyProcessesRowsExplicitlyIncludedInThePreview": 6.87,
+    "ImportPage_BookEditionComparison_ReturnsActualFormats_WithoutWritingWorks": 8.21,
+    "ImportPage_PreviewShowsEveryRowAndTheRunHonoursTheChoices": 11.34,
+    "ImportPage_PreviewStream_ReportsIndividualIsbnAndSearchStagesWithoutImporting": 11.01,
+    "ImportPage_StreamsActualPerRowOutcomes_BeforeCompletion": 8.04,
+    "ImportPreview_WhenMetadataProviderIsUnavailable_ExplainsWhyBooksRemainUnsearched": 8.13,
+    "ImportPreview_WhenProviderRateLimits_ExplainsWhyRemainingBooksAreNotSearched": 6.81,
+    "Import_AddOnlyThenMonitor_KeepsOneWorkAndGivesItATargetLater": 9.55,
+    "Import_AudiobookEditionIsbn_DoesNotAutoImportParentBook": 8.34,
+    "Import_BookSearch_OmitsAudioOnlyWorks_ButKeepsPrintedBooksAndMixedFormatWorks": 7.05,
+    "Import_DeletedWithExclusion_IsNotAddedAgain": 8.11,
+    "Import_FaultyList_IsRejectedWithItsReasonAndChangesNothing": 7.5,
+    "Import_FileUpload_ReadsStrictUtf8WithinItsLimits": 8.76,
+    "Import_Isbn_ResolvesUnimportedEditionToCanonicalWork_AndRejectsWrongTitleOrAuthor": 32.74,
+    "Import_LargeListOfIds_PreviewsWithoutAskingAProvider": 7.49,
+    "Import_ListBook_CatalogMatchPreservesItsUnclassifiedIsbn": 9.11,
+    "Import_ListBook_ConcurrentRequests_CreateOneCanonicalBook": 6.94,
+    "Import_ListBook_IsExplicitKeepsAuthorsAndEditionIsbnAndRepeatsWithoutDuplicates": 7.22,
+    "Import_ListBook_WithConflictingIsbn_IsNotCreatedOrRebound": 7.02,
+    "Import_ListWithIds_PreviewsWithoutChangesThenAddsMonitorsAndRepeatsWithoutDuplicates": 10.77,
+    "Import_LocalBooks_AreChoicesEvenWithDifferentCatalogIdAndRejectForgedSelections": 7.43,
+    "Import_MoreNewTitlesThanOneRunTakes_DefersTheRestAndStaysIdempotent": 11.34,
+    "Import_OnlyAdministrators_MayPreviewOrRun": 8.58,
+    "Import_PartialFailures_AreReportedPerRowAndLeaveTheRestForTheNextRun": 7.5,
+    "Import_Series_IsTheTvdbSeries_ByItsOwnIdImdbsIdOrItsTitle": 7.66,
+    "Parse_ExplicitAuthors_RoundTripWithoutSplittingCommasInNames": 0.0,
+    "Parse_FaultyDocument_IsRejectedAsAWhole": 0.0,
+    "Parse_FaultyEntry_IsInvalidOnItsOwn": 0.01,
+    "Parse_TooManyItemsOrTooManyBytes_IsRejectedWithoutReadingFurther": 0.02,
+    "Parse_ValidEntries_AreNormalizedDeterministically": 0.01
+   },
+   "Jularr.Backend.Tests.MediaMarkerTests": {
+    "ChapterList_LeavesOutAStretchThatCannotBeWhatItsTitleSays": 0.0,
+    "ChapterTitle_NamesItsKind_OrNone": 0.01,
+    "Chapters_GiveOneMarkerPerKind_FromTheFirstRun_FittedToTheFile": 0.01,
+    "Chapters_WithImplausibleStretch_GiveNoMarker": 0.0,
+    "Markers_PlayerReadsTheMostTrustedSource_AdminSetsCopiesAndDeletes_AndPermissionsApply": 8.15,
+    "Probe_FfprobeJson_ReadsChaptersInOrder_BoundedAndSkippingBrokenOnes": 0.01,
+    "Scan_ReadsChaptersAndSidecar_FromARealFile": 0.01,
+    "SidecarFile_Edl_ReadsKnownActionsWithinItsLimits": 0.0,
+    "SidecarPath_ReplacesTheExtension_StayingBesideTheVideo": 0.0
+   },
+   "Jularr.Backend.Tests.MediaServerTests": {
+    "Emby_TwoVersionsOfAFilm_AgreeOnTheFurtherPosition": 8.09,
+    "Jellyfin_ConfirmedUser_SharesProgressBothWaysAndCatchesUpAfterAnOutage": 9.07,
+    "Merge_BothSidesMoved_FinishingWinsThenTheFurtherPosition": 0.0,
+    "ProviderSync_ReadsOneServerPerPass_SkipsAnUnconnectedOne_AndFollowsTheModuleSwitch": 8.04
+   },
+   "Jularr.Backend.Tests.MediaTests": {
+    "Library_Availability_DefaultsToFilesAndUnionsActiveRequestsWithoutDuplicates": 4.78,
+    "Library_Facets_UsePresentTracksManualGenresProgressAndCanonicalRating": 4.78,
+    "Library_NarrowsByTypesAndYears_OrdersAndPagesTheCardsOfOnePage": 5.05,
+    "Library_RecentFiles_IgnoreMissingVersionsAndKeepUnitAssetsSeparate": 4.91,
+    "Library_Subtypes_LeaveTheirParentList": 24.0,
+    "MediaSwitches_MoveSubtypesBackAndHideTypesWithoutDeleting": 5.17,
+    "ProfileMedia_BlockedTypesCloseHiddenTypesOnlyLeaveLists": 5.14,
+    "Razor_MediaForms_ValidateCreateEditAndPersonalList": 6.72,
+    "Watchlist_RepeatedUpdatesAndPaging_StayProfileScoped": 5.07,
+    "WorkCard_BooksUsePresentEditionOrCurrentDocumentLanguage_NotTheOriginalWorkLanguage": 5.07,
+    "WorkCard_LibraryAndWatchlist_ShowTheCanonicalAvailabilityOfEveryTitle": 5.96,
+    "Work_ManualCreationAndStaleEdit_PreserveIdentityAndTitleProvenance": 4.76,
+    "Work_Subtype_FitsItsTypeAndBecomesManualOnlyWhenChanged": 4.82
+   },
+   "Jularr.Backend.Tests.MetadataFillTests": {
+    "CatalogTitle_NobodyOpened_StaysOutOfTheLibraryAndIsNotFilled": 6.21,
+    "Fill_FilmKnownOnlyByItsImdbId_IsFoundThroughTmdbAndFilled": 6.2,
+    "Fill_IsAJobOfTheMediaWorker": 0.0,
+    "Fill_TitlesTheCatalogCannotGive_DoNotHoldBackTheOthers_AndAreAskedOnceADay": 6.42,
+    "Fill_WorkWithTmdbIdAndNoFacts_GetsItsDescription_AndIsNotAskedAgainToday": 6.16,
+    "Fill_WorkWithoutAnyCatalogIdentity_IsLeftAlone": 6.07
+   },
+   "Jularr.Backend.Tests.MusicTests": {
+    "Album_PlaysItsPresentTracksInOrderAndLeadsToTheArtist": 9.64,
+    "Music_ArtistAndAlbum_AreSeparateRuns": 0.0,
+    "Music_Fingerprints_NameTheAlbumEveryFileOfAFolderMatches": 0.01,
+    "Music_LibraryScan_AssignsFilesTaggedWithTheirAlbumInTagOrder": 10.49,
+    "Music_MusicBrainzAlbumSearchAndImport_PlacesTracksOnTheirUnits": 12.46,
+    "Music_Placement_FollowsTagsOverNames": 0.0,
+    "Music_Placement_KeepsNaturalOrderAndTiesTracksOnlyWhenCountsAgree": 0.0,
+    "Music_ReleaseNames_NameTheirFormat": 0.0
+   },
+   "Jularr.Backend.Tests.NamingPatternTests": {
+    "NamingPattern_AdminEdit_IsVersionChecked": 6.05,
+    "NamingPattern_ColonsIllegalCharactersAndSeason0_FollowTheRules": 0.0,
+    "NamingPattern_CommunityFormatsOfSonarrAndRadarr_RenderAsTheArrsDo": 0.0,
+    "NamingPattern_EmptyPlaceholders_DropWithTheirBrackets": 0.02,
+    "NamingPattern_LocalizedTitle_UsesStoredLocaleAndFallsBackToCanonical": 0.0,
+    "NamingPattern_MediaInfoAndCustomFormatTokens_RenderOnlyKnownData": 0.0,
+    "NamingPattern_OriginalFilename_ExcludesTheExtension": 0.0,
+    "NamingPattern_RadarrSonarrAliasesAndProviderIds": 0.0,
+    "NamingPattern_SpecialsFolder_RendersTokensWithTheNamingRules": 0.0,
+    "NamingPattern_TokenCaseSeparatorEscapesAndFilters_FollowTheArrs": 0.0,
+    "NamingPattern_UnknownOrIncomplete_IsRejected": 0.0,
+    "NamingPreview_TypedPattern_ShowsTheExampleOrWhyItCannotBeSaved": 6.14,
+    "NamingSet_SubtypePattern_NamesItsFilesAndTheTypeKeepsTheRest": 0.0,
+    "NamingSettings_AdminEdit_IsVersionCheckedAndHeldPerType": 6.58,
+    "NamingSettings_SpecialsFormat_OnlyMovesFilesAfterTheConfirmedPreview": 6.38,
+    "Replacement_SeveralReleasesNeedTellingNamesAndRecycledFilesLeaveAfterTheirDays": 6.45
+   },
+   "Jularr.Backend.Tests.NarouAcquisitionTests": {
+    "WebNovel_FoundAndRequested_StaysApartFromTheEdition_AndIsDownloadedImportedAndRead": 13.65,
+    "WebNovel_FoundByItsEditionsEnglishName_TakesThatNameOnlyWhenTitleAndWriterAgree": 11.21
+   },
+   "Jularr.Backend.Tests.NarouClientTests": {
+    "Chapter_KeepsItsTextAndRuby_WithoutForewordAndAfterword": 0.01,
+    "Download_GivesUpAfterRepeatedFailuresWithoutProgress": 4.99,
+    "Download_KeepsChaptersThroughAFailure_ResumesAndWritesAReadableEpub": 4.0,
+    "Search_ByTitleOrNcode_AsksOnlyTheOfficialApi": 2.01
+   },
+   "Jularr.Backend.Tests.NewznabThrottleTests": {
+    "DownloadNzb_ALinkThatIsGone_IsNotFoundAndNoOutage": 0.0,
+    "Download_RateLimited_StopsTheCallsWaitingBehindIt": 0.0,
+    "Gate_ParallelCalls_KeepTheirSpacingPerHost": 0.8,
+    "Search_RateLimitedByDateOrWithoutHeader_PausesTheHostAnyway": 0.0,
+    "Search_RateLimited_ReturnsRetryAfterAndStopsEveryCallToThatHost": 0.01
+   },
+   "Jularr.Backend.Tests.NotificationTests": {
+    "Notifications_RequestDecisions_ReachTheRequestingProfileUnlessMuted": 9.7
+   },
+   "Jularr.Backend.Tests.NyaaCategoriesTests": {
+    "Categories_AnyFallback_AsksEnglishTranslatedAndRawBesidesTheWantedLanguage": 0.0,
+    "Categories_NoneFallback_AsksOnlyTheWantedLanguage": 0.0
+   },
+   "Jularr.Backend.Tests.NyaaClientTests": {
+    "ABrokenAnswer_IsReported_AndNotTakenForAnEntry": 0.0,
+    "TheSearch_ReadsTheFeed_AndNamesTheFileWithTheTorrent": 0.01,
+    "TheSource_OffersTheTorrent_AndNamesTheLanguage": 0.01
+   },
+   "Jularr.Backend.Tests.OcrTests": {
+    "Books_ArePreparedOnce_WhenTheLibraryHoldsTwoCopies": 8.4,
+    "Books_ArePreparedWithoutOpening_ScansThroughTheRecognizer": 9.91,
+    "Engine_ReadsTheLinesOfATypesetPageInOrder": 0.0,
+    "Language_IsGuessedFromCommonWords": 0.0,
+    "Plan_ReadsTheOpenPageFirstThenWrapsAround": 0.0,
+    "Plan_RestsAsLongAsItWorkedAndLongerWhileInUse": 0.0,
+    "Recognition_NoiseOfAnIllustration_BecomesTheOriginalPage": 10.81,
+    "Recognition_ReadsInSlices_OpenPageFirst_AndResumes": 34.11,
+    "Recognizer_JoinsTheWordsOfALine_ButNotTheColumns": 0.0,
+    "Recognizer_PartsARegion_AtTheGutterBetweenColumns": 0.03,
+    "Rendering_KeepsTheColoursOfThePage": 0.01,
+    "ScanAnalysis_FindsThePicture_AndItsLabels": 0.02,
+    "ScanAnalysis_TakesTheLayersColumns_WhereTheRecognizerWasUnsureOfALine": 0.02,
+    "ScanAnalysis_TakesTheLayersWord_WhereTheRecognizerWasUnsure": 0.03,
+    "ScannedPage_WithAPicture_ReadsAsTextWithThePictureAndItsCaption": 2.56,
+    "ScannedPdf_WaitsForRecognition_ThenReadsAsText": 11.07,
+    "SmartPage_KeepsTheOriginalsLines": 0.0,
+    "SmartPage_LeadInsInTheirOwnLook_AreBlocksOfTheirOwn": 0.0,
+    "SmartPage_TextAroundAPicture_IsOneBlockInParts": 0.0
+   },
+   "Jularr.Backend.Tests.PagingTests": {
+    "APageWithItsOwnDock_GetsThePagerThere_AndAShortFirstPageAddsNoDock": 0.0,
+    "Link_SetsOnlyItsOwnKey_AndKeepsTheOtherListsAndTheFilters": 0.0,
+    "Rule_NextIffThePageIsFull_PreviousFromPageTwo": 0.0,
+    "ThePrimaryListIsTheOneMarkedPrimary": 0.0,
+    "TwoPagedLists_PageIndependently_AndTheFirstOneIsInTheDock": 0.0
+   },
+   "Jularr.Backend.Tests.PdfBookTests": {
+    "BrokenFile_IsInvalid": 0.0,
+    "ChapterNumberWithItsCentredTitle_StartsAChapterNamedByBoth": 0.21,
+    "DiagramDrawnWithPaths_BecomesAnSvgFigureThatKeepsItsLabels": 0.24,
+    "FiguresOfAPdf_AreSectionsWithZoomableFigureMarkup": 0.06,
+    "PageAnchors_AreNumbersOrNothing_AndMapBothWays": 0.0,
+    "PagesWithoutAnyText_AreNoBook": 0.01,
+    "Paragraphs_KnowTheirPage_AndTheirSectionsThePagesTheyCover": 0.33,
+    "PictureOnItsOwnPage_BecomesAWholePageFigure_InTextOrder": 0.18,
+    "RecognizedPages_ReadAsText_WhereTheyHoldTogether_AndKeepTheirPageNumber": 0.01,
+    "ScanLayerInTwoColumns_ReadsOneColumnAfterTheOther_ButRunningThroughEachOtherStaysThePage": 0.04,
+    "ScanWithAHiddenTextLayer_ReadsItsText_ButNoReadingCopyIsMade": 0.23,
+    "ScannedPageWithNoisyText_ShowsItsPicture_WhereThePictureCanBeRead": 0.24,
+    "ScannedPagesWithAPictureNobodyCanRead_StandInForTheOriginal_ExceptBlankOnes": 0.06,
+    "TableWithRules_BecomesAFigureOfItsOwn": 0.14,
+    "TextPages_ReflowWithoutFigures_AndAreFitForAReadingCopy": 0.74,
+    "TwoColumnPage_ReadsOneColumnAfterTheOther": 0.14,
+    "WidePicture_KeepsItsCaptionAndAnAlternativeText_AndASmallOneStaysInTheLine": 0.25
+   },
+   "Jularr.Backend.Tests.PdfCorpusTests": {
+    "Corpus_EveryBook_ReportsItsPagesAndFigures": 0.0
+   },
+   "Jularr.Backend.Tests.PlaybackPreferenceTests": {
+    "Audio_FollowsTheLanguage_AndFallsBackToTheFilesDefault": 0.0,
+    "Plan_DeviceQualityCapsTheConversion_AndThePlaybacksOwnChoiceWins": 7.97,
+    "Plan_ExceedingTheTarget_IsConvertedWithTheCap": 0.0,
+    "Preferences_DefaultsSaveAndSpeed_BelongToTheProfile": 8.06,
+    "Quality_Targets_CapAndALimitCanOnlyLowerThem": 0.0,
+    "Settings_PlaybackSection_SavesThroughItsForm": 7.42,
+    "Subtitles_FollowTheMode_AndTheirLanguage": 0.0,
+    "Subtitles_WithoutALanguage_FollowTheProfilesLanguage": 0.0,
+    "TracksAndPlan_FollowThePreferences_AndTheExplicitChoiceWins": 8.16,
+    "Transcoder_AudioOffset_DelaysOrTrimsTheEncodedAudio": 0.0,
+    "Transcoder_Cap_ScalesDownAndLimitsTheRateForSoftwareEncoding": 0.0
+   },
+   "Jularr.Backend.Tests.PlaybackTests": {
+    "AttachmentList_NamesTheFontsOfTheContainer_AndNothingElse": 0.0,
+    "CacheSize_CountsEveryFileAndIgnoresFoldersRemovedWhileCounting": 0.02,
+    "CastSubtitle_SignedAddressOfActiveSession_ServesWebVttAndNothingElse": 5.38,
+    "DirectPlay_StreamsRangesAndResumesPerProfile": 5.64,
+    "Fonts_OfAMatroskaFile_AreTakenOutOnceAndServedOneByOne": 0.0,
+    "Hls_ConversionSessions_ServeOwnSegmentsAndReleaseCache": 5.45,
+    "Hls_RealFfmpeg_TranscodesSeeksAndStaysWithinBudget": 0.0,
+    "Music_DeviceQuality_ConvertsOnlyClearlyLargerAudio": 0.0,
+    "Music_FlacEmbeddedCover_IsNotPlayedAsVideo": 0.0,
+    "Plan_ClientCapabilities_ChooseLeastWork": 0.0,
+    "Playlist_FixedGrid_CoversWholeDuration": 0.0,
+    "Razor_DetailsAndPlayer_OfferCanonicalPlayback": 6.1,
+    "Start_UnplayableOrSleepingStorage_CreatesNoSession": 5.3,
+    "Tracks_ListAudioAndSubtitlesAndServeSubRipAsWebVtt": 5.56,
+    "Tracks_SidecarNamesAndSubRip_BecomeLanguagesAndWebVtt": 0.01,
+    "Transcoder_Arguments_SeekPaceSegmentAndKeepHardwareForEncodingOnly": 0.0,
+    "Trickplay_RenderedSheets_ShowThePlayedFilesThumbnails": 5.66
+   },
+   "Jularr.Backend.Tests.ProfileReferenceVerticalTests": {
+    "ContentLanguages_AreProfileScoped_PartialAndIndependentOfUiLanguage": 0.3,
+    "InvalidNameRollsBackAndParameterBindingDoesNotInterpretSql": 0.23,
+    "InvalidProfileIdRejectedBeforeDatabaseAccess": 0.22,
+    "MembershipRevocationAndDisabledAccountBothFailClosed": 0.23,
+    "Read_UsesLongIdAndOnlyTheActiveProfile": 0.19,
+    "TransactionalGateDenialPreventsAnyMutation": 0.29,
+    "Update_ForeignProfileId_IsDeniedEvenWithMembership": 0.2,
+    "Update_LateFailure_RollsBackSharedLogicTransaction": 0.33,
+    "Update_LoadSetDataWrite_CommitsAndReturnsSuccess": 0.28
+   },
+   "Jularr.Backend.Tests.ProfileServiceGateTests": {
+    "Endpoints_AuthenticatedReadAndUpdate_UseRealDiGateAndPostgres": 3.82,
+    "ExecuteReadBatch_AuthorizationChangedDuringExternalWork_DeniesBusinessRead": 4.37,
+    "ExecuteReadBatches_ParallelInvocationsInOneScopeHaveIndependentAuthorization": 1.69,
+    "ExecuteReadBatches_SameAccountCanReadConcurrentlyWithoutAuthorizationLocks": 1.48,
+    "Gate_AdministrativeRoles_GrantOnlyTheDeclaredScope": 4.28,
+    "Gate_AnonymousLegacyAndUnverifiedSession_AreDenied": 1.47,
+    "Gate_IndependentInvocationsRetainTheirOwnVerifiedCaller": 1.4,
+    "Gate_InvalidSession_ReadAndUpdateAreDenied": 8.76,
+    "Gate_MemberWithoutOwnership_CanReadButCannotRename": 1.47,
+    "Gate_UnknownPermissionForeignResourceAndDisabledModules_AreDenied": 1.52,
+    "Rename_AuthorizationChangeAfterInitialGate_RollsBackWithoutMutation": 2.87
+   },
+   "Jularr.Backend.Tests.ProgressTests": {
+    "Continue_ARemovedTitle_LeavesTheRowKeepsItsProgressAndReturnsWithNewProgress": 6.17,
+    "Continue_SeveralStartedEpisodes_ListsTheTitleOnceWithTheLastTouched": 6.36,
+    "Details_ShowsWatchedStateAndChangesItFromItsRows": 7.91,
+    "Home_ContinueCard_OffersItsMenuAsFormsThatWorkWithoutScript": 6.81,
+    "Progress_EpisodesSeasonsAndSeries_AreMarkedAndClearedForTheProfileOnly": 6.16,
+    "Progress_FilmsBooksAndGames_FollowTheirOwnRules": 6.34
+   },
+   "Jularr.Backend.Tests.PwaAppearanceTests": {
+    "MainAccentPicker_SavesOnlyAnOwnedMainProfile_NotAnotherAccountsSharedProfile": 4.05,
+    "MainProfile_IsAccountScopedAndAccentNeverFollowsAnUnrelatedProfile": 6.34,
+    "RemovingAssignedMainProfileClearsTheSelection": 4.28
+   },
+   "Jularr.Backend.Tests.PwaTests": {
+    "FaviconColors_UseCanonicalVectorWithPublicColorOnlyUrls": 0.03,
+    "Layout_LinksTheManifestAndAppleTags_OnTheSignInPageAndSignedIn": 6.38,
+    "Manifest_IsPublic_NamesTheAppAndLinksFingerprintedIcons": 0.03,
+    "ProfileColoredIcons_AreOpaqueSafeAndContainNoAccountIdentifiers": 0.12,
+    "SignedInManifestAndAppleTouchIcon_UseThePersistedMainProfileAccent": 6.04,
+    "Version_IsPublicNeverCached_AndMatchesFrontendBuild": 0.03,
+    "Worker_IsServedFromTheRootWithScope_NeverCached_AndPassesEveryRequestThrough": 0.02
+   },
+   "Jularr.Backend.Tests.QbittorrentClientTests": {
+    "Client_ListsIndividualFilesForActivity": 0.0,
+    "Client_LogsIn_AddsTheTorrent_AndReadsItsState": 0.01,
+    "Client_Pauses_Resumes_And_RemovesATorrent": 0.0,
+    "Client_RefusesAWrongAccount_AndReportsIt": 0.0,
+    "Client_TellsTheFolder_ItWritesInto": 0.0,
+    "Grab_AssignsOnlyTheTaggedTorrent_NotTheNewestOrSameNamedUnrelatedTorrent": 0.0,
+    "StoppedUploading_IsCompletedAndPaused_AndStoppedDownloadingIsNotComplete": 0.0
+   },
+   "Jularr.Backend.Tests.ReaderSettingsTests": {
+    "Settings_DefaultsSaveAndBounds_BelongToTheProfile": 6.46
+   },
+   "Jularr.Backend.Tests.ReadingBlocksTests": {
+    "Prepare_ADivHoldingBlocksOrOtherDivs_IsNotABlockItself": 0.0,
+    "Prepare_TextInLeafDivs_BecomesBlocksInReadingOrder": 0.0,
+    "TranslationContext_ContainsOnlyEarlierCleanBlocks": 0.0,
+    "TranslationText_IgnoresJapaneseRubyReadingsWithoutChangingTheReaderDisplay": 0.0
+   },
+   "Jularr.Backend.Tests.ReadingDerivationTests": {
+    "BookWithItsOwnEpub_IsNeverGivenAReadingCopy_AndAScanStaysAPdf": 8.66,
+    "DigitalPdf_BecomesAReadingCopyBesideIt_ReadFromWhileCurrent_AndIsConvertedOnce": 9.81
+   },
+   "Jularr.Backend.Tests.ReadingFilesTests": {
+    "Files_KeepTypeAndContentTag_AndAreReplacedByTheirPath": 0.0,
+    "Trim_RemovesTheBooksUsedLongestAgo_ButNeverOneInUse": 0.0
+   },
+   "Jularr.Backend.Tests.ReadingRetranslationTests": {
+    "Chunk_StartsAtTheBlockInView_WrapsToTheStart_AndRespectsBothLimits": 0.0,
+    "Chunks_AFailedRequest_NamesTheCause_KeepsTheFinishedOnes_AndTheRetryAsksOnlyForTheRest": 8.68,
+    "Chunks_TranslateTheChapterInSeveralRequests_FromTheBlockInView_HoldTheLanePerRequest_AndKeepWhatIsDone": 7.64,
+    "Codex_NotConnected_IsNotOffered_SoTheReaderStaysAsWithoutCodex": 4.85,
+    "Codex_WithAnAnsweringOllama_IsOnlyOfferedBesideIt": 5.29,
+    "Codex_WithoutAnAnsweringOllama_IsOnlyOfferedToTheOwner_AndNeverChosenOrAskedByItself": 8.06,
+    "Models_AnAdminOnlyProvider_IsOfferedAndUsableOnlyWithTheRight": 7.6,
+    "Models_ConnectedCodex_OffersTheOwnersModelForWholePassages_OnlyWithTheRight": 4.91,
+    "Paragraph_ReTranslatedWithAnotherModel_WinsOnlyThere_ForEveryReader_AndTheEarlierTextStaysUntilItIsDone": 7.8,
+    "SectionAndBook_ReTranslated_ChooseEveryBlock_AndTheJobTranslatesTheRestWithTheChosenModel": 7.93
+   },
+   "Jularr.Backend.Tests.ReadingTests": {
+    "Annotations_StayWithTheProfileAndMarkTheReader": 9.66,
+    "Bookmarks_StayWithTheProfileAreBoundedAndFollowTheModule": 10.53,
+    "Cache_KeepsCurrentBooks_AndEvictsOldReadsOfVanishedFilesBeyondTheBudget": 9.36,
+    "Comic_PagesInNaturalOrderTypedByBytesResumeOnTheExactPage": 9.38,
+    "Epub_OpensFromTheCacheOfflineSharesContentAndKeepsProgress": 10.53,
+    "Epub_RejectsForeignFilesAndUnsafePaths": 9.07,
+    "Pdf_ReadsInTheViewTheProfileChose_AndTheOtherViewOpensAtTheSamePage": 10.67,
+    "Pdf_WithText_ReadsAsChaptersAcrossPagesAndKeepsTheOriginal": 10.52,
+    "Pdf_WithoutReadableText_OpensInTheBrowsersViewer": 9.76,
+    "ReaderNotes_FragmentPagesOwnNotesWithoutOpeningBook_AndChecksSourceVisibility": 9.73,
+    "ReadingModule_Off_LeavesBooksAsFilesOnly": 9.68,
+    "ReadingView_IsKeptPerProfileAndBook_NextToTheLanguage_AndAutomaticDropsIt": 9.53,
+    "Search_FindsTheSectionsWithTheWords": 9.81,
+    "WorkDeletion_TakesTheBooksPicturesOffTheDisk": 9.73
+   },
+   "Jularr.Backend.Tests.ReleaseFactsTests": {
+    "ReleaseFacts_NameOrFolder_TellGroupQualityEditionAndRevision": 0.0
+   },
+   "Jularr.Backend.Tests.ReleaseGroupTests": {
+    "Parse_BookAndMangaNames_StateTheirGroup": 0.0,
+    "Parse_KnownPublisher_IsThePublisherAndNeverTheGroup": 0.0,
+    "ReadProfile_TakesTheRatingsOfTheMediaType_AndDefaultPointsOfAnOlderDefinition": 0.0,
+    "Score_ProfilePoints_ReplaceTheDefaults": 0.0,
+    "Score_RatedGroups_AddTheProfilesPointsAsANamedRule_InAnyCaseAndSpacing": 0.01,
+    "Selection_BlockedGroup_IsRejectedAutomatically_AndOnlyMarkedInAManualSearch": 0.0,
+    "Selection_SeveralGroupsInOneName_AreRatedEachOnTheirOwn": 0.0,
+    "Sightings_TrimAndKeepEachGroupOnceInAnyCase_WithinTheStoredLength": 0.0
+   },
+   "Jularr.Backend.Tests.ReleaseSelectionTests": {
+    "Selection_ACompleteFile_Comes_Before_A_Part_In_The_Asked_Language": 0.0,
+    "Selection_A_Part_Comes_Last": 0.0,
+    "Selection_FlexibleFallbackLeavesOtherKnownLanguagesToAPerson": 0.0,
+    "Selection_FlexibleFallbackTakesAnUnknownLanguageOnlyWhenNothingInTheChainIsFound": 0.0,
+    "Selection_FlexibleFallbackTakesTheOriginalNotAnotherSource": 0.0,
+    "Selection_FlexibleWithoutRequestedLanguagePrefersOriginal": 0.0,
+    "Selection_FlexibleWithoutRequestedOrOriginalPrefersBestQuality": 0.0,
+    "Selection_NoFallback_LeavesOtherLanguagesForManualReview": 0.0,
+    "Selection_OriginalLanguage_Comes_Before_Any_Other": 0.0,
+    "Selection_RequestedLanguageBeatsHigherPriorityFallback": 0.0,
+    "Selection_RequestedLanguageBeatsSourcePriorityAndExplainsWhy": 0.0,
+    "Selection_RequestedLanguage_Comes_First": 0.02,
+    "Selection_StrictModeRejectsUnknownLanguage": 0.0,
+    "Selection_StrictModeWithoutAnyRequestedLanguageNeverDownloadsAutomatically": 0.0,
+    "Selection_TheAskedLanguage_Comes_Before_TheFallback": 0.0,
+    "Selection_TheFallbackOfTheProfile_Comes_Before_Any_Other": 0.0,
+    "Selection_TheOriginalLanguage_Comes_Before_Any_Other_By_Default": 0.0,
+    "Selection_TheSourceWithTheHigherPriority_Comes_First": 0.0,
+    "Selection_UnrequestedLanguageIsManualEvenWhenItIsTheOnlyResult": 0.0,
+    "Selection_UntaggedBookIsOnlyTheLastResort_NeverGuessedAsTheOriginalLanguage": 0.0,
+    "Selection_WithinOneSource_TheQuality_Still_Decides": 0.0
+   },
+   "Jularr.Backend.Tests.RequestTests": {
+    "AdminRequests_FilterByType_NarrowsListAndCounts": 7.53,
+    "Approval_TargetFailureRollsBack_AndTargetsAreShared": 7.57,
+    "Razor_RequestModerationAndWanted_UseEncodedFormsAndModuleGate": 8.94,
+    "Razor_Requests_ShowRowsFiltersAndWithdraw": 8.0,
+    "Razor_RulesAndUsers_EditRulesAndAssignments": 8.88,
+    "RequestRules_BoundMediaLimitApprovalAndQuality": 8.66,
+    "Requests_FilterAndSort_ByStateTypeAndTitle": 7.07,
+    "Requests_RepeatedIntentAndPaging_StayProfileScoped": 7.11,
+    "WithdrawRequest_OwnUntilImported_PausesOnlyUnsharedTargets": 7.0
+   },
+   "Jularr.Backend.Tests.SearchReassessmentTests": {
+    "CurrentRules_AValidExistingVersion_AndDisabledUpgrades_AreRetained": 0.0,
+    "CurrentRules_RejectedInstalledFile_CanBeReplacedByAnAllowedRelease": 0.01,
+    "ReusedEvidence_StillUsesTheCurrentFormatScoresAndUpgradeSwitch": 0.0,
+    "SeasonPack_KnownTotalRuntime_UsesTheSameSizeBounds": 0.0,
+    "Units_ReassessEveryCoveredEpisode_WithoutSearchingTheValidOne": 0.01
+   },
+   "Jularr.Backend.Tests.SeriesCatalogTests": {
+    "Refresh_WhereACatalogTwinHoldsTheTvdbId_MergesTheTwinIntoTheLibrarySeries": 7.64,
+    "SeriesSearch_NamesTheLibrarySeriesByItsImdbId_TakesNoTwin_AndKeepsItsTitle": 7.1,
+    "Series_NewOneIsClassifiedAnime_ARefreshNeverChangesTheSubtype_AndOneTvdbSessionServesBoth": 8.44,
+    "TvdbPeople_JoinThePersonAnotherCatalogKnowsByTheSameTmdbId_AndAreLookedUpOnce": 7.2
+   },
+   "Jularr.Backend.Tests.SeriesTitleIdentityTests": {
+    "Anime_AliasesCountButLongerTitlesDoNot": 0.0,
+    "Anime_ConfusableTitlesAreDistinguished": 0.0,
+    "Country_IsPartOfTheTitle": 0.0,
+    "FoundById_ADifferentNameStaysAmbiguousForAPerson_NeverTakenAutomatically": 0.0,
+    "Import_FilesOfAnotherSeriesAreWrongSeries_AliasesAndYearsAreKnown": 0.0,
+    "Season_AnotherSeasonIsStillRejected": 0.0,
+    "Selection_ConfusableReleaseIsRejectedWithItsReason_TheRightOneIsTaken": 0.0,
+    "Tv_ParsedTitleMustBeTheWholeSeriesTitle": 0.01,
+    "Year_AddedByTheReleaseMustBeTheSeriesOwn": 0.0
+   },
+   "Jularr.Backend.Tests.ServiceApiTests": {
+    "Api_ExplicitPublicService_BindsAndUsesSharedErrors": 0.05,
+    "PublicGate_ProfilePermissionAndResource_AreDenied": 0.0,
+    "Registration_BackendOwnsDatabase_DirectAndHttpServicesShareRuntime": 4.4,
+    "Registration_MissingDatabaseConfiguration_IsRejected": 0.0,
+    "UnknownErrors_ReadAsUnknownAndShowTheirMessageToAdministratorsOnly": 0.0
+   },
+   "Jularr.Backend.Tests.ServiceArchitectureTests": {
+    "ConsumerBoundary_DatabaseAndRuntimeOwners_AreInternal": 0.01,
+    "ConsumerContracts_PublicAndProtectedSignatures_DoNotExposeNpgsql": 0.06,
+    "ErrorCodes_ThrownBySourceCode_HaveTheirEnglishText": 0.05,
+    "NeutralSqlInfrastructure_DoesNotDependOnServiceTypes": 0.01,
+    "OperationType_UsesOnlyTheFiveApprovedKinds": 0.0,
+    "ReadSqlFacade_HasNoWriteCommandMethods": 0.0,
+    "ServiceInputs_CanBeRebuiltWithNormalizedFields": 0.01,
+    "Sql_ProfileWorksOfAnAsset_IsNotJoinedDirectly": 0.03,
+    "Sql_StoredJson_IsParsedOncePerRow": 0.02
+   },
+   "Jularr.Backend.Tests.ServiceFoundationTests": {
+    "AdminWrite_MultipleLogicCallsRollbackOnLateFailure": 0.08,
+    "ExecuteBatch_RechecksPermissionsAndBlocksSecondBatchBeforeSql": 0.15,
+    "ExecuteWithoutOuterTransaction_UsesShortBatchesWithIndependentRollback": 0.08,
+    "Execute_DisabledModule_NeverRunsOperationHook": 0.08,
+    "Execute_ReadBatchIsRestrictedAndNextWriteCommits": 0.16,
+    "ModulesBlocked_NeverRunsReadOperation": 0.04,
+    "OnRead_ConcurrentCalls_KeepInvocationStateIsolated": 0.08,
+    "ReadService_CannotObtainLogicWriteCapability": 0.05,
+    "ReadService_RequiresAccessAndModulesInReadOnlyTransaction": 0.08,
+    "UndeclaredOutput_IsRejectedWithoutInvokingGate": 0.04,
+    "UserList_InvalidSortAndPage_FailBeforeCallerOrDatabase": 0.15,
+    "UserList_PageHook_IsEvaluatedOnceAndUsedBySql": 0.07,
+    "ValidatePermissions_Denied_NeverRunsOperationHook": 0.06
+   },
+   "Jularr.Backend.Tests.ServiceTimingsTests": {
+    "Timings_Last24Hours_SumPerServiceAndForgetOlderCalls": 0.0,
+    "Timings_Save_OnlyWhatChanged_AndAReloadAddsUpWithNewCalls": 0.0
+   },
+   "Jularr.Backend.Tests.SessionLockTests": {
+    "Authorization_ConcurrentAccountWrite_LocksAccountFirstAndRevalidates": 1.47,
+    "Authorization_ProfileForeignKeyReferences_DoNotWaitForAuthorization": 0.23
+   },
+   "Jularr.Backend.Tests.SetupTests": {
+    "Checks_EmptyInstance_NamesEverythingTheChosenModulesStillNeed": 6.34,
+    "Checks_FullyConfiguredInstance_RaisesNothingAndFinishesWithoutConfirmation": 6.26,
+    "Checks_WithoutArrPlus_NeitherClientNorIndexerNorDownloadStorageIsDemanded": 6.34,
+    "Downloads_TooManyConnections_UsesCanonicalBoundsAndAnInlineError": 6.29,
+    "Finish_WithRequiredThingsMissing_NeedsTheOwnersConfirmation": 6.29,
+    "FirstOwner_ConcurrentCreation_OnlyOneSucceedsAndBootstrapStaysClosed": 3.57,
+    "FirstOwner_DisabledGeneratedLanguage_EnablesAndSharesItWithTheInstance": 6.2,
+    "Libraries_OnlyAnimeRoot_RetainsItsParentAndCompletesWithTheNewKey": 6.22,
+    "Modules_StaleRow_RollsBackSettingsAndProgressThenSavesTogether": 8.09,
+    "Razor_FirstOwner_ValidatesRollsBackAndSignsIn": 11.41
+   },
+   "Jularr.Backend.Tests.SmbStorageTests": {
+    "Connections_DirectSmb_CheckBrowseAndScanThroughJularrsOwnSession": 6.49,
+    "Files_DirectShare_ReadWriteMoveListAndProbeLikeALocalFolder": 0.01,
+    "Inputs_DirectShareFile_AreSeekableLoopbackAddressesWhileTheToolRuns": 0.02,
+    "Inputs_DirectShare_RealFfmpegTranscodesAndSeeksHls": 0.0,
+    "Playback_DirectSmbShare_StreamsRangesAndPreservesResume": 7.02,
+    "Share_OpenFilesOnOwnSessions_LostSessionsReopenAndIdleOnesClose": 0.01,
+    "Stream_ReadsAhead_SmallReadsAndSeeksReturnTheFileExactly": 0.0
+   },
+   "Jularr.Backend.Tests.SourceBrowserTests": {
+    "Assistance_ResumesOnlyTheIntendedPageWithinTheTrustedSource": 0.0,
+    "BrowserDiagnostics_KeepOnlyPublicOrigin": 0.0,
+    "Browser_CancelledMirrorSearch_ClosesOnlyTemporaryTabs_AndReleasesTheBrowser": 0.0,
+    "Browser_DownloadAssistanceLeavesAnUnrelatedSearchPageForItsExactTarget": 0.0,
+    "Browser_LaunchUsesTheVirtualDisplayOrHeadless": 0.0,
+    "Browser_ManualAndAutomaticReadsKeepPrimaryPageSessionAndResumeItsPage": 0.0,
+    "Browser_ManualControlsPauseAutomationAndKeepCookiesUntilExplicitReset": 0.0,
+    "Browser_ManualViewOpensAtOnceWhileTheSourcePageStillLoads": 0.0,
+    "Browser_PrivateNavigationIsRejectedBeforeConnecting": 0.01,
+    "Browser_ReadsAPageBehindACheckAndFetchesItsFile": 0.0,
+    "Browser_ReadsSeveralAddressesAtTheSameTime": 0.0,
+    "Browser_ResetEndsTheBrowserThatHoldsTheProfile": 0.0,
+    "Browser_UnfinishedCheckKeepsItsLivePageForManualAssistance": 0.0,
+    "Browser_UsesARunningBrowser": 0.0,
+    "Browser_UsesTheBrowserThatStillRunsWithItsProfile": 0.0,
+    "Browser_WithoutABinaryAnswersNothing": 0.0,
+    "EgressProxy_AcceptsOnlyHttpsConnectOn443": 0.0,
+    "EgressProxy_RefusesPrivateHostsAndUnencryptedRequests": 0.02,
+    "ManagedBrowser_ExternalRuntimeCannotBeManaged": 0.0,
+    "ManagedBrowser_FailedInstallBacksOffAndTurningOffClearsRetry": 0.0,
+    "ManagedBrowser_FailedUpdateKeepsPreviousPackageAvailable": 0.0,
+    "ManagedBrowser_RefreshCanBeQueuedAndCancelledByUninstall": 0.0,
+    "ManagedBrowser_RemovesAbandonedStagingWithoutTouchingOtherFolders": 0.0,
+    "ManagedBrowser_SizeScanCannotFollowSymlinksToUnrelatedFiles": 0.0,
+    "VirtualDisplay_ServerOfACrashedRun_IsStoppedAndItsNumberTakenAgain": 0.32,
+    "VirtualDisplay_TakesTheFirstFreeNumber_AndLeavesNothingBehind": 0.49,
+    "VirtualDisplay_WithoutAWorkingXvfb_IsNone": 6.26
+   },
+   "Jularr.Backend.Tests.SourceTests": {
+    "AnnaWays_NameTheWorkInEveryWay_TheIsbnFirst": 0.0,
+    "AnnasArchive_APageInsteadOfTheFile_IsFetchedByTheBrowser": 0.0,
+    "AnnasArchive_AStillClosedSourceIsAskedAgainOnlyOncePerInterval": 9.09,
+    "AnnasArchive_BrowserHtmlIsRejectedAndIncompleteFileRemoved": 0.0,
+    "AnnasArchive_CaptchaWordInBookTitleIsNotAChallenge": 0.0,
+    "AnnasArchive_ChecksWaitForAPermittedPersonAndThenContinue": 9.62,
+    "AnnasArchive_ClosingAssistanceResolvesWaitingDownloadsWithoutPastedLinks": 10.5,
+    "AnnasArchive_CountdownPageWithoutAFileIsAWait": 0.0,
+    "AnnasArchive_CountdownSpeaksSecondsMinutesAndClocks": 0.0,
+    "AnnasArchive_DerivativeIsRejectedBeforeAutomaticGrab": 15.41,
+    "AnnasArchive_ExistingMirrorIsAlreadyConfigured": 7.09,
+    "AnnasArchive_FailedDownloadPreservesAnExistingFile": 0.0,
+    "AnnasArchive_FileThatIsOnlyAPartIsMarked": 0.0,
+    "AnnasArchive_FormatBadgesAreNotLanguageEvidence": 0.0,
+    "AnnasArchive_HtmlCheckWithSuccessStatusIsNotAnEmptySearch": 0.0,
+    "AnnasArchive_KeyStaysWithTheSiteAndGatesWaitForAPerson": 8.25,
+    "AnnasArchive_KeyedDownloadsAcceptOnlyConfiguredOrKnownMirrorOrigins": 0.0,
+    "AnnasArchive_KeyedMirrorFallbackDownloadsWithoutLeakingKey": 8.0,
+    "AnnasArchive_LegacyDefaultSearchFallsBackToAvailableMirror": 0.0,
+    "AnnasArchive_LongCountdownIsHandedBackInsteadOfGuessed": 0.0,
+    "AnnasArchive_MirrorSearchNeverMovesMemberKeyToAnotherHost": 8.51,
+    "AnnasArchive_OversizedSearchNeverFallsBackToBrowser": 0.0,
+    "AnnasArchive_RequestedBookIsDownloadedImportedAndRead": 9.94,
+    "AnnasArchive_SearchGathersTheFilesOfEveryWay": 0.0,
+    "AnnasArchive_SearchKeepsTheMirrorThatResponded": 0.0,
+    "AnnasArchive_SearchReadsTheResultRowsOfTheSite": 0.0,
+    "AnnasArchive_UnreadableSearch_ReportsLayoutFailureThroughProbeAndSearch": 7.81,
+    "AnnasArchive_WaitingDownloadsContinueByThemselvesOnceTheBrowserReadsTheSourceAgain": 9.21,
+    "AnnasArchive_WithoutKeyWaitsBetweenJobsAndImports": 8.54,
+    "Catalog_SetUpAddsKeylessSourcesAndAsksForAccounts": 7.78,
+    "DirectCatalogLanguage_UsesVerifiedIsoCodesOnly": 0.0,
+    "DirectDownload_OversizedHtmlIsRejectedBeforeReading": 0.01,
+    "DirectJobs_RunInParallelWithIndependentTransactionsAndImportBoth": 9.2,
+    "DirectSizeLimit_WaitsAndImportsTheSameJobAfterTheLimitIsRemoved": 9.18,
+    "Opds_LogsInOnlyAtItsOwnOriginRenewsSignedLinksAndImports": 7.97,
+    "Opds_OnlyTheRequestedLanguageIsTakenAutomatically_UnknownOnlyAsTheLastResort_OthersAreOfferedWithTheirReason": 28.37,
+    "PublicNetwork_BrowserTargetsAreHttpsAndPublic": 0.01,
+    "PublicNetwork_ReachesPublicAddressesOnly": 0.0,
+    "SimulatedGates_PassOnlyForAllowedTestTargets": 0.0,
+    "Sources_ShowNativeStoragePrerequisitesBeforeActivation": 7.7
+   },
+   "Jularr.Backend.Tests.SpeechDiscoveryTests": {
+    "Catalog_GenderRequiresKnownClassificationAndSource": 0.0,
+    "Discovery_AllUnsupportedLocalesFailClosedDuringTheCooldown": 0.0,
+    "Discovery_ExplicitRefreshSearchConfirmationAndDeviceDeliveryUseOneCatalog": 6.13,
+    "Discovery_SourceFailurePreservesSnapshotAndDoesNotBlockLocalReads": 5.37,
+    "Source_ExplicitOfficialMetadataSmoke": 0.0,
+    "Source_OnlyHashPinnedCompatiblePackagesWithModelCardsAreAccepted": 0.01,
+    "Source_OversizedPackagesAndMissingModelCardsAreExcluded": 0.0,
+    "Source_UnverifiedOrIncompatiblePackagesDoNotBecomeInstallOptions": 0.0
+   },
+   "Jularr.Backend.Tests.SpeechTests": {
+    "Catalog_DuplicatesAndInvalidSize_AreExcluded": 0.0,
+    "Catalog_InvalidEntry_DoesNotBecomeAnInstallOption": 0.0,
+    "Download_ChecksHashAndNeverPublishesAPartialPackage": 0.0,
+    "Models_FailedVerificationAndDisabledReading_DoNotActivatePackages": 5.05,
+    "Models_RequireExplicitOwnerActivationAndRetainTheFileWhenDisabled": 5.54,
+    "Preferences_AreProfileScopedPreserveOtherLanguagesAndRejectStaleSaves": 4.8,
+    "Preferences_InvalidRate_IsRejected": 0.0,
+    "Preferences_NeuralChoiceRequiresActivatedCompatibleModelAndVoice": 4.96,
+    "Recommendations_HaveOrderedLanguagesAndVerifiedMetadata": 0.0
+   },
+   "Jularr.Backend.Tests.SqlContextTests": {
+    "Context_UnstartedOrCompleted_RejectsQueries": 0.06,
+    "ReadFacade_RejectsMutatingCommandsEvenDuringReadWriteTransaction": 0.07,
+    "ReadOnly_JitOverride_EndsWithTransaction": 0.14,
+    "ReadOnly_RejectsSequenceMutation_AndDoesNotLeakToNextTransaction": 0.07,
+    "ReadWrite_FailedLogicStep_RollsBackPreviousChanges": 0.07,
+    "ReadWrite_MultipleLogicSteps_UseOneTransactionAndCommitTogether": 0.07
+   },
+   "Jularr.Backend.Tests.SqlExecutorTests": {
+    "LiteralsCommentsAndDollarQuotes_AreNotBound": 0.07,
+    "MissingParameter_IsRejectedByPostgres": 0.07,
+    "ReadPage_BindsExplicitPageWithLowerCaseSqlPlaceholders": 0.06,
+    "ReadPage_RequiresExplicitPageAndRejectsUnboundedRows": 0.06,
+    "ReadPage_UsesValidatedPaginationAndMapsJsonChildren": 0.08,
+    "ReadRequired_BindsFullDtoWithUnusedProperties": 0.06,
+    "ReadRequired_UndefinedPersistedEnum_IsRejected": 0.06,
+    "ReadScalar_KeywordNamedParameter_RemainsValidSelect": 0.06,
+    "RequiredAndOptionalRowReads_DistinguishNotFoundFromDuplicateRows": 0.06,
+    "SqlObject_ActorName_IsAnOrdinaryExplicitParameter": 0.06,
+    "SqlObject_ParameterObjects_UseCanonicalBindingAndReadGuard": 0.07,
+    "TwoDtoObjectsWithSameParameter_AreRejected": 0.06,
+    "TypedPostgresArrays_AreBoundFromCompleteDto": 0.06,
+    "TypedPostgresArrays_LeaveSqlCastsToPostgresAndRejectUnsupportedElementType": 0.07,
+    "Write_UsesParametersAndDataFromSameContext": 0.07
+   },
+   "Jularr.Backend.Tests.StartupStatusTests": {
+    "DatabaseUpgrade_ACurrentDatabase_ReportsOnlyTheCheck_NoBackupNoMigration": 0.44,
+    "DatabaseUpgrade_ReportsTheBackupAndEveryMigration_InOrder": 0.45,
+    "Elapsed_IsShortAndGerman": 0.0,
+    "Handover_KeepsAnsweringUntilTheApplicationsServerBinds": 1.57,
+    "Page_IsSelfContained": 0.08,
+    "Page_OfAPlainRestart_ShowsNoSteps": 0.05,
+    "Page_SaysInGerman_WhatTheUpdateIsDoing_AndReloadsItself": 0.32,
+    "Server_AnswersEveryRequestWith503_ThePhasePage_AndAfterAFailureTheMaintenancePage": 0.3,
+    "Status_FollowsThePhases_AndAFailureStays": 0.0
+   },
+   "Jularr.Backend.Tests.StatisticsTests": {
+    "Statistics_ProfileHistoryAndSystemHealth_ComeFromStoredState": 6.07
+   },
+   "Jularr.Backend.Tests.StorageTests": {
+    "Connections_FailedChecks_CheckAgainWithBackoffNotifyOnceAndShowTheirState": 6.38,
+    "Connections_HealthyAndUnused_AreCheckedHourly_ExceptWhenWokenOnDemand": 6.3,
+    "Connections_SaveAndEdit_ProtectCredentialsAndRestrictOwnerAccess": 6.51,
+    "Razor_SettingsAndSetup_UseTheSameStoredConnectionsWithoutExposingPasswords": 6.85,
+    "Synology_Certificates_NeedAnAuthorityOrTheOwnersTrust": 0.0,
+    "Synology_DsmAccess_ReadsHealthAndSendsPowerCommandsWithoutExposingThePassword": 7.25,
+    "Volume_ComposeBlock_MountsTheShareWhereJularrLooksAndKeepsThePasswordAVariable": 0.0
+   },
+   "Jularr.Backend.Tests.SubtitleTests": {
+    "SubDl_SeasonPack_GivesTheAskedEpisodeInItsLanguage": 0.01,
+    "Subtitles_MissingLanguage_IsFetchedBesideTheVideoOnce": 9.07,
+    "Subtitles_SearchedByHand_AreChosenAndSavedBesideTheVideo": 9.74
+   },
+   "Jularr.Backend.Tests.SubtitleTranslationTests": {
+    "Batches_AreSplitByCountAndAnswersByNumber": 0.0,
+    "Cues_AreParsedBatchedAndComposedWithTheirOwnTimes": 0.0,
+    "Translation_RunsInTheBackgroundWithTheLocalModelAndServesItsSubtitle": 6.77
+   },
+   "Jularr.Backend.Tests.TakeoverTests": {
+    "LidarrMetadataProfiles_SharingOneQualityProfile_RemainSeparateAcrossImports": 5.34,
+    "SeriesWithoutId_UseTitleAndYear_AndUnsupportedProfilesBlockTitles": 10.94,
+    "Sonarr_WithoutTheTvdbKey_TakesTheSeriesWithItsIds_AndItsDetailsFollowOnceTheKeyIsThere": 5.57,
+    "Takeover_ProwlarrSonarrLidarrAndReadarr_TakeConnectionsAndWantTheirMissingTitles": 12.26,
+    "Takeover_RadarrPreviewThenApply_ImportsInventoryIntoTheLibraryWithRadarrsMonitoring": 5.92
+   },
+   "Jularr.Backend.Tests.TorrentClientTests": {
+    "Engine_OffIdles_OnFailsClosedWithoutAVerifiedTunnel_AndProvesItsLock": 6.96
+   },
+   "Jularr.Backend.Tests.TorrentEngineTests": {
+    "Lock_RefusesEveryFrameThatCarriesOrAdvertisesData": 0.0,
+    "Magnet_FetchesVerifiedMetadataThenFiles_AndOnlyRequestsMetadata": 0.23,
+    "Metainfo_RejectsPathsOutsideTheJob": 0.0,
+    "Torrent_DownloadsCompletely_AndSendsNoFileDataDuringAfterOrAcrossPasses": 4.39
+   },
+   "Jularr.Backend.Tests.TorrentOutboundWireTests": {
+    "BoundedRequestCancelOrReject_IsAllowed": 0.0,
+    "ControlMessage_IsAllowed": 0.0,
+    "ExplicitPieceWithFileBytes_IsBlockedBeforeWriting": 0.0,
+    "FastExtensionHandshake_IsBlockedBeforeWriting": 0.0,
+    "KeepAlive_IsAllowed": 0.0,
+    "MalformedFrames_FailClosedBeforeWriting": 0.0,
+    "PlainHandshake_IsAllowedWithoutExtensionNegotiation": 0.0,
+    "UploadAdvertisingAndUnrecognizedMessages_AreBlockedBeforeWriting": 0.0
+   },
+   "Jularr.Backend.Tests.TorrentResumeTests": {
+    "TakeOver_AnEarlierTryOfTheSameTorrent_KeepsItsPiecesAndMetadata": 0.01,
+    "TakeOver_AnotherTorrent_OrAFolderWhoseJobStillRuns_IsLeftAlone": 0.0
+   },
+   "Jularr.Backend.Tests.TranscodeTests": {
+    "Benchmark_FakeFfmpeg_FindsHardwareAndTimesEveryPipeline": 0.01,
+    "Benchmark_NoEncoderRuns_FailsWithoutStoringAProposal": 6.6,
+    "Benchmark_RunOnDemand_StoresTheResultAndItsProposal": 6.73,
+    "Candidates_LadderBelowThePicture_OffersLighterConversionsHighestFirst": 0.01,
+    "Decide_FreeBudget_AdmitsTheFirstCandidateThatFits": 0.0,
+    "Decide_PriorityAccount_StopsTheNewestConversionsOfAccountsWithoutPriorityOnly": 0.0,
+    "Page_Transcoding_ShowsHardwareRunsTheBenchmarkAndSavesTheSettings": 7.89,
+    "Priority_Account_DefaultsOnForTheOwnerAndIsEditedOnTheAccount": 5.2,
+    "Propose_Benchmark_PicksTheFastestEncoderAndAConservativeCount": 0.01,
+    "Registry_Admission_StopsTheNewestNormalConversionAndTellsItsPlayer": 0.01,
+    "Registry_CacheBudget_PreventsNewConversionWhenDiskBudgetIsExceeded": 0.01,
+    "Registry_ProcessRestart_CleansOnlyOwnedTranscodeSessionDirectories": 0.0,
+    "ResolveEncoding_ChoiceBenchmarkAndConfiguration_PickTheArguments": 0.0,
+    "Settings_Owner_ReadsEditsAndKeepsTheBounds": 6.61,
+    "Start_PriorityAccount_StopsTheNewestConversionAndTellsItsPlayer": 7.33,
+    "Start_ServerAtItsLimit_OffersLighterQualityElseReportsBusyAndNeverCountsCopying": 7.45,
+    "Transcoder_HardwarePipeline_ScalesWithItsOwnFilter": 0.0,
+    "Weight_PictureHeight_TakesItsShareOfTheBudget": 0.0
+   },
+   "Jularr.Backend.Tests.TranslationTests": {
+    "Files_AreFetchedOnceCheckedAgainstTheirHashAndKeptForBrowsers": 7.41,
+    "MozillaModule_IsAnEmergencyOnlyAndAsksMozillaForNothingWhileOff": 7.46,
+    "ReaderLanguage_FollowsTheProfile_AndTheServerKeepsNoBrowserTranslation": 12.2,
+    "Route_UsesTheNewestModelForEveryBuildAndBridgesThroughEnglish": 7.27,
+    "TranslationPage_SaysWhatTheBookJobIsWaitingFor": 7.57
+   },
+   "Jularr.Backend.Tests.TrustedProxyTests": {
+    "ForwardedChain_StopsAtTheFirstUntrustedAddress_AndIgnoresForgedOnes": 0.0,
+    "ForwardedHeaders_CountOnlyFromTrustedProxies": 0.01,
+    "Settings_StoreCanonicalNetworks_AndTheQrCodeUsesTheForwardedAddress": 7.84,
+    "WrongDeviceTokens_BlockTheirAddressAfterThirty": 0.0
+   },
+   "Jularr.Backend.Tests.TvdbSeriesPreviewTests": {
+    "Preview_ConflictingImdbIdentity_IsRejectedWithoutChanges": 5.72,
+    "Preview_ImdbOnly_ResolvesTvdbWithoutSavingExternalIdentity": 6.1,
+    "Preview_KnownTvdbSeries_ComparesNumbersWithoutChangingLocalUnits": 6.21,
+    "Preview_NoCredential_DoesNotContactProvider": 5.89
+   },
+   "Jularr.Backend.Tests.TvdbTests": {
+    "Episodes_AreAskedInEnglish_SoAnimeTitlesAreNotJapanese": 0.0,
+    "Episodes_InALanguage_ReadItsTranslationsWithSummaryAndImage": 0.0,
+    "Episodes_IncludeSpecialsAndAllPages_WithoutRepeats": 0.0,
+    "Episodes_WithoutEnglishTitle_KeepTheirOriginalName": 0.0,
+    "ImdbLookup_RejectsMultipleSeries_AndIgnoresMovies": 0.0,
+    "Login_UsesProjectKey_WithoutSendingPinWhenAbsent": 0.0,
+    "Search_SeriesOnly_WithYearPageAndNamesPerLanguage": 0.0,
+    "Series_ReadsEverythingAnImportNeeds": 0.02,
+    "Unauthorized_FailsWithoutRevealingCredential": 0.0
+   },
+   "Jularr.Backend.Tests.UiLocalizationTests": {
+    "AcquisitionOutcome_KeysTheSearchRecords_HaveEnglishAndGermanTexts": 0.05,
+    "Bundle_ExactParentEnglish_RefreshesVersionsAndSkipsOutdated": 5.36,
+    "GermanCatalog_ErrorsGenresAndCatalogFields_FollowTheCurrentEnglish": 0.03,
+    "GermanCatalog_EveryText_FollowsTheCurrentEnglish": 0.01,
+    "ShippedLanguages_FillMissingAndMachineTexts_ButNeverWhatSomeoneWrote": 0.37,
+    "Synchronization_Idempotent_PreservesManualContextAndTranslations": 0.4,
+    "Translation_PlaceholderFailure_RollsBackAndConstraintsRejectDuplicates": 0.32
+   },
+   "Jularr.Backend.Tests.UsenetTests": {
+    "NativeDownload_RejectsSymbolicWorkspaceAncestors": 0.0,
+    "Newznab_CallerCancellation_PropagatesWithoutBecomingAnUnavailableDownload": 0.0,
+    "Usenet_ConcurrentArticleExtentCannotExceedConfiguredJobBudget": 0.01,
+    "Usenet_ConnectionLimitAndWrongLogin_AreToldApart": 7.95,
+    "Usenet_FinishedArticlesStillCountTowardTheJobBudget": 0.0,
+    "Usenet_IndexerNzb_ReadsPlainSubjectNamesAndThePassword": 0.0,
+    "Usenet_JobLimitStopsDownloadBeforeCreatingArticleFiles": 8.22,
+    "Usenet_MissingArticlesWithoutRepairFiles_FailTheRelease": 8.16,
+    "Usenet_NzbAccessDenied_LogsSafeDiagnosticsAndPropagatesTheException": 7.65,
+    "Usenet_NzbGrabFailure_LogsSafeDiagnosticsAndPreservesTheFailureState": 53.65,
+    "Usenet_NzbRateLimited_WaitsInTheQueueForThePause_AndTheSameReleaseIsFetchedThen": 12.08,
+    "Usenet_OverflowingNzbSizeWaitsWithoutCreatingArticleFiles": 8.41,
+    "Usenet_OwnDownloaderFetchesTheNzbAndArticlesAndImports": 16.61,
+    "Usenet_PackedReleaseWithoutExtractor_WaitsWithoutRetryingAtOnce": 8.23,
+    "Usenet_PlainSubjectOrProtectedArchive_ImportsTheFeature": 16.59,
+    "Usenet_UnsetJobLimitAllowsReleasesAnnouncingMoreThanTwentyGiB": 8.33,
+    "Usenet_YencAndNzb_DecodeCheckAndRejectInjection": 0.01
+   },
+   "Jularr.Backend.Tests.VideoIdentityImportTests": {
+    "Import_ConflictingExistingTmdbId_LeavesManualIdentityIntact": 7.09,
+    "Import_DifferentMediaTypeWithSameImdbId_DoesNotMerge": 7.13,
+    "Import_KnownImdbWork_ReusesItsUnitsAndProgress": 7.9,
+    "Import_SeriesTheTvdbDoesNotKnow_CreatesNoWork": 6.94,
+    "Import_Series_TakesEveryFactFromTvdb_AndOnlyTheRatingFromTmdb": 7.13,
+    "Import_TwoConflictingProviderWorks_BlocksBeforeAnyWrite": 7.05
+   },
+   "Jularr.Backend.Tests.VideoLanguageSelectionTests": {
+    "AddOns_PreferredGroupAndWordAddPoints_BlockedRejects_OnlyForTheReleasesLanguage": 0.0,
+    "Audio_UntaggedIsTheOriginalLanguage_DlAndMultiAddItToTheNamedOnes_UnknownOriginalIsUnknown": 0.01,
+    "Chain_AnotherKnownLanguage_IsNeverTakenAutomatically_AndSaysWhy": 0.0,
+    "Chain_FirstBeforeSecondBeforeOriginal_WhateverTheIndexerPriorityAndOrder": 0.01,
+    "Chain_StrictWithoutTheOriginal_RefusesAnUntaggedRelease": 0.0,
+    "Chain_UnknownOriginalLanguage_MakesAnUntaggedReleaseUnknown_ATakenLastResortOnlyWhenNothingElseFits": 0.0,
+    "Manga_FollowsTheSameChain_AnUntaggedVolumeIsOnlyALastResort": 0.0,
+    "Manga_ReleaseNamesWithoutALanguage_AreUnknown_NotEnglish": 0.01,
+    "OriginalStep_PrefersSubtitlesInTheChainsLanguages_BeforeIndexerPriority": 0.0,
+    "Subtitles_AReleaseWithoutThemHasNone": 0.0,
+    "Subtitles_AreReadFromTheSceneTags": 0.0
+   },
+   "Jularr.Backend.Tests.VideoLanguageUpgradeTests": {
+    "FileInTheFirstLanguage_IsNeverReplacedByABetterQualityInAnotherLanguage": 0.0,
+    "FileInTheOriginalLanguage_IsReplacedByAReleaseInTheFirstLanguage_OnlyThroughTheFeedDecision": 0.02,
+    "FileWithoutRecordedAudio_CoversEveryLanguage": 0.0,
+    "ReleaseTheLibraryHolds_IsNeverTakenAgain_ByItsNameOnTheFileOrByAnImportOfIt": 0.0,
+    "Replacement_AtImport_PutsTheLanguageBeforeTheQuality": 0.0,
+    "SeveralFirstLanguages_AMultiReleaseWins_AndReplacesTheFileOfOneLanguage": 0.0
+   },
+   "Jularr.Backend.Tests.VolumeUploadTests": {
+    "Upload_MangaVolume_LandsInItsLibraryOnce": 6.88
+   },
+   "Jularr.Backend.Tests.VpnNetworkPolicyTests": {
+    "CountryConstrainedProfiles_DoNotFallbackOutsideRequiredCountry": 0.0,
+    "FallOver_OnlyForNetworkFailuresNotRateLimitsOrBlocking": 0.0,
+    "SearchAndDirectDownloads_AreDirectUnlessAssignedToVpn": 0.0,
+    "SourceSpecificRule_TakesPrecedenceOverGeneralPolicy": 0.0,
+    "Torrent_DirectOverrideMustBeReauthenticatedAndIsNotImplementedYet": 0.0,
+    "Torrent_IsFailClosedWithoutVerifiedVpn": 0.0,
+    "VpnHealth_RequiresFreshVerifiedTunnelFirewallAndExit": 0.0,
+    "WireGuardImport_RejectsMalformedAndExcessivelyLongInputs": 0.0,
+    "WireGuardImport_RejectsSplitTunnelConfigurations": 0.0,
+    "WireGuardImport_RejectsUnexpectedOptionsOrDuplicatePeers": 0.0,
+    "WireGuardImport_ValidatesFullTunnelWithoutReturningPrivateMaterial": 0.0
+   },
+   "Jularr.Backend.Tests.VpnTunnelTests": {
+    "Configuration_KeepsTheProfileAndOpensOnlyTheLoopbackDoor": 0.0,
+    "Counters_ReadHandshakeAndBytes": 0.0,
+    "Page_ShowsTheProfileWithoutKeysAndItsMenuEntryOnlyWithTheModule": 8.55,
+    "Profiles_ImportCheckDelete_KeepTheKeysAndFailClosedWithoutTheHelper": 7.88,
+    "Profiles_ModuleOff_AreUnavailable": 7.6,
+    "Socks5_ConnectsThroughTheProxyWithTheHostName_AndRelaysData": 0.01,
+    "Socks5_ProxyDown_FailsWithoutTouchingTheTarget": 0.0,
+    "Socks5_WrongSignIn_IsRefused": 0.0
+   },
+   "Jularr.Backend.Tests.WantedBookEntriesTests": {
+    "Wanted_ABookIsOneEntryPerLanguage_EachWithItsOwnStatus_AndTheSummaryCountsEntries": 8.08
+   },
+   "Jularr.Backend.Tests.WantedPerformanceTests": {
+    "Wanted_MixedInventory_ReportsWarmReadLatency": 0.01
+   },
+   "Jularr.Backend.Tests.WorkGradeLogicTests": {
+    "Quality_IsMetAtTheCutoff_UpgradeBelowItAndNotAllowedOutsideTheProfile": 0.0,
+    "Size_IsGoodInRange_SmallBelowIt_AndALeanCodecMayBeMuchSmaller": 0.0
+   },
+   "Jularr.Backend.Tests.WorkListTests": {
+    "Bulk_AnAccountWithoutTheManagerRole_IsRefused": 33.98,
+    "Delete_FiftySelectedTitles_ContinuesPastAnIndividualFailure": 7.08,
+    "Delete_LikeTheTitleDialog_RefusesARunningDownloadAndKeepsTheOthersGoing": 5.23,
+    "Delete_WithItsData_DiscardsTheRunningDownloadWithoutAnError": 5.59,
+    "Monitoring_ATitleWithoutTarget_GetsOneInTheLibraryOfItsFiles_AndTheSearchWakes": 6.26,
+    "Monitoring_SameRuleAsTheTitlePage_AndAReportPerTitle": 5.5,
+    "ProfileAndLibrary_ApplyToTargetsThatFit_AndSayWhyOthersStay": 5.7,
+    "Razor_Delete_KeepsFailedTitlesSelected_AndOneTitleReturnsAnEncodedOutcome": 6.21,
+    "Razor_List_ShowsRowsFiltersAndTakesTheRowAndBulkActions": 7.44,
+    "Read_FiltersSortsAndPages_WithWhatTheRowShows": 5.95,
+    "RefreshMetadata_TitleWithoutProviderIdentity_StaysAndSaysWhy": 5.35,
+    "Search_ReportsEveryTitle_AndTheBatchIsBounded": 5.53,
+    "Targets_EveryTitleWithFilesGetsAPausedOne_InTheLibraryOfItsFiles_AndNothingElse": 5.64
+   },
+   "Jularr.Backend.Tests.WorkRelationTests": {
+    "AniList_Relations_MapToTypesAndKeepOnlyTitlesDiscoverShows": 0.01,
+    "Relations_ManualAdd_RefusesDuplicatesSelfAndUnknownTitlesAndDeletesOnlyItsOwn": 7.32,
+    "Relations_ProviderManualInverseAndSuppression_ShowOnBothWorksOnce": 9.04,
+    "Type_Inverse_NamesTheOtherSideAndStoresOnlyForwardTypes": 0.0
+   },
+   "Jularr.Backend.Tests.WorkSearchRunTests": {
+    "Cancel_InFlightSourceRequest_StopsTheRunWithoutCancellingDownloads": 6.54,
+    "CancelledRun_IsFinalAcrossRestart_AndAnotherAccountCannotReadOrCancelIt": 6.8,
+    "Queue_500Targets_RecordsWarmHttpLatencyWithoutCallingSources": 5.89,
+    "Queue_AllPagesAndFilters_AreSnapshottedAndDuplicateClicksShareTheRun": 6.22,
+    "Razor_QueuesFilteredOrSelected_AndServesAnAuthorizedStatusFragment": 5.71,
+    "Worker_RestartResumesOnlyPendingTargets_AndKeepsExistingDownloads": 6.55,
+    "Worker_RevokedRequesterFailsSafely_AndRetryPreservesAcknowledgedProgress": 6.08
+   },
+   "Jularr.Backend.Tests.WorkUnitGroupTests": {
+    "Sections_BookVolumes_TakeTheirChaptersAlong": 5.82,
+    "Sections_InvalidRangesAndUsers_AreRefused": 5.26,
+    "Sections_SeriesRanges_NameEpisodesAndSplitTheDetails": 6.7
+   },
+   "Jularr.Backend.Tests.WorkerJobTests": {
+    "Admin_ListsJobs_PausesRunsAndSetsUse_ForTheOwnerOnly": 7.35,
+    "Begin_FollowsStartDelayPauseRunNowAndUse": 0.0,
+    "Definitions_CoverEveryWorkerAndTheSampler_AndStaggerTheirStart": 0.01,
+    "Definitions_EveryGroupAndJob_HaveTheirTextOnTheJobsPage": 0.0,
+    "Finish_KeepsAQuietSuccessOnlyOnceAMinute_AndEveryChangeAtOnce": 0.0,
+    "JobsPage_AFailedPass_SaysWhy_InTheRowAndInTheHistory_AndAnUnknownCodeReadsAsUnknownError": 7.18,
+    "Runner_AFailedPass_BecomesOneNoticeInActivity_UntilTheJobRunsWellOrIsDismissed": 5.03,
+    "Runner_RunsADueJobOnce_NotWhilePaused_AndOnRequest": 4.76
+   }
+  },
+  "e2e": {
+   "Jularr.E2E.Tests.AdminMenuTests": {
+    "Find_NarrowsTheEntriesAsOneTypes_AndTheFigureOfOpenRequestsFollowsWithoutReload": 12.22,
+    "Menu_MarksTheCurrentEntryAfterEverySwap_ShowsOneRowOfPages_AndEveryAddressStillRenders": 19.13
+   },
+   "Jularr.E2E.Tests.AdminPageSmokeTests": {
+    "NetworkBackupLibraryFilesAndRules_Load_UnderTheirTitles": 11.81
+   },
+   "Jularr.E2E.Tests.AdminPhoneFitTests": {
+    "BlockedAndDashboard_OnAPhone_FitTheScreen": 10.43
+   },
+   "Jularr.E2E.Tests.AiPageTests": {
+    "Codex_ConnectsByItself_AndDisconnectsAfterAsking": 13.32
+   },
+   "Jularr.E2E.Tests.AniListTests": {
+    "Profile_ConnectsItsAniList_TakesOverItsList_AndSendsProgress_UntilItDisconnects": 24.38
+   },
+   "Jularr.E2E.Tests.ArrSettingsTests": {
+    "FormatsProfilesAndTags_WorkThroughListsCardsAndDialogs_OnDesktopAndMobile": 20.73
+   },
+   "Jularr.E2E.Tests.AutomaticPathTests": {
+    "SonarrTakeover_MonitoredSeries_ChoosesReleasesAndEpisodesPlay": 32.63,
+    "UserRequestsABook_ThePdfIsFoundAutomatically_AndReadsWithItsPicture": 21.09,
+    "UserRequests_FilmByACustomProfileAndAnAnime_AreFoundAutomatically_AndPlay": 40.54,
+    "WantedPriority_TheBulkBarMarksATitleHigh_AndTheSearchTakesItFirst": 29.76
+   },
+   "Jularr.E2E.Tests.CastQueueTests": {
+    "Cast_QueuesTheSeason_FollowsTheDeviceAndGoesOnLocallyWhereItLeft": 27.68
+   },
+   "Jularr.E2E.Tests.CatalogSettingsTests": {
+    "AniListWindow_AddedTypedAndSaved_StaysAfterReload": 9.89,
+    "CachingModule_ShowsItsDaysAndSubOptions_AndDecidesHowEveryCatalogIsKept": 9.9,
+    "EveryCatalog_ShowsItsNameAndIcon_NeverItsKey": 7.41
+   },
+   "Jularr.E2E.Tests.ContentAvailabilityTests": {
+    "Settings_LibraryAndTrending_UseBothContentLanguagesAndMatchingSubtitles": 8.23
+   },
+   "Jularr.E2E.Tests.ContinueMenuTests": {
+    "ContinueRow_ThreeDotsMenu_RemovesMarksAndFavoritesFromTheCard_AtEveryWidth": 11.97
+   },
+   "Jularr.E2E.Tests.CoverDeliveryTests": {
+    "Cards_SelectTheirRenderedSize_AndReuseFreshExternalCovers": 8.18
+   },
+   "Jularr.E2E.Tests.DashboardTests": {
+    "OwnerSeesTheDashboard_ChecksTheServicesAgain_AndOpensPerformanceAndLogs": 8.33
+   },
+   "Jularr.E2E.Tests.DetailsTabsTests": {
+    "Details_TabsPreviewsHeroAndEmptyTabs_WorkWithAndWithoutScript": 8.19
+   },
+   "Jularr.E2E.Tests.DevicePairingTests": {
+    "AppPairsByApi_PhoneConfirms_AppUsesItsTokenWithoutCookies": 6.45,
+    "TvShowsCode_PhoneConfirmsTheShownDevice_TvSignsIn": 12.59
+   },
+   "Jularr.E2E.Tests.DiscoverCatalogTests": {
+    "WholeCatalog_FillsTheShelvesAndSuggestsByTypeWhileTyping": 9.57,
+    "WholeCatalog_RankingGridAndShelfLoadMoreWhileScrolling_UntilTheyEnd": 17.05
+   },
+   "Jularr.E2E.Tests.DiscoverFilterTests": {
+    "FilterRow_GenreAndMore_ShowAGridThatLoadsOn_AndClearingBringsTheShelvesBack": 14.89
+   },
+   "Jularr.E2E.Tests.DiscoverLayoutTests": {
+    "Discover_ChoosesTypesInTheBar_ShowsHighlights_AndFiltersInTheDrawer": 9.93,
+    "Filter_ListsTypeThenAvailability_AndOnlyTheFiltersTheChosenTypesHave": 8.49,
+    "ShelfHeadings_KeepTheirTitlesClearOfTheLink_AtEveryPhoneWidth": 10.73
+   },
+   "Jularr.E2E.Tests.DiscoverRecommendationsTests": {
+    "Recommendations_LoadAFewShelvesAtATime_WhileScrolling_WithoutShifting": 13.5
+   },
+   "Jularr.E2E.Tests.DownloadMappingTests": {
+    "CompletedDownloadStorage_BrowsesAndPersistsWithoutLosingTheDraft": 18.97
+   },
+   "Jularr.E2E.Tests.DownloadPagesTests": {
+    "Downloads_LiveMovesIntoHistory_AndKeepsImportAttentionSeparate": 20.15,
+    "IndexersAndClients_AreAddedAndEditedInDialogs_TestedWithoutReload": 11.95,
+    "Indexers_EditedInTheirDialog_ShowTodaysQueriesAgainstTheLimit": 26.09
+   },
+   "Jularr.E2E.Tests.DownloadStorageTests": {
+    "NativeStorage_BrowsesBothPathsAndPersistsExplicitSettings": 20.41
+   },
+   "Jularr.E2E.Tests.ErrorPageTests": {
+    "PageOfMissingEntity_ShowsThe404Page_AndFragmentsKeepTheirBareStatus": 11.04,
+    "TitleWithoutCover_ShowsThePlaceholder_AndABrokenImageSwapsToIt": 9.35,
+    "UnhandledException_ShowsThe500Page_WithoutDetails_AndApiKeepsItsAnswer": 9.2,
+    "UnknownAddress_ShowsThe404Page_InCleanAndOriginal": 10.22
+   },
+   "Jularr.E2E.Tests.FailureTests": {
+    "FailedDownloadRetries_AndNasOutageKeepsBrowsing": 24.66,
+    "RestartDuringDownload_AndLostDatabaseConnections_Recover": 53.91,
+    "UnclearDownload_WaitsInTheQueue_AndRemoveAndBlockTakesTheNextRelease": 23.25
+   },
+   "Jularr.E2E.Tests.FileInputTests": {
+    "VolumeUpload_ShowsTheFileInput_AcceptsAVolume_AndRefusesAnotherKind": 7.71
+   },
+   "Jularr.E2E.Tests.FilmPathTests": {
+    "FilmAndEpisode_FromSetupToRequestDownloadImportPlayAndResume": 52.89
+   },
+   "Jularr.E2E.Tests.FirstRunTests": {
+    "FreshInstance_OwnerSetupSignInAndMenuPages_OpenWithoutErrors": 12.33
+   },
+   "Jularr.E2E.Tests.FolderPickerTests": {
+    "FolderDialog_PreservesDraftAndSelectsWithoutPageNavigation": 16.37,
+    "SetupLibraries_OfferTheLocalPathBeforeItIsConnected_AndConnectItOnChoosing": 6.04
+   },
+   "Jularr.E2E.Tests.GamePathTests": {
+    "HomebrewGames_FromTheLibraryFolder_PlayInTheBrowser": 18.16
+   },
+   "Jularr.E2E.Tests.HoverPreviewTests": {
+    "Cover_AfterAShortRest_OpensTheMutedTrailerOrTheDescription_OverTheRow_AndNothingElse": 19.92,
+    "Touch_ACardThatLingers_StartsItsPreviewAfterTwoSeconds_UnlessTheProfileSwitchedItOff": 14.16,
+    "Touch_AGridOfCoversNeverOpensAPreviewOverItsNeighbours": 11.04
+   },
+   "Jularr.E2E.Tests.JobsTests": {
+    "OwnerSeesEveryJob_PausesResumesAndRunsOne_AndChangesWhetherItWaits": 17.3
+   },
+   "Jularr.E2E.Tests.LayoutShiftTests": {
+    "Pages_WhileLoading_ShiftLessThanAHundredth": 106.64
+   },
+   "Jularr.E2E.Tests.LibraryChangesTests": {
+    "AmbiguousRelease_Upgrade_AndMissingFile_StayVisibleAndSafe": 23.37
+   },
+   "Jularr.E2E.Tests.LibraryFiltersTests": {
+    "Library_FiltersAppendRetryAndRestoreAfterBack_KeepNativePaging": 11.08
+   },
+   "Jularr.E2E.Tests.ListFilterTests": {
+    "Library_HasTheSameBarsAsFavorites_NarrowsOrdersAndChangesLayout": 8.17
+   },
+   "Jularr.E2E.Tests.ManualBookSearchTests": {
+    "SlowBookSource_DoesNotLoseOtherResults_AndLeavingTheSearchCancelsIt": 35.03
+   },
+   "Jularr.E2E.Tests.ManualImportTests": {
+    "Film_FromAFolderOnTheStorage_IsRecognisedAndMovedIntoTheLibrary": 17.34,
+    "WaitingBook_FromTheQueue_IsAssignedByHand": 22.56,
+    "WaitingDownload_FromTheQueue_IsImportedByHand": 19.21,
+    "WaitingDownload_WithTwoFiles_IsMatchedToTwoTitlesWithALanguage": 27.81
+   },
+   "Jularr.E2E.Tests.MatchesTests": {
+    "Matches_MediaTypeBar_NarrowsTheReviews": 6.52
+   },
+   "Jularr.E2E.Tests.MediaCardTests": {
+    "Cover_ResponsiveLayout_KeepsTitleActionStatusAndProgressStable": 7.24
+   },
+   "Jularr.E2E.Tests.MediaImportDurabilityTests": {
+    "MoreThanThreeHundredWorks_SurviveClosedTabAndServerRestart_WithoutDuplicates": 22.18
+   },
+   "Jularr.E2E.Tests.MediaImportTests": {
+    "LongList_ContinuesWithTheChoicesOfItsRows": 13.46,
+    "MixedList_IsUploadedPreviewedImportedAndRepeatedWithoutDuplicates": 20.33,
+    "TypeBar_NarrowsThePreviewAndWhatIsChosen": 10.6,
+    "UncataloguedBook_ListDetailsAreExplicitAndRepeatOffersTheExistingBook": 12.55
+   },
+   "Jularr.E2E.Tests.MusicPathTests": {
+    "Album_FromMetadataToRequestDownloadImportPlayAndResume": 22.5
+   },
+   "Jularr.E2E.Tests.NamingSettingsTests": {
+    "AllMediaNames_IdsDailyAndMultiEpisodeSettings_PreviewAndPersist": 17.91,
+    "EpisodeNames_ColonAndSpecialsFolderChanged_StayAfterReload": 17.89
+   },
+   "Jularr.E2E.Tests.PagingTests": {
+    "TranslationTable_PagesWithTheDock_WithoutCountingPages": 7.31
+   },
+   "Jularr.E2E.Tests.PhoneGeometryTests": {
+    "Phone_FieldsButtonsPageEndSheetsCalendarAndTabsFit_DesktopKeepsItsSizes_ReaderPanelClosesOnEscape": 28.03
+   },
+   "Jularr.E2E.Tests.PhoneLayoutTests": {
+    "Phone_CarouselArrowsStayOffTheTitle_RelationDialogFitsItsButton_IndexerDockActionsDiffer": 8.18
+   },
+   "Jularr.E2E.Tests.PhoneShellTests": {
+    "Phone_TaskRowKeepsItsTitle_AndTheHeaderTrailShowsItsFirstPartAndScrollsItsMenu": 8.52
+   },
+   "Jularr.E2E.Tests.PhoneTapTargetsTests": {
+    "Phone_TapTargetsReachTheirHitArea": 16.79
+   },
+   "Jularr.E2E.Tests.ProfilesTests": {
+    "Registration_NeedsTheOwner_RequestsNeedApproval_AdministrationStaysClosed": 21.87
+   },
+   "Jularr.E2E.Tests.PwaTests": {
+    "ExpiredSession_FromBoostedLink_SignsInAndRestoresDeepLink": 8.37,
+    "InstalledPwa_ShowsUpdateButNeverReloadsUntilUserChooses": 5.33,
+    "WorkerRegistered_ManifestAndIconsServed_AndNavigationLoginSwapsLiveAndRangesStillWork": 9.64
+   },
+   "Jularr.E2E.Tests.QueueAndTasksTests": {
+    "Queue_DownloadWithNothingToAssign_LeavesTheQueueAndTheHistoryTellsWhy": 15.35,
+    "Queue_HoldsTheDownloads_AndTasks_TheRestWithRetryAndDismiss": 9.32
+   },
+   "Jularr.E2E.Tests.ReaderCodexTests": {
+    "Owner_RetranslatesAChapterWithCodex_AndTheReaderAndTheAiPageShowIt": 13.74,
+    "Owner_WhenCodexFailsOrIsLimited_IsToldWhy_AndTheRetryKeepsTheFinishedPart": 34.61,
+    "Owner_WithoutAnAnsweringOllama_TranslatesAChapterByButtonOnly_LiveInChunks_AndKeepsItWhenReopened": 51.79
+   },
+   "Jularr.E2E.Tests.ReaderTranslationTests": {
+    "AnotherModel_RetranslatesTheParagraph_ForEveryReader_AndNamesItsModel": 14.16,
+    "InstalledTranslateGemma_TranslatesTwoSections_CachesAndRestoresOriginal": 14.92
+   },
+   "Jularr.E2E.Tests.ReaderV3Tests": {
+    "BackArrow_LeavesTheBookInOneStep_AfterChapterChanges_ToWhereTheReaderCameFrom": 11.61,
+    "DoublePage_TextBoxAndNumberFollowEachPaper_ProfileKeepsTheTextSettings": 20.31,
+    "Header_OverflowsByWidth_LanguageButtonShowsItsHint_SettingsOpenWithOnePress": 19.41,
+    "ModeButton_CyclesBookScrollAndFlatPages_AndTheDeviceKeepsIt": 11.37,
+    "ProgressSlider_ShowsChapterTicks_PreviewsAndSeeksTheWholeBook": 13.51,
+    "ReadAloud_HighlightsWordAndSentence_FollowsInAScrolledText_SleepTimerStops": 11.88,
+    "TranslationStatus_IsAPillAboveTheBottomBar_AtEveryWidth": 13.09
+   },
+   "Jularr.E2E.Tests.ReadingPathTests": {
+    "BookMangaAndLightNovel_FromMetadataToRequestDownloadImportReadAndContinue": 54.8,
+    "LocalComic_BookRenderer_CoverSpreadAndMobile": 14.23,
+    "LocalDjvu_ShowsItsPagesAsPictures_AndTurnsToTheNextPage": 12.73,
+    "LocalEpub_BackgroundPages_PauseRestartAndFailWithoutBlockingReading": 14.46,
+    "LocalEpub_BookSpread_StacksFollowReadingAndTextFollowsEachPaper": 0.0,
+    "LocalEpub_PageBreakInsideAWord_NeverRepeatsTheFirstLine": 35.64,
+    "LocalEpub_ReaderOpening_ReturnsContent": 19.62,
+    "LocalFb2_OpensThroughItsReadingCopy_AndAProtectedKindleBookSaysWhy": 14.64,
+    "LocalPdf_PageOfItsOwnPicture_ReadsAsFigureAndOpensFullScreenWithZoom": 0.0,
+    "LocalPdf_Scan_OpensAsOriginalPages_TurnsZoomsAndKeepsTheChosenView": 14.52,
+    "PdfBook_FromRequestDownloadAndImportReadsReflowedAndContinues": 27.9
+   },
+   "Jularr.E2E.Tests.RemoteBrowserTests": {
+    "AuthorizationEnded_ClearsPictureAndStopsControls": 3.99,
+    "DownloadReconnect_ReopensItsOperationInsteadOfTheSourceHomepage": 1.31,
+    "ExpiredView_OffersReconnectWithoutPollingItsOldLease": 1.29,
+    "ImageFailure_RetainsLastPictureAndRecoversWithoutReplayingInput": 5.93,
+    "LoadingPage_ShowsItsStatusAtOnceAndThenTheView": 10.14,
+    "RepeatedFrameFailure_StopsAndOffersOneDirectReconnect": 5.39
+   },
+   "Jularr.E2E.Tests.RequestsPhoneTests": {
+    "RequestsOnAPhone_KeepChipsInTheirRowAndTabsApartFromTools_AndDialogsLockThePageBehind": 10.06
+   },
+   "Jularr.E2E.Tests.SavePillTests": {
+    "NamingPage_SavesChangedFormsTogether_DiscardsInPlace_AndKeepsAFailingFormsError": 11.17,
+    "SettingsPage_SharedControls_DropdownBoxesStepperSliderAndDraggedOrder_AreCountedBySaveDock": 12.01
+   },
+   "Jularr.E2E.Tests.SettingsPagesTests": {
+    "Instance_ChangesInSeveralSections_SaveWithOneSave": 9.33,
+    "Languages_AddInADialogWithCancel_AndEditInlineInTheCardSavedByThePill": 11.21,
+    "MediaTypes_SwitchesAreDraftsOfOnePill_AndSaveWithoutReload": 8.16,
+    "Modules_DependenciesBlockSwitches_AndSeveralChangesSaveTogetherWithoutReload": 9.35,
+    "Naming_MediaTypeBar_NarrowsThePanelsAndTheLibraryOverviewHasIt": 7.98,
+    "Naming_TokensFillTheFieldAndTheExampleFollowsWhatIsTyped": 9.13
+   },
+   "Jularr.E2E.Tests.SetupFlowTests": {
+    "ClickingThroughWithNothingEntered_MarksSkippedStepsAndTheOverviewSaysWhatIsMissing_FinishAnywayAsks": 9.29,
+    "FirstChoice_NewTakeoverAndRestore_EachLeadsItsOwnWay": 14.16,
+    "Flow_EveryTopicIsAStepInOrder_AndTheOverviewFinishes": 21.72,
+    "Providers_AniListKeyFieldsAppearOnlyWithTheModule_InTheAdministrationToo": 7.57,
+    "StorageStep_ListsTheMountedPathsAndTheAddDialogCanBeCancelled": 13.49,
+    "TakeoverStep_ConnectsReadsAndShowsWhatItFoundThenTakesOver": 17.43,
+    "UnfinishedSetup_EveryAddressLeadsBackToTheSavedStep_AndOthersAreToldItIsBeingSetUp": 9.04
+   },
+   "Jularr.E2E.Tests.SetupOwnerTests": {
+    "OwnerStep_ShowsSteps_RevealsPasswords_AndCreatesAccountAndProfileWithTheirNames": 31.13
+   },
+   "Jularr.E2E.Tests.SpeechPathTests": {
+    "Catalog_SearchPagingSamplesAndLicenseReviewWorkOnDesktopAndPhone": 13.39,
+    "Models_OpenFromModuleAdministrationWithoutInstallingAnything": 10.72,
+    "Neural_ReadAloudUsesExplicitDeviceInstallBoundProfileControlsAndVerifiedCache": 14.96,
+    "ReadAloud_UsesProfilePreferencesSelectionWordPaintAndCancellableDeviceSessions": 15.65
+   },
+   "Jularr.E2E.Tests.StackingTests": {
+    "Phone_OpenHeroMenu_LiesOverTheTabs_AndTheMenu_OverTheFloatingPill": 7.27
+   },
+   "Jularr.E2E.Tests.StartupStatusPageTests": {
+    "Update_ShowsTheStatusPageWhileTheBackupRuns_ThenTheApplicationTakesOver": 7.79
+   },
+   "Jularr.E2E.Tests.StorageIntegrationsTests": {
+    "ConnectionCard_ShowsSpace_AnOfflineConnectionStaysListedWithItsState": 19.3,
+    "MediaServers_AreCards_AndTheirUsersAreListedWithProfileAndState": 9.24,
+    "ProviderCard_ShowsTheKeyOnlyAsState_AndSwitchesWithoutReloading": 8.87
+   },
+   "Jularr.E2E.Tests.TimeZoneTests": {
+    "BrowserZone_FormatsUtcInstantsAndCalendarTodayInTwoZones": 8.55
+   },
+   "Jularr.E2E.Tests.TracksTests": {
+    "AudioAndSubtitleChoice_AndABrokenFile_AreHandledInThePlayer": 36.07
+   },
+   "Jularr.E2E.Tests.TranscodingTests": {
+    "Benchmark_RunOnDemand_ProposesAndTheSettingsStay": 14.92
+   },
+   "Jularr.E2E.Tests.TranslatedEpubTests": {
+    "TranslatedBook_DownloadsAsEpub_FromTheTranslatedWorksListAndTheReader": 12.81
+   },
+   "Jularr.E2E.Tests.TranslationPageTests": {
+    "Machines_ShowStateAnswerAndLastError_AndThePageFitsEveryWidth": 10.94,
+    "Progress_ShowsLanguagesAndBooks_AsCardsWithBars": 13.53
+   },
+   "Jularr.E2E.Tests.UserListScrollTests": {
+    "CatalogsRequestsAndNotifications_AppendBoundedPagesAndKeepActions": 10.77
+   },
+   "Jularr.E2E.Tests.UserPanelScrollTests": {
+    "DetailsFiles_AppendGroupedInventoryAndKeepNativePaging": 8.16,
+    "ReaderNotes_AppendWithoutOpeningBook_DeleteAndKeepNativeLinks": 9.78
+   },
+   "Jularr.E2E.Tests.WantedSearchDialogTests": {
+    "Dialog_ShowsEachSourceWhenItAnswers_KeepsFailuresVisible_AndFiltersWithoutAskingAgain": 12.13,
+    "SeasonDialog_SearchesTheWholeSeason_CountsInTheSingular_AndKeepsItsHeadClear": 10.65
+   },
+   "Jularr.E2E.Tests.WantedTests": {
+    "Wanted_MediaTypeBar_NarrowsTheTargetsAndCounts": 10.81,
+    "Wanted_TheFloatingBarCoversNoRow_AndTheStateSaysWhyInFull": 11.27
+   },
+   "Jularr.E2E.Tests.WorkAddTests": {
+    "AddFromSearch_MonitorsTheTitle_AndSearchNowDecidesTheFirstSearch": 13.18
+   },
+   "Jularr.E2E.Tests.WorkDeletionTests": {
+    "Delete_FiftyFilms_ShowsProgressContinuesAfterFailureAndKeepsOnlyFailuresSelected": 10.85,
+    "Delete_LostConfirmation_DoesNotRetryAndStillProcessesTheOtherFilms": 8.23
+   },
+   "Jularr.E2E.Tests.WorkPageTests": {
+    "Series_OnItsManagementPage_ShowsSeasonsColumnsAndTheTitleActions": 16.44,
+    "Works_ListTakesFiltersRowActionsAndTheMassEditor": 31.36
+   },
+   "Jularr.E2E.Tests.WorkRelationsTests": {
+    "Relations_LibraryRowAndCatalogRow_AddRemoveAndInverse_WorkOnTheTitlesPage": 10.51,
+    "Relations_RequestFromTheRow_MakesTheRequestWithoutLeavingThePage": 11.21
+   },
+   "Jularr.E2E.Tests.WorkSearchRunTests": {
+    "AllFilteredAndSelected_SearchInTheBackground_AndCanBeCancelled": 14.46
+   },
+   "Jularr.E2E.Tests.WorkTypesTests": {
+    "Anime_ShowsAbsoluteNumbers_AndSwitchesToAniListNumbers_AndManga_ShowsItsVolumes": 13.66,
+    "Book_ListsItsTranslations_AndClearsOneLanguage": 10.77
+   }
+  }
  },
  "updated": "2026-11-11"
 }

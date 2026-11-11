@@ -60,6 +60,27 @@ namespace Jularr.Backend.Data.Admin.Wanted.V1
         public int PausedCount { get; }
     }
 
+    // One page of a view of the wanted list with the numbers of all views, read together; an empty page keeps its numbers.
+    public sealed class WantedPageV1 : BaseResponse
+    {
+        public WantedPageV1(PageResult<WantedDetailsV1> entries, WantedSummaryV1 summary)
+        {
+            Entries = entries;
+            Summary = summary;
+        }
+
+        public PageResult<WantedDetailsV1> Entries { get; }
+
+        public WantedSummaryV1 Summary { get; }
+
+        public override void Validate()
+        {
+            base.Validate();
+            Entries.Validate();
+            Summary.Validate();
+        }
+    }
+
     public sealed class UpdateWantedParametersV1 : BaseParameters
     {
         public UpdateWantedParametersV1(long wantedItemId)
@@ -354,6 +375,17 @@ namespace Jularr.Backend.Data.Admin.Wanted.V1
 
         [DataField(typeof(LibraryRootFields), nameof(LibraryRootFields.Name))]
         public string Name { get; }
+    }
+
+    public sealed class ReadWantedItemsParametersV1 : BaseParameters
+    {
+        public ReadWantedItemsParametersV1(long[] wantedItemIds)
+        {
+            WantedItemIds = wantedItemIds;
+        }
+
+        [DataField(typeof(WantedItemFields), nameof(WantedItemFields.Ids))]
+        public long[] WantedItemIds { get; }
     }
 
     public sealed class WantedItemParametersV1 : BaseParameters

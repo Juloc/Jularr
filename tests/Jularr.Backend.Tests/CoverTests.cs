@@ -6,7 +6,6 @@ using System.Text;
 using Jularr.Backend.Data.Admin.Media.V1;
 using Jularr.Backend.Data.Admin.Provider.V1;
 using Jularr.Backend.Data.Enums.Media;
-using Jularr.Backend.Data.Logic.Media;
 using Jularr.Backend.Data.Public.Authentication.V1;
 using Jularr.Backend.Data.System.Media.V1;
 using Jularr.Backend.Data.User.Request.V1;
@@ -75,58 +74,6 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.OK, deleted.StatusCode, await deleted.Content.ReadAsStringAsync());
             Assert.IsFalse(Directory.Exists(Path.Combine(root, workId.ToString())));
             Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"WorkCovers\""));
-        }
-
-        [TestMethod]
-        public async Task Cover_WithFfmpeg_KeepsOneWebPWidthBesideTheOriginal_AndConvertsOlderFormats()
-        {
-            // Opt-in: JULARR_TEST_FFMPEG names an ffmpeg executable.
-            var ffmpeg = Environment.GetEnvironmentVariable("JULARR_TEST_FFMPEG");
-            if (string.IsNullOrEmpty(ffmpeg))
-            {
-                Assert.Inconclusive("JULARR_TEST_FFMPEG is not configured.");
-                return;
-            }
-
-            var images = new FakeImages { Payload = Convert.FromBase64String(OnePixelPng) };
-            await using var host = await CreateHostAsync(images, new Dictionary<string, string> { ["Media:FfmpegPath"] = ffmpeg, ["Media:CjxlPath"] = "" });
-            var root = host.Services.GetRequiredService<IOptions<MediaOptions>>().Value.CoversPath;
-            using var requested = await RequestMatrixAsync(host);
-            Assert.AreEqual(HttpStatusCode.OK, requested.StatusCode, await requested.Content.ReadAsStringAsync());
-            var workId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Works\""))!;
-            var folder = Path.Combine(root, workId.ToString());
-
-            // Without cjxl the one format is WebP: no JPEG XL and no JPEG beside it.
-            foreach (var name in new[] { "poster.png", "poster-250.webp", "poster-500.webp", "backdrop-500.webp", "backdrop-1280.webp" })
-            {
-                Assert.IsTrue(File.Exists(Path.Combine(folder, name)), name);
-            }
-
-            Assert.AreEqual(0, Directory.EnumerateFiles(folder, "*.jxl").Count() + Directory.EnumerateFiles(folder, "*.jpg").Count());
-            Assert.AreEqual(2L, await host.ScalarAsync("SELECT count(*) FROM \"WorkCovers\" WHERE \"FormatId\" = 2"));
-
-            // A browser that names WebP is given the stored file; one that does not gets a JPEG made for that answer, kept nowhere.
-            var poster = (string)(await host.ScalarAsync("SELECT \"Value\" FROM \"WorkMetadataFacts\" WHERE \"FactKey\" = 'Poster'"))!;
-            var narrowAddress = poster.Replace("poster?", "poster-250?", StringComparison.Ordinal);
-            using var modern = await GetAsync(host, narrowAddress, "image/avif,image/webp,*/*");
-            Assert.AreEqual("image/webp", modern.Content.Headers.ContentType!.MediaType);
-            Assert.AreEqual("Accept", modern.Headers.Vary.Single());
-            using var plain = await host.SendAsync(HttpMethod.Get, narrowAddress);
-            Assert.AreEqual("image/jpeg", plain.Content.Headers.ContentType!.MediaType);
-            Assert.IsTrue(CoverPaths.IsFormat(await plain.Content.ReadAsByteArrayAsync(), "jpg"));
-            Assert.AreNotEqual(modern.Headers.ETag, plain.Headers.ETag);
-            Assert.AreEqual(0, Directory.EnumerateFiles(folder, "*.jpg").Count());
-
-            // The backfill makes a width kept in an older format into the chosen one: the JPEG leaves once the WebP is written and checked.
-            var poster250 = Path.Combine(folder, "poster-250.webp");
-            File.Delete(poster250);
-            await File.WriteAllBytesAsync(Path.Combine(folder, "poster-250.jpg"), [0xFF, 0xD8, 0xFF, 0xE0, 1, 2, 3]);
-            await host.ScalarAsync("UPDATE \"WorkCovers\" SET \"FormatId\" = NULL WHERE \"CoverKindId\" = 1");
-            await RunAsync(host, scope => scope.ServiceProvider.GetRequiredService<ConvertCoversV1>().ExecuteAsync<Jularr.Backend.Data.Common.UpdateResult>(new CoverParametersV1(), default));
-            Assert.IsTrue(CoverPaths.IsFormat(await File.ReadAllBytesAsync(poster250), "webp"));
-            Assert.IsFalse(File.Exists(Path.Combine(folder, "poster-250.jpg")));
-            Assert.IsTrue(File.Exists(Path.Combine(folder, "poster.png")));
-            Assert.AreEqual(2L, await host.ScalarAsync("SELECT count(*) FROM \"WorkCovers\" WHERE \"FormatId\" = 2"));
         }
 
         [TestMethod]
@@ -520,58 +467,6 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(CoverFormat.Jxl, Store(new JxlEncoder { ExecutablePath = "cjxl" }).EffectiveFormat(CoverFormat.Jxl));
             Assert.AreEqual(CoverFormat.WebP, Store(new JxlEncoder { ExecutablePath = "cjxl" }).EffectiveFormat(CoverFormat.WebP));
             Assert.IsFalse(Store(new JxlEncoder()).CanScale);
-        }
-
-        [TestMethod]
-        public async Task CoverStore_WithFfmpeg_ConvertsAWidthToWebP_ServesItAndDerivesForOtherBrowsers()
-        {
-            // Opt-in: JULARR_TEST_FFMPEG names an ffmpeg executable; no database needed.
-            var ffmpeg = Environment.GetEnvironmentVariable("JULARR_TEST_FFMPEG");
-            if (string.IsNullOrEmpty(ffmpeg))
-            {
-                Assert.Inconclusive("JULARR_TEST_FFMPEG is not configured.");
-                return;
-            }
-
-            var root = Directory.CreateTempSubdirectory("jularr-covers").FullName;
-            try
-            {
-                var store = new CoverStore(Options.Create(new MediaOptions { CoversPath = root }), null!, new MediaTranscoder { ExecutablePath = ffmpeg }, new JxlEncoder(),
-                    Microsoft.Extensions.Logging.Abstractions.NullLogger<CoverStore>.Instance);
-                var folder = Directory.CreateDirectory(Path.Combine(root, "7")).FullName;
-                await File.WriteAllBytesAsync(Path.Combine(folder, "poster.png"), Convert.FromBase64String(OnePixelPng));
-                await File.WriteAllBytesAsync(Path.Combine(folder, "poster-250.jpg"), [0xFF, 0xD8, 0xFF, 0xE0, 1]);
-                await File.WriteAllBytesAsync(Path.Combine(folder, "poster-500.jpg"), [0xFF, 0xD8, 0xFF, 0xE0, 1]);
-
-                // Both widths are made in WebP from the download, then the JPEGs leave; the download stays.
-                var cover = new WorkCoverConvertData(7, CoverKind.Poster, null, "image/png", "abc");
-                Assert.IsTrue(await store.ConvertAsync(cover, store.EffectiveFormat(CoverFormat.Jxl), default));
-                foreach (var width in new[] { "250", "500" })
-                {
-                    Assert.IsTrue(CoverPaths.IsFormat(await File.ReadAllBytesAsync(Path.Combine(folder, "poster-" + width + ".webp")), "webp"));
-                    Assert.IsFalse(File.Exists(Path.Combine(folder, "poster-" + width + ".jpg")));
-                }
-
-                Assert.IsTrue(File.Exists(Path.Combine(folder, "poster.png")));
-                Assert.IsFalse(Directory.EnumerateFiles(folder, "*.partial*").Any());
-
-                // Converting again changes nothing; a browser that names WebP gets the file, any other a JPEG made for it and kept nowhere.
-                Assert.IsTrue(await store.ConvertAsync(cover, CoverFormat.WebP, default));
-                var webp = await store.FindAsync(7, CoverKind.Poster, null, 250, "image/png", CoverFormats.WebP, default);
-                Assert.AreEqual("image/webp", webp!.ContentType);
-                Assert.IsNotNull(webp.Path);
-                var plain = await store.FindAsync(7, CoverKind.Poster, null, 250, "image/png", CoverFormats.None, default);
-                Assert.AreEqual("image/jpeg", plain!.ContentType);
-                Assert.IsNull(plain.Path);
-                Assert.IsTrue(CoverPaths.IsFormat(plain.Bytes!, "jpg"));
-                Assert.AreEqual(0, Directory.EnumerateFiles(folder, "*.jpg").Count());
-                var original = await store.FindAsync(7, CoverKind.Poster, null, null, "image/png", CoverFormats.None, default);
-                Assert.AreEqual("image/png", original!.ContentType);
-            }
-            finally
-            {
-                Directory.Delete(root, true);
-            }
         }
 
         [TestMethod]

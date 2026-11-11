@@ -106,6 +106,9 @@ app.UseAuthentication();
 app.UseJularrSetupGate();
 app.UseAuthorization();
 
+// Every page's server time against its budget; the shell and the page handler report their parts.
+app.UseJularrPageTimings();
+
 // Resolve the full DB-backed language pack once per Razor request, after authorization.
 // Static resources and API service requests do not pass through localization rendering.
 app.Use(async (context, next) =>

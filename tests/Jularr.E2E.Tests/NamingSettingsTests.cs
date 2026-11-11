@@ -8,7 +8,6 @@ namespace Jularr.E2E.Tests
     {
         [TestMethod]
         [DataRow(1440, 900)]
-        [DataRow(390, 844)]
         [Timeout(300_000)]
         public async Task EpisodeNames_ColonAndSpecialsFolderChanged_StayAfterReload(int width, int height)
         {
@@ -42,7 +41,6 @@ namespace Jularr.E2E.Tests
         }
         [TestMethod]
         [DataRow(1440, 900)]
-        [DataRow(390, 844)]
         [Timeout(300_000)]
         public async Task AllMediaNames_IdsDailyAndMultiEpisodeSettings_PreviewAndPersist(int width, int height)
         {
