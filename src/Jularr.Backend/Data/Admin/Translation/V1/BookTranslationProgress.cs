@@ -37,7 +37,7 @@ namespace Jularr.Backend.Data.Admin.Translation.V1
     }
 
     public sealed class BookTranslationProgressV1(BookTranslationLanguageV1[] languages, BookTranslationBookV1[] books, BookTranslationCurrentV1? current, double blocksPerMinute,
-        long? secondsRemaining, string? issueKey) : BaseResponse
+        long? secondsRemaining, string? issueKey, bool counting = false) : BaseResponse
     {
         public BookTranslationLanguageV1[] Languages { get; } = languages;
         public BookTranslationBookV1[] Books { get; } = books;
@@ -45,5 +45,7 @@ namespace Jularr.Backend.Data.Admin.Translation.V1
         public double BlocksPerMinute { get; } = blocksPerMinute;
         public long? SecondsRemaining { get; } = secondsRemaining;
         public string? IssueKey { get; } = issueKey;
+        // The books are being counted again (after a start, or the languages changed): the figures may still lag behind.
+        public bool Counting { get; } = counting;
     }
 }

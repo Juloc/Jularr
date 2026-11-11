@@ -12,6 +12,7 @@ using Jularr.Backend.Data.Enums.Instance;
 using Jularr.Backend.Data.System.Instance.V1;
 using Jularr.Backend.Service.Core;
 using Jularr.Backend.Service.System.Instance.V1;
+using Jularr.Backend.Tests.Infrastructure;
 using Jularr.Integrations.Logic.MediaServer;
 using Jularr.Integrations.Logic.Newznab;
 using Jularr.Integrations.Logic.Sabnzbd;
@@ -156,6 +157,34 @@ namespace Jularr.Backend.Tests
             Assert.IsFalse(providers.ContainsKey("provider:igdb"), "A provider nobody configured or asked has no row.");
             await host.Fixture.RunSqlAsync("UPDATE \"Providers\" SET \"IsEnabled\" = FALSE WHERE \"Key\" = 'anilist'");
             Assert.IsFalse((await CheckNowAsync(host)).Services.Any(service => service.Key == "provider:anilist"));
+        }
+
+        [TestMethod]
+        public async Task ProviderObservation_AProviderThatNeverAnswers_FailsWhenTheClientsTimeIsUp_AndACallerThatGivesUpSaysNothing()
+        {
+            var limit = TimeSpan.FromMilliseconds(300);
+            HttpClient Client(ProviderObservations observations) =>
+                new(new ProviderObservationHandler(observations, "tmdb", limit, TimeProvider.System) { InnerHandler = SilentServer.NeverAnswers() }) { Timeout = limit };
+
+            // The client's own timeout: the provider did not answer, so the health check shows it failing.
+            var observed = new ProviderObservations(TimeProvider.System);
+            using (var http = Client(observed))
+            {
+                var timeout = await Assert.ThrowsExactlyAsync<TaskCanceledException>(() => http.GetAsync("https://api.themoviedb.org/3/movie/1"));
+                Assert.IsInstanceOfType<TimeoutException>(timeout.InnerException);
+            }
+
+            Assert.IsFalse(observed.Last("tmdb")?.Succeeded ?? true);
+
+            // A caller that stops waiting first learns nothing about the provider.
+            var quiet = new ProviderObservations(TimeProvider.System);
+            using (var http = Client(quiet))
+            {
+                using var stop = new CancellationTokenSource(TimeSpan.FromMilliseconds(50));
+                await Assert.ThrowsAsync<OperationCanceledException>(() => http.GetAsync("https://api.themoviedb.org/3/movie/1", stop.Token));
+            }
+
+            Assert.IsNull(quiet.Last("tmdb"));
         }
 
         [TestMethod]

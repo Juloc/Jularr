@@ -12,6 +12,6 @@ namespace Jularr.Workers
     {
         protected override async Task RunOnceAsync(CancellationToken ct) =>
             await Runner.RunWhileBusyAsync("recognition", async (services, token) =>
-                (await services.GetRequiredService<RecognizeReadingV1>().ExecuteAsync<UpdateResult>(new ReadingRecognitionParametersV1(), default, token)).Success, TimeSpan.Zero, Time, ct);
+                (await services.GetRequiredService<RecognizeReadingV1>().ExecuteAsync<UpdateResult>(new ReadingRecognitionParametersV1(), default, token)).Success, TimeSpan.Zero, ct);
     }
 }

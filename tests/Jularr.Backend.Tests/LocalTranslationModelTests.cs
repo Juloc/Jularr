@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Net;
 using System.Text.Json;
 using Jularr.Backend.Data.Admin.Translation.V1;
@@ -5,6 +6,7 @@ using Jularr.Backend.Service.User.Translation.V1;
 using Jularr.Backend.Service.Core;
 using Microsoft.Extensions.Options;
 using Jularr.Integrations.Logic.Translation;
+using Jularr.Backend.Tests.Infrastructure;
 
 namespace Jularr.Backend.Tests
 {
@@ -14,25 +16,30 @@ namespace Jularr.Backend.Tests
         private static readonly Uri Ollama = new("http://ollama:11434/");
 
         [TestMethod]
-        public async Task Machine_ThatAcceptsTheConnectionButNeverAnswers_FailsAfterItsLimit_AndTheNextMachineTakesOver()
+        public async Task Machine_ThatAcceptsTheConnectionButNeverAnswers_FailsItsCheckAfterTheLimit_AndIsKeptAsATimeout()
         {
-            using var http = new HttpClient(new Silent());
+            using var http = new HttpClient(SilentServer.NeverAnswers());
             var models = new OllamaLocalModels(http) { QuestionLimit = TimeSpan.FromMilliseconds(200), GenerateLimit = TimeSpan.FromMilliseconds(200) };
             var clock = new Clock();
             var machines = new LocalTranslationMachines(models, Options.Create(new LocalTranslationOptions { Endpoint = "http://ollama:11434" }), clock);
 
-            // Neither a question nor a translation hangs for the client's own 65 minutes; both end as the timeout the callers already treat as a failed machine.
+            // Neither a question nor a translation hangs for the client's own 10 minutes; both end as the timeout the callers already treat as a failed machine.
             await Assert.ThrowsExactlyAsync<TaskCanceledException>(async () => await models.InstalledAsync(Ollama, default));
             await Assert.ThrowsExactlyAsync<TaskCanceledException>(async () => await models.TranslateAsync(Ollama, "translategemma:12b", "en", "de", "Hello", default));
             // A caller that cancels itself still ends as a cancellation, not as a failed machine.
             using var own = new CancellationTokenSource(50);
             await Assert.ThrowsAsync<OperationCanceledException>(async () => await models.InstalledAsync(Ollama, own.Token));
-            Assert.IsNull(await machines.ChooseAsync([], default), "A machine that does not answer is passed over and rests.");
-            Assert.IsTrue(machines.AllResting([]));
+
+            // The check keeps it as not reachable for lack of an answer; choices pass it over, and the Reader hears that the machines are away.
+            await machines.CheckAsync([], default);
+            Assert.AreEqual((null, "timeout"), (machines.CheckOf(Ollama)?.Installed, machines.CheckOf(Ollama)?.Reason));
+            Assert.AreEqual(clock.Now, machines.CheckOf(Ollama)?.CheckedAt);
+            Assert.IsNull(machines.Choose([]));
+            Assert.IsTrue(machines.AllAway([]));
         }
 
         [TestMethod]
-        public async Task Machines_TranslateInTheOwnersOrder_PassOverOneThatFails_AndReturnToItAfterItsRest()
+        public async Task Machines_AreChosenByTheirLastCheck_InTheOwnersOrder_AndAReturnedOneCountsWithTheNextCheck()
         {
             var handler = new Machines();
             using var http = new HttpClient(handler);
@@ -45,41 +52,45 @@ namespace Jularr.Backend.Tests
             CollectionAssert.AreEqual(new[] { new Uri("http://192.168.1.20:11434/"), new Uri("http://10.0.0.2:11434/") },
                 machines.Order(["http://192.168.1.20:11434", "http://8.8.8.8:11434", "http://10.0.0.2:11434", "http://192.168.1.20:11434"]));
 
+            // A read never asks a machine: before the first check nothing is chosen. A translation about to run asks the machines never asked yet.
             string[] saved = ["http://192.168.1.20:11434", "http://10.0.0.2:11434"];
+            Assert.IsNull(machines.Choose(saved));
+            Assert.AreEqual(0, handler.Requests);
             Assert.AreEqual(new Uri("http://192.168.1.20:11434/"), (await machines.ChooseAsync(saved, default))?.Server);
+            Assert.AreEqual(4, handler.Requests, "Each machine once for its models and once for the loaded ones.");
+            Assert.AreEqual(new Uri("http://192.168.1.20:11434/"), (await machines.ChooseAsync(saved, default))?.Server);
+            Assert.AreEqual(4, handler.Requests, "A machine asked before is not asked again by a choice.");
 
-            // The first drops out: the next takes over, and the first rests even once it answers again.
+            // The first drops out: choices follow the check that found it, and the next takes over.
             handler.Offline = "192.168.1.20";
-            Assert.AreEqual(new Uri("http://10.0.0.2:11434/"), (await machines.ChooseAsync(saved, default))?.Server);
-            handler.Offline = null;
-            Assert.AreEqual(new Uri("http://10.0.0.2:11434/"), (await machines.ChooseAsync(saved, default))?.Server);
-            // After its rest it is asked again in the background, so this choice does not wait for it; once it answered it translates again.
-            clock.Now += TimeSpan.FromMinutes(2);
-            Assert.AreEqual(new Uri("http://10.0.0.2:11434/"), (await machines.ChooseAsync(saved, default))?.Server);
-            await machines.WakingAsync();
-            Assert.AreEqual(new Uri("http://192.168.1.20:11434/"), (await machines.ChooseAsync(saved, default))?.Server);
+            Assert.AreEqual(new Uri("http://192.168.1.20:11434/"), machines.Choose(saved)?.Server);
+            await machines.CheckAsync(saved, default);
+            Assert.AreEqual(new Uri("http://10.0.0.2:11434/"), machines.Choose(saved)?.Server);
+            Assert.AreEqual("unreachable", machines.CheckOf(new Uri("http://192.168.1.20:11434/"))?.Reason);
+            CollectionAssert.AreEquivalent(new[] { "translategemma:4b", "translategemma:12b" }, machines.Installed(saved));
 
-            // Still away after its rest: it rests once more, and no choice waits for it.
-            handler.Offline = "192.168.1.20";
-            machines.Fail(new Uri("http://192.168.1.20:11434/"));
-            clock.Now += TimeSpan.FromMinutes(2);
-            Assert.AreEqual(new Uri("http://10.0.0.2:11434/"), (await machines.ChooseAsync(saved, default))?.Server);
-            await machines.WakingAsync();
+            // Back again, it counts with the next check, without a rest of its own.
             handler.Offline = null;
-            Assert.AreEqual(new Uri("http://10.0.0.2:11434/"), (await machines.ChooseAsync(saved, default))?.Server);
-            clock.Now += TimeSpan.FromMinutes(2);
-            await machines.ChooseAsync(saved, default);
-            await machines.WakingAsync();
-            Assert.AreEqual(new Uri("http://192.168.1.20:11434/"), (await machines.ChooseAsync(saved, default))?.Server);
+            await machines.CheckAsync(saved, default);
+            Assert.AreEqual(new Uri("http://192.168.1.20:11434/"), machines.Choose(saved)?.Server);
 
-            // A machine that failed a block rests too; a machine without the wanted model is passed over.
+            // A machine that failed a block rests a minute whatever its checks say; a machine without the wanted model is passed over.
             machines.Fail(new Uri("http://192.168.1.20:11434/"));
-            Assert.AreEqual(new Uri("http://10.0.0.2:11434/"), (await machines.ChooseAsync(saved, default))?.Server);
+            await machines.CheckAsync(saved, default);
+            Assert.AreEqual(new Uri("http://10.0.0.2:11434/"), machines.Choose(saved)?.Server);
+            Assert.IsFalse(machines.AllAway(saved));
             clock.Now += TimeSpan.FromMinutes(2);
-            Assert.AreEqual(new Uri("http://10.0.0.2:11434/"), (await machines.ChooseAsync(saved, default, "translategemma:12b"))?.Server);
-            Assert.IsNull(await machines.ChooseAsync(saved, default, "translategemma:27b"));
+            Assert.AreEqual(new Uri("http://192.168.1.20:11434/"), machines.Choose(saved)?.Server);
+            Assert.AreEqual(new Uri("http://10.0.0.2:11434/"), machines.Choose(saved, "translategemma:12b")?.Server);
+            Assert.IsNull(machines.Choose(saved, "translategemma:27b"));
             // Within one machine prefer 12B over 4B, without changing the owner's machine priority.
-            Assert.AreEqual("translategemma:12b", (await machines.ChooseAsync(["http://10.0.0.2:11434"], default))?.Model);
+            await machines.CheckAsync(["http://10.0.0.2:11434"], default);
+            Assert.AreEqual("translategemma:12b", machines.Choose(["http://10.0.0.2:11434"])?.Model);
+
+            // Reading the state asks nobody.
+            var asked = handler.Requests;
+            _ = (machines.Choose(saved), machines.Installed(saved), machines.AllAway(saved), machines.StateOf(new Uri("http://10.0.0.2:11434/")));
+            Assert.AreEqual(asked, handler.Requests);
         }
 
         [TestMethod]
@@ -115,10 +126,14 @@ namespace Jularr.Backend.Tests
         // Two machines: 192.168.1.20 with the small model, 10.0.0.2 with the small and the middle one.
         private sealed class Machines : HttpMessageHandler
         {
+            private int _requests;
+
             public string? Offline { get; set; }
+            public int Requests => _requests;
 
             protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
             {
+                Interlocked.Increment(ref _requests);
                 if (request.RequestUri!.Host == Offline) throw new HttpRequestException("No route to host.");
                 var models = request.RequestUri.Host == "10.0.0.2" ? """[{"name":"translategemma:4b"},{"name":"translategemma:12b"}]""" : """[{"name":"translategemma:4b"}]""";
                 return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("{\"models\":" + models + "}") });
@@ -142,8 +157,9 @@ namespace Jularr.Backend.Tests
             using var http = new HttpClient(handler);
             var client = new OllamaLocalModels(http);
             var server = new Uri("http://ollama:11434/");
-            CollectionAssert.AreEquivalent(new[] { "translategemma:4b" }, await client.InstalledAsync(server, default));
-            Assert.AreEqual(new string('a', 64), await client.DigestAsync(server, "translategemma:4b", default));
+            var installed = await client.InstalledAsync(server, default);
+            CollectionAssert.AreEquivalent(new[] { "translategemma:4b" }, installed.Keys.ToArray());
+            Assert.AreEqual(new string('a', 64), installed["translategemma:4b"]);
             CollectionAssert.AreEquivalent(new[] { "translategemma:4b" }, await client.RunningAsync(server, default));
             var result = await client.TranslateAsync(server, "translategemma:4b", "id", "de", "Rina pulang.", default);
             Assert.AreEqual("Rina ging nach Hause.", result.Text);
@@ -294,6 +310,43 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Lanes_EachProviderHasItsOwn_APersonGoesBeforeTheBookJob_AndAWaitEnds()
+        {
+            var time = new WorkerJobTests.ManualTime(new DateTimeOffset(2026, 11, 10, 9, 0, 0, TimeSpan.Zero));
+            var lanes = new TranslationLanes(time);
+
+            // Codex translates while Ollama does; another Ollama translation waits for the one lane of every Ollama machine.
+            var ollama = await lanes.TryEnterAsync("ollama", TimeSpan.Zero, default);
+            Assert.IsNotNull(ollama);
+            using (var codex = await lanes.TryEnterAsync("codex", TimeSpan.Zero, default)) Assert.IsNotNull(codex);
+            Assert.IsNull(await lanes.TryEnterAsync("ollama", TimeSpan.Zero, default));
+
+            // The book job asked first and the Reader after it: the Reader gets the lane, and the job's short wait ends while the Reader translates.
+            var job = lanes.TryEnterAsync("ollama", TimeSpan.FromSeconds(2), default, background: true);
+            var reader = lanes.TryEnterAsync("ollama", TimeSpan.FromSeconds(20), default);
+            ollama.Dispose();
+            var readerHold = await reader;
+            Assert.IsNotNull(readerHold);
+            Assert.IsFalse(job.IsCompleted);
+            time.Advance(TimeSpan.FromSeconds(2));
+            Assert.IsNull(await job);
+
+            // A job that waits gets the lane once nobody else does; a cancelled wait throws and leaves the line.
+            var next = lanes.TryEnterAsync("ollama", TimeSpan.FromSeconds(2), default, background: true);
+            using var cancel = new CancellationTokenSource();
+            var cancelled = lanes.TryEnterAsync("ollama", TimeSpan.FromSeconds(20), cancel.Token);
+            await cancel.CancelAsync();
+            await Assert.ThrowsExactlyAsync<OperationCanceledException>(() => cancelled);
+            readerHold.Dispose();
+            readerHold.Dispose();
+            var jobHold = await next;
+            Assert.IsNotNull(jobHold);
+            jobHold.Dispose();
+            using var free = await lanes.TryEnterAsync("ollama", TimeSpan.Zero, default);
+            Assert.IsNotNull(free, "Every hold handed the lane on once.");
+        }
+
+        [TestMethod]
         public void DownloadQueue_DeniesModelsWithoutOperatorVerifiedVolumeBudget()
         {
             using var http = new HttpClient(new FakeOllama());
@@ -301,15 +354,13 @@ namespace Jularr.Backend.Tests
             var root = Path.Combine(Path.GetTempPath(), "jularr-local-pull-" + Guid.NewGuid().ToString("N"));
             using var noCapacity = new LocalTranslationDownloads(client,
                 Options.Create(new LocalTranslationOptions { Endpoint = "http://ollama:11434", OperatorVerifiedFreeBytes = 0 }),
-                Options.Create(new MediaOptions { TranslationPath = Path.Combine(root, "denied") }),
-                new LocalTranslationGate());
+                Options.Create(new MediaOptions { TranslationPath = Path.Combine(root, "denied") }));
             Assert.IsFalse(noCapacity.Queue("translategemma:4b", Ollama, 0));
             Assert.IsFalse(noCapacity.Queue("other:27b", Ollama, 0));
 
             using var adequate = new LocalTranslationDownloads(client,
                 Options.Create(new LocalTranslationOptions { Endpoint = "http://ollama:11434", OperatorVerifiedFreeBytes = 6_000_000_000L }),
-                Options.Create(new MediaOptions { TranslationPath = Path.Combine(root, "approved") }),
-                new LocalTranslationGate());
+                Options.Create(new MediaOptions { TranslationPath = Path.Combine(root, "approved") }));
             Assert.IsTrue(adequate.Queue("translategemma:4b", Ollama, 6_000_000_000L));
             Assert.IsFalse(adequate.Queue("translategemma:12b", Ollama, 6_000_000_000L));
             Assert.AreEqual("queued", adequate.Current().State);
@@ -328,7 +379,7 @@ namespace Jularr.Backend.Tests
                     Endpoint = "http://ollama:11434", OperatorVerifiedFreeBytes = 6_000_000_000L
                 });
                 var media = Options.Create(new MediaOptions { TranslationPath = root });
-                using (var beforeRestart = new LocalTranslationDownloads(client, settings, media, new LocalTranslationGate()))
+                using (var beforeRestart = new LocalTranslationDownloads(client, settings, media))
                 {
                     Assert.IsTrue(beforeRestart.Queue("translategemma:4b", Ollama, 6_000_000_000L));
                     Assert.AreEqual("queued", beforeRestart.Current().State);
@@ -336,13 +387,47 @@ namespace Jularr.Backend.Tests
                 }
                 // No automatic network activity: restart reports interruption and the owner
                 // explicitly retries the same model, whose partial blobs Ollama retains.
-                using (var afterRestart = new LocalTranslationDownloads(client, settings, media, new LocalTranslationGate()))
+                using (var afterRestart = new LocalTranslationDownloads(client, settings, media))
                 {
                     Assert.AreEqual("interrupted", afterRestart.Current().State);
                     Assert.AreEqual("translategemma:4b", afterRestart.Current().Model);
                     Assert.IsTrue(afterRestart.Queue("translategemma:4b", Ollama, 6_000_000_000L));
                     Assert.AreEqual("queued", afterRestart.Current().State);
                 }
+            }
+            finally
+            {
+                if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+            }
+        }
+
+        [TestMethod]
+        public async Task Download_ThatStopsSendingData_FailsAfterItsIdleLimit_AndIsStartedAgainOnlyByHand()
+        {
+            var root = Path.Combine(Path.GetTempPath(), "jularr-pull-stall-" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                var server = SilentServer.StallsAfter("""{"status":"pulling manifest"}""", """{"status":"pulling","total":100,"completed":40}""");
+                using var http = new HttpClient(server);
+                var limit = TimeSpan.FromMilliseconds(300);
+                using var downloads = new LocalTranslationDownloads(new OllamaLocalModels(http) { PullIdleLimit = limit },
+                    Options.Create(new LocalTranslationOptions { Endpoint = "http://ollama:11434", OperatorVerifiedFreeBytes = 6_000_000_000L }),
+                    Options.Create(new MediaOptions { TranslationPath = root }));
+                await downloads.StartAsync(default);
+
+                // The machine sends some progress and then nothing: the download fails once the limit passed without data.
+                var started = Stopwatch.StartNew();
+                Assert.IsTrue(downloads.Queue("translategemma:4b", Ollama, 6_000_000_000L));
+                while (downloads.Current().State != "failed" && started.Elapsed < TimeSpan.FromSeconds(10)) await Task.Delay(20);
+                Assert.AreEqual(("failed", 40), (downloads.Current().State, downloads.Current().Progress));
+                Assert.IsTrue(started.Elapsed >= limit, started.Elapsed.ToString());
+
+                // Nothing starts it again by itself; the Owner does, and stopping the host interrupts it rather than failing it.
+                Assert.AreEqual(1, server.Requests);
+                Assert.IsTrue(downloads.Queue("translategemma:4b", Ollama, 6_000_000_000L));
+                while (server.Requests < 2 && started.Elapsed < TimeSpan.FromSeconds(10)) await Task.Delay(10);
+                await downloads.StopAsync(default);
+                Assert.AreEqual("interrupted", downloads.Current().State);
             }
             finally
             {
@@ -364,8 +449,7 @@ namespace Jularr.Backend.Tests
                     {
                         Endpoint = "http://ollama:11434", OperatorVerifiedFreeBytes = 6_000_000_000L
                     }),
-                    Options.Create(new MediaOptions { TranslationPath = root }),
-                    new LocalTranslationGate());
+                    Options.Create(new MediaOptions { TranslationPath = root }));
                 Assert.AreEqual("failed", downloads.Current().State);
                 Assert.IsFalse(downloads.Queue("translategemma:4b", Ollama, 6_000_000_000L));
             }
@@ -389,16 +473,6 @@ namespace Jularr.Backend.Tests
 
             using var negative = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/translation/free-bytes", new TranslationFreeBytesDataV1(-1));
             Assert.AreEqual(System.Net.HttpStatusCode.BadRequest, negative.StatusCode);
-        }
-
-        // A machine that took the connection and never answers.
-        private sealed class Silent : HttpMessageHandler
-        {
-            protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
-            {
-                await Task.Delay(Timeout.Infinite, cancellationToken);
-                throw new InvalidOperationException();
-            }
         }
 
         private sealed class FakeOllama : HttpMessageHandler

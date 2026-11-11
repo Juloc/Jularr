@@ -190,10 +190,10 @@ namespace Jularr.Backend.Tests
 
             // While the scan is still running the backup lane takes the backup and runs it; the scan is untouched.
             await using var other = host.Services.CreateAsyncScope();
-            Assert.IsTrue(await OperationWorker.RunNextAsync(other.ServiceProvider, NullLogger.Instance, OperationType.Backup, CancellationToken.None));
+            Assert.IsTrue(await OperationWorker.RunNextAsync(other.ServiceProvider, NullLogger.Instance, OperationType.Backup, CancellationToken.None, CancellationToken.None));
             Assert.AreEqual((short)2, await host.ScalarAsync("SELECT \"OperationStatusTypeId\" FROM \"Operations\" WHERE \"Id\" = " + scanClaim.OperationId));
             Assert.AreEqual((short)4, await host.ScalarAsync("SELECT \"OperationStatusTypeId\" FROM \"Operations\" WHERE \"OperationTypeId\" = 3"));
-            Assert.IsFalse(await OperationWorker.RunNextAsync(other.ServiceProvider, NullLogger.Instance, OperationType.Backup, CancellationToken.None));
+            Assert.IsFalse(await OperationWorker.RunNextAsync(other.ServiceProvider, NullLogger.Instance, OperationType.Backup, CancellationToken.None, CancellationToken.None));
 
             // Only scans and backups are queued work.
             await Assert.ThrowsAsync<DataValidationException>(() => claim.ExecuteAsync<ClaimOperationResultV1>(new ClaimOperationParametersV1(OperationType.Download), default));

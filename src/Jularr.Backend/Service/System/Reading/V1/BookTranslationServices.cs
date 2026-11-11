@@ -18,19 +18,20 @@ namespace Jularr.Backend.Service.System.Reading.V1
     // interface language and the languages chosen for books), into the same cache the Reader fills while reading. Books someone
     // is reading come first, from the chapter they are in; passages a reader re-translated with another model come before them, with that model.
     // A few blocks per call; returns whether there was work.
-    // A reader's own request comes first: while the model is busy for one, the round ends and the job looks again later.
+    // A reader's own request comes first: the job waits behind it for its provider's lane, and while the model is busy the round ends and the job looks again later.
     public sealed class TranslateReadingBooksV1 : SystemService<BookTranslationParametersV1, NoData>
     {
         private const int BlocksPerCall = 6;
+        private const int BooksPerCount = 25;
         private static readonly TimeSpan GateWait = TimeSpan.FromSeconds(2);
         private readonly TranslationProviders _providers;
-        private readonly LocalTranslationGate _gate;
+        private readonly TranslationLanes _lanes;
         private readonly BookTranslationProgress _progress;
 
-        internal TranslateReadingBooksV1(TranslationProviders providers, LocalTranslationGate gate, BookTranslationProgress progress)
+        internal TranslateReadingBooksV1(TranslationProviders providers, TranslationLanes lanes, BookTranslationProgress progress)
         {
             _providers = providers;
-            _gate = gate;
+            _lanes = lanes;
             _progress = progress;
         }
 
@@ -41,17 +42,36 @@ namespace Jularr.Backend.Service.System.Reading.V1
 
         protected override async Task<IServiceOutput> OnExecute()
         {
+            var counting = await CountAsync();
+            var translated = await TranslateNextAsync();
+            return new UpdateResult(counting || translated);
+        }
+
+        // The progress counts every book again after a start and whenever the languages profiles read change, a batch of books per round beside the
+        // translation; whether books are left to count.
+        private async Task<bool> CountAsync()
+        {
+            var languages = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadBookTranslationLanguagesAsync(ct), CancellationToken);
+            if (_progress.CountFrom(languages) is not { } from) return false;
+            var next = await Context.ExecuteBatchAsync((ctx, ct) => ctx.RecountBookTranslationBatchAsync(new BookTranslationBatchData(from, BooksPerCount), ct), CancellationToken);
+            _progress.Counted(languages, next);
+            return next is not null;
+        }
+
+        // A few blocks of the next section; whether there was work.
+        private async Task<bool> TranslateNextAsync()
+        {
             // The Owner's default model (else the largest installed TranslateGemma) on the first machine of the order that answers with it; one that
             // fails rests, and the next round goes to the next one.
             var setup = await Context.ExecuteBatchAsync(TranslationProviders.SetupAsync, CancellationToken);
             var machine = await _providers.ChooseAsync(setup, CancellationToken);
 
             // Passages a reader re-translated with another model come first: they were asked for by name.
-            if (await TranslateChosenAsync(setup, machine?.ModelId) is { } chosen) return new UpdateResult(chosen);
+            if (await TranslateChosenAsync(setup, machine?.ModelId) is { } chosen) return chosen;
             if (machine is null)
             {
                 _progress.Idle("noMachine");
-                return new UpdateResult(false);
+                return false;
             }
             string digest;
             try
@@ -62,7 +82,7 @@ namespace Jularr.Backend.Service.System.Reading.V1
             {
                 machine.Provider.Fail(machine);
                 _progress.Idle("machineFailed");
-                return new UpdateResult(false);
+                return false;
             }
 
             var key = LocalReadingPaths.ModelKey(machine.ModelId);
@@ -71,11 +91,11 @@ namespace Jularr.Backend.Service.System.Reading.V1
             if (unit is null)
             {
                 _progress.Idle(null);
-                return new UpdateResult(false);
+                return false;
             }
 
             _progress.Picked(unit.DocumentId, unit.SectionIndex, unit.Language);
-            return new UpdateResult(await TranslateBlocksAsync(machine, digest, unit, null) ?? false);
+            return await TranslateBlocksAsync(machine, digest, unit, null) ?? false;
         }
 
         // A few blocks of the next section someone re-translated with a model other than the default, with that model; null when none waits or
@@ -157,7 +177,8 @@ namespace Jularr.Backend.Service.System.Reading.V1
                 else if (source.Length > 20_000) value = source;
                 else
                 {
-                    if (!await _gate.HeavyWork.WaitAsync(GateWait, CancellationToken)) break;
+                    using var lane = await _lanes.TryEnterAsync(machine.Provider.Key, GateWait, CancellationToken, background: true);
+                    if (lane is null) break;
                     try
                     {
                         var context = ReadingHtml.TranslationContext(nodes, index);
@@ -171,7 +192,6 @@ namespace Jularr.Backend.Service.System.Reading.V1
                         if (reports) _progress.Idle("machineFailed");
                         break;
                     }
-                    finally { _gate.HeavyWork.Release(); }
                     translated++;
                 }
 
@@ -292,7 +312,8 @@ namespace Jularr.Backend.Service.System.Reading.V1
             var failed = false;
             if (sources.Count > 0)
             {
-                if (!await _gate.HeavyWork.WaitAsync(GateWait, CancellationToken)) return false;
+                using var lane = await _lanes.TryEnterAsync(machine.Provider.Key, GateWait, CancellationToken, background: true);
+                if (lane is null) return false;
                 try
                 {
                     var answers = await batcher.TranslateBlocksAsync(machine, unit.SourceLanguage, unit.Language, [.. sources.Select(item => item.Text)], ReadingHtml.TranslationContext(nodes, sources[0].Index), CancellationToken);
@@ -310,7 +331,6 @@ namespace Jularr.Backend.Service.System.Reading.V1
                     // What was translated before the failure is kept; the rest waits for the next round.
                     failed = true;
                 }
-                finally { _gate.HeavyWork.Release(); }
             }
 
             if (values.Count > 0)

@@ -10023,6 +10023,10 @@
    "The backup tool ran too long and was stopped.",
    "Das Backup-Tool lief zu lange und wurde gestoppt."
   ],
+  "errors.job_round_timeout": [
+   "The job ran past its time limit and was stopped.",
+   "Der Job hat sein Zeitlimit überschritten und wurde abgebrochen."
+  ],
   "errors.backup_running": [
    "A restore is already running.",
    "Eine Wiederherstellung läuft bereits."
@@ -14422,6 +14426,14 @@
    "Health check",
    "Gesundheitsprüfung"
   ],
+  "jobs.job.translationMachines": [
+   "Translation machine check",
+   "Übersetzungsrechner prüfen"
+  ],
+  "jobs.about.translationMachines": [
+   "Asks every translation machine and Codex every 30 seconds how they are, so the translation page and the Reader show their state without asking them.",
+   "Fragt alle 30 Sekunden jeden Übersetzungsrechner und Codex, wie es ihnen geht, damit die Übersetzungsseite und der Reader ihren Zustand zeigen, ohne sie zu fragen."
+  ],
   "jobs.worker.Health": [
    "Health",
    "Gesundheit"
@@ -14429,6 +14441,10 @@
   "jobs.worker.Translation": [
    "Translation",
    "Übersetzung"
+  ],
+  "jobs.worker.TranslationMachines": [
+   "Translation machines",
+   "Übersetzungsrechner"
   ],
   "jobs.health.summary": [
    "{0} of {1} services reachable",
@@ -16528,6 +16544,10 @@
    "Waiting for the next run",
    "Wartet auf den nächsten Lauf"
   ],
+  "translation.progress.counting": [
+   "Being counted: the figures may still lag behind",
+   "Wird gezählt: Die Zahlen können noch nachhängen"
+  ],
   "translation.progress.volumesDone": [
    "{0} of {1} volumes done",
    "{0} von {1} Bänden fertig"
@@ -16584,6 +16604,10 @@
    "Ollama machines",
    "Ollama-Rechner"
   ],
+  "translation.machines.check": [
+   "Check now",
+   "Jetzt prüfen"
+  ],
   "translation.machine.resting": [
    "Resting",
    "Ruht"
@@ -16623,6 +16647,14 @@
   "translation.machine.restingUntil": [
    "Resting until",
    "Ruht bis"
+  ],
+  "translation.machine.checkedAt": [
+   "Checked at",
+   "Geprüft um"
+  ],
+  "translation.machine.unchecked": [
+   "Not checked yet",
+   "Noch nicht geprüft"
   ],
   "translation.machine.lastError": [
    "Last error",

@@ -13,6 +13,6 @@ namespace Jularr.Workers
     {
         protected override async Task RunOnceAsync(CancellationToken ct) =>
             await Runner.RunWhileBusyAsync("bookTranslations", async (services, token) =>
-                (await services.GetRequiredService<TranslateReadingBooksV1>().ExecuteAsync<UpdateResult>(new BookTranslationParametersV1(), default, token)).Success, TimeSpan.Zero, Time, ct);
+                (await services.GetRequiredService<TranslateReadingBooksV1>().ExecuteAsync<UpdateResult>(new BookTranslationParametersV1(), default, token)).Success, TimeSpan.Zero, ct);
     }
 }

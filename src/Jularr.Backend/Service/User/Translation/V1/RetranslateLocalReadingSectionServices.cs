@@ -26,13 +26,13 @@ namespace Jularr.Backend.Service.User.Translation.V1
     {
         private readonly ReadReadingSectionV1 _sections;
         private readonly TranslationProviders _providers;
-        private readonly LocalTranslationGate _gate;
+        private readonly TranslationLanes _lanes;
 
-        internal RetranslateLocalReadingSectionV1(ReadReadingSectionV1 sections, TranslationProviders providers, LocalTranslationGate gate)
+        internal RetranslateLocalReadingSectionV1(ReadReadingSectionV1 sections, TranslationProviders providers, TranslationLanes lanes)
         {
             _sections = sections;
             _providers = providers;
-            _gate = gate;
+            _lanes = lanes;
         }
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
@@ -51,7 +51,7 @@ namespace Jularr.Backend.Service.User.Translation.V1
             var pending = PassageTranslation.Pending(nodes, _ => true);
             if (pending.Count == 0) return new LocalReadingRetranslationV1(0, 0);
             var (machine, digest) = await PassageTranslation.ChooseAsync(_providers, setup, Parameters.Model, CancellationToken);
-            var done = await PassageTranslation.TranslateAsync(machine, section, nodes, pending, Data.SourceLanguage, Parameters.Language, _gate, CancellationToken);
+            var done = await PassageTranslation.TranslateAsync(machine, section, nodes, pending, Data.SourceLanguage, Parameters.Language, _lanes, CancellationToken);
 
             // Nothing translated at all: the Owner is told why, and nothing was changed.
             if (done.Count == 0) throw new ServiceUnavailableException("translation_local_unavailable");
@@ -78,20 +78,20 @@ namespace Jularr.Backend.Service.User.Translation.V1
 
     // The default translation of a model that translates in several requests (Codex), one request per call: the next stretch of blocks this version of the model has not
     // translated yet, from the block in view onward and round to the start. The Reader asks again until nothing remains and shows each answer as it arrives, so a reader
-    // never waits for the chapter and the single translation lane is held for one request only. Stored like any default translation, no choice for other readers.
+    // never waits for the chapter and the provider's translation lane is held for one request only. Stored like any default translation, no choice for other readers.
     [ServiceEndpoint("POST", "/api/v1/reading/documents/{documentId:long}/sections/{sectionIndex:int}/local-translations/{language}/{model}/passages")]
     public sealed class TranslateLocalReadingPassagesV1 : UserService<LocalReadingSectionModelParametersV1, LocalReadingChunkDataV1>
     {
         private static readonly TimeSpan SaveEvery = TimeSpan.FromSeconds(1.5);
         private readonly ReadReadingSectionV1 _sections;
         private readonly TranslationProviders _providers;
-        private readonly LocalTranslationGate _gate;
+        private readonly TranslationLanes _lanes;
 
-        internal TranslateLocalReadingPassagesV1(ReadReadingSectionV1 sections, TranslationProviders providers, LocalTranslationGate gate)
+        internal TranslateLocalReadingPassagesV1(ReadReadingSectionV1 sections, TranslationProviders providers, TranslationLanes lanes)
         {
             _sections = sections;
             _providers = providers;
-            _gate = gate;
+            _lanes = lanes;
         }
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
@@ -127,7 +127,7 @@ namespace Jularr.Backend.Service.User.Translation.V1
             // One request, one hold of the lane. Its blocks are stored while the answer streams in, so the Reader (asking for the section's texts meanwhile) shows each as
             // it is complete, and what was done stays when the request fails.
             var chunk = PassageTranslation.Chunk(pending, Data.From, batch);
-            if (!await _gate.HeavyWork.WaitAsync(_gate.ChunkWait, CancellationToken)) throw new ServiceUnavailableException("translation_local_busy");
+            var lane = await _lanes.TryEnterAsync(provider.Key, _lanes.ChunkWait, CancellationToken) ?? throw new ServiceUnavailableException("translation_local_busy");
             var done = new ConcurrentDictionary<int, string>();
             var waiting = new ConcurrentQueue<KeyValuePair<int, string>>();
             async Task SaveAsync()
@@ -166,9 +166,10 @@ namespace Jularr.Backend.Service.User.Translation.V1
             }
             finally
             {
+                // The request is over: the lane goes on first, so a saver that throws (cancelled before it started) never keeps it.
+                lane.Dispose();
                 await saving.CancelAsync();
                 await saver;
-                _gate.HeavyWork.Release();
             }
             var seconds = Math.Round(Stopwatch.GetElapsedTime(started).TotalSeconds, 1);
 
@@ -246,18 +247,21 @@ namespace Jularr.Backend.Service.User.Translation.V1
         }
 
         // Why a request failed, as the error code the Reader names to the person: the provider's own state (limit, not signed in), else a failed request.
-        public static async Task<string> ProblemAsync(IBatchTranslationProvider provider, TranslationSetupV1 setup, CancellationToken ct) =>
-            (await provider.OfferAsync(setup, ct)).Problem switch
+        public static async Task<string> ProblemAsync(IBatchTranslationProvider provider, TranslationSetupV1 setup, CancellationToken ct)
+        {
+            await provider.CheckAsync(setup, ct);
+            return provider.Offer(setup).Problem switch
             {
                 "limit" => "translation_limit_reached",
                 "not_connected" => "translation_not_connected",
                 _ => "translation_request_failed"
             };
+        }
 
         // The translated blocks by index. One request takes as many blocks as the provider allows (a provider without batches is asked block by block); a block
         // whose batch answer fails the checks is asked alone. A failing machine rests and ends the run with what was translated so far.
         public static async Task<Dictionary<int, string>> TranslateAsync(TranslationMachine machine, ReadingSectionV1 section, IElement[] nodes, List<(int Index, string Text)> pending,
-            string source, string target, LocalTranslationGate gate, CancellationToken ct)
+            string source, string target, TranslationLanes lanes, CancellationToken ct)
         {
             var done = new Dictionary<int, string>();
             var batch = machine.Provider as IBatchTranslationProvider;
@@ -271,7 +275,7 @@ namespace Jularr.Backend.Service.User.Translation.V1
                 var group = pending.GetRange(start, take);
                 start += take;
 
-                if (!await gate.HeavyWork.WaitAsync(GateWait, ct)) throw new ServiceUnavailableException("translation_local_busy");
+                using var lane = await lanes.TryEnterAsync(machine.Provider.Key, GateWait, ct) ?? throw new ServiceUnavailableException("translation_local_busy");
                 try
                 {
                     var context = ReadingHtml.TranslationContext(nodes, group[0].Index);
@@ -289,7 +293,6 @@ namespace Jularr.Backend.Service.User.Translation.V1
                     machine.Provider.Fail(machine);
                     break;
                 }
-                finally { gate.HeavyWork.Release(); }
             }
 
             return done;

@@ -2,12 +2,13 @@ name: Install the test tools
 description: >-
   The PostgreSQL 18 client (pg_dump matches the test database major; backups are part of the tests),
   and when asked cjxl (libjxl-tools, small, from apt), DjVuLibre (djvulibre-bin, small, from apt) and FFmpeg. FFmpeg is NOT installed with apt: its
-  dependency set is large and downloading it from the hosted mirrors stalled for minutes; a static
-  build from the FFmpeg-Builds releases is one download, cached between runs.
+  dependency set is large and downloading it from the hosted mirrors stalled for minutes. CI uses the FFmpeg line production
+  runs (the image installs jellyfin-ffmpeg7): one pinned jellyfin-ffmpeg 7 portable build, checked by sha256 and cached
+  between runs.
 
 inputs:
   ffmpeg:
-    description: Install FFmpeg and ffprobe (static build, linked into /usr/bin)
+    description: Install FFmpeg and ffprobe (pinned jellyfin-ffmpeg 7 portable build, installed into /usr/bin)
     default: 'false'
   cjxl:
     description: Install cjxl (libjxl-tools)
@@ -19,36 +20,53 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: Cache the static FFmpeg
+    # The verified archive is cached, not the unpacked binaries: every job checks it with sha256sum -c.
+    # Keep the version in this key equal to FFMPEG_VERSION below.
+    - name: Cache the pinned FFmpeg archive
       if: inputs.ffmpeg == 'true'
-      id: ffmpeg-cache
       uses: actions/cache@v6
       with:
-        path: ~/ffmpeg-static
-        key: ffmpeg-static-n8.1-linux64-gpl-v1
+        path: ~/jellyfin-ffmpeg
+        key: jellyfin-ffmpeg-7.1.4-3
 
-    - name: Install FFmpeg (static build)
+    - name: Install FFmpeg (pinned jellyfin-ffmpeg 7)
       if: inputs.ffmpeg == 'true'
       shell: bash
       env:
-        CACHE_HIT: ${{ steps.ffmpeg-cache.outputs.cache-hit }}
+        # A new version: take version and sha256 (the release asset's digest) from
+        # https://github.com/jellyfin/jellyfin-ffmpeg/releases, change both and the cache key together.
+        FFMPEG_VERSION: 7.1.4-3
+        FFMPEG_SHA256: cab9ff40a47e4232d231e4eb7e4e85fabfeec56c6905266bc94291fc0881f83f
       run: |
         set -euo pipefail
-        dir="${HOME}/ffmpeg-static"
-        if [[ "${CACHE_HIT}" != "true" || ! -x "${dir}/ffmpeg" ]]; then
-          mkdir -p "${dir}"
-          url="https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-n8.1-latest-linux64-gpl-8.1.tar.xz"
+        dir="${HOME}/jellyfin-ffmpeg"
+        name="jellyfin-ffmpeg_${FFMPEG_VERSION}_portable_linux64-gpl.tar.xz"
+        archive="${dir}/${name}"
+        url="https://github.com/jellyfin/jellyfin-ffmpeg/releases/download/v${FFMPEG_VERSION}/${name}"
+        verify() { echo "${FFMPEG_SHA256}  ${archive}" | sha256sum -c -; }
+        mkdir -p "${dir}"
+        if [[ ! -f "${archive}" ]] || ! verify; then
+          rm -f "${archive}"
           for attempt in 1 2 3; do
-            if curl -fsSL --retry 3 --retry-delay 3 --connect-timeout 20 --max-time 240 "${url}" -o "${RUNNER_TEMP}/ffmpeg.tar.xz"; then break; fi
-            echo "::warning::FFmpeg download attempt ${attempt} failed; retrying"
-            [[ "${attempt}" -lt 3 ]] || { echo "::error::The static FFmpeg could not be downloaded."; exit 1; }
+            if curl -fsSL --retry 3 --retry-delay 3 --connect-timeout 20 --max-time 240 "${url}" -o "${archive}" && verify; then break; fi
+            rm -f "${archive}"
+            echo "::warning::FFmpeg download attempt ${attempt} failed or did not match its sha256; retrying"
+            [[ "${attempt}" -lt 3 ]] || { echo "::error::The pinned jellyfin-ffmpeg ${FFMPEG_VERSION} could not be downloaded and verified."; exit 1; }
             sleep 5
           done
-          tar -xJf "${RUNNER_TEMP}/ffmpeg.tar.xz" -C "${dir}" --strip-components=2 --wildcards '*/bin/ffmpeg' '*/bin/ffprobe'
-          rm -f "${RUNNER_TEMP}/ffmpeg.tar.xz"
         fi
-        sudo ln -sf "${dir}/ffmpeg" /usr/bin/ffmpeg
-        sudo ln -sf "${dir}/ffprobe" /usr/bin/ffprobe
+        unpacked="${RUNNER_TEMP}/jellyfin-ffmpeg"
+        rm -rf "${unpacked}"
+        mkdir -p "${unpacked}"
+        tar -xJf "${archive}" -C "${unpacked}"
+        ffmpeg="$(find "${unpacked}" -type f -name ffmpeg -print -quit)"
+        ffprobe="$(find "${unpacked}" -type f -name ffprobe -print -quit)"
+        if [[ -z "${ffmpeg}" || -z "${ffprobe}" ]]; then
+          echo "::error::${name} holds no ffmpeg and ffprobe."
+          exit 1
+        fi
+        sudo install -m 0755 "${ffmpeg}" /usr/bin/ffmpeg
+        sudo install -m 0755 "${ffprobe}" /usr/bin/ffprobe
         /usr/bin/ffmpeg -version | head -1
         /usr/bin/ffprobe -version | head -1
 

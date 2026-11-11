@@ -46,9 +46,9 @@ namespace Jularr.Backend.Tests
                 Assert.IsTrue(WorkerJobs.Of(group).Count > 0, group.ToString());
             }
 
-            // Sixteen workers and the sampler. Queues and interrupted downloads start at once; other workers have their own offset;
+            // Seventeen workers and the sampler. Queues and interrupted downloads start at once; other workers have their own offset;
             // a provider of the provider sync has no schedule of its own.
-            Assert.AreEqual(17, Enum.GetValues<WorkerGroupType>().Length);
+            Assert.AreEqual(18, Enum.GetValues<WorkerGroupType>().Length);
             foreach (var key in new[] { "operations", "backupQueue", "mediaImportQueue", "benchmarkQueue", "searchQueue", "downloads", "resources" })
             {
                 Assert.AreEqual(TimeSpan.Zero, WorkerJobs.Definition(key).StartDelay, key);
@@ -61,6 +61,20 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(jobs.Count - 7 - parts.Length, delayed.Length);
             Assert.IsTrue(delayed.GroupBy(job => job.StartDelay).All(group => group.Select(job => job.Group).Distinct().Count() == 1), "Only jobs sharing a worker may share their start offset.");
             Assert.IsTrue(delayed.All(job => job.StartDelay < TimeSpan.FromMinutes(5)));
+
+            // Rounds that copy whole libraries or downloads onto the NAS get hours before their limit, an operation (never resumed after it) the most;
+            // quick looks get minutes.
+            foreach (var key in new[] { "operations", "backupQueue", "mediaImportQueue", "benchmarkQueue", "searchQueue" })
+            {
+                Assert.IsTrue(WorkerJobs.Definition(key).RoundLimit >= TimeSpan.FromHours(12), key);
+            }
+
+            foreach (var key in new[] { "catalog", "providerSync", "downloads", "usenet" })
+            {
+                Assert.IsTrue(WorkerJobs.Definition(key).RoundLimit >= TimeSpan.FromHours(3), key);
+            }
+
+            Assert.IsTrue(WorkerJobs.Definition("translationMachines").RoundLimit <= TimeSpan.FromMinutes(10));
 
             // Heavy jobs wait while Jularr is used, downloads never do.
             foreach (var key in new[] { "trickplay", "recognition", "readingCopies", "scanScheduling", "providerSync", "aniListMatching" })
@@ -364,6 +378,135 @@ namespace Jularr.Backend.Tests
             Assert.IsFalse(html.Contains("temporarily unavailable", StringComparison.Ordinal));
         }
 
+        [TestMethod]
+        public async Task Runner_ARoundPastItsLimit_FailsWithTheTimeLimit_AndTheGroupGoesOn()
+        {
+            var time = new ManualTime(Start);
+            await using var host = await Host.CreateAsync(library: true, services: services => services.AddSingleton<TimeProvider>(time));
+            var runner = host.Services.GetRequiredService<WorkerJobRunner>();
+            var jobs = host.Services.GetRequiredService<WorkerJobs>();
+            time.Advance(TimeSpan.FromMinutes(5));
+
+            // A step that waits for ever, but listens to its token, is stopped at the group's limit.
+            var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var running = runner.RunAsync("catalog", async (_, token) =>
+            {
+                started.SetResult();
+                await Task.Delay(Timeout.Infinite, token);
+            }, default);
+            await started.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            time.Advance(WorkerJobs.Definition("catalog").RoundLimit - TimeSpan.FromSeconds(1));
+            Assert.IsFalse(running.IsCompleted, "The round runs up to its limit.");
+            time.Advance(TimeSpan.FromSeconds(1));
+            Assert.AreEqual(WorkerJobResultType.Failed, await running.WaitAsync(TimeSpan.FromSeconds(10)));
+
+            // The failure is kept and told like any other; the next pass is planned.
+            Assert.AreEqual("job_round_timeout", await host.ScalarAsync("SELECT \"LastErrorKey\" FROM \"WorkerJobs\" WHERE \"Key\" = 'catalog'"));
+            Assert.AreEqual(1L, await OpenNoticesAsync(host, "catalog"));
+            var status = jobs.Describe("catalog", null);
+            Assert.AreEqual(WorkerJobStateType.Failed, status.State);
+            Assert.AreEqual(status.LastFinishedAt + TimeSpan.FromMinutes(1), status.NextRunAt);
+
+            // The worker is free again: the group's next job runs.
+            Assert.AreEqual(WorkerJobResultType.Succeeded, await runner.RunAsync("discoverFeeds", (_, _) => Task.CompletedTask, default));
+        }
+
+        [TestMethod]
+        public async Task Runner_ARoundIgnoringItsStop_IsNamedInTheLog_AndStillEndsAtItsLimit()
+        {
+            var time = new ManualTime(Start);
+            await using var host = await Host.CreateAsync(library: true, services: services => services.AddSingleton<TimeProvider>(time));
+            var runner = host.Services.GetRequiredService<WorkerJobRunner>();
+            time.Advance(TimeSpan.FromMinutes(5));
+
+            // The round does not listen; it is awaited, never abandoned, and the log names it after the grace.
+            var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var running = runner.RunAsync("maintenance", (_, _) => release.Task, default);
+            var limit = WorkerJobs.Definition("maintenance").RoundLimit;
+            await time.WaitForTimerAsync(limit + WorkerJobRunner.StopGrace);
+            time.Advance(limit);
+            time.Advance(WorkerJobRunner.StopGrace);
+            Assert.IsFalse(running.IsCompleted);
+            release.SetResult();
+
+            // Coming back late is still a round past its limit.
+            Assert.AreEqual(WorkerJobResultType.Failed, await running.WaitAsync(TimeSpan.FromSeconds(10)));
+            Assert.AreEqual("job_round_timeout", await host.ScalarAsync("SELECT \"LastErrorKey\" FROM \"WorkerJobs\" WHERE \"Key\" = 'maintenance'"));
+            var log = host.Services.GetRequiredService<RecentLogs>().Read(100).Where(entry => entry.Category == typeof(WorkerJobRunner).FullName).Select(entry => entry.Message).ToArray();
+            Assert.IsTrue(log.Any(message => message.Contains("maintenance ignores its time limit", StringComparison.Ordinal)), string.Join(" | ", log));
+        }
+
+        [TestMethod]
+        public async Task Runner_ABusyPass_IsKeptAtItsLimit_AndGoesOnAtTheNextTick()
+        {
+            var time = new ManualTime(Start);
+            await using var host = await Host.CreateAsync(library: true, services: services => services.AddSingleton<TimeProvider>(time));
+            var runner = host.Services.GetRequiredService<WorkerJobRunner>();
+            var jobs = host.Services.GetRequiredService<WorkerJobs>();
+            time.Advance(TimeSpan.FromMinutes(5));
+            var rounds = 0;
+            Task<bool> Busy(IServiceProvider services, CancellationToken token)
+            {
+                rounds++;
+                time.Advance(TimeSpan.FromMinutes(4));
+                return Task.FromResult(true);
+            }
+
+            // Rounds go on while there is work; the pass that reaches its limit is kept and the job is due again at once.
+            Assert.AreEqual(WorkerJobResultType.Succeeded, await runner.RunWhileBusyAsync("covers", Busy, TimeSpan.Zero, default));
+            Assert.AreEqual(3, rounds);
+            var kept = jobs.Describe("covers", null);
+            Assert.AreEqual(WorkerJobStateType.Idle, kept.State);
+            Assert.AreEqual(kept.LastFinishedAt, kept.NextRunAt);
+            Assert.AreEqual((short)1, await host.ScalarAsync("SELECT \"LastResultTypeId\" FROM \"WorkerJobs\" WHERE \"Key\" = 'covers'"));
+
+            // The next tick goes on with the work.
+            Assert.AreEqual(WorkerJobResultType.Succeeded, await runner.RunWhileBusyAsync("covers", (_, _) => Task.FromResult(++rounds < 5), TimeSpan.Zero, default));
+            Assert.AreEqual(5, rounds);
+        }
+
+        [TestMethod]
+        public async Task Runner_AStateThatCannotBeKeptOnce_IsTriedAgain_AndAfterTwoFailuresTheNextPassKeepsIt()
+        {
+            var time = new ManualTime(Start);
+            await using var host = await Host.CreateAsync(library: true, services: services => services.AddSingleton<TimeProvider>(time));
+            var runner = host.Services.GetRequiredService<WorkerJobRunner>();
+            var jobs = host.Services.GetRequiredService<WorkerJobs>();
+            Task Fail(IServiceProvider services, CancellationToken token) => throw new InvalidOperationException("The catalog broke.");
+            time.Advance(TimeSpan.FromMinutes(5));
+            Assert.AreEqual(WorkerJobResultType.Succeeded, await runner.RunAsync("catalog", (_, _) => Task.CompletedTask, default));
+
+            // The database refuses the catalog's record, counting each try.
+            const string refuse = """
+                CREATE SEQUENCE "RefusedRecords";
+                CREATE FUNCTION "RefuseRecord"() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN PERFORM nextval('"RefusedRecords"'); RAISE EXCEPTION 'busy'; END $$;
+                CREATE TRIGGER "RefuseRecord" BEFORE INSERT OR UPDATE ON "WorkerJobs" FOR EACH ROW WHEN (NEW."Key" = 'catalog') EXECUTE FUNCTION "RefuseRecord"();
+                """;
+            await host.Fixture.RunSqlAsync(refuse);
+            time.Advance(TimeSpan.FromMinutes(2));
+            var running = runner.RunAsync("catalog", Fail, default);
+            await time.WaitForTimerAsync(WorkerJobRunner.ReportRetry);
+            await host.Fixture.RunSqlAsync("DROP TRIGGER \"RefuseRecord\" ON \"WorkerJobs\"");
+            time.Advance(WorkerJobRunner.ReportRetry);
+            Assert.AreEqual(WorkerJobResultType.Failed, await running.WaitAsync(TimeSpan.FromSeconds(10)));
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT last_value FROM \"RefusedRecords\""));
+            Assert.AreEqual("internal_error", await host.ScalarAsync("SELECT \"LastErrorKey\" FROM \"WorkerJobs\" WHERE \"Key\" = 'catalog'"));
+
+            // Refused twice, the state is not lost: the next pass keeps it although its outcome did not change.
+            await host.Fixture.RunSqlAsync("CREATE TRIGGER \"RefuseRecord\" BEFORE INSERT OR UPDATE ON \"WorkerJobs\" FOR EACH ROW WHEN (NEW.\"Key\" = 'catalog') EXECUTE FUNCTION \"RefuseRecord\"()");
+            time.Advance(TimeSpan.FromMinutes(2));
+            running = runner.RunAsync("catalog", Fail, default);
+            await time.WaitForTimerAsync(WorkerJobRunner.ReportRetry);
+            time.Advance(WorkerJobRunner.ReportRetry);
+            Assert.AreEqual(WorkerJobResultType.Failed, await running.WaitAsync(TimeSpan.FromSeconds(10)));
+            Assert.AreEqual(3L, await host.ScalarAsync("SELECT last_value FROM \"RefusedRecords\""));
+            await host.Fixture.RunSqlAsync("DROP TRIGGER \"RefuseRecord\" ON \"WorkerJobs\"");
+            time.Advance(TimeSpan.FromSeconds(10));
+            Assert.IsTrue(jobs.RequestRun("catalog"));
+            Assert.AreEqual(WorkerJobResultType.Failed, await runner.RunAsync("catalog", Fail, default));
+            Assert.AreEqual(time.Now.UtcDateTime.Ticks, ((DateTime)(await host.ScalarAsync("SELECT \"LastFinishedAt\" FROM \"WorkerJobs\" WHERE \"Key\" = 'catalog'"))!).Ticks);
+        }
+
         private static async Task<long> OpenNoticesAsync(Host host, string key) =>
             (long)(await host.ScalarAsync("SELECT count(*) FROM \"Operations\" WHERE \"WorkerJobKey\" = '" + key + "' AND \"OperationTypeId\" = 4 AND \"DismissedAt\" IS NULL"))!;
 
@@ -371,6 +514,110 @@ namespace Jularr.Backend.Tests
         {
             public DateTimeOffset Now { get; set; } = now;
             public override DateTimeOffset GetUtcNow() => Now;
+        }
+
+        // A clock that moves only when the test moves it; its timers fire on that move.
+        internal sealed class ManualTime(DateTimeOffset now) : TimeProvider
+        {
+            private readonly object _gate = new();
+            private readonly List<ManualTimer> _timers = [];
+            private DateTimeOffset _now = now;
+
+            public DateTimeOffset Now
+            {
+                get
+                {
+                    lock (_gate)
+                    {
+                        return _now;
+                    }
+                }
+            }
+
+            public override DateTimeOffset GetUtcNow() => Now;
+            public override long GetTimestamp() => Now.UtcTicks;
+            public override long TimestampFrequency => TimeSpan.TicksPerSecond;
+
+            public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
+            {
+                var timer = new ManualTimer(this, callback, state);
+                timer.Change(dueTime, period);
+                return timer;
+            }
+
+            public void Advance(TimeSpan by)
+            {
+                List<ManualTimer> due;
+                lock (_gate)
+                {
+                    _now += by;
+                    due = [.. _timers.Where(timer => timer.DueAt <= _now)];
+                    foreach (var timer in due)
+                    {
+                        if (timer.Period > TimeSpan.Zero) timer.DueAt = _now + timer.Period;
+                        else _timers.Remove(timer);
+                    }
+                }
+
+                foreach (var timer in due)
+                {
+                    timer.Fire();
+                }
+            }
+
+            // Until something waits on this clock for exactly this long, such as a retry's pause.
+            public async Task WaitForTimerAsync(TimeSpan dueTime)
+            {
+                var deadline = DateTime.UtcNow.AddSeconds(10);
+                while (true)
+                {
+                    lock (_gate)
+                    {
+                        if (_timers.Any(timer => timer.DueTime == dueTime)) return;
+                    }
+
+                    Assert.IsTrue(DateTime.UtcNow < deadline, "Nothing waited for " + dueTime + ".");
+                    await Task.Delay(10);
+                }
+            }
+
+            private sealed class ManualTimer(ManualTime clock, TimerCallback callback, object? state) : ITimer
+            {
+                public DateTimeOffset DueAt { get; set; }
+                public TimeSpan DueTime { get; private set; }
+                public TimeSpan Period { get; private set; }
+
+                public void Fire() => callback(state);
+
+                public bool Change(TimeSpan dueTime, TimeSpan period)
+                {
+                    lock (clock._gate)
+                    {
+                        clock._timers.Remove(this);
+                        DueTime = dueTime;
+                        Period = period == Timeout.InfiniteTimeSpan ? TimeSpan.Zero : period;
+                        if (dueTime == Timeout.InfiniteTimeSpan) return true;
+                        DueAt = clock._now + dueTime;
+                        clock._timers.Add(this);
+                    }
+
+                    return true;
+                }
+
+                public void Dispose()
+                {
+                    lock (clock._gate)
+                    {
+                        clock._timers.Remove(this);
+                    }
+                }
+
+                public ValueTask DisposeAsync()
+                {
+                    Dispose();
+                    return ValueTask.CompletedTask;
+                }
+            }
         }
     }
 }

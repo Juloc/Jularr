@@ -3,6 +3,8 @@ name: Backend
 # Always report a stable PR check (`Backend / test`); docs-only changes skip the costly jobs.
 # Job graph: prepare (build once, smoke methods, change-aware selection) -> shards (the selected
 # test classes split in two balanced shards) -> test (the one required conclusion).
+# CI retry (ci-retry.yml) re-runs a run once that failed only in set-up steps; their names are listed in
+# scripts/ci-classify-failure.py: rename or add set-up steps there too.
 on:
   pull_request:
     branches: [main, dev]
@@ -17,10 +19,13 @@ concurrency:
 
 env:
   JULARR_TEST_DB: Host=127.0.0.1;Port=15433;Username=jularr_test;Password=isolated-test-password;Database=jularr_test_admin
+  # Every dotnet test process: a test still running after 5 minutes is dumped and killed, a crashed test host
+  # leaves a dump, and Sequence_*.xml names the test that ran (uploaded on failure as blame-*).
+  DOTNET_TEST_BLAME: --blame-hang-timeout 5m --blame-hang-dump-type mini --blame-crash --blame-crash-dump-type mini
 
 jobs:
   prepare:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 12
     outputs:
       backend: ${{ steps.paths.outputs.backend }}
@@ -87,6 +92,7 @@ jobs:
         run: |
           python3 scripts/ci-shard-tests.py --self-test
           python3 scripts/ci-select-backend-tests.py --self-test
+          python3 scripts/ci-classify-failure.py --self-test
       - name: Compile assets required by Razor tests
         if: steps.paths.outputs.backend == 'true'
         working-directory: src/Jularr.Frontend
@@ -109,7 +115,7 @@ jobs:
           echo "classes=$(jq -r '.classes | join(",")' <<< "$selection")" >> "$GITHUB_OUTPUT"
           methods="$(jq -r '.methods' <<< "$selection")"
           if [[ -n "$methods" ]]; then
-            dotnet test tests/Jularr.Backend.Tests --configuration Release --no-build \
+            dotnet test tests/Jularr.Backend.Tests --configuration Release --no-build ${DOTNET_TEST_BLAME} \
               --filter "$methods" --logger "trx;LogFileName=backend-pr-smoke.trx" \
               --results-directory TestResults/ci/fast
           fi
@@ -123,17 +129,29 @@ jobs:
           path: TestResults/ci/fast/*.trx
           if-no-files-found: ignore
           retention-days: 7
+      - name: Keep the hang and crash evidence
+        if: failure() && steps.paths.outputs.backend == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: blame-pr-prepare
+          path: |
+            TestResults/ci/**/Sequence_*.xml
+            TestResults/ci/**/*.dmp
+            !TestResults/ci/**/In/**
+          if-no-files-found: ignore
+          retention-days: 2
 
   # The selected test classes of the changed areas, packed by measured duration. Two shards,
-  # two test processes each; they start only when `prepare` (smoke) is green.
+  # two test processes each; they start only when `prepare` (smoke) is green. A failing shard
+  # does not cancel the other one (fail-fast off), so one run reports every failing class.
   shards:
     name: backend (${{ matrix.shard }})
     needs: prepare
     if: needs.prepare.outputs.classes != ''
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 12
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
         include:
           - { kind: backend, shard: 1/2 }
@@ -180,7 +198,7 @@ jobs:
             [[ -n "${lanes[$index]}" ]] || continue
             lane=$((index + 1))
             (set -o pipefail
-             dotnet test tests/Jularr.Backend.Tests --configuration Release --no-build \
+             dotnet test tests/Jularr.Backend.Tests --configuration Release --no-build ${DOTNET_TEST_BLAME} \
                --filter "${lanes[$index]}" --logger "trx;LogFileName=backend-pr-lane${lane}.trx" \
                --results-directory TestResults/ci/fast 2>&1 | sed -u "s/^/[lane${lane}] /") &
             pids+=($!)
@@ -201,12 +219,23 @@ jobs:
           path: TestResults/ci/fast/*.trx
           if-no-files-found: ignore
           retention-days: 7
+      - name: Keep the hang and crash evidence
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: blame-pr-shard-${{ strategy.job-index }}
+          path: |
+            TestResults/ci/**/Sequence_*.xml
+            TestResults/ci/**/*.dmp
+            !TestResults/ci/**/In/**
+          if-no-files-found: ignore
+          retention-days: 2
 
   # The stable required check `Backend / test`: one conclusion for prepare and all shards.
   test:
     needs: [prepare, shards, full-regression]
     if: ${{ !cancelled() }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - name: Require prepare and the shards

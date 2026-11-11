@@ -47,7 +47,7 @@ jobs:
   # TV app and only the Android modules it actually uses. Mobile-only changes
   # are tested in android-mobile.yml, without starting the TV build.
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
 
     steps:
