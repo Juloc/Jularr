@@ -90,11 +90,11 @@ jobs:
           dotnet build tests/Jularr.Backend.Tests --configuration Release
           dotnet build tests/Jularr.E2E.Tests --configuration Release
       # The shard counts here equal the matrix entries of `shards`. The real-tool step runs on backend 6/6 after its
-      # lanes: --reserve 6=S plans each of its two lanes S/2 seconds lighter (S = 2 x the step's measured time).
+      # lanes: --reserve 6=S plans each of its two lanes S/2 seconds lighter (S = 2 x the step's measured time, 30 s).
       - name: Plan the test shards
         run: |
           set -euo pipefail
-          python3 scripts/ci-shard-tests.py matrix --kind backend --shards 6 --lanes 2 --reserve 6=150 \
+          python3 scripts/ci-shard-tests.py matrix --kind backend --shards 6 --lanes 2 --reserve 6=60 \
             --exclude "$(python3 scripts/ci-select-backend-tests.py --full-exclude)" \
             --measured "${RUNNER_TEMP}/measured" --out ci-plan/backend.json
           python3 scripts/ci-shard-tests.py matrix --kind e2e --shards 6 --lanes 1 \
