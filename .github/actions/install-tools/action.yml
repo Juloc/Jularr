@@ -1,7 +1,8 @@
 name: Install the test tools
 description: >-
   The PostgreSQL 18 client (pg_dump matches the test database major; backups are part of the tests),
-  and when asked cjxl (libjxl-tools, small, from apt), DjVuLibre (djvulibre-bin, small, from apt) and FFmpeg. FFmpeg is NOT installed with apt: its
+  and when asked cjxl (libjxl-tools, small, from apt), DjVuLibre (djvulibre-bin, small, from apt) and FFmpeg. The apt
+  packages are cached as .deb files per runner image and installed with dpkg. FFmpeg is NOT installed with apt: its
   dependency set is large and downloading it from the hosted mirrors stalled for minutes. CI uses the FFmpeg line production
   runs (the image installs jellyfin-ffmpeg7): one pinned jellyfin-ffmpeg 7 portable build, checked by sha256 and cached
   between runs.
@@ -70,35 +71,73 @@ runs:
         /usr/bin/ffmpeg -version | head -1
         /usr/bin/ffprobe -version | head -1
 
-    - name: Install the PostgreSQL client and cjxl
+    # The .deb files apt downloaded for this package set on this runner image (the key names both), so a
+    # later job installs them with dpkg: no apt-get update, no network. A miss takes the apt route below.
+    - name: Name the tool package cache
+      id: debs
       shell: bash
       env:
         WITH_CJXL: ${{ inputs.cjxl }}
         WITH_DJVULIBRE: ${{ inputs.djvulibre }}
       run: |
+        packages="postgresql-client-18"
+        if [[ "${WITH_CJXL}" == "true" ]]; then packages+=" libjxl-tools"; fi
+        if [[ "${WITH_DJVULIBRE}" == "true" ]]; then packages+=" djvulibre-bin"; fi
+        echo "packages=${packages}" >> "${GITHUB_OUTPUT}"
+        echo "key=test-tool-debs-v1-${ImageOS:-image}-${ImageVersion:-unknown}-${packages// /-}" >> "${GITHUB_OUTPUT}"
+
+    - name: Cache the tool packages
+      id: cache
+      uses: actions/cache@v6
+      with:
+        path: ~/test-tool-debs
+        key: ${{ steps.debs.outputs.key }}
+
+    - name: Install the PostgreSQL client and cjxl
+      shell: bash
+      env:
+        PACKAGES: ${{ steps.debs.outputs.packages }}
+        CACHE_HIT: ${{ steps.cache.outputs.cache-hit }}
+      run: |
         set -euo pipefail
-        # apt on hosted runners can stall (IPv6, a slow mirror): IPv4 is forced, every command has a time
-        # limit and the install is retried instead of hanging for minutes.
-        apt_opts=(-o Acquire::Retries=3 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 -o Acquire::ForceIPv4=true -o Dpkg::Use-Pty=0)
-        sudo install -d -m 0755 /usr/share/postgresql-common/pgdg
-        curl -fsSL --retry 3 --retry-delay 2 --max-time 30 https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo tee /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc >/dev/null
-        echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(. /etc/os-release && echo "${VERSION_CODENAME}")-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list >/dev/null
-        packages=(postgresql-client-18)
-        if [[ "${WITH_CJXL}" == "true" ]]; then packages+=(libjxl-tools); fi
-        if [[ "${WITH_DJVULIBRE}" == "true" ]]; then packages+=(djvulibre-bin); fi
+        read -ra packages <<< "${PACKAGES}"
+        dir="${HOME}/test-tool-debs"
         installed=false
-        for attempt in 1 2 3; do
-          if sudo timeout 90 apt-get update -qq "${apt_opts[@]}" && sudo env DEBIAN_FRONTEND=noninteractive timeout 150 apt-get install -qq --yes --no-install-recommends "${apt_opts[@]}" "${packages[@]}"; then
+        if [[ "${CACHE_HIT}" == "true" ]] && compgen -G "${dir}/*.deb" >/dev/null; then
+          if sudo env DEBIAN_FRONTEND=noninteractive dpkg -i "${dir}"/*.deb >/dev/null && dpkg -s "${packages[@]}" >/dev/null 2>&1; then
             installed=true
-            break
+            echo "Installed ${PACKAGES} from the $(ls "${dir}"/*.deb | wc -l) cached packages."
+          else
+            echo "::warning::The cached tool packages did not install; taking apt."
+            sudo dpkg --configure -a || true
           fi
-          echo "::warning::apt attempt ${attempt} failed or timed out; retrying"
-          sudo dpkg --configure -a || true
-          sleep 5
-        done
+        fi
         if [[ "${installed}" != "true" ]]; then
-          echo "::error::Installing the test tools failed three times."
-          exit 1
+          # apt on hosted runners can stall (IPv6, a slow mirror): IPv4 is forced, every command has a time
+          # limit and the install is retried instead of hanging for minutes. The downloaded packages stay in
+          # ${dir} for the cache.
+          mkdir -p "${dir}/partial"
+          apt_opts=(-o Acquire::Retries=3 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 -o Acquire::ForceIPv4=true -o Dpkg::Use-Pty=0)
+          keep=(-o "Dir::Cache::archives=${dir}" -o APT::Keep-Downloaded-Packages=true)
+          sudo install -d -m 0755 /usr/share/postgresql-common/pgdg
+          curl -fsSL --retry 3 --retry-delay 2 --max-time 30 https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo tee /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc >/dev/null
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(. /etc/os-release && echo "${VERSION_CODENAME}")-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list >/dev/null
+          for attempt in 1 2 3; do
+            if sudo timeout 90 apt-get update -qq "${apt_opts[@]}" && sudo env DEBIAN_FRONTEND=noninteractive timeout 150 apt-get install -qq --yes --no-install-recommends "${apt_opts[@]}" "${keep[@]}" "${packages[@]}"; then
+              installed=true
+              break
+            fi
+            echo "::warning::apt attempt ${attempt} failed or timed out; retrying"
+            sudo dpkg --configure -a || true
+            sleep 5
+          done
+          if [[ "${installed}" != "true" ]]; then
+            echo "::error::Installing the test tools failed three times."
+            exit 1
+          fi
+          # apt's lock and partial folder belong to root: the cache keeps only the packages.
+          sudo rm -rf "${dir}/partial" "${dir}/lock"
+          sudo chown -R "$(id -u):$(id -g)" "${dir}"
         fi
         echo "/usr/lib/postgresql/18/bin" >> "${GITHUB_PATH}"
         /usr/lib/postgresql/18/bin/pg_dump --version

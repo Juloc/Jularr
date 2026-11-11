@@ -39,7 +39,7 @@ dotnet test tests/Jularr.E2E.Tests -c Release --no-build --filter "FullyQualifie
 
 Android (in `clients/android`, JDK 17, Android SDK 36): `gradle :app-tv:testDebugUnitTest :app-mobile:testDebugUnitTest`.
 
-CI runs on PRs to `main`; the label `ci/full` or `[full-ci]` in the PR title adds the full regression.
+CI runs on PRs to `main`; the label `ci/full` adds the full regression.
 
 ## Migrations
 
@@ -53,7 +53,8 @@ CI runs on PRs to `main`; the label `ci/full` or `[full-ci]` in the PR title add
 ## Release
 
 The release commit's Frontend and Backend Full runs on `main` are green (`gh run list --commit <sha>`; start Frontend by hand with
-`gh workflow run Frontend --ref main` if the commit changed no frontend file). Then:
+`gh workflow run Frontend --ref main` if the commit changed no frontend file).
+A docs-only commit (`docs/**`, `AGENTS.md`, `README.md`) gets no Backend Full on push: start it with `gh workflow run backend.yml --ref main`. Then:
 
 ```bash
 git fetch origin && git tag vX.Y.Z origin/main && git push origin vX.Y.Z
