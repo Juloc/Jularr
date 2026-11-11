@@ -6,10 +6,12 @@ name: Backend
 # -> test (the one required conclusion).
 # CI retry (ci-retry.yml) re-runs a run once that failed only in set-up steps; their names are listed in
 # scripts/ci-classify-failure.py: rename or add set-up steps there too.
+# A PR with the label ci/full runs the full regression instead of the selection. Labels and edits of title or
+# description start nothing here: adding ci/full starts the full regression in backend-full-label.yml.
 on:
   pull_request:
     branches: [main, dev]
-    types: [opened, synchronize, reopened, converted_to_draft, ready_for_review, labeled, edited]
+    types: [opened, synchronize, reopened, converted_to_draft, ready_for_review]
 
 permissions:
   contents: read
@@ -65,7 +67,7 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           DRAFT: ${{ github.event.pull_request.draft }}
-          FULL: ${{ contains(github.event.pull_request.labels.*.name, 'ci/full') || contains(github.event.pull_request.title, '[full-ci]') }}
+          FULL: ${{ contains(github.event.pull_request.labels.*.name, 'ci/full') }}
         shell: bash
         run: |
           set -euo pipefail
@@ -286,7 +288,7 @@ jobs:
 
   # An opted-in full run replaces (rather than duplicates) the fast backend build.
   full-regression:
-    if: ${{ !github.event.pull_request.draft && (contains(github.event.pull_request.labels.*.name, 'ci/full') || contains(github.event.pull_request.title, '[full-ci]')) }}
+    if: ${{ !github.event.pull_request.draft && contains(github.event.pull_request.labels.*.name, 'ci/full') }}
     uses: ./.github/workflows/backend.yml
     permissions:
       contents: read

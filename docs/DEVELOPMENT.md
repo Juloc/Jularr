@@ -39,7 +39,7 @@ dotnet test tests/Jularr.E2E.Tests -c Release --no-build --filter "FullyQualifie
 
 Android (in `clients/android`, JDK 17, Android SDK 36): `gradle :app-tv:testDebugUnitTest :app-mobile:testDebugUnitTest`.
 
-CI runs on PRs to `main`; the label `ci/full` or `[full-ci]` in the PR title adds the full regression.
+CI runs on PRs to `main`; the label `ci/full` adds the full regression.
 
 ## Migrations
 

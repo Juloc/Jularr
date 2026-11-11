@@ -1,0 +1,21 @@
+name: Backend (ci/full)
+
+# Adding the label ci/full to a PR starts its full regression at once; later pushes run it inside Backend
+# (backend-pr.yml), whose run then supersedes this one (same concurrency group in backend.yml).
+# Backend itself listens to no label, so no label restarts or cancels it. For any other label the one job here
+# is skipped: a skipped check of its own name, while Backend's checks keep their results.
+on:
+  pull_request:
+    branches: [main, dev]
+    types: [labeled]
+
+permissions:
+  contents: read
+
+jobs:
+  full-regression:
+    if: ${{ github.event.label.name == 'ci/full' && !github.event.pull_request.draft }}
+    uses: ./.github/workflows/backend.yml
+    permissions:
+      contents: read
+      actions: read  # its build job plans the shards from the timings of the last finished main runs
