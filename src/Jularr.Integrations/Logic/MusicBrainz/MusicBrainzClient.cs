@@ -4,15 +4,15 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using Jularr.Integrations.Data.Common;
 using Jularr.Integrations.Data.MusicBrainz;
+using Jularr.Integrations.Logic.Common;
 
 namespace Jularr.Integrations.Logic.MusicBrainz
 {
     // MusicBrainz: keyless album metadata; the service allows one request per second per application.
-    internal sealed partial class MusicBrainzClient(HttpClient http)
+    internal sealed partial class MusicBrainzClient(HttpClient http, RequestPace<MusicBrainzClient>? pace = null)
     {
-        private static readonly SemaphoreSlim Pace = new(1, 1);
-        private static readonly TimeSpan Spacing = TimeSpan.FromMilliseconds(1100);
-        private static DateTimeOffset _last = DateTimeOffset.MinValue;
+        public static readonly TimeSpan DefaultSpacing = TimeSpan.FromMilliseconds(1100);
+        private readonly RequestPace<MusicBrainzClient> _pace = pace ?? new(DefaultSpacing);
 
         [GeneratedRegex("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")]
         private static partial Regex Mbid();
@@ -112,16 +112,11 @@ namespace Jularr.Integrations.Logic.MusicBrainz
         private async Task<JsonDocument> GetAsync(string path, CancellationToken ct)
         {
             // One request at a time with the service's spacing.
-            await Pace.WaitAsync(ct);
+            await _pace.Gate.WaitAsync(ct);
             HttpResponseMessage response;
             try
             {
-                var wait = _last + Spacing - DateTimeOffset.UtcNow;
-                if (wait > TimeSpan.Zero)
-                {
-                    await Task.Delay(wait, ct);
-                }
-
+                await _pace.WaitForTurnAsync(ct);
                 response = await http.GetAsync(new Uri(path, UriKind.Relative), HttpCompletionOption.ResponseHeadersRead, ct);
             }
             catch (Exception exception) when (exception is HttpRequestException || exception is TaskCanceledException && !ct.IsCancellationRequested)
@@ -130,8 +125,9 @@ namespace Jularr.Integrations.Logic.MusicBrainz
             }
             finally
             {
-                _last = DateTimeOffset.UtcNow;
-                Pace.Release();
+                // The spacing counts from the end of the request.
+                _pace.Last = DateTimeOffset.UtcNow;
+                _pace.Gate.Release();
             }
 
             using (response)

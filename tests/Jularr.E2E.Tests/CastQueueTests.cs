@@ -225,7 +225,11 @@ namespace Jularr.E2E.Tests
                 await tv.Locator("[data-action=cast]").DispatchEventAsync("click");
                 await tv.WaitForURLAsync("**/Player/" + assets[2], new() { Timeout = Steps.MediaTimeout });
                 await WaitForAsync(async () => (long)(await jularr.ScalarAsync("SELECT count(*) FROM \"PlaybackSessions\" WHERE \"EndedAt\" IS NULL"))! <= 1);
-                var saved = (long)(await jularr.ScalarAsync("SELECT progress.\"PositionMs\" FROM \"MediaProgress\" AS progress JOIN \"WorkUnits\" AS unit ON unit.\"Id\" = progress.\"WorkUnitId\" WHERE unit.\"Number\" = 3"))!;
+
+                // The place the device reported last is stored when its session ends; it is read once it arrived.
+                const string ThirdPlace = "SELECT progress.\"PositionMs\" FROM \"MediaProgress\" AS progress JOIN \"WorkUnits\" AS unit ON unit.\"Id\" = progress.\"WorkUnitId\" WHERE unit.\"Number\" = 3";
+                await WaitForAsync(async () => await jularr.ScalarAsync(ThirdPlace) is long place && place >= 120_000 && place < 130_000);
+                var saved = (long)(await jularr.ScalarAsync(ThirdPlace))!;
                 Assert.IsTrue(saved >= 120_000 && saved < 130_000, "The third episode's place was " + saved + " ms.");
                 Assert.AreEqual(false, await jularr.ScalarAsync("SELECT \"IsCompleted\" FROM \"MediaProgress\" AS progress JOIN \"WorkUnits\" AS unit ON unit.\"Id\" = progress.\"WorkUnitId\" WHERE unit.\"Number\" = 3"));
 

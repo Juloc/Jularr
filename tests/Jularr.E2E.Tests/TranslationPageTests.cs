@@ -85,6 +85,12 @@ namespace Jularr.E2E.Tests
                     ON CONFLICT ("ProfileId", "WorkId") DO UPDATE SET "Language" = 'de'
                     """);
 
+                // The book translation job counts the books again when the languages read change; it runs now instead of on its schedule (its first pass
+                // comes fifty seconds after the start), and the page shows its count once it is stored.
+                await Steps.RunJobAsync(page, "bookTranslations");
+                await Steps.WaitUntilAsync(async () => (long)(await jularr.ScalarAsync("SELECT count(*) FROM \"BookTranslationProgress\" WHERE \"Language\" = 'de'"))! > 0,
+                    "The book was not counted for German", TimeSpan.FromSeconds(60));
+
                 foreach (var (width, height) in new[] { (1440, 900), (768, 1024), (375, 812) })
                 {
                     await page.SetViewportSizeAsync(width, height);

@@ -8,22 +8,47 @@ namespace Jularr.E2E.Tests
     [TestClass]
     public sealed class LayoutShiftTests
     {
-        // The layout shift the browser counted since the page began to load (cumulative, without shifts right after an input), with its first sources.
+        // The layout shift the browser counted since the page began to load (cumulative, without shifts right after an input), with its first sources;
+        // read once the page has settled: loaded, its fonts in, no htmx request running, two frames painted and, since the load or whatever came last,
+        // 1.2 seconds without a new shift or a finished request (at most 2.5 seconds after the measuring began).
         internal const string Measure = """
             async () => {
-                await new Promise(resolve => setTimeout(resolve, 2500));
+                const began = performance.now();
                 let score = 0; const sources = [];
-                await new Promise(resolve => {
-                    new PerformanceObserver(list => {
-                        for (const entry of list.getEntries()) {
-                            if (entry.hadRecentInput) continue;
-                            score += entry.value;
-                            for (const source of entry.sources) sources.push((source.node?.className || source.node?.nodeName || '?') + ' ' + Math.round(source.previousRect.height) + '>' + Math.round(source.currentRect.height));
-                        }
-                    }).observe({ type: 'layout-shift', buffered: true });
-                    setTimeout(resolve, 300);
+                let active = performance.getEntriesByType('navigation')[0]?.loadEventEnd || began;
+                const shifts = new PerformanceObserver(list => {
+                    for (const entry of list.getEntries()) {
+                        active = Math.max(active, entry.startTime);
+                        if (entry.hadRecentInput) continue;
+                        score += entry.value;
+                        for (const source of entry.sources) sources.push((source.node?.className || source.node?.nodeName || '?') + ' ' + Math.round(source.previousRect.height) + '>' + Math.round(source.currentRect.height));
+                    }
                 });
+                shifts.observe({ type: 'layout-shift', buffered: true });
+                const requests = new PerformanceObserver(list => { for (const entry of list.getEntries()) active = Math.max(active, entry.responseEnd); });
+                requests.observe({ type: 'resource', buffered: true });
+                const frame = () => new Promise(resolve => requestAnimationFrame(resolve));
+                if (document.readyState !== 'complete') await new Promise(resolve => addEventListener('load', resolve, { once: true }));
+                await document.fonts.ready;
+                await frame();
+                await frame();
+                while (performance.now() - began < 2500 && (document.querySelector('.htmx-request') || performance.now() - active < 1200)) {
+                    await new Promise(resolve => setTimeout(resolve, 50));
+                }
+                shifts.disconnect();
+                requests.disconnect();
                 return { score, sources: sources.slice(0, 4).join(' | ') };
+            }
+            """;
+
+        // After a scroll: the page at rest, and a page of the endless list that started loading arrived.
+        private const string ScrollSettled = """
+            async () => {
+                const frame = () => new Promise(resolve => requestAnimationFrame(resolve));
+                let y = -1;
+                while (y !== scrollY) { y = scrollY; await frame(); await frame(); }
+                await frame();
+                while (document.querySelector('[data-infinite-list][aria-busy=true]')) await frame();
             }
             """;
 
@@ -81,10 +106,10 @@ namespace Jularr.E2E.Tests
 
                     // Scrolling down the Library loads its further pages; the cards above hold still and the row of the link moves unseen.
                     await page.GotoAsync("/Library");
-                    for (var step = 0; step < 6; step++)
+                    for (var step = 0; step < 6 && await page.Locator("[data-infinite-status]").TextContentAsync() != "No more titles."; step++)
                     {
                         await page.Mouse.WheelAsync(0, 2500);
-                        await page.WaitForTimeoutAsync(500);
+                        await page.EvaluateAsync(ScrollSettled);
                     }
 
                     await Assertions.Expect(page.Locator(".library-grid .media-card")).ToHaveCountAsync(60);
