@@ -7,7 +7,6 @@ on:
     paths:
       - 'src/Jularr.Frontend/**'
       - 'src/Jularr.Backend/**'
-      - 'docs/FRONTEND_CONVENTIONS.md'
       - '.github/workflows/frontend.yml'
   push:
     branches: [main, dev]
@@ -15,7 +14,7 @@ on:
       - 'src/Jularr.Frontend/**'
       - 'src/Jularr.Backend/**'
       - '.github/workflows/frontend.yml'
-  # Started by hand on main when the release commit changed no frontend path (see docs/RELEASE.md).
+  # Started by hand on main when the release commit changed no frontend path (see docs/DEVELOPMENT.md).
   workflow_dispatch:
 
 permissions:

@@ -88,8 +88,7 @@ class LibraryDownloads private constructor(context: Context) {
      * Resolves a same-origin request path against locally downloaded content
      * for the signed-in account of [origin], or `null` to fall through to the
      * network. Used by the WebView's `shouldInterceptRequest` so the same web
-     * reader can render offline content ("local source first"; see
-     * docs/ANDROID_CLIENTS.md §8.1 and docs/OFFLINE_LIBRARY.md). Same-origin
+     * reader can render offline content ("local source first"). Same-origin
      * enforcement is the caller's responsibility.
      */
     fun resolveLocalRequest(origin: String, path: String): LibraryLocalResponse? {
