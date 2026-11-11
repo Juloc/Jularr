@@ -1848,6 +1848,14 @@
    "Last complete",
    "Zuletzt vollständig"
   ],
+  "admin.catalog.counting": [
+   "Being counted",
+   "Wird gezählt"
+  ],
+  "admin.catalog.countedAt": [
+   "As of",
+   "Stand"
+  ],
   "admin.catalog.requestsPerMinute": [
    "Requests",
    "Anfragen"
@@ -14341,6 +14349,34 @@
   "performance.empty": [
    "No service was called in the last 24 hours.",
    "In den letzten 24 Stunden wurde kein Service aufgerufen."
+  ],
+  "performance.pages": [
+   "Pages by server time",
+   "Seiten nach Serverzeit"
+  ],
+  "performance.page": [
+   "Page",
+   "Seite"
+  ],
+  "performance.budget": [
+   "Budget",
+   "Budget"
+  ],
+  "performance.budgetState": [
+   "State",
+   "Status"
+  ],
+  "performance.overBudget": [
+   "Over budget",
+   "Über Budget"
+  ],
+  "performance.withinBudget": [
+   "Within budget",
+   "Im Budget"
+  ],
+  "performance.pagesEmpty": [
+   "No page was opened in the last 24 hours.",
+   "In den letzten 24 Stunden wurde keine Seite aufgerufen."
   ],
   "logs.level.All": [
    "All",

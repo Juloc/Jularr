@@ -11,58 +11,147 @@ namespace Jularr.Backend.Logic.Library
     // Moves identified files to the import layout; nothing moves before the Owner confirms the exact plan.
     internal static partial class LibraryRenameLogic
     {
-        public static Task<IReadOnlyList<LibraryRenameFileData>> ReadLibraryRenameFilesAsync(this LogicContext ctx, CancellationToken ct)
+        public static Task<IReadOnlyList<LibraryRenameFileData>> ReadLibraryRenameFilesAsync(this LogicContext ctx, long? workId, CancellationToken ct)
         {
-            // Every known path counts as taken; a library being scanned keeps its names.
-            // Only Works with an asset are numbered, and each asset's numbers are gathered once.
+            // Every known path counts as taken; a library being scanned keeps its names. A title's part of the plan needs only the libraries that hold its files,
+            // since each library is planned on its own. Only Works with a file there are numbered and read, each once, not once per file.
             var sql = new SqlStatement { DisableJit = true };
             sql.Statement =
                 """
-                WITH numbered_episodes AS (
-                    SELECT episode."Id", row_number() OVER (PARTITION BY episode."WorkId" ORDER BY season."Number", episode."Number")::numeric AS "AbsoluteNumber"
-                    FROM "WorkUnits" AS episode
-                    JOIN "WorkUnits" AS season ON season."Id" = episode."ParentWorkUnitId"
-                    WHERE episode."WorkUnitTypeId" = 2 AND season."Number" > 0
-                        AND episode."WorkId" IN (SELECT asset."WorkId" FROM "MediaAssets" AS asset)
-                ),
-                covered_absolutes AS (
-                    SELECT coverage."MediaAssetId", jsonb_agg(numbered."AbsoluteNumber" ORDER BY covered."Number")::text AS "AbsoluteNumbers"
-                    FROM "MediaAssetUnitCoverage" AS coverage
-                    JOIN "WorkUnits" AS covered ON covered."Id" = coverage."WorkUnitId"
-                    JOIN numbered_episodes AS numbered ON numbered."Id" = covered."Id"
-                    GROUP BY coverage."MediaAssetId"
+                WITH scope AS MATERIALIZED (
+                    SELECT
+                        root."Id",
+                        root."Name",
+                        root."MediaTypeId",
+                        root."MediaSubtypeId"
+                    FROM
+                        "LibraryRoots" AS root
+                    WHERE
+                        NOT EXISTS (
+                            SELECT
+                                1
+                            FROM
+                                "Operations" AS operation
+                            WHERE
+                                operation."LibraryRootId" = root."Id"
+                                AND operation."OperationTypeId" = 1
+                                AND operation."OperationStatusTypeId" IN (1, 2)
+                        )
+                        AND (
+                            @WorkId::bigint IS NULL
+                            OR EXISTS (
+                                SELECT
+                                    1
+                                FROM
+                                    "MediaAssets" AS own
+                                    JOIN "StoredFiles" AS owned ON owned."MediaAssetId" = own."Id"
+                                WHERE
+                                    own."WorkId" = @WorkId
+                                    AND owned."LibraryRootId" = root."Id"
+                            )
+                        )
+                ), works AS MATERIALIZED (
+                    SELECT DISTINCT
+                        asset."WorkId"
+                    FROM
+                        "StoredFiles" AS file
+                        JOIN scope ON scope."Id" = file."LibraryRootId"
+                        JOIN "MediaAssets" AS asset ON asset."Id" = file."MediaAssetId"
+                ), numbered_episodes AS (
+                    SELECT
+                        episode."Id",
+                        row_number() OVER (PARTITION BY episode."WorkId" ORDER BY season."Number", episode."Number")::numeric AS "AbsoluteNumber"
+                    FROM
+                        "WorkUnits" AS episode
+                        JOIN "WorkUnits" AS season ON season."Id" = episode."ParentWorkUnitId"
+                    WHERE
+                        episode."WorkUnitTypeId" = 2
+                        AND season."Number" > 0
+                        AND episode."WorkId" IN (SELECT works."WorkId" FROM works)
+                ), covered_numbers AS (
+                    SELECT
+                        coverage."MediaAssetId",
+                        jsonb_agg(numbered."AbsoluteNumber" ORDER BY covered."Number") FILTER (WHERE numbered."Id" IS NOT NULL)::text AS "AbsoluteNumbers",
+                        jsonb_agg(covered."Number" ORDER BY covered."Number") FILTER (WHERE covered."WorkUnitTypeId" = 2)::text AS "EpisodeNumbers"
+                    FROM
+                        "MediaAssetUnitCoverage" AS coverage
+                        JOIN "WorkUnits" AS covered ON covered."Id" = coverage."WorkUnitId"
+                        LEFT JOIN numbered_episodes AS numbered ON numbered."Id" = covered."Id"
+                    WHERE
+                        coverage."WorkId" IN (SELECT works."WorkId" FROM works)
+                    GROUP BY
+                        coverage."MediaAssetId"
+                ), work_facts AS MATERIALIZED (
+                    SELECT
+                        works."WorkId",
+                        (
+                            SELECT
+                                creator."Creator"
+                            FROM
+                                "WorkCreators" AS creator
+                            WHERE
+                                creator."WorkId" = works."WorkId"
+                        ) AS "Author",
+                        (
+                            SELECT
+                                max(track."DiscNumber")::integer
+                            FROM
+                                "WorkUnits" AS track
+                            WHERE
+                                track."WorkId" = works."WorkId"
+                                AND track."WorkUnitTypeId" = 5
+                        ) AS "DiscCount",
+                        coalesce((
+                            SELECT
+                                jsonb_object_agg(identity."Namespace", identity."Value")::text
+                            FROM
+                                "WorkExternalIdentities" AS identity
+                            WHERE
+                                identity."WorkId" = works."WorkId"
+                        ), '{}') AS "ProviderIds",
+                        coalesce((
+                            SELECT
+                                jsonb_object_agg(translation."Locale", translation."Title")::text
+                            FROM (
+                                SELECT DISTINCT ON (lower(split_part(locale."Locale", '-', 1)))
+                                    lower(split_part(locale."Locale", '-', 1)) AS "Locale",
+                                    title."Title"
+                                FROM
+                                    "WorkTitles" AS title
+                                    JOIN "UiLocales" AS locale ON locale."Id" = title."UiLocaleId"
+                                WHERE
+                                    title."WorkId" = works."WorkId"
+                                ORDER BY
+                                    lower(split_part(locale."Locale", '-', 1)),
+                                    title."IsManual" DESC,
+                                    title."UpdatedAt" DESC,
+                                    title."Id" DESC
+                            ) AS translation
+                        ), '{}') AS "LocalizedTitles"
+                    FROM
+                        works
                 )
                 SELECT
                     file."Id",
                     work."Id" AS "WorkId",
                     file."LibraryRootId",
-                    root."Name" AS "LibraryRootName",
-                    root."MediaTypeId",
-                    CASE WHEN class."WorkId" IS NOT NULL THEN class."MediaSubtypeId" ELSE coalesce(work."MediaSubtypeId", root."MediaSubtypeId") END AS "MediaSubtypeId",
+                    scope."Name" AS "LibraryRootName",
+                    scope."MediaTypeId",
+                    CASE WHEN class."WorkId" IS NOT NULL THEN class."MediaSubtypeId" ELSE coalesce(work."MediaSubtypeId", scope."MediaSubtypeId") END AS "MediaSubtypeId",
                     file."RelativePath",
                     file."MissingSince",
                     file."MediaAssetId",
                     work."CanonicalTitle",
                     work."ReleaseYear"::integer AS "ReleaseYear",
-                    (
-                        SELECT
-                            creator."Creator"
-                        FROM
-                            "WorkCreators" AS creator
-                        WHERE
-                            creator."WorkId" = work."Id"
-                    ) AS "Author",
+                    facts."Author",
                     unit."WorkUnitTypeId",
                     numbering."AbsoluteNumber",
-                    coalesce(absolutes."AbsoluteNumbers", '[]') AS "AbsoluteNumbers",
-                    coalesce((SELECT jsonb_agg(covered."Number" ORDER BY covered."Number")::text
-                        FROM "MediaAssetUnitCoverage" AS coverage
-                        JOIN "WorkUnits" AS covered ON covered."Id" = coverage."WorkUnitId"
-                        WHERE coverage."MediaAssetId" = asset."Id" AND covered."WorkUnitTypeId" = 2), '[]') AS "EpisodeNumbers",
+                    coalesce(covered."AbsoluteNumbers", '[]') AS "AbsoluteNumbers",
+                    coalesce(covered."EpisodeNumbers", '[]') AS "EpisodeNumbers",
                     unit."Number" AS "UnitNumber",
                     unit."Title" AS "UnitTitle",
                     unit."DiscNumber"::integer,
-                    (SELECT max(track."DiscNumber")::integer FROM "WorkUnits" AS track WHERE track."WorkId" = work."Id" AND track."WorkUnitTypeId" = 5) AS "DiscCount",
+                    facts."DiscCount",
                     coalesce(edition."LanguageCode", work."OriginalLanguage") AS "Language",
                     platform."Name" AS "Platform",
                     unit."ReleasedOn" AS "UnitReleasedOn",
@@ -71,47 +160,19 @@ namespace Jularr.Backend.Logic.Library
                     file."ReleaseGroup",
                     file."Edition",
                     file."Revision",
-                    coalesce((SELECT jsonb_object_agg(identity."Namespace", identity."Value")::text FROM "WorkExternalIdentities" AS identity
-                        WHERE identity."WorkId" = work."Id"), '{}') AS "ProviderIds",
-                    coalesce((SELECT jsonb_agg(jsonb_build_object('MediaTrackTypeId', track."MediaTrackTypeId", 'Codec', track."Codec",
-                        'Language', track."Language", 'Channels', track."Channels", 'BitDepth', track."BitDepth", 'DynamicRange', track."DynamicRange", 'Is3D', track."Is3D") ORDER BY track."StreamIndex")::text
-                        FROM "MediaTracks" AS track WHERE track."StoredFileId" = file."Id"), '[]') AS "MediaTracks",
-                    coalesce((SELECT jsonb_object_agg(format."Name", format."Name")::text
-                        FROM "StoredFileCustomFormats" AS evaluated
-                        JOIN "CustomFormats" AS format ON format."Id" = evaluated."CustomFormatId"
-                        JOIN "StoredFileFormatEvidence" AS evidence ON evidence."StoredFileId" = evaluated."StoredFileId"
-                        WHERE evaluated."StoredFileId" = file."Id" AND evaluated."Matches" AND evaluated."IsValid"
-                            AND evaluated."FormatVersion" = format."Version" AND evaluated."Evidence" = evidence."Evidence"
-                            AND format."IncludeWhenRenaming"), '{}') AS "CustomFormats",
+                    coalesce(facts."ProviderIds", '{}') AS "ProviderIds",
+                    coalesce(tracks."MediaTracks", '[]') AS "MediaTracks",
+                    coalesce(formats."CustomFormats", '{}') AS "CustomFormats",
                     file."ReleaseName",
                     franchise."Name" AS "Collection",
-                    coalesce((
-                        SELECT jsonb_object_agg(translation."Locale", translation."Title")::text
-                        FROM (
-                            SELECT DISTINCT ON (lower(split_part(locale."Locale", '-', 1)))
-                                lower(split_part(locale."Locale", '-', 1)) AS "Locale",
-                                title."Title"
-                            FROM "WorkTitles" AS title
-                            JOIN "UiLocales" AS locale ON locale."Id" = title."UiLocaleId"
-                            WHERE title."WorkId" = work."Id"
-                            ORDER BY lower(split_part(locale."Locale", '-', 1)),
-                                title."IsManual" DESC, title."UpdatedAt" DESC, title."Id" DESC
-                        ) AS translation
-                    ), '{}') AS "LocalizedTitles",
-                    (
-                        SELECT
-                            max(track."Width")
-                        FROM
-                            "MediaTracks" AS track
-                        WHERE
-                            track."StoredFileId" = file."Id"
-                            AND track."MediaTrackTypeId" = 1
-                    ) AS "Width"
+                    coalesce(facts."LocalizedTitles", '{}') AS "LocalizedTitles",
+                    tracks."Width"
                 FROM
                     "StoredFiles" AS file
-                    JOIN "LibraryRoots" AS root ON root."Id" = file."LibraryRootId"
+                    JOIN scope ON scope."Id" = file."LibraryRootId"
                     LEFT JOIN "MediaAssets" AS asset ON asset."Id" = file."MediaAssetId"
                     LEFT JOIN "Works" AS work ON work."Id" = asset."WorkId"
+                    LEFT JOIN work_facts AS facts ON facts."WorkId" = work."Id"
                     LEFT JOIN "WorkClasses" AS class ON class."WorkId" = work."Id"
                     LEFT JOIN "WorkVersions" AS version ON version."Id" = asset."WorkVersionId"
                     LEFT JOIN "WorkEditions" AS edition ON edition."Id" = version."WorkEditionId"
@@ -121,22 +182,37 @@ namespace Jularr.Backend.Logic.Library
                     LEFT JOIN "WorkUnits" AS unit ON unit."Id" = asset."WorkUnitId"
                     LEFT JOIN "WorkUnits" AS parent ON parent."Id" = unit."ParentWorkUnitId"
                     LEFT JOIN numbered_episodes AS numbering ON numbering."Id" = unit."Id"
-                    LEFT JOIN covered_absolutes AS absolutes ON absolutes."MediaAssetId" = asset."Id"
-                WHERE
-                    NOT EXISTS (
+                    LEFT JOIN covered_numbers AS covered ON covered."MediaAssetId" = asset."Id"
+                    LEFT JOIN LATERAL (
                         SELECT
-                            1
+                            jsonb_agg(jsonb_build_object('MediaTrackTypeId', track."MediaTrackTypeId", 'Codec', track."Codec", 'Language', track."Language", 'Channels', track."Channels",
+                                'BitDepth', track."BitDepth", 'DynamicRange', track."DynamicRange", 'Is3D', track."Is3D") ORDER BY track."StreamIndex")::text AS "MediaTracks",
+                            max(track."Width") FILTER (WHERE track."MediaTrackTypeId" = 1) AS "Width"
                         FROM
-                            "Operations" AS operation
+                            "MediaTracks" AS track
                         WHERE
-                            operation."LibraryRootId" = root."Id"
-                            AND operation."OperationTypeId" = 1
-                            AND operation."OperationStatusTypeId" IN (1, 2)
-                    )
+                            track."StoredFileId" = file."Id"
+                    ) AS tracks ON TRUE
+                    LEFT JOIN LATERAL (
+                        SELECT
+                            jsonb_object_agg(format."Name", format."Name")::text AS "CustomFormats"
+                        FROM
+                            "StoredFileCustomFormats" AS evaluated
+                            JOIN "CustomFormats" AS format ON format."Id" = evaluated."CustomFormatId"
+                            JOIN "StoredFileFormatEvidence" AS evidence ON evidence."StoredFileId" = evaluated."StoredFileId"
+                        WHERE
+                            evaluated."StoredFileId" = file."Id"
+                            AND evaluated."Matches"
+                            AND evaluated."IsValid"
+                            AND evaluated."FormatVersion" = format."Version"
+                            AND evaluated."Evidence" = evidence."Evidence"
+                            AND format."IncludeWhenRenaming"
+                    ) AS formats ON TRUE
                 ORDER BY
                     file."LibraryRootId",
                     file."RelativePath";
                 """;
+            sql.Parameters.Add(new LibraryRenameScopeData(workId));
             return ctx.ReadSql.ReadListAsync<LibraryRenameFileData>(sql, ct);
         }
 
@@ -229,13 +305,22 @@ namespace Jularr.Backend.Logic.Library
             return (file.MediaTypeId, file.WorkUnitTypeId) switch
             {
                 (MediaType.Movie, null) => NamingPattern.Apply(patterns.Pattern(MediaType.Movie, file.MediaSubtypeId), Values(file, title, null, null, patterns)),
-                (MediaType.Series, WorkUnitType.Episode) when file.ParentUnitNumber is { } season => NamingPattern.Apply(patterns.Pattern(MediaType.Series, file.MediaSubtypeId, Jularr.Backend.Logic.Acquisition.ReleaseParser.TryParse(file.ReleaseName ?? Path.GetFileNameWithoutExtension(file.RelativePath), out var release) && release.AirDate is not null), Values(file, title, season, file.UnitNumber, patterns)),
+                (MediaType.Series, WorkUnitType.Episode) when file.ParentUnitNumber is { } season => NamingPattern.Apply(EpisodePattern(file, patterns), Values(file, title, season, file.UnitNumber, patterns)),
                 (MediaType.Book, null or WorkUnitType.Volume) when file.MediaSubtypeId == MediaSubtype.Manga => NamingPattern.Apply(patterns.Pattern(MediaType.Book, file.MediaSubtypeId), Values(file, title, null, null, patterns)),
                 (MediaType.Book, null) => NamingPattern.Apply(patterns.Pattern(MediaType.Book, file.MediaSubtypeId), Values(file, title, null, null, patterns)),
                 (MediaType.Music, WorkUnitType.Track) when file.UnitTitle is not null => NamingPattern.Apply(patterns.Pattern(MediaType.Music, file.MediaSubtypeId), Values(file, title, null, null, patterns)),
                 (MediaType.Game, null) => NamingPattern.Apply(patterns.Pattern(MediaType.Game, file.MediaSubtypeId), Values(file, title, null, null, patterns)),
                 _ => null
             };
+        }
+
+        // A dated release takes the daily pattern; the name is parsed only when that pattern differs from the standard one.
+        private static string EpisodePattern(LibraryRenameFileData file, NamingSet patterns)
+        {
+            var standard = patterns.Pattern(MediaType.Series, file.MediaSubtypeId, false);
+            var daily = patterns.Pattern(MediaType.Series, file.MediaSubtypeId, true);
+            return daily != standard && Jularr.Backend.Logic.Acquisition.ReleaseParser.TryParse(file.ReleaseName ?? Path.GetFileNameWithoutExtension(file.RelativePath), out var release)
+                && release.AirDate is not null ? daily : standard;
         }
 
         private static NamingValues Values(LibraryRenameFileData file, string title, decimal? season, decimal? episode, NamingSet patterns) =>

@@ -134,7 +134,8 @@ namespace Jularr.Backend.Tests
             CollectionAssert.AreEqual(new long[] { 1, 2, 3, 4, 5, 6, 8, 35, 40 }, listed);
             using var system = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/system");
             var health = (await system.Content.ReadFromJsonAsync<SystemHealthV1>())!;
-            Assert.AreEqual(10L, health.CatalogWorks, "Works 20 to 24, 31, 32, 33, 34 and 37 are catalog only.");
+            Assert.AreEqual(10L, health.CatalogWorks, "Works 20 to 24, 31, 32, 33, 34 and 37 are catalog only; the cleanup counted the catalog after it deleted titles.");
+            Assert.IsNotNull(health.CatalogCountedAt);
             Assert.AreEqual(1L, health.Library.Single(item => item.MediaTypeId == MediaType.Movie).Count);
         }
 

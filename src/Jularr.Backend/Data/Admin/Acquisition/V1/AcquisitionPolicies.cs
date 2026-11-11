@@ -27,14 +27,19 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
     }
     public sealed class ReadAcquisitionTagsParametersV1 : BaseParameters
     {
-        public ReadAcquisitionTagsParametersV1(int page = 1, int pageSize = 25)
+        public ReadAcquisitionTagsParametersV1(int page = 1, int pageSize = 25, long[]? acquisitionTagIds = null)
         {
             Page = page;
             PageSize = pageSize;
+            AcquisitionTagIds = acquisitionTagIds ?? [];
         }
 
         public int Page { get; }
         public int PageSize { get; }
+
+        // Only these tags, such as the chosen ones a page of choices may not hold; none lists them all.
+        [DataField(typeof(AcquisitionPolicyFields), nameof(AcquisitionPolicyFields.TagIds))]
+        public long[] AcquisitionTagIds { get; }
     }
     public sealed class SaveReleaseProfileDataV1 : BaseData
     {

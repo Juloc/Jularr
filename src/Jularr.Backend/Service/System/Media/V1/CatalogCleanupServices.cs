@@ -39,14 +39,17 @@ namespace Jularr.Backend.Service.System.Media.V1
             }
             while (count == BatchSize && ++batches < MaximumBatches);
 
+            var deleted = 0;
             do
             {
                 count = await Context.ExecuteBatchAsync((ctx, ct) => ctx.DeleteUnusedCatalogTitlesAsync(data, ct), CancellationToken);
-                changed += count;
+                deleted += count;
             }
             while (count == BatchSize && ++batches < MaximumBatches);
 
-            return new UpdateResult(changed > 0);
+            // Deleted titles leave the catalog figures at once.
+            if (deleted > 0) await Context.ExecuteBatchAsync((ctx, ct) => ctx.RefreshCatalogTotalsAsync(ct), CancellationToken);
+            return new UpdateResult(changed + deleted > 0);
         }
     }
 }

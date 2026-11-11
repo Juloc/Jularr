@@ -1379,6 +1379,8 @@ namespace Jularr.Backend.Tests
             using var own = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/library/renames?WorkId=" + workId);
             var ownPlan = (await own.Content.ReadFromJsonAsync<LibraryRenamePlanV1>())!;
             Assert.AreEqual(2, ownPlan.Items.Count);
+            CollectionAssert.AreEqual(plan.Items.Select(item => item.StoredFileId + " " + item.TargetPath).ToArray(), ownPlan.Items.Select(item => item.StoredFileId + " " + item.TargetPath).ToArray());
+            Assert.AreEqual(plan.Fingerprint, ownPlan.Fingerprint);
             using var other = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/library/renames?WorkId=" + (workId + 1000));
             var otherPlan = (await other.Content.ReadFromJsonAsync<LibraryRenamePlanV1>())!;
             Assert.AreEqual(0, otherPlan.Items.Count);
@@ -1503,7 +1505,7 @@ namespace Jularr.Backend.Tests
 
             await using var sql = new SqlContext(host.Fixture.Database);
             await sql.BeginAsync(SqlAccessMode.ReadOnly);
-            var files = await new LogicContext(sql).ReadLibraryRenameFilesAsync(default);
+            var files = await new LogicContext(sql).ReadLibraryRenameFilesAsync(null, default);
             await sql.CommitAsync();
 
             CollectionAssert.AreEqual(new[]
