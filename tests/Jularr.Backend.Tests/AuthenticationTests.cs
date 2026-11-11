@@ -318,6 +318,37 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Login_HashOfAnOlderWorkFactor_IsStoredAgainAtTheCurrentOne()
+        {
+            // A password kept from before the current work factor (the framework's 100,000 iterations); the hosts' own hash is already current.
+            await using var host = await Host.CreateAsync();
+            var older = new PasswordHasher<AccountAuthenticationData>(Options.Create(new PasswordHasherOptions { IterationCount = 100_000 }))
+                .HashPassword(new AccountAuthenticationData(41, 1, null, true, false), Password);
+            await using (var connection = await host.Fixture.Database.OpenConnectionAsync())
+            await using (var command = new NpgsqlCommand("UPDATE \"AccountPasswords\" SET \"PasswordHash\" = @hash WHERE \"AccountId\" = 41", connection))
+            {
+                command.Parameters.AddWithValue("hash", older);
+                Assert.AreEqual(1, await command.ExecuteNonQueryAsync());
+            }
+
+            // Signing in replaces it with a hash of the current work factor (the V3 format keeps the iteration count big-endian at bytes 5 to 8).
+            await host.SendAsync(HttpMethod.Get, "/api/v1/auth");
+            using (var login = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/login", new LoginDataV1("account_a", Password)))
+            {
+                Assert.AreEqual(HttpStatusCode.OK, login.StatusCode);
+            }
+
+            var stored = (string)(await host.ScalarAsync("SELECT \"PasswordHash\" FROM \"AccountPasswords\" WHERE \"AccountId\" = 41"))!;
+            Assert.AreNotEqual(older, stored);
+            Assert.AreEqual(600_000, System.Buffers.Binary.BinaryPrimitives.ReadInt32BigEndian(Convert.FromBase64String(stored).AsSpan(5, 4)));
+
+            // The new hash signs in and is kept as it is.
+            using var again = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/login", new LoginDataV1("account_a", Password));
+            Assert.AreEqual(HttpStatusCode.OK, again.StatusCode);
+            Assert.AreEqual(stored, await host.ScalarAsync("SELECT \"PasswordHash\" FROM \"AccountPasswords\" WHERE \"AccountId\" = 41"));
+        }
+
+        [TestMethod]
         public async Task Login_RealCookieAndRevocation_WorkWithoutExposingSessionSecrets()
         {
             await using var host = await Host.CreateAsync();
