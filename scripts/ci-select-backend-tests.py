@@ -18,6 +18,8 @@ SMOKE = (
     "ServiceApiTests.Registration_BackendOwnsDatabase_DirectAndHttpServicesShareRuntime",
     "AuthenticationTests.Session_ExpiredOrRevoked_IsNotRenewed",
     "InstanceModuleDependencyTests.Modules_Read_NameWhatEachNeeds",
+    # Builds the service container with ValidateOnBuild: a broken registration fails every PR.
+    "ProfileServiceGateTests.Gate_IndependentInvocationsRetainTheirOwnVerifiedCaller",
 )
 
 # The `smoke` job of Backend Full: startup, schema, migrations, sessions and the first-owner
