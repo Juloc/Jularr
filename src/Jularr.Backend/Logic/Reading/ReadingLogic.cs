@@ -1,4 +1,5 @@
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Logic.Media;
 using Jularr.Backend.Data.Logic.Profile;
 using Jularr.Backend.Data.Logic.Reading;
 using Jularr.Backend.Infrastructure.Sql;
@@ -35,9 +36,58 @@ namespace Jularr.Backend.Logic.Reading
             return ctx.ReadRequiredAsync<ReadingDocumentStateData>(sql, ct);
         }
 
+        // A section's translation cache is written under a shared lock of its document and a lock of its own: other sections are written side by side, the same
+        // section waits for the writer before it. Whatever clears or rebuilds a document's resources takes the document's lock alone and waits for every open writer.
+        public static async Task LockReadingResourceAsync(this LogicContext ctx, ReadingTranslationPathData data, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT pg_advisory_xact_lock_shared(hashtextextended('reading-document:' || @DocumentId::text, 0));
+                SELECT pg_advisory_xact_lock(hashtextextended('reading-resource:' || @DocumentId::text || ':' || @Path, 0));
+                """;
+            sql.Parameters.Add(data);
+            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+        }
+
+        public static async Task LockReadingDocumentAsync(this LogicContext ctx, ReadingDocumentIdData data, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement = "SELECT pg_advisory_xact_lock(hashtextextended('reading-document:' || @DocumentId::text, 0));";
+            sql.Parameters.Add(data);
+            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+        }
+
+        // The documents of every file of a work, always in the same order, so two callers never wait for each other in a circle.
+        public static async Task LockWorkReadingDocumentsAsync(this LogicContext ctx, WorkIdData data, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    pg_advisory_xact_lock(hashtextextended('reading-document:' || book."Id"::text, 0))
+                FROM (
+                    SELECT
+                        document."Id"
+                    FROM
+                        "ReadingDocuments" AS document
+                        JOIN "StoredFiles" AS file ON file."Id" = document."StoredFileId"
+                        JOIN "MediaAssets" AS asset ON asset."Id" = file."MediaAssetId"
+                    WHERE
+                        asset."WorkId" = @Id
+                    ORDER BY
+                        document."Id"
+                ) AS book;
+                """;
+            sql.Parameters.Add(data);
+            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+        }
+
         public static async Task ClearReadingResourcesAsync(this LogicContext ctx, ReadingDocumentIdData data, CancellationToken ct)
         {
-            // An interrupted preparation starts over.
+            // An interrupted preparation starts over, once no translation is being written into the document. Its translation progress is counted again
+            // under the counts' own lock (never deleted beside it), so it never waits for the job's count in a circle.
+            await ctx.LockReadingDocumentAsync(data, ct);
             var sql = new SqlStatement();
             sql.Statement =
                 """
@@ -48,6 +98,7 @@ namespace Jularr.Backend.Logic.Reading
                 """;
             sql.Parameters.Add(data);
             await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+            await ctx.RecountBookTranslationProgressAsync(new BookTranslationRecountData([data.DocumentId], null), ct);
         }
 
         public static async Task SaveReadingResourceAsync(this LogicContext ctx, ReadingResourceData data, CancellationToken ct)
@@ -70,7 +121,8 @@ namespace Jularr.Backend.Logic.Reading
 
         public static async Task CompleteReadingDocumentAsync(this LogicContext ctx, ReadingDocumentCompleteData data, CancellationToken ct)
         {
-            // Only a complete package counts as readable without the storage.
+            // Only a complete package counts as readable without the storage; its size counts every translation written before.
+            await ctx.LockReadingDocumentAsync(new ReadingDocumentIdData(data.DocumentId), ct);
             var sql = new SqlStatement();
             sql.Statement =
                 """

@@ -1,7 +1,9 @@
 name: Restore the shared build
 description: >-
   Unpacks the workspace that the build job compiled once (sources, bin/obj, compiled frontend
-  assets) so a test shard runs `dotnet test --no-build` without compiling again.
+  assets, the shard plans in ci-plan/) so a test job runs `dotnet test --no-build` without compiling
+  again. No NuGet cache: the test outputs carry every assembly they load, and the NuGet imports of a
+  project file only apply when they exist.
 
 runs:
   using: composite
@@ -15,11 +17,7 @@ runs:
         path: ${{ runner.temp }}/jularr-build
     - name: Unpack the build into the workspace
       shell: bash
-      run: tar -xzf "${RUNNER_TEMP}/jularr-build/jularr-build.tgz" -C "${GITHUB_WORKSPACE}"
-    # After the unpack, so the project files exist and the key equals the one smoke saved.
-    - uses: actions/cache/restore@v6
-      with:
-        path: ~/.nuget/packages
-        key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', '**/*.props', '**/*.targets') }}
-        restore-keys: |
-          nuget-${{ runner.os }}-
+      run: |
+        tar -xzf "${RUNNER_TEMP}/jularr-build/jularr-build.tgz" -C "${GITHUB_WORKSPACE}"
+        rm -f "${RUNNER_TEMP}/jularr-build/jularr-build.tgz"
+        echo "NuGet package folder: $(ls -d ~/.nuget/packages 2>/dev/null || echo 'none (not needed)')"

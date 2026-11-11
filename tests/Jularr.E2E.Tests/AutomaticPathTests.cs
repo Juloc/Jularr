@@ -59,7 +59,7 @@ namespace Jularr.E2E.Tests
 
                 // The automatic search takes only what the imported profile allows.
                 await WaitForGrabsAsync(fakes, first, second);
-                var details = await Steps.WaitForAvailableAsync(page, FakeServices.SeriesTitle);
+                var details = await Steps.WaitForAvailableAsync(page, FakeServices.SeriesTitle, asksMonitor: false);
                 CollectionAssert.AreEquivalent(new[] { fakes.NzbAddress(first).ToString(), fakes.NzbAddress(second).ToString() }, fakes.Grabbed.ToArray());
                 Assert.AreEqual(2, Directory.EnumerateFiles(Path.Combine(folders.Library, "Series"), "*.webm", SearchOption.AllDirectories).Count(), "The episodes were not imported.");
 
@@ -194,8 +194,8 @@ namespace Jularr.E2E.Tests
                 CollectionAssert.DoesNotContain(fakes.Grabbed.ToArray(), fakes.NzbAddress(english).ToString(), "The custom profile's German release was not preferred.");
 
                 // Both arrive for the user and play.
-                var film = await Steps.WaitForAvailableAsync(user, FakeServices.MovieTitle);
-                var anime = await Steps.WaitForAvailableAsync(user, FakeServices.AnimeTitle);
+                var film = await Steps.WaitForAvailableAsync(user, FakeServices.MovieTitle, asksMonitor: false);
+                var anime = await Steps.WaitForAvailableAsync(user, FakeServices.AnimeTitle, asksMonitor: false);
                 Assert.AreEqual(2, Directory.EnumerateFiles(Path.Combine(folders.Library, "Anime"), "*.webm", SearchOption.AllDirectories).Count(), "The anime episodes were not imported.");
                 await user.GotoAsync("/Requests?mode=watch");
                 await Assertions.Expect(user.Locator(".request-row", new() { HasText = FakeServices.MovieTitle })).ToContainTextAsync("Available");
@@ -261,7 +261,7 @@ namespace Jularr.E2E.Tests
                 await WaitForGrabsAsync(fakes, pdf);
 
                 // The PDF reads reflowed, with its picture where it stood.
-                var details = await Steps.WaitForAvailableAsync(user, FakeServices.BookTitle, "Read");
+                var details = await Steps.WaitForAvailableAsync(user, FakeServices.BookTitle, "Read", asksMonitor: false);
                 await Steps.OpenReaderAsync(user, details);
                 var content = user.Locator("[data-role=content]");
                 await Assertions.Expect(content).ToContainTextAsync("must be in want of a wife.");
@@ -377,7 +377,7 @@ namespace Jularr.E2E.Tests
                         + "; grabbed: " + string.Join(", ", fakes.Grabbed));
                 }
 
-                await Task.Delay(3000);
+                await Task.Delay(250);
             }
         }
     }

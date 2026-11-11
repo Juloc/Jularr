@@ -170,6 +170,7 @@ namespace Jularr.Backend.Tests
                     services.AddHttpClient<OllamaLocalModels>().ConfigurePrimaryHttpMessageHandler(() => new FakeOllama());
                 });
             await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" IN ('Translation', 'TranslationBrowser')");
+            await LocalReadingTranslationIntegrationTests.CheckMachinesAsync(host);
             return host;
         }
 

@@ -21,7 +21,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             var windows = await Context.ReadExternalWorkSyncWindowsAsync(CancellationToken);
             var tier = await Context.ReadCachingTierAsync(CancellationToken);
             return new BaseDataList<ExternalWorkSyncV1>([.. syncs.Select(sync => new ExternalWorkSyncV1(sync.Namespace, ExternalWorkLogic.CatalogTier(tier, sync.Namespace), sync.RequestsPerMinute,
-                sync.PausesWhileUsed, sync.ListedOn, sync.Entries, sync.Pending, sync.Version,
+                sync.PausesWhileUsed, sync.ListedOn, sync.Entries, sync.Pending, sync.CountedAt, sync.Version,
                 new BaseDataList<ExternalWorkSyncWindowV1>([.. windows.Where(window => window.Namespace == sync.Namespace).Select(window => new ExternalWorkSyncWindowV1(window.StartsAt, window.EndsAt))])))]);
         }
     }

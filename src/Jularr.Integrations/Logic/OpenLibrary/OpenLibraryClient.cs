@@ -4,18 +4,19 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using Jularr.Integrations.Data.Common;
 using Jularr.Integrations.Data.OpenLibrary;
+using Jularr.Integrations.Logic.Common;
 
 namespace Jularr.Integrations.Logic.OpenLibrary
 {
     // Open Library: keyless book metadata and covers.
-    internal sealed partial class OpenLibraryClient(HttpClient http)
+    internal sealed partial class OpenLibraryClient(HttpClient http, RequestPace<OpenLibraryClient>? pace = null)
     {
         private const string Fields = "key,title,author_name,first_publish_year,cover_i,isbn,language,format";
 
         // Open Library permits one request per second for unidentified clients. All
-        // imports and interactive searches on this host share the same rate gate.
-        private static readonly SemaphoreSlim RequestGate = new(1, 1);
-        private static DateTimeOffset _nextRequestAt = DateTimeOffset.MinValue;
+        // imports and interactive searches on this host share the same pace.
+        public static readonly TimeSpan DefaultSpacing = TimeSpan.FromSeconds(1);
+        private readonly RequestPace<OpenLibraryClient> _pace = pace ?? new(DefaultSpacing);
 
         public static string? CoverUrl(long? coverId) => coverId is > 0 ? "https://covers.openlibrary.org/b/id/" + coverId.Value.ToString(CultureInfo.InvariantCulture) + "-L.jpg" : null;
 
@@ -171,16 +172,14 @@ namespace Jularr.Integrations.Logic.OpenLibrary
 
         private async Task<JsonDocument> GetAsync(string path, CancellationToken ct)
         {
-            await RequestGate.WaitAsync(ct);
+            await _pace.Gate.WaitAsync(ct);
             try
             {
-                var wait = _nextRequestAt - DateTimeOffset.UtcNow;
-                if (wait > TimeSpan.Zero) await Task.Delay(wait, ct);
-                _nextRequestAt = DateTimeOffset.UtcNow.AddSeconds(1);
+                await _pace.WaitForTurnAsync(ct);
             }
             finally
             {
-                RequestGate.Release();
+                _pace.Gate.Release();
             }
 
             HttpResponseMessage response;

@@ -71,7 +71,6 @@ namespace Jularr.Integrations.Logic.Speech
         private async Task<string> ReadJsonAsync(string address, int limit, CancellationToken ct)
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, address);
-            request.Headers.UserAgent.ParseAdd("Jularr/1.0 (+https://github.com/Juloc/Jularr)");
             using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
             response.EnsureSuccessStatusCode();
             if (response.Content.Headers.ContentLength > limit) throw new InvalidDataException("Speech source metadata is too large.");

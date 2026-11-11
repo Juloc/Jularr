@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   authorship:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
 
     steps:
@@ -43,3 +43,7 @@ jobs:
             range="${HEAD_SHA}"
           fi
           bash scripts/verify-authorship.sh --range "${range}"
+
+      # The only check of verify-authorship.sh itself (with the runner's Node; it runs the script above on throwaway repositories).
+      - name: Verify the authorship check's own test cases
+        run: node --test scripts/authorship.test.mjs

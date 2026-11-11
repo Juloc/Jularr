@@ -12,6 +12,7 @@ using Jularr.Backend.Data.Enums.Instance;
 using Jularr.Backend.Data.System.Instance.V1;
 using Jularr.Backend.Service.Core;
 using Jularr.Backend.Service.System.Instance.V1;
+using Jularr.Backend.Tests.Infrastructure;
 using Jularr.Integrations.Logic.MediaServer;
 using Jularr.Integrations.Logic.Newznab;
 using Jularr.Integrations.Logic.Sabnzbd;
@@ -156,6 +157,34 @@ namespace Jularr.Backend.Tests
             Assert.IsFalse(providers.ContainsKey("provider:igdb"), "A provider nobody configured or asked has no row.");
             await host.Fixture.RunSqlAsync("UPDATE \"Providers\" SET \"IsEnabled\" = FALSE WHERE \"Key\" = 'anilist'");
             Assert.IsFalse((await CheckNowAsync(host)).Services.Any(service => service.Key == "provider:anilist"));
+        }
+
+        [TestMethod]
+        public async Task ProviderObservation_AProviderThatNeverAnswers_FailsWhenTheClientsTimeIsUp_AndACallerThatGivesUpSaysNothing()
+        {
+            var limit = TimeSpan.FromMilliseconds(300);
+            HttpClient Client(ProviderObservations observations) =>
+                new(new ProviderObservationHandler(observations, "tmdb", limit, TimeProvider.System) { InnerHandler = SilentServer.NeverAnswers() }) { Timeout = limit };
+
+            // The client's own timeout: the provider did not answer, so the health check shows it failing.
+            var observed = new ProviderObservations(TimeProvider.System);
+            using (var http = Client(observed))
+            {
+                var timeout = await Assert.ThrowsExactlyAsync<TaskCanceledException>(() => http.GetAsync("https://api.themoviedb.org/3/movie/1"));
+                Assert.IsInstanceOfType<TimeoutException>(timeout.InnerException);
+            }
+
+            Assert.IsFalse(observed.Last("tmdb")?.Succeeded ?? true);
+
+            // A caller that stops waiting first learns nothing about the provider.
+            var quiet = new ProviderObservations(TimeProvider.System);
+            using (var http = Client(quiet))
+            {
+                using var stop = new CancellationTokenSource(TimeSpan.FromMilliseconds(50));
+                await Assert.ThrowsAsync<OperationCanceledException>(() => http.GetAsync("https://api.themoviedb.org/3/movie/1", stop.Token));
+            }
+
+            Assert.IsNull(quiet.Last("tmdb"));
         }
 
         [TestMethod]
@@ -334,6 +363,7 @@ namespace Jularr.Backend.Tests
             var now = DateTime.UtcNow;
             timings.Record("Probe/Service", TimeSpan.FromMilliseconds(40), false);
             timings.Record("Probe/Service", TimeSpan.FromMilliseconds(10), true);
+            timings.RecordPage("/Probe/Page", TimeSpan.FromMilliseconds(25), false);
             history.Add(new ResourceSample(now.AddMinutes(-1), 12.5m, 300_000_000));
             history.Add(new ResourceSample(now, 20.0m, 310_000_000));
             await host.Fixture.RunSqlAsync("INSERT INTO \"PerformanceSamples\" (\"SampledAt\", \"ProcessorPercent\", \"MemoryBytes\") VALUES (now() - interval '30 hours', 1, 1)");
@@ -345,6 +375,7 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(2L, await host.ScalarAsync("SELECT \"Calls\" FROM \"ServiceTimings\" WHERE \"Service\" = 'Probe/Service'"));
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT \"Errors\" FROM \"ServiceTimings\" WHERE \"Service\" = 'Probe/Service'"));
             Assert.AreEqual(40L, await host.ScalarAsync("SELECT \"MaximumMilliseconds\" FROM \"ServiceTimings\" WHERE \"Service\" = 'Probe/Service'"));
+            Assert.AreEqual(25L, await host.ScalarAsync("SELECT \"TotalMilliseconds\" FROM \"ServiceTimings\" WHERE \"Service\" = 'Page/Probe/Page'"));
 
             // What was written is not written again; a later call changes the same row.
             Assert.IsFalse(timings.ReadUnsaved().Any(slice => slice.Service == "Probe/Service"));
@@ -365,6 +396,7 @@ namespace Jularr.Backend.Tests
             }
 
             var read = timings.Read(100).Single(timing => timing.Service == "Probe/Service");
+            Assert.AreEqual(1L, timings.ReadPages().Single(page => page.Service == "/Probe/Page").Count);
             Assert.AreEqual(4L, read.Count);
             Assert.AreEqual(1L, read.Errors);
             Assert.AreEqual(70d, read.MaxMilliseconds);

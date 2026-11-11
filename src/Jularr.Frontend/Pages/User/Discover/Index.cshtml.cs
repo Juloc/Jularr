@@ -944,7 +944,7 @@ namespace Jularr.Frontend.Pages.User.Discover
             }
 
             var total = Stopwatch.GetElapsedTime(started);
-            HttpContext.Response.Headers["Server-Timing"] = $"local;dur={wholeMilliseconds}, shelves;dur={(long)total.TotalMilliseconds}";
+            HttpContext.Response.Headers.Append("Server-Timing", $"local;dur={wholeMilliseconds}, shelves;dur={(long)total.TotalMilliseconds}");
             if (total > SlowShelf) log.LogInformation("Discover shelves: {Shelves} shelves in {Milliseconds} ms ({Local} ms for the local ones)", answers.Count, (long)total.TotalMilliseconds, wholeMilliseconds);
         }
 

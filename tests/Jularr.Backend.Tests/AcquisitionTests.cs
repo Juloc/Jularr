@@ -1445,6 +1445,44 @@ namespace Jularr.Backend.Tests
 
         // A book's files belong to its editions, a game's to its platforms, each platform with its own target and a ROM check by hash.
         [TestMethod]
+        public async Task WorkPage_AGamesPlatformsAndChosenTags_AreReadInABoundedNumberOfServiceCalls()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, new FakeUsenet(), razor: true);
+            using var game = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works", new CreateWorkDataV1(MediaType.Game, "Game"));
+            var gameId = (await game.Content.ReadFromJsonAsync<WorkDetailsV1>())!.Id;
+
+            // Three wanted platforms and more tags than the first page of choices holds; the title carries the last one.
+            await host.Fixture.RunSqlAsync($"""
+                INSERT INTO "GamePlatforms" ("Id", "Name") VALUES (700, 'Switch'), (701, 'PC'), (702, 'Wii');
+                INSERT INTO "WorkPlatforms" ("WorkId", "GamePlatformId") SELECT {gameId}, "Id" FROM "GamePlatforms" WHERE "Id" BETWEEN 700 AND 702;
+                INSERT INTO "WantedItems" ("WorkId", "GamePlatformId") SELECT {gameId}, "Id" FROM "GamePlatforms" WHERE "Id" BETWEEN 700 AND 702;
+                INSERT INTO "Tags" ("Label") SELECT 'tag ' || lpad(n::text, 2, '0') FROM generate_series(1, 30) AS n;
+                INSERT INTO "WorkTags" ("WorkId", "TagId") SELECT {gameId}, "Id" FROM "Tags" WHERE "Label" = 'tag 30';
+                """);
+            var targets = ((string)(await host.ScalarAsync("SELECT string_agg(\"Id\"::text, ',') FROM \"WantedItems\" WHERE \"WorkId\" = " + gameId))!).Split(',');
+
+            // Each target has its edit dialog and the chosen tag is a choice; the targets come in one read, the missing tag in one more.
+            var timings = host.Services.GetRequiredService<Jularr.Backend.Service.Core.ServiceTimings>();
+            Dictionary<string, long> Calls() => timings.Read(1000).ToDictionary(timing => timing.Service, timing => timing.Count);
+            var before = Calls();
+            using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Works/" + gameId);
+            var html = await page.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
+            var calls = Calls().Select(call => (call.Key, Count: call.Value - before.GetValueOrDefault(call.Key))).Where(call => call.Count > 0).ToDictionary(call => call.Key, call => call.Count);
+            var described = string.Join(", ", calls.Select(call => call.Key + " " + call.Value));
+            foreach (var target in targets) StringAssert.Contains(html, "id=\"work-edit-" + target + "\"");
+            var tagId = await host.ScalarAsync("SELECT \"Id\" FROM \"Tags\" WHERE \"Label\" = 'tag 30'");
+            StringAssert.Contains(html, "name=\"TagIds\" value=\"" + tagId + "\" checked=\"checked\"><span>tag 30</span>");
+            Assert.AreEqual(1, calls.GetValueOrDefault("Admin/ReadWantedItemsV1"), described);
+            Assert.AreEqual(0, calls.GetValueOrDefault("Admin/ReadWantedItemV1"), described);
+            Assert.AreEqual(0, calls.GetValueOrDefault("Admin/ReadAcquisitionTagV1"), described);
+            Assert.AreEqual(2, calls.GetValueOrDefault("Admin/ReadAcquisitionTagsV1"), described);
+            Assert.IsLessThanOrEqualTo(7, calls.Where(call => call.Key.StartsWith("Admin/", StringComparison.Ordinal) && !call.Key.EndsWith("SummaryV1", StringComparison.Ordinal)).Sum(call => call.Value), described);
+        }
+
+        [TestMethod]
         public async Task WorkManagement_GroupsABooksFilesByEdition_AndAGamesByPlatform()
         {
             using var storage = new TemporaryDirectory();
@@ -2960,10 +2998,27 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(expected.Length, summary.CutoffUnmetCount);
             Assert.AreEqual(1, summary.PausedCount);
 
-            // The page offers the lists and keeps the chosen one.
+            // The page's read gives each view's entries and the numbers as the list and the summary do, in one statement; an empty page keeps the numbers.
+            foreach (var (view, number) in new[] { (WantedViewType.All, 1), (WantedViewType.Missing, 1), (WantedViewType.CutoffUnmet, 1), (WantedViewType.All, 2), (WantedViewType.All, 3) })
+            {
+                var query = "?page=" + number + "&pageSize=4&wantedViewTypeId=" + (int)view;
+                using var listed = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/wanted" + query);
+                using var combined = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/wanted/page" + query);
+                Assert.AreEqual(HttpStatusCode.OK, combined.StatusCode, await combined.Content.ReadAsStringAsync());
+                using var both = System.Text.Json.JsonDocument.Parse(await combined.Content.ReadAsStringAsync());
+                using var list = System.Text.Json.JsonDocument.Parse(await listed.Content.ReadAsStringAsync());
+                Assert.AreEqual(list.RootElement.GetProperty("items").GetRawText(), both.RootElement.GetProperty("entries").GetProperty("items").GetRawText(), view + " page " + number);
+                Assert.AreEqual(System.Text.Json.JsonSerializer.Serialize(summary), System.Text.Json.JsonSerializer.Serialize(System.Text.Json.JsonSerializer.Deserialize<WantedSummaryV1>(both.RootElement.GetProperty("summary").GetRawText(), System.Text.Json.JsonSerializerOptions.Web)), view + " page " + number);
+            }
+
+            // The page offers the lists and keeps the chosen one; it reads the wanted targets once.
+            var timings = host.Services.GetRequiredService<Jularr.Backend.Service.Core.ServiceTimings>();
+            long Calls(string service) => timings.Read(1000).SingleOrDefault(timing => timing.Service == service)?.Count ?? 0;
+            var (lists, summaries, pages) = (Calls("Admin/ReadWantedV1"), Calls("Admin/ReadWantedSummaryV1"), Calls("Admin/ReadWantedPageV1"));
             using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Wanted?PageNumber=1&View=CutoffUnmet");
             var html = await page.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
+            Assert.AreEqual((lists, summaries, pages + 1), (Calls("Admin/ReadWantedV1"), Calls("Admin/ReadWantedSummaryV1"), Calls("Admin/ReadWantedPageV1")));
             StringAssert.Contains(html, "Cutoff unmet");
             StringAssert.Contains(html, "Below cutoff");
             StringAssert.Contains(html, "href=\"/Admin/Wanted/702\"");
@@ -4007,7 +4062,7 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(0, usenet.Grabbed.Count);
             await using (var scope = host.Services.CreateAsyncScope())
             {
-                await OperationWorker.RunNextAsync(scope.ServiceProvider, NullLogger.Instance, OperationType.AcquisitionSearch, CancellationToken.None);
+                await OperationWorker.RunNextAsync(scope.ServiceProvider, NullLogger.Instance, OperationType.AcquisitionSearch, CancellationToken.None, CancellationToken.None);
             }
 
             Assert.AreEqual(1, usenet.Grabbed.Count);
@@ -4129,7 +4184,7 @@ namespace Jularr.Backend.Tests
             using var downloads = new TemporaryDirectory();
             var usenet = new FakeUsenet();
             await using var host = await CreateHostAsync(storage.Path, downloads.Path, usenet);
-            var wantedId = await CreateWantedMovieAsync(host);
+            await CreateWantedMovieAsync(host);
             await host.Fixture.RunSqlAsync("""
                 UPDATE "Works" SET "OriginalLanguage" = 'ja';
                 UPDATE "WantedItems" SET "NextSearchAt" = 'infinity';
@@ -4153,9 +4208,6 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(0, usenet.Grabbed.Count);
             usenet.Results = FeedOf(("Example.Movie.2020.720p.WEB-DL.H264-SEEN", "seen"), ("Example.Movie.2020.1080p.WEB-DL.H264-AGAIN", "again"), ("Example.Movie.2020.German.1080p.WEB-DL.H264-DUB", "dub"));
             await RunAsync<SyncFeedsV1>(host);
-            using var dbg = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/wanted/" + wantedId + "/search", new SearchWantedDataV1());
-            Console.WriteLine("DBG " + string.Join(" | ", (await dbg.Content.ReadFromJsonAsync<BaseDataList<WantedReleaseCandidateV1>>())!.Select(c => c.Title + " " + c.ReleaseDecisionTypeId + " " + c.ReasonCode + " " + string.Join(",", c.Languages))));
-            Console.WriteLine("DBG grabbed " + usenet.Grabbed.Count);
             CollectionAssert.AreEqual(new[] { "https://indexer.example.test/getnzb/dub" }, usenet.Grabbed);
         }
 
@@ -4587,19 +4639,15 @@ namespace Jularr.Backend.Tests
                 </channel></rss>
                 """;
 
-            // One series: two seasons, the last episode still unaired.
+            // One series: a special and two seasons; TheTVDB names their episodes.
             private static HttpResponseMessage Tmdb(HttpRequestMessage request)
             {
                 if (request.Headers.Authorization?.Parameter != TmdbToken) return new HttpResponseMessage(HttpStatusCode.Unauthorized);
                 var path = request.RequestUri!.AbsolutePath;
-                var future = DateTime.UtcNow.AddDays(30).ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
                 return path switch
                 {
                     "/3/search/tv" => Json("""{"results":[{"id":1399,"name":"Example Show","original_name":"Beispiel Serie","first_air_date":"2020-04-01","overview":"A show."}]}"""),
                     "/3/tv/1399" => Json("""{"id":1399,"name":"Example Show","original_name":"Beispiel Serie","first_air_date":"2020-04-01","external_ids":{"tvdb_id":81189,"imdb_id":"tt0903747"},"seasons":[{"season_number":0,"name":"Specials","episode_count":1},{"season_number":1,"name":"Season 1","air_date":"2020-04-01","episode_count":3,"poster_path":"/s1.jpg"},{"season_number":2,"name":"Season 2","air_date":"2021-04-01","episode_count":2}]}"""),
-                    "/3/tv/1399/season/0" => Json("""{"episodes":[{"season_number":0,"episode_number":1,"name":"Pilot extra","air_date":"2020-01-01"}]}"""),
-                    "/3/tv/1399/season/1" => Json("""{"episodes":[{"season_number":1,"episode_number":1,"name":"One","air_date":"2020-04-01","overview":"The first.","still_path":"/one.jpg","runtime":42,"guest_stars":[{"id":77,"name":"Guest Example","character":"Visitor"}],"crew":[{"id":78,"name":"Episode Director","job":"Director"},{"id":79,"name":"Grip","job":"Key Grip"}]},{"season_number":1,"episode_number":2,"name":"Two","air_date":"2020-04-08"},{"season_number":1,"episode_number":3,"name":"Three","air_date":"2020-04-15"}]}"""),
-                    "/3/tv/1399/season/2" => Json($$$"""{"episodes":[{"season_number":2,"episode_number":1,"name":"Four","air_date":"2021-04-01"},{"season_number":2,"episode_number":2,"name":"Five","air_date":"{{{future}}}"}]}"""),
                     _ => new HttpResponseMessage(HttpStatusCode.NotFound)
                 };
             }

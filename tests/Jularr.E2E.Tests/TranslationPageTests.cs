@@ -21,6 +21,7 @@ namespace Jularr.E2E.Tests
                     UPDATE "InstanceModules" SET "IsEnabled" = TRUE WHERE "Key" = 'Translation';
                     UPDATE "InstanceSettings" SET "TranslationMachines" = ARRAY['http://127.0.0.1:9/', '{{ollama.Address}}'] WHERE "Id" = 1;
                     """);
+                await ReaderTranslationTests.CheckMachinesAsync(page);
 
                 foreach (var (width, height) in new[] { (1440, 900), (768, 1024), (375, 812) })
                 {
@@ -75,6 +76,7 @@ namespace Jularr.E2E.Tests
             {
                 await ReadingPathTests.AddBookAsync(page, folders, "Progress Book");
                 await jularr.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'Translation'");
+                await ReaderTranslationTests.CheckMachinesAsync(page);
                 await page.GotoAsync("/Read/1");
                 await Assertions.Expect(page.Locator("[data-role=content]")).ToContainTextAsync("Chapter One");
                 await jularr.RunSqlAsync("""
@@ -82,6 +84,12 @@ namespace Jularr.E2E.Tests
                     SELECT profile."Id", asset."WorkId", 'de' FROM "Profiles" AS profile, "MediaAssets" AS asset WHERE asset."Id" = 1
                     ON CONFLICT ("ProfileId", "WorkId") DO UPDATE SET "Language" = 'de'
                     """);
+
+                // The book translation job counts the books again when the languages read change; it runs now instead of on its schedule (its first pass
+                // comes fifty seconds after the start), and the page shows its count once it is stored.
+                await Steps.RunJobAsync(page, "bookTranslations");
+                await Steps.WaitUntilAsync(async () => (long)(await jularr.ScalarAsync("SELECT count(*) FROM \"BookTranslationProgress\" WHERE \"Language\" = 'de'"))! > 0,
+                    "The book was not counted for German", TimeSpan.FromSeconds(60));
 
                 foreach (var (width, height) in new[] { (1440, 900), (768, 1024), (375, 812) })
                 {

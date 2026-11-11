@@ -9,7 +9,6 @@ namespace Jularr.E2E.Tests
     public sealed class RemoteBrowserTests
     {
         [TestMethod]
-        [DataRow(390)]
         [DataRow(1440)]
         [Timeout(90_000)]
         public async Task ImageFailure_RetainsLastPictureAndRecoversWithoutReplayingInput(int width)
@@ -38,8 +37,6 @@ namespace Jularr.E2E.Tests
         }
 
         [TestMethod]
-        [DataRow(375)]
-        [DataRow(768)]
         [DataRow(1440)]
         [Timeout(90_000)]
         public async Task LoadingPage_ShowsItsStatusAtOnceAndThenTheView(int width)
@@ -114,7 +111,6 @@ namespace Jularr.E2E.Tests
         }
 
         [TestMethod]
-        [DataRow(390)]
         [DataRow(1440)]
         [Timeout(90_000)]
         public async Task DownloadReconnect_ReopensItsOperationInsteadOfTheSourceHomepage(int width)

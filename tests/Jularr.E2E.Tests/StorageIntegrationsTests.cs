@@ -20,6 +20,10 @@ namespace Jularr.E2E.Tests
             try
             {
                 await Owner.SetUpAndSignInAsync(page);
+
+                // The storage job checks every connection that was never checked, at its own times; it waits, so the new card shows that state until
+                // Check now below. Check now runs the same check itself.
+                await Steps.PauseJobAsync(page, "storage");
                 await Steps.AddLibraryAsync(page, folders.Library);
                 await page.GotoAsync("/Admin/Storage");
 

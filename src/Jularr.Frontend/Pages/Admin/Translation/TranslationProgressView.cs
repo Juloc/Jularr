@@ -67,7 +67,8 @@ namespace Jularr.Frontend.Pages.Admin.Translation
             return parts;
         }
 
-        // What the job does now: the reason it cannot, the book and place it works on (with a warning when it stands still), or why it rests.
+        // What the job does now: the reason it cannot, the book and place it works on (with a warning when it stands still), or why it rests; and that the
+        // books are being counted again, while they are.
         private static IReadOnlyList<IUiComponent> Now(BookTranslationProgressV1 progress, UiText texts)
         {
             var parts = new List<IUiComponent>();
@@ -80,6 +81,7 @@ namespace Jularr.Frontend.Pages.Admin.Translation
                     parts.Add(new P(new ValueText(texts["translation.progress.stalled"] + " " + Duration(current.SecondsWithoutProgress))).Attribute("role", "alert"));
             }
             else parts.Add(new P(new Text(progress.Languages.Length == 0 ? "translation.progress.nothing" : open == 0 ? "translation.progress.done" : "translation.progress.waiting")));
+            if (progress.Counting) parts.Add(new P(new Text("translation.progress.counting")).Class("translation-progress__hint"));
             return parts;
         }
 

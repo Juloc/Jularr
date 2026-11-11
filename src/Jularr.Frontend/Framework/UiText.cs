@@ -11,6 +11,7 @@ using Jularr.Backend.Service.User.Instance.V1;
 using Jularr.Backend.Service.User.Notification.V1;
 using Jularr.Backend.Service.User.Profile.V1;
 using Microsoft.AspNetCore.Http;
+using System.Diagnostics;
 using System.Text.RegularExpressions;
 
 namespace Jularr.Frontend.Framework
@@ -66,6 +67,7 @@ namespace Jularr.Frontend.Framework
 
         public async Task InitializeAsync(HttpContext context)
         {
+            var started = Stopwatch.GetTimestamp();
             var token = context.RequestAborted;
             var authentication = await authenticationService.ExecuteAsync<AuthenticationResultV1>(cancellationToken: token);
             _presentation = await presentationService.ExecuteAsync<InstancePresentationDetailsV1>(cancellationToken: token);
@@ -94,6 +96,8 @@ namespace Jularr.Frontend.Framework
                     UnreadNotifications = (await unreadService.ExecuteAsync<UnreadNotificationsV1>(new NotificationsParametersV1(), token)).UnreadCount;
                 }
             }
+
+            PageBudgets.Shell(context, Stopwatch.GetElapsedTime(started));
         }
     }
 }

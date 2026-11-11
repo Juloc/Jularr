@@ -24,6 +24,7 @@ namespace Jularr.Workers
             services.AddHostedService<RecognitionWorker>();
             services.AddHostedService<DerivationWorker>();
             services.AddHostedService<TranslationWorker>();
+            services.AddHostedService<TranslationMachineWorker>();
             services.AddHostedService<CatalogWorker>();
             services.AddHostedService<HealthWorker>();
             return services;

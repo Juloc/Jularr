@@ -136,6 +136,19 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        [DataRow(true, "Title/Title - 2020-01-02 - News.mkv,Title/Title S01E01.mkv")]
+        [DataRow(false, "Title/Title S01E02.mkv,Title/Title S01E01.mkv")]
+        public void DailyFormats_RenameDatedEpisodesOnlyWhenADailyFormatIsSet(bool daily, string expected)
+        {
+            var patterns = new NamingSet(new Dictionary<(MediaType, MediaSubtype?), string> { [(MediaType.Series, null)] = "{Title}/{Title} S{Season:00}E{Episode:00}" },
+                daily: daily ? new Dictionary<(MediaType, MediaSubtype?), string> { [(MediaType.Series, null)] = "{Series Title} - {Air-Date} - {Episode Title}" } : null);
+            static LibraryRenameFileData Episode(long id, string path, decimal number) => new(id, 1, "Series", MediaType.Series, null, path, null, id, "Title", 2020, null, WorkUnitType.Episode, number, "News",
+                1, null, null, null, 1, null, unitReleasedOn: new DateOnly(2020, 1, 2));
+            var plan = LibraryRenameLogic.Plan([Episode(1, "a/Title.2020.01.02.mkv", 2), Episode(2, "b/Title.S01E01.mkv", 1)], patterns);
+            Assert.AreEqual(expected, string.Join(',', plan.Select(rename => rename.TargetPath)));
+        }
+
+        [TestMethod]
         public void RenameDisabled_StillUsesConfiguredFoldersAndKeepsTheOriginalFileStem()
         {
             var values = Values(MediaType.Book) with { OriginalFilename = "Original.Release", Rules = NamingRules.Default with { RenamesFiles = false } };

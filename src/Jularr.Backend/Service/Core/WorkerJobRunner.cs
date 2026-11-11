@@ -10,39 +10,57 @@ namespace Jularr.Backend.Service.Core
 {
     // Runs one pass of a job for its worker: asks the registry whether the job may run, runs it in its own scope and reports how it went.
     // A switched-off module is no failure; anything else is told to the registry and, as a notice, to the Owner.
-    public sealed class WorkerJobRunner(IServiceScopeFactory scopes, WorkerJobs jobs, ILogger<WorkerJobRunner> logger)
+    // Every round runs under its job's time limit, so a round that hangs ends as a failure and frees its group.
+    public sealed class WorkerJobRunner(IServiceScopeFactory scopes, WorkerJobs jobs, TimeProvider time, ILogger<WorkerJobRunner> logger)
     {
+        // A pass that keeps finding work is kept after this long and goes on at the next tick.
+        internal static readonly TimeSpan PassLimit = TimeSpan.FromMinutes(10);
+
+        // How long a stopped round may take to notice it before the log names it.
+        internal static readonly TimeSpan StopGrace = TimeSpan.FromSeconds(30);
+        internal static readonly TimeSpan ReportLimit = TimeSpan.FromSeconds(10);
+        internal static readonly TimeSpan ReportRetry = TimeSpan.FromSeconds(2);
+
         // Null when the job did not run: it is paused, waits while Jularr is used, is not due or its choices could not be read yet.
         public Task<WorkerJobResultType?> RunAsync(string key, Func<IServiceProvider, CancellationToken, Task> step, CancellationToken ct) =>
-            RunPassAsync(key, async token =>
+            RunPassAsync(key, token => RunRoundAsync(key, async round =>
             {
                 await using var scope = scopes.CreateAsyncScope();
-                await step(scope.ServiceProvider, token);
+                await step(scope.ServiceProvider, round);
                 return true;
-            }, ct);
+            }, token), ct);
 
         // A step that finds nothing to do (a server that is not connected) leaves the job off instead of succeeded.
         public Task<WorkerJobResultType?> RunIfConnectedAsync(string key, Func<IServiceProvider, CancellationToken, Task<bool>> step, CancellationToken ct) =>
-            RunPassAsync(key, async token =>
+            RunPassAsync(key, token => RunRoundAsync(key, async round =>
             {
                 await using var scope = scopes.CreateAsyncScope();
-                return await step(scope.ServiceProvider, token);
-            }, ct);
+                return await step(scope.ServiceProvider, round);
+            }, token), ct);
 
         // The pass repeats while its step reports more work, each round in a new scope, and stops between rounds when the job is paused or has to wait.
-        public Task<WorkerJobResultType?> RunWhileBusyAsync(string key, Func<IServiceProvider, CancellationToken, Task<bool>> step, TimeSpan pause, TimeProvider time, CancellationToken ct) =>
-            RunPassAsync(key, async token =>
+        // After the pass limit it is kept and the job is due again at once, so its state stays current and the group's other jobs get their turn.
+        public async Task<WorkerJobResultType?> RunWhileBusyAsync(string key, Func<IServiceProvider, CancellationToken, Task<bool>> step, TimeSpan pause, CancellationToken ct)
+        {
+            var isCut = false;
+            var result = await RunPassAsync(key, async token =>
             {
-                var busy = true;
-                while (busy && !token.IsCancellationRequested)
+                var startedAt = time.GetTimestamp();
+                while (!token.IsCancellationRequested)
                 {
-                    await using (var scope = scopes.CreateAsyncScope())
+                    var busy = await RunRoundAsync(key, async round =>
                     {
-                        busy = await step(scope.ServiceProvider, token);
-                    }
-
+                        await using var scope = scopes.CreateAsyncScope();
+                        return await step(scope.ServiceProvider, round);
+                    }, token);
                     if (!busy || jobs.IsHalted(key))
                     {
+                        break;
+                    }
+
+                    if (time.GetElapsedTime(startedAt) >= PassLimit)
+                    {
+                        isCut = true;
                         break;
                     }
 
@@ -54,6 +72,47 @@ namespace Jularr.Backend.Service.Core
 
                 return true;
             }, ct);
+
+            if (isCut && result == WorkerJobResultType.Succeeded)
+            {
+                jobs.RunAgainWithin(key, TimeSpan.Zero);
+            }
+
+            return result;
+        }
+
+        // One round under its job's limit. Past the limit the round is asked to stop and fails with job_round_timeout; one that ignores it
+        // is named in the log after the grace and still awaited, never abandoned.
+        private async Task<T> RunRoundAsync<T>(string key, Func<CancellationToken, Task<T>> round, CancellationToken ct)
+        {
+            var roundLimit = WorkerJobs.Definition(key).RoundLimit;
+            using var limit = new CancellationTokenSource(roundLimit, time);
+            using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, limit.Token);
+            using var watch = new CancellationTokenSource();
+            var running = round(linked.Token);
+            var overdue = Task.Delay(roundLimit + StopGrace, time, watch.Token);
+            if (await Task.WhenAny(running, overdue) == overdue)
+            {
+                logger.LogError("{Job} ignores its time limit of {Limit} and is still running.", key, roundLimit);
+            }
+
+            await watch.CancelAsync();
+            try
+            {
+                var value = await running;
+                if (!limit.IsCancellationRequested || ct.IsCancellationRequested)
+                {
+                    return value;
+                }
+            }
+            catch (Exception exception) when (limit.IsCancellationRequested && !ct.IsCancellationRequested)
+            {
+                throw new ServiceUnavailableException("job_round_timeout", exception);
+            }
+
+            // The round came back only after its limit: it overran even though it swallowed the stop.
+            throw new ServiceUnavailableException("job_round_timeout");
+        }
 
         private async Task<WorkerJobResultType?> RunPassAsync(string key, Func<CancellationToken, Task<bool>> pass, CancellationToken ct)
         {
@@ -118,6 +177,8 @@ namespace Jularr.Backend.Service.Core
             return jobs.IsLoaded;
         }
 
+        // The record has a limit of its own and a second try, so a busy database neither holds the worker nor loses the state;
+        // a record that still fails is written again by the next pass.
         private async Task ReportAsync(string key, RecordWorkerJobDataV1? record, CancellationToken ct)
         {
             if (record is null)
@@ -125,14 +186,28 @@ namespace Jularr.Backend.Service.Core
                 return;
             }
 
-            try
+            for (var attempt = 1; ; attempt++)
             {
-                await using var scope = scopes.CreateAsyncScope();
-                await scope.ServiceProvider.GetRequiredService<RecordWorkerJobV1>().ExecuteAsync<UpdateResult>(new WorkerJobParametersV1(key), record, ct);
-            }
-            catch (Exception exception) when (!ct.IsCancellationRequested)
-            {
-                logger.LogWarning(exception, "The state of {Job} could not be kept.", key);
+                try
+                {
+                    using var limit = new CancellationTokenSource(ReportLimit, time);
+                    using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, limit.Token);
+                    await using var scope = scopes.CreateAsyncScope();
+                    await scope.ServiceProvider.GetRequiredService<RecordWorkerJobV1>().ExecuteAsync<UpdateResult>(new WorkerJobParametersV1(key), record, linked.Token);
+                    return;
+                }
+                catch (Exception exception) when (!ct.IsCancellationRequested && attempt == 1)
+                {
+                    logger.LogDebug(exception, "The state of {Job} could not be kept; trying again.", key);
+                }
+                catch (Exception exception) when (!ct.IsCancellationRequested)
+                {
+                    jobs.ForgetKept(key);
+                    logger.LogWarning(exception, "The state of {Job} could not be kept.", key);
+                    return;
+                }
+
+                await Task.Delay(ReportRetry, time, ct);
             }
         }
     }

@@ -4,48 +4,50 @@ name: Backend Full
 # workflow through Backend, without a separate skipped PR run.
 #
 # Job graph:
-#   smoke  ->  shards (4 backend + 4 browser, run in parallel, fail-fast)  ->  gate
-# `smoke` compiles everything once, runs the quick critical checks and publishes the build;
-# a shard only unpacks it. No job is meant to run longer than about 10 minutes.
+#   build  ->  smoke (startup, schema, migrations, sessions, setup gate)  ->  gate
+#          ->  shards (6 backend x 2 lanes + 6 browser, each to its end)  ->
+# `build` compiles everything once, runs the frontend unit tests, plans the shards and publishes the
+# build; smoke and the shards only unpack it and run beside each other. The backend shards leave out
+# what smoke runs. No job is meant to run longer than about 10 minutes.
+# CI retry (ci-retry.yml) re-runs a run once that failed only in set-up steps; their names are listed in
+# scripts/ci-classify-failure.py: rename or add set-up steps there too.
 on:
   push:
     branches: [main]
+    # A docs-only commit runs nothing here; a release of one needs a manual run (docs/DEVELOPMENT.md, Release).
+    paths-ignore:
+      - 'docs/**'
+      - 'AGENTS.md'
+      - 'README.md'
   workflow_dispatch:
   workflow_call:
 
 permissions:
   contents: read
 
-# Newer commits supersede older runs of the same branch or PR (a failing or obsolete run
-# stops using runners). A manual release verification run is never cancelled by this workflow.
+# Newer commits supersede older runs of the same branch or PR, and a newer manual run of a branch supersedes the
+# older one (a failing or obsolete run stops using runners). A manual run on main or a tag is a release check
+# (release.yml needs a green Backend Full of the tagged commit): it has a group of its own and is never cancelled.
 concurrency:
-  group: backend-full-${{ github.event_name == 'workflow_dispatch' && github.run_id || (github.event.pull_request.number || github.ref) }}
-  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
+  group: backend-full-${{ github.event_name == 'workflow_dispatch' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')) && github.run_id || (github.event.pull_request.number || github.ref) }}
+  cancel-in-progress: true
 
 env:
   JULARR_TEST_DB: Host=127.0.0.1;Port=15433;Username=jularr_test;Password=isolated-test-password;Database=jularr_test_admin
+  # Every dotnet test process: a test still running after 5 minutes is dumped and killed, a crashed test host
+  # leaves a dump, and Sequence_*.xml names the test that ran (uploaded on failure as blame-*).
+  DOTNET_TEST_BLAME: --blame-hang-timeout 5m --blame-hang-dump-type mini --blame-crash --blame-crash-dump-type mini
 
 jobs:
-  # Build once, fail fast: compile, quick critical tests (startup, schema, migrations, sessions,
-  # first-owner setup) and the frontend unit tests. Heavy shards start only when this is green.
-  smoke:
-    name: smoke
-    runs-on: ubuntu-latest
+  # The only compile of the run, the frontend unit tests and the shard plans (ci-plan/*.json, shipped in
+  # the build): seconds per test from the last 3 finished Backend Full runs on main, else tests/ci-durations.json.
+  build:
+    name: build
+    runs-on: ubuntu-24.04
     timeout-minutes: 12
-    services:
-      postgres:
-        image: postgres:18
-        env:
-          POSTGRES_USER: jularr_test
-          POSTGRES_PASSWORD: isolated-test-password
-          POSTGRES_DB: jularr_test_admin
-        ports:
-          - 15433:5432
-        options: >-
-          --health-cmd "pg_isready -U jularr_test -d jularr_test_admin"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
+    permissions:
+      contents: read
+      actions: read  # the timings artifacts of the last finished Backend Full runs on main
     steps:
       - uses: actions/checkout@v7
         with:
@@ -64,12 +66,17 @@ jobs:
           node-version: '26'
           cache: npm
           cache-dependency-path: src/Jularr.Frontend/package-lock.json
-      # The migration tests run the real pg_dump/pg_restore; the runner's own client is older than the test database.
-      - uses: ./.github/actions/install-tools
       - name: Verify the CI scripts (test shards and selection)
         run: |
           python3 scripts/ci-shard-tests.py --self-test
           python3 scripts/ci-select-backend-tests.py --self-test
+          python3 scripts/ci-classify-failure.py --self-test
+      # Never fails: without a token, run or artifact the plan uses tests/ci-durations.json (the log says which).
+      - name: Fetch the measured test durations of recent main runs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: python3 scripts/ci-shard-tests.py fetch --repo "${REPOSITORY}" --out "${RUNNER_TEMP}/measured"
       - name: Compile assets for the Razor and browser tests
         working-directory: src/Jularr.Frontend
         run: |
@@ -78,49 +85,29 @@ jobs:
       - name: Frontend unit tests
         working-directory: src/Jularr.Frontend
         run: npm test
-      # The only compile of the run: the shards use these outputs.
       - name: Compile the backend and browser test projects once
         run: |
           dotnet build tests/Jularr.Backend.Tests --configuration Release
           dotnet build tests/Jularr.E2E.Tests --configuration Release
-      - name: Critical backend tests (startup, schema, migrations, sessions, setup gate)
+      # The shard counts here equal the matrix entries of `shards`. The real-tool step runs on backend 6/6 after its
+      # lanes: --reserve 6=S plans each of its two lanes S/2 seconds lighter (S = 2 x the step's measured time, 30 s).
+      - name: Plan the test shards
         run: |
-          dotnet test tests/Jularr.Backend.Tests --configuration Release --no-build \
-            --filter "$(python3 scripts/ci-select-backend-tests.py --boot-filter)" \
-            --logger "trx;LogFileName=backend-smoke.trx" --results-directory TestResults/ci/smoke
+          set -euo pipefail
+          python3 scripts/ci-shard-tests.py matrix --kind backend --shards 6 --lanes 2 --reserve 6=60 \
+            --exclude "$(python3 scripts/ci-select-backend-tests.py --full-exclude)" \
+            --measured "${RUNNER_TEMP}/measured" --out ci-plan/backend.json
+          python3 scripts/ci-shard-tests.py matrix --kind e2e --shards 6 --lanes 1 \
+            --measured "${RUNNER_TEMP}/measured" --out ci-plan/e2e.json
       - uses: ./.github/actions/pack-build
-      # Not named timings-*: these are partial classes and must not feed tests/ci-durations.json.
-      - name: Keep smoke test results
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: smoke-results
-          path: TestResults/ci/smoke/*.trx
-          if-no-files-found: ignore
-          retention-days: 7
 
-  # Balanced shards by measured class duration (tests/ci-durations.json, scripts/ci-shard-tests.py).
-  # One matrix for backend and browser shards: when any shard fails, GitHub cancels all others.
-  # Backend shards run two test processes (lanes) each; browser shards run one.
-  # Change a shard count by editing the matrix entries of that kind (every kind lists 1/N .. N/N).
-  shards:
-    name: ${{ matrix.kind }} (${{ matrix.shard }})
-    needs: smoke
-    runs-on: ubuntu-latest
-    timeout-minutes: 18
-    strategy:
-      fail-fast: true
-      matrix:
-        include:
-          - { kind: backend, shard: 1/4 }
-          - { kind: backend, shard: 2/4 }
-          - { kind: backend, shard: 3/4 }
-          # Also runs the real-tool tests (FFmpeg, cjxl), about 75 s: shard 4 is planned 150 lane-seconds lighter.
-          - { kind: backend, shard: 4/4, tools: true }
-          - { kind: e2e, shard: 1/4 }
-          - { kind: e2e, shard: 2/4 }
-          - { kind: e2e, shard: 3/4 }
-          - { kind: e2e, shard: 4/4 }
+  # The quick critical checks, beside the shards: startup, schema, migrations, sessions and the first-owner
+  # setup gate (ci-select-backend-tests.py --boot-filter). The backend shards leave these tests out.
+  smoke:
+    name: smoke
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
     services:
       postgres:
         image: postgres:18
@@ -132,9 +119,84 @@ jobs:
           - 15433:5432
         options: >-
           --health-cmd "pg_isready -U jularr_test -d jularr_test_admin"
-          --health-interval 5s
+          --health-interval 1s
           --health-timeout 5s
-          --health-retries 10
+          --health-retries 60
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: .github/actions
+          persist-credentials: false
+      - uses: ./.github/actions/restore-build
+      # The migration tests run the real pg_dump/pg_restore; the runner's own client is older than the test database.
+      - uses: ./.github/actions/install-tools
+      - name: Critical backend tests (startup, schema, migrations, sessions, setup gate)
+        run: |
+          export TMPDIR="${RUNNER_TEMP}"
+          dotnet test tests/Jularr.Backend.Tests --configuration Release --no-build ${DOTNET_TEST_BLAME} \
+            --filter "$(python3 scripts/ci-select-backend-tests.py --boot-filter)" \
+            --logger "trx;LogFileName=backend-smoke.trx" --results-directory TestResults/ci/smoke
+      # Seconds per test method: the next runs plan with these too (ci-shard-tests.py fetch).
+      - name: Keep smoke test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: smoke-results
+          path: TestResults/ci/smoke/*.trx
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Keep the hang and crash evidence
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: blame-smoke
+          path: |
+            TestResults/ci/**/Sequence_*.xml
+            TestResults/ci/**/*.dmp
+            !TestResults/ci/**/In/**
+          if-no-files-found: ignore
+          retention-days: 2
+
+  # The shards of the plan in ci-plan/*.json (scripts/ci-shard-tests.py): balanced by measured seconds per
+  # test, a long class split by method. A failing shard does not cancel the others (fail-fast off), so one
+  # run reports every failing shard. Backend shards run two test processes (lanes) each; browser shards run one.
+  # Change a shard count in the matrix entries of that kind (1/N .. N/N) and in `Plan the test shards` together.
+  shards:
+    name: ${{ matrix.kind }} (${{ matrix.shard }})
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { kind: backend, shard: 1/6 }
+          - { kind: backend, shard: 2/6 }
+          - { kind: backend, shard: 3/6 }
+          - { kind: backend, shard: 4/6 }
+          - { kind: backend, shard: 5/6 }
+          # Also runs the real-tool tests (FFmpeg, ffprobe, cjxl): shard 6 is planned lighter by their time.
+          - { kind: backend, shard: 6/6, tools: true }
+          - { kind: e2e, shard: 1/6 }
+          - { kind: e2e, shard: 2/6 }
+          - { kind: e2e, shard: 3/6 }
+          - { kind: e2e, shard: 4/6 }
+          - { kind: e2e, shard: 5/6 }
+          - { kind: e2e, shard: 6/6 }
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: jularr_test
+          POSTGRES_PASSWORD: isolated-test-password
+          POSTGRES_DB: jularr_test_admin
+        ports:
+          - 15433:5432
+        options: >-
+          --health-cmd "pg_isready -U jularr_test -d jularr_test_admin"
+          --health-interval 1s
+          --health-timeout 5s
+          --health-retries 60
     env:
       SHARD: ${{ matrix.shard }}
     steps:
@@ -171,8 +233,9 @@ jobs:
         uses: ./.github/actions/install-chromium
 
       # The assembly disables in-process parallelism; lanes are separate dotnet test processes with
-      # their own fixture state and databases. TRX files record the durations for tests/ci-durations.json.
+      # their own fixture state and databases. The TRX files (timings-*) plan the next runs.
       - name: Run the backend shard
+        id: lanes
         if: matrix.kind == 'backend'
         shell: bash
         run: |
@@ -182,13 +245,14 @@ jobs:
           export XDG_RUNTIME_DIR="${RUNNER_TEMP}/jularr-dotnet-runtime"
           install -d -m 0700 "${XDG_RUNTIME_DIR}" "${XDG_RUNTIME_DIR}/.dotnet" "${XDG_RUNTIME_DIR}/.dotnet/shm"
           dotnet --info >/dev/null
-          mapfile -t lanes < <(python3 scripts/ci-shard-tests.py plan --kind backend --shard "${SHARD}" --lanes 2 --reserve 4=150)
+          python3 scripts/ci-shard-tests.py lanes --plan ci-plan/backend.json --shard "${SHARD}" > "${RUNNER_TEMP}/lanes.txt" || exit 1
+          mapfile -t lanes < "${RUNNER_TEMP}/lanes.txt"
           pids=()
           for index in "${!lanes[@]}"; do
             [[ -n "${lanes[$index]}" ]] || continue
             lane=$((index + 1))
             (set -o pipefail
-             dotnet test tests/Jularr.Backend.Tests --configuration Release --no-build \
+             dotnet test tests/Jularr.Backend.Tests --configuration Release --no-build ${DOTNET_TEST_BLAME} \
                --filter "${lanes[$index]}" --logger "trx;LogFileName=backend-lane${lane}.trx" \
                --results-directory TestResults/ci/backend 2>&1 | sed -u "s/^/[lane${lane}] /") &
             pids+=($!)
@@ -201,13 +265,16 @@ jobs:
           fi
         env:
           JULARR_TEST_DJVULIBRE: /usr/bin
-      - name: Real-tool tests (FFmpeg HLS, JPEG XL covers)
-        if: matrix.kind == 'backend' && matrix.tools == true
+      # The tests of REAL_TOOLS in ci-select-backend-tests.py (no shard plans them), also after a failed lane, so one
+      # run reports both. Their TRX goes with the timings.
+      - name: Real-tool tests (FFmpeg, ffprobe, cjxl)
+        if: ${{ !cancelled() && matrix.kind == 'backend' && matrix.tools == true && (steps.lanes.outcome == 'success' || steps.lanes.outcome == 'failure') }}
         run: |
           cjxl --version
-          dotnet test tests/Jularr.Backend.Tests --configuration Release --no-build \
-            --filter "FullyQualifiedName~JxlEncoder_WithCjxl|FullyQualifiedName~Cover_WithFfmpegAndCjxl|FullyQualifiedName~Inputs_DirectShare_RealFfmpegTranscodesAndSeeksHls" \
-            --logger "trx;LogFileName=real-tools.trx" --results-directory TestResults/ci/tools
+          ffmpeg -version | head -1
+          dotnet test tests/Jularr.Backend.Tests --configuration Release --no-build ${DOTNET_TEST_BLAME} \
+            --filter "$(python3 scripts/ci-select-backend-tests.py --tools-filter)" \
+            --logger "trx;LogFileName=real-tools.trx" --results-directory TestResults/ci/backend
         env:
           JULARR_TEST_FFMPEG: /usr/bin/ffmpeg
           JULARR_TEST_CJXL: /usr/bin/cjxl
@@ -216,11 +283,14 @@ jobs:
         run: |
           # Native download storage refuses RAM and overlay filesystems, so the test folders must lie on the runner's
           # disk. Some runner images mount /tmp as tmpfs: use the runner's temp directory and log where it lies.
+          set -euo pipefail
           export TMPDIR="${RUNNER_TEMP}"
           findmnt -T "${TMPDIR}" -o TARGET,FSTYPE,SOURCE || true
-          dotnet test tests/Jularr.E2E.Tests --configuration Release --no-build \
-            --filter "$(python3 scripts/ci-shard-tests.py plan --kind e2e --shard "${SHARD}")" \
-            --logger "trx;LogFileName=e2e-shard.trx" --results-directory TestResults/ci/e2e
+          filter="$(python3 scripts/ci-shard-tests.py lanes --plan ci-plan/e2e.json --shard "${SHARD}")"
+          # An empty filter would run every browser test.
+          if [[ -z "${filter}" ]]; then echo "::notice::Browser shard ${SHARD} has no planned tests."; exit 0; fi
+          dotnet test tests/Jularr.E2E.Tests --configuration Release --no-build ${DOTNET_TEST_BLAME} \
+            --filter "${filter}" --logger "trx;LogFileName=e2e-shard.trx" --results-directory TestResults/ci/e2e
         env:
           JULARR_TEST_FFMPEG: /usr/bin/ffmpeg
           JULARR_TEST_DJVULIBRE: /usr/bin
@@ -244,23 +314,35 @@ jobs:
           path: TestResults/e2e
           if-no-files-found: ignore
           retention-days: 7
+      - name: Keep the hang and crash evidence
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: blame-${{ matrix.kind }}-${{ strategy.job-index }}
+          path: |
+            TestResults/ci/**/Sequence_*.xml
+            TestResults/ci/**/*.dmp
+            !TestResults/ci/**/In/**
+          if-no-files-found: ignore
+          retention-days: 2
 
   # One clear conclusion for the whole run (and for branch protection, if ever required):
-  # green only when smoke and every shard passed. Skipped entirely when the run was not requested.
+  # green only when the build, smoke and every shard passed. Skipped entirely when the run was not requested.
   gate:
     name: gate
-    needs: [smoke, shards]
+    needs: [build, smoke, shards]
     if: ${{ !cancelled() }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
-      - name: Require smoke and all shards
+      - name: Require the build, smoke and all shards
         env:
+          BUILD: ${{ needs.build.result }}
           SMOKE: ${{ needs.smoke.result }}
           SHARDS: ${{ needs.shards.result }}
         run: |
-          echo "smoke: ${SMOKE}, shards: ${SHARDS}"
-          if [[ "${SMOKE}" != "success" || "${SHARDS}" != "success" ]]; then
-            echo "::error::Backend Full did not pass (smoke ${SMOKE}, shards ${SHARDS}). Open the failed shard job: its name says backend or e2e and the shard number."
+          echo "build: ${BUILD}, smoke: ${SMOKE}, shards: ${SHARDS}"
+          if [[ "${BUILD}" != "success" || "${SMOKE}" != "success" || "${SHARDS}" != "success" ]]; then
+            echo "::error::Backend Full did not pass (build ${BUILD}, smoke ${SMOKE}, shards ${SHARDS}). Open the failed job: build, smoke, or a shard named backend or e2e with its number."
             exit 1
           fi

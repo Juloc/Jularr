@@ -17,9 +17,9 @@ namespace Jularr.Backend.Service.Core
 
         int BatchBlocks { get; }
 
-        // The model this provider offers for a button press now (the Owner's choice first) and what keeps it from translating: null for a model or a problem
-        // that is not known; a problem is one of "not_connected", "limit", "unavailable".
-        Task<(string? Model, string? Problem)> OfferAsync(TranslationSetupV1 setup, CancellationToken ct);
+        // The model this provider offers for a button press by its last check (the Owner's choice first) and what keeps it from translating: null for a model or
+        // a problem that is not known; a problem is one of "not_connected", "limit", "unavailable".
+        (string? Model, string? Problem) Offer(TranslationSetupV1 setup);
 
         Task<string?[]> TranslateBlocksAsync(TranslationMachine machine, string source, string target, IReadOnlyList<string> blocks, string? context, CancellationToken ct);
 
@@ -49,42 +49,45 @@ namespace Jularr.Backend.Service.Core
 
         public int BatchBlocks => 100;
 
-        // The models the account offered when last asked, never a guess; empty until the AI page or the first translation has asked.
-        public IReadOnlyList<string> Models
-        {
-            get
-            {
-                connection.WarmModels();
-                return connection.KnownModels;
-            }
-        }
+        // The models the account offered when last asked, never a guess; empty until the AI page or a check has asked.
+        public IReadOnlyList<string> Models => connection.KnownModels;
 
         // The Owner's ChatGPT account: only the admin-only right chooses its model in the Reader.
         public bool IsAdminOnly => true;
 
-        // The account's models while Codex is connected and within its limits, the one chosen on the AI page first (the Owner compares them on one chapter).
-        public async Task<IReadOnlyList<string>> AvailableAsync(TranslationSetupV1 setup, CancellationToken ct)
+        // Whether a sign-in is stored, from the CLI; while connected the account's models are asked again when old, so a saved model id is known without a page visit.
+        public async Task CheckAsync(TranslationSetupV1 setup, CancellationToken ct)
         {
-            if (connection.PlanLimitedUntil is not null || connection.LimitReached(setup.CodexDailyTokens, setup.CodexRunTokens) || !await connection.IsConnectedAsync(ct)) return [];
-            if (connection.KnownModels.Length == 0) await connection.ReadCatalogAsync(ct);
+            if (await connection.IsConnectedAsync(ct)) await connection.WarmModelsAsync(ct);
+        }
+
+        // The account's models while Codex was connected at the last check and is within its limits, the one chosen on the AI page first (the Owner compares
+        // them on one chapter).
+        public IReadOnlyList<string> Available(TranslationSetupV1 setup)
+        {
+            if (connection.PlanLimitedUntil is not null || connection.LimitReached(setup.CodexDailyTokens, setup.CodexRunTokens) || !connection.IsConnected) return [];
             var known = connection.KnownModels;
             return [.. known.Where(model => model == setup.CodexModel).Concat(known.Where(model => model != setup.CodexModel))];
         }
 
-        public async Task<(string? Model, string? Problem)> OfferAsync(TranslationSetupV1 setup, CancellationToken ct)
+        public (string? Model, string? Problem) Offer(TranslationSetupV1 setup)
         {
-            if (!await connection.IsConnectedAsync(ct)) return (null, "not_connected");
-            if (connection.KnownModels.Length == 0) await connection.ReadCatalogAsync(ct);
+            if (!connection.IsConnected) return (null, "not_connected");
             var known = connection.KnownModels;
             var model = known.Contains(setup.CodexModel, StringComparer.Ordinal) ? setup.CodexModel : known.FirstOrDefault();
             if (connection.PlanLimitedUntil is not null || connection.LimitReached(setup.CodexDailyTokens, setup.CodexRunTokens)) return (model, "limit");
             return model is null ? (null, "unavailable") : (model, null);
         }
 
-        public async Task<TranslationMachine?> ChooseAsync(TranslationSetupV1 setup, string? model, CancellationToken ct)
+        // By the last check; a translation about to run asks the CLI when that is older than half a minute.
+        public TranslationMachine? Choose(TranslationSetupV1 setup, string? model) => connection.IsConnected ? Machine(setup, model) : null;
+
+        public async Task<TranslationMachine?> ChooseAsync(TranslationSetupV1 setup, string? model, CancellationToken ct) =>
+            Machine(setup, model) is { } machine && await connection.IsConnectedAsync(ct) ? machine : null;
+
+        private TranslationMachine? Machine(TranslationSetupV1 setup, string? model)
         {
             if (model is null || time.GetUtcNow() < _restingUntil || connection.PlanLimitedUntil is not null || connection.LimitReached(setup.CodexDailyTokens, setup.CodexRunTokens)) return null;
-            if (!await connection.IsConnectedAsync(ct)) return null;
             var query = new List<string>();
             if (setup.CodexEffort is not null) query.Add("effort=" + Uri.EscapeDataString(setup.CodexEffort));
             if (setup.CodexFallbackModel is not null && setup.CodexFallbackModel != model) query.Add("fallback=" + Uri.EscapeDataString(setup.CodexFallbackModel));

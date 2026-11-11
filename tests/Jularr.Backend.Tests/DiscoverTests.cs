@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Provider.V1;
 using AdminMedia = Jularr.Backend.Data.Admin.Media.V1;
@@ -224,6 +225,9 @@ namespace Jularr.Backend.Tests
             // Anime's fifth list arrives with the second part of its shelves.
             using var shelves = await host.SendAsync(HttpMethod.Get, "/?type=anime&p=2&handler=Recommendations");
             StringAssert.Contains(await shelves.Content.ReadAsStringAsync(), "data-shelf-more=\"/?type=anime&amp;view=Top100&amp;p=2\"");
+
+            // The shelves keep their own timings in front of the page's shell and data.
+            StringAssert.Matches(string.Join(", ", shelves.Headers.GetValues("Server-Timing")), new Regex(@"^local;dur=[0-9]+, shelves;dur=[0-9]+, shell;dur=[0-9.]+, data;dur=[0-9.]+$"));
         }
 
         [TestMethod]

@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Globalization;
 using System.Text.Json;
 using Microsoft.AspNetCore.Diagnostics;
@@ -48,7 +49,9 @@ namespace Jularr.Frontend.Framework
                 return;
             }
 
+            var started = Stopwatch.GetTimestamp();
             var executed = await next();
+            PageBudgets.Data(HttpContext, Stopwatch.GetElapsedTime(started), context.HandlerMethod);
             if (executed.Exception is null || executed.ExceptionHandled || executed.Exception is OperationCanceledException)
             {
                 if (executed.Exception is null) AnswerHint(executed.Result);

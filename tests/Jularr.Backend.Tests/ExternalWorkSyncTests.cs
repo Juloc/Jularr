@@ -5,6 +5,7 @@ using System.Text;
 using System.Net.Http.Json;
 using Jularr.Backend.Data.Admin.Media.V1;
 using Jularr.Backend.Data.Admin.Provider.V1;
+using Jularr.Backend.Data.Admin.System.V1;
 using Jularr.Backend.Data.Logic.Media;
 using Jularr.Backend.Logic.Media;
 using Jularr.Backend.Data.Common;
@@ -279,6 +280,97 @@ namespace Jularr.Backend.Tests
             html = await PageAsync();
             StringAssert.Contains(Card(html, "anilist"), ">Live<");
             StringAssert.Contains(html, "Discover keeps nothing locally and always asks the providers.");
+        }
+
+        [TestMethod]
+        public async Task CatalogTotals_AreTheWorkersCount_MatchALiveCount_AndAreCountedAgainAfterFiveMinutes()
+        {
+            await using var host = await Host.CreateAsync(library: true, razor: true);
+            using var state = await host.SendAsync(HttpMethod.Get, "/api/v1/auth");
+            using var login = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/login", new LoginDataV1("a@example.test", "test-password-123"));
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle", "CatalogNamespace", "FetchedAt") VALUES
+                    (901, 1, 'Read film', 'tmdb_movie', now()), (902, 1, 'Unread film', 'tmdb_movie', NULL), (903, 1, 'Wanted film', 'tmdb_movie', NULL),
+                    (904, 2, 'Anime', 'anilist', now()), (905, 2, 'Series of a catalog without sync settings', 'tmdb_tv', now()), (906, 1, 'Library film', NULL, NULL);
+                INSERT INTO "WantedItems" ("WorkId") VALUES (903), (906);
+                """);
+
+            async Task<(string Syncs, bool Counted)> SyncsAsync()
+            {
+                using var read = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/catalog/syncs");
+                Assert.AreEqual(HttpStatusCode.OK, read.StatusCode, await read.Content.ReadAsStringAsync());
+                var syncs = (await read.Content.ReadFromJsonAsync<BaseDataList<ExternalWorkSyncV1>>())!;
+                return (string.Join(',', syncs.Select(sync => sync.Namespace + ":" + sync.Entries + ":" + sync.Pending)), syncs.All(sync => sync.CountedAt is not null));
+            }
+
+            async Task<SystemHealthV1> SystemAsync()
+            {
+                using var read = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/system");
+                Assert.AreEqual(HttpStatusCode.OK, read.StatusCode, await read.Content.ReadAsStringAsync());
+                return (await read.Content.ReadFromJsonAsync<SystemHealthV1>())!;
+            }
+
+            async Task<string> PageAsync(string path)
+            {
+                using var response = await host.SendAsync(HttpMethod.Get, path);
+                var html = await response.Content.ReadAsStringAsync();
+                Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, html);
+                return html;
+            }
+
+            async Task<bool> CountAsync()
+            {
+                await using var scope = host.Services.CreateAsyncScope();
+                return (await scope.ServiceProvider.GetRequiredService<CountCatalogTitlesV1>().ExecuteAsync<UpdateResult>(new SyncExternalWorksParametersV1(), default)).Success;
+            }
+
+            // What the pages counted live before; they now read the worker's figures.
+            async Task<string> LiveSyncsAsync() => (string)(await host.ScalarAsync("""
+                SELECT string_agg(sync."Namespace" || ':' || (SELECT count(*) FROM "Works" AS work WHERE work."CatalogNamespace" = sync."Namespace") || ':'
+                    || (SELECT count(*) FROM "Works" AS work WHERE work."CatalogNamespace" = sync."Namespace" AND work."FetchedAt" IS NULL), ',' ORDER BY sync."Namespace")
+                FROM "ExternalWorkSyncs" AS sync
+                """))!;
+            async Task<long> LiveCatalogOnlyAsync() => (long)(await host.ScalarAsync("""
+                SELECT count(*) FROM "Works" AS work WHERE work."CatalogNamespace" IS NOT NULL AND NOT EXISTS (SELECT 1 FROM "WorkLibraryRelations" AS tie WHERE tie."WorkId" = work."Id")
+                """))!;
+
+            // Before the worker's first count the figures are being counted, no error and no live count.
+            var (syncs, counted) = await SyncsAsync();
+            Assert.IsFalse(counted);
+            Assert.AreEqual("anilist:0:0,tmdb_movie:0:0,tvdb:0:0", syncs);
+            var system = await SystemAsync();
+            Assert.IsNull(system.CatalogCountedAt);
+            Assert.AreEqual(0L, system.CatalogWorks);
+            StringAssert.Contains(await PageAsync("/Admin/Catalog"), "Being counted");
+            StringAssert.Contains(await PageAsync("/Admin/System"), "Being counted");
+
+            // A count needs no module (the full catalog is off) and matches the live count, catalogs without sync settings included.
+            Assert.IsTrue(await CountAsync());
+            (syncs, counted) = await SyncsAsync();
+            Assert.IsTrue(counted);
+            Assert.AreEqual(await LiveSyncsAsync(), syncs);
+            StringAssert.Contains(syncs, "tmdb_movie:3:2");
+            system = await SystemAsync();
+            Assert.IsNotNull(system.CatalogCountedAt);
+            Assert.AreEqual(await LiveCatalogOnlyAsync(), system.CatalogWorks);
+            Assert.AreEqual(4L, system.CatalogWorks, "Works 901, 902, 904 and 905 are catalog only; 903 is wanted.");
+            var html = await PageAsync("/Admin/Catalog");
+            StringAssert.Contains(html, "As of");
+            Assert.IsFalse(html.Contains("Being counted", StringComparison.Ordinal));
+
+            // Within five minutes the figures stay; after that the next pass counts again, and a catalog that holds nothing any more keeps its row with zeros.
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle", "CatalogNamespace", "FetchedAt") VALUES (907, 1, 'New film', 'tmdb_movie', NULL);
+                DELETE FROM "Works" WHERE "Id" = 905;
+                DELETE FROM "WantedItems" WHERE "WorkId" = 903;
+                """);
+            Assert.IsFalse(await CountAsync());
+            Assert.AreEqual(4L, (await SystemAsync()).CatalogWorks);
+            await host.Fixture.RunSqlAsync("UPDATE \"CatalogNamespaceTotals\" SET \"CountedAt\" = now() - interval '6 minutes'");
+            Assert.IsTrue(await CountAsync());
+            Assert.AreEqual(await LiveSyncsAsync(), (await SyncsAsync()).Syncs);
+            Assert.AreEqual(await LiveCatalogOnlyAsync(), (await SystemAsync()).CatalogWorks);
+            Assert.AreEqual("0:0:0", await host.ScalarAsync("SELECT \"Entries\" || ':' || \"Pending\" || ':' || \"CatalogOnly\" FROM \"CatalogNamespaceTotals\" WHERE \"Namespace\" = 'tmdb_tv'"));
         }
 
         // One column of the catalog Work a provider identity names.

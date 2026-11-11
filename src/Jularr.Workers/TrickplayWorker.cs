@@ -14,6 +14,6 @@ namespace Jularr.Workers
 
         protected override async Task RunOnceAsync(CancellationToken ct) =>
             await Runner.RunWhileBusyAsync("trickplay", async (services, token) =>
-                (await services.GetRequiredService<GenerateTrickplayV1>().ExecuteAsync<UpdateResult>(new TrickplayParametersV1(), default, token)).Success, Pause, Time, ct);
+                (await services.GetRequiredService<GenerateTrickplayV1>().ExecuteAsync<UpdateResult>(new TrickplayParametersV1(), default, token)).Success, Pause, ct);
     }
 }

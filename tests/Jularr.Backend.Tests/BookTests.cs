@@ -271,7 +271,9 @@ namespace Jularr.Backend.Tests
             using var storage = new TemporaryDirectory();
             using var downloads = new TemporaryDirectory();
             var sources = new FakeBookSources();
-            await using var host = await CreateHostAsync(storage.Path, downloads.Path, sources);
+            var budget = SearchBudget.For(SearchDepth.Normal).IndexerTimeout;
+            var clock = new BudgetClock(budget);
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, sources, time: clock);
             using var imported = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works/metadata", new ImportMetadataWorkDataV1(MediaType.Book, "OL66554W"));
             var work = (await imported.Content.ReadFromJsonAsync<WorkDetailsV1>())!;
             var wantedId = await CreateWantedAsync(host, work.Id);
@@ -280,10 +282,16 @@ namespace Jularr.Backend.Tests
                 await host.Fixture.RunSqlAsync("UPDATE \"AcquisitionConnections\" SET \"IsEnabled\" = FALSE WHERE \"AcquisitionConnectionTypeId\" = 1");
             }
 
+            // The direct source answers nothing; its budget runs out once it is asked and the indexer, if any, has answered within its own.
             sources.BlockDirectSearch = true;
             var pending = host.SendAsync(HttpMethod.Post, "/api/v1/admin/wanted/" + wantedId + "/search", new SearchWantedDataV1());
             HttpResponseMessage response;
-            try { response = await pending.WaitAsync(TimeSpan.FromSeconds(35)); }
+            try
+            {
+                await sources.DirectSearchAsked.Task.WaitAsync(TimeSpan.FromSeconds(30));
+                await clock.ElapseWhenOnlyOneWaitsAsync(TimeSpan.FromSeconds(30));
+                response = await pending.WaitAsync(TimeSpan.FromSeconds(30));
+            }
             catch
             {
                 host.Client.CancelPendingRequests();
@@ -534,7 +542,7 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(landing, "/Details/" + workId);
         }
 
-        private static async Task<Host> CreateHostAsync(string storage, string downloads, FakeBookSources sources, bool razor = false)
+        private static async Task<Host> CreateHostAsync(string storage, string downloads, FakeBookSources sources, bool razor = false, TimeProvider? time = null)
         {
             var host = await LibraryTests.CreateHostAsync(storage, razor, settings: new Dictionary<string, string>
             {
@@ -546,6 +554,10 @@ namespace Jularr.Backend.Tests
                 services.AddHttpClient<OpenLibraryClient>().ConfigurePrimaryHttpMessageHandler(() => sources);
                 services.AddHttpClient<GutenbergClient>().ConfigurePrimaryHttpMessageHandler(() => sources);
                 services.AddHttpClient<HardcoverClient>().ConfigurePrimaryHttpMessageHandler(() => sources);
+                if (time is not null)
+                {
+                    services.AddSingleton(time);
+                }
             });
 
             // A writable book library, one indexer, one client and Project Gutenberg.
@@ -754,6 +766,72 @@ namespace Jularr.Backend.Tests
             await scope.ServiceProvider.GetRequiredService<TService>().ExecuteAsync<UpdateResult>(new AcquisitionCycleParametersV1(), default);
         }
 
+        // The system's time, except for timers of one length (a search budget): those run out only when the test lets that time pass.
+        private sealed class BudgetClock(TimeSpan budget) : TimeProvider
+        {
+            private readonly List<BudgetTimer> _waiting = [];
+
+            public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
+            {
+                if (dueTime != budget || period != Timeout.InfiniteTimeSpan)
+                {
+                    return TimeProvider.System.CreateTimer(callback, state, dueTime, period);
+                }
+
+                var timer = new BudgetTimer(this, callback, state);
+                lock (_waiting)
+                {
+                    _waiting.Add(timer);
+                }
+
+                return timer;
+            }
+
+            // Once a single search still waits on its budget (an indexer that answered has ended its own), that budget runs out.
+            public async Task ElapseWhenOnlyOneWaitsAsync(TimeSpan within)
+            {
+                var deadline = DateTime.UtcNow + within;
+                BudgetTimer? last = null;
+                while (last is null)
+                {
+                    lock (_waiting)
+                    {
+                        if (_waiting.Count == 1)
+                        {
+                            last = _waiting[0];
+                            _waiting.Clear();
+                        }
+                    }
+
+                    Assert.IsTrue(last is not null || DateTime.UtcNow < deadline, "More than one search kept waiting on its budget.");
+                    if (last is null) await Task.Delay(20);
+                }
+
+                last.Fire();
+            }
+
+            private sealed class BudgetTimer(BudgetClock clock, TimerCallback callback, object? state) : ITimer
+            {
+                public void Fire() => callback(state);
+
+                public bool Change(TimeSpan dueTime, TimeSpan period) => throw new NotSupportedException("A search budget is not moved.");
+
+                public void Dispose()
+                {
+                    lock (clock._waiting)
+                    {
+                        clock._waiting.Remove(this);
+                    }
+                }
+
+                public ValueTask DisposeAsync()
+                {
+                    Dispose();
+                    return ValueTask.CompletedTask;
+                }
+            }
+        }
+
         internal sealed class FakeBookSources : HttpMessageHandler
         {
             public int SabGrabs { get; private set; }
@@ -764,6 +842,7 @@ namespace Jularr.Backend.Tests
             public int DirectSearches { get; private set; }
             public bool BlockDirectSearch { get; set; }
             public bool DirectSearchCancelled { get; private set; }
+            public TaskCompletionSource DirectSearchAsked { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
             // Forgets what the set-up asked, so that only the next search is observed, and makes each source wait for the other from now on.
             public void StartCounting()
@@ -808,6 +887,7 @@ namespace Jularr.Backend.Tests
                         DirectSearches++;
                         if (BlockDirectSearch)
                         {
+                            DirectSearchAsked.TrySetResult();
                             try { await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken); }
                             finally { DirectSearchCancelled = cancellationToken.IsCancellationRequested; }
                         }

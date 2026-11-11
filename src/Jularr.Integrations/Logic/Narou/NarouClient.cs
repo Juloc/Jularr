@@ -5,12 +5,13 @@ using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Jularr.Integrations.Data.Narou;
+using Jularr.Integrations.Logic.Common;
 
 namespace Jularr.Integrations.Logic.Narou
 {
     // Shōsetsuka ni Narō: the official API finds and describes web novels, the novel pages give the chapters.
     // Only these two hosts are asked, one request at a time per host and at most one a second.
-    internal sealed partial class NarouClient(HttpClient http)
+    internal sealed partial class NarouClient(HttpClient http, NarouPace? pace = null)
     {
         public const string Api = "https://api.syosetu.com/novelapi/api/";
         public const string Site = "https://ncode.syosetu.com/";
@@ -20,11 +21,10 @@ namespace Jularr.Integrations.Logic.Narou
         private const long MaximumTextBytes = 256L * 1024 * 1024;
         private const int FailuresBeforeGivingUp = 5;
         private const string Fields = "t-n-w-s-gf-nt-e-ga";
-        private static readonly TimeSpan RequestInterval = TimeSpan.FromSeconds(1);
+        public static readonly TimeSpan RequestInterval = TimeSpan.FromSeconds(1);
         private static readonly TimeSpan PassLength = TimeSpan.FromSeconds(30);
         private static readonly TimeSpan RetryDelay = TimeSpan.FromMinutes(10);
-        private static readonly Pace ApiPace = new();
-        private static readonly Pace SitePace = new();
+        private readonly NarouPace _pace = pace ?? new(RequestInterval);
 
         public static bool IsNcode(string? value) => value is { Length: >= 6 and <= 12 } && NcodePattern().IsMatch(value);
 
@@ -47,7 +47,7 @@ namespace Jularr.Integrations.Logic.Narou
         private async Task<IReadOnlyList<NarouNovel>> ReadListAsync(string filter, CancellationToken ct)
         {
             // The answer starts with the count row, then one record per novel.
-            var page = await GetAsync(ApiPace, new Uri(Api + "?out=json&of=" + Fields + "&lim=" + MaximumResults.ToString(CultureInfo.InvariantCulture) + "&" + filter), ct);
+            var page = await GetAsync(_pace.Api, new Uri(Api + "?out=json&of=" + Fields + "&lim=" + MaximumResults.ToString(CultureInfo.InvariantCulture) + "&" + filter), ct);
             try
             {
                 using var document = JsonDocument.Parse(page, new JsonDocumentOptions { MaxDepth = 8 });
@@ -81,7 +81,7 @@ namespace Jularr.Integrations.Logic.Narou
         // One chapter from its page: the title and the text without the foreword and afterword.
         public async Task<NarouChapter> ReadChapterAsync(NarouNovel novel, int number, CancellationToken ct)
         {
-            var html = await GetAsync(SitePace, novel.IsShortStory ? NovelUri(novel.Ncode) : new Uri(NovelUri(novel.Ncode), number.ToString(CultureInfo.InvariantCulture) + "/"), ct);
+            var html = await GetAsync(_pace.Site, novel.IsShortStory ? NovelUri(novel.Ncode) : new Uri(NovelUri(novel.Ncode), number.ToString(CultureInfo.InvariantCulture) + "/"), ct);
             return ParseChapter(html, number, novel.IsShortStory ? novel.Title : null);
         }
 
@@ -236,9 +236,18 @@ namespace Jularr.Integrations.Logic.Narou
             File.Move(path + ".partial", path, true);
         }
 
-        private async Task<string> GetAsync(Pace pace, Uri address, CancellationToken ct)
+        private async Task<string> GetAsync(RequestPace<NarouClient> pace, Uri address, CancellationToken ct)
         {
-            await pace.WaitAsync(RequestInterval, ct);
+            await pace.Gate.WaitAsync(ct);
+            try
+            {
+                await pace.WaitForTurnAsync(ct);
+            }
+            finally
+            {
+                pace.Gate.Release();
+            }
+
             try
             {
                 using var response = await http.GetAsync(address, HttpCompletionOption.ResponseHeadersRead, ct);
@@ -298,28 +307,6 @@ namespace Jularr.Integrations.Logic.Narou
         private static string? String(JsonElement item, string name) => item.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
 
         private static int? Number(JsonElement item, string name) => item.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out var number) ? number : null;
-
-        // Requests of one host start at least the interval apart.
-        private sealed class Pace
-        {
-            private readonly SemaphoreSlim _gate = new(1, 1);
-            private long _last;
-
-            public async Task WaitAsync(TimeSpan interval, CancellationToken ct)
-            {
-                await _gate.WaitAsync(ct);
-                try
-                {
-                    var wait = interval - Stopwatch.GetElapsedTime(_last);
-                    if (_last != 0 && wait > TimeSpan.Zero) await Task.Delay(wait, ct);
-                    _last = Stopwatch.GetTimestamp();
-                }
-                finally
-                {
-                    _gate.Release();
-                }
-            }
-        }
 
         [GeneratedRegex("^n[0-9]{4}[a-z]{1,4}$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
         private static partial Regex NcodePattern();

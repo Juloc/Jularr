@@ -152,6 +152,7 @@ namespace Jularr.Backend.Tests
                 settings: new Dictionary<string, string> { ["LocalTranslation:Endpoint"] = "http://ollama:11434", ["Ai:CodexPath"] = codex.Executable, ["Ai:CodexHome"] = codex.Home },
                 services: services => services.AddHttpClient<OllamaLocalModels>().ConfigurePrimaryHttpMessageHandler(() => ollama));
             await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'Translation'");
+            await LocalReadingTranslationIntegrationTests.CheckMachinesAsync(host);
 
             // The account's models, the one the Owner chose on the AI page first; Codex re-translates chapters in whole passages, Ollama block by block.
             CollectionAssert.AreEqual(new[] { Small + " False", Large + " False", "codex:gpt-test True", "codex:gpt-ok True" }, await ModelInfosAsync(host));
@@ -177,6 +178,7 @@ namespace Jularr.Backend.Tests
             await host.Fixture.RunSqlAsync("UPDATE \"ReadingDocuments\" SET \"Language\" = 'en'");
             await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'Translation'");
             await host.Fixture.RunSqlAsync("UPDATE \"InstanceSettings\" SET \"TranslationModel\" = '" + Small + "', \"CodexModel\" = 'gpt-ok', \"CodexEffort\" = 'low' WHERE \"Id\" = 1");
+            await LocalReadingTranslationIntegrationTests.CheckMachinesAsync(host);
 
             // Ollama does not answer: no model translates for anyone, and the Owner is offered Codex's model for a button press, not chosen as the default.
             var owner = await AvailabilityAsync(host);
@@ -210,6 +212,7 @@ namespace Jularr.Backend.Tests
                 settings: new Dictionary<string, string> { ["LocalTranslation:Endpoint"] = "http://ollama:11434", ["Ai:CodexPath"] = codex.Executable, ["Ai:CodexHome"] = codex.Home },
                 services: services => services.AddHttpClient<OllamaLocalModels>().ConfigurePrimaryHttpMessageHandler(() => new FakeOllama()));
             await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'Translation'");
+            await LocalReadingTranslationIntegrationTests.CheckMachinesAsync(host);
 
             // Ollama translates for everyone as before; Codex is offered beside it and never replaces it.
             var local = await AvailabilityAsync(host);
@@ -250,8 +253,8 @@ namespace Jularr.Backend.Tests
             var document = (await ReadingTests.OpenAsync(host, first)).DocumentId;
             await host.Fixture.RunSqlAsync("UPDATE \"ReadingDocuments\" SET \"Language\" = 'en'");
             await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'Translation'");
-            var gate = host.Services.GetRequiredService<LocalTranslationGate>();
-            chunky.Gate = gate;
+            var lanes = host.Services.GetRequiredService<TranslationLanes>();
+            chunky.Lanes = lanes;
             var url = Url(document, 0, ChunkProvider.Id) + "/passages";
 
             // The first request takes the blocks from the one in view onward; the lane is held for it and free after it.
@@ -261,7 +264,7 @@ namespace Jularr.Backend.Tests
             while (true)
             {
                 var chunk = await PostChunkAsync(host, url, from, []);
-                Assert.AreEqual(1, gate.HeavyWork.CurrentCount, "The lane is free between requests.");
+                Assert.IsTrue(await IsFreeAsync(lanes, chunky.Key), "The lane is free between requests.");
                 if (chunk.Blocks.Length == 0) break;
                 chunks.Add(chunk);
                 chapter.AddRange(chunk.Blocks.Select(block => block.Index));
@@ -300,8 +303,8 @@ namespace Jularr.Backend.Tests
             var document = (await ReadingTests.OpenAsync(host, first)).DocumentId;
             await host.Fixture.RunSqlAsync("UPDATE \"ReadingDocuments\" SET \"Language\" = 'en'");
             await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'Translation'");
-            var gate = host.Services.GetRequiredService<LocalTranslationGate>();
-            chunky.Gate = gate;
+            var lanes = host.Services.GetRequiredService<TranslationLanes>();
+            chunky.Lanes = lanes;
             var url = Url(document, 0, ChunkProvider.Id) + "/passages";
 
             // A request breaks after its first block: that block is stored, the cause is the error code, and the lane is free.
@@ -311,7 +314,7 @@ namespace Jularr.Backend.Tests
                 Assert.AreEqual(HttpStatusCode.ServiceUnavailable, failed.StatusCode);
                 StringAssert.Contains(await failed.Content.ReadAsStringAsync(), "translation_limit_reached");
             }
-            Assert.AreEqual(1, gate.HeavyWork.CurrentCount);
+            Assert.IsTrue(await IsFreeAsync(lanes, chunky.Key));
             int[] stored;
             using (var read = await host.SendAsync(HttpMethod.Get, Url(document, 0, ChunkProvider.Id) + "?sourceLanguage=en"))
                 stored = [.. Texts((await read.Content.ReadFromJsonAsync<LocalReadingTranslationV1>(JsonSerializerOptions.Web))!).Select((text, index) => (text, index)).Where(item => !string.IsNullOrEmpty(item.text)).Select(item => item.index)];
@@ -345,7 +348,7 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
-        public async Task Chunks_WhenTheLaneIsTakenTooLong_AnswerBusy_WithoutAskingTheModel()
+        public async Task Chunks_WhenTheirLaneIsTakenTooLong_AnswerBusy_WithoutAskingTheModel_AndRunWhileOllamaTranslates()
         {
             using var storage = new TemporaryDirectory();
             var chunky = new ChunkProvider();
@@ -354,18 +357,29 @@ namespace Jularr.Backend.Tests
             var document = (await ReadingTests.OpenAsync(host, first)).DocumentId;
             await host.Fixture.RunSqlAsync("UPDATE \"ReadingDocuments\" SET \"Language\" = 'en'");
             await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'Translation'");
-            var gate = host.Services.GetRequiredService<LocalTranslationGate>();
-            gate.ChunkWait = TimeSpan.FromMilliseconds(200);
+            var lanes = host.Services.GetRequiredService<TranslationLanes>();
+            lanes.ChunkWait = TimeSpan.FromMilliseconds(200);
 
-            await gate.HeavyWork.WaitAsync();
-            try
+            using (await lanes.TryEnterAsync(chunky.Key, TimeSpan.Zero, default))
             {
                 using var busy = await host.SendAsync(HttpMethod.Post, Url(document, 0, ChunkProvider.Id) + "/passages", new LocalReadingChunkDataV1("en", 0, []));
                 Assert.AreEqual(HttpStatusCode.ServiceUnavailable, busy.StatusCode);
                 StringAssert.Contains(await busy.Content.ReadAsStringAsync(), "translation_local_busy");
             }
-            finally { gate.HeavyWork.Release(); }
             Assert.AreEqual(0, chunky.Calls);
+
+            // Ollama translating holds up no other provider: each has its own lane.
+            using (await lanes.TryEnterAsync(OllamaTranslationProvider.ProviderKey, TimeSpan.Zero, default))
+            {
+                var chunk = await PostChunkAsync(host, Url(document, 0, ChunkProvider.Id) + "/passages", 0, []);
+                Assert.IsTrue(chunk.Blocks.Length > 0);
+            }
+        }
+
+        private static async Task<bool> IsFreeAsync(TranslationLanes lanes, string key)
+        {
+            using var hold = await lanes.TryEnterAsync(key, TimeSpan.Zero, default);
+            return hold is not null;
         }
 
         [TestMethod]
@@ -500,7 +514,7 @@ namespace Jularr.Backend.Tests
             private int _calls;
             private string? _problem;
 
-            public LocalTranslationGate? Gate { get; set; }
+            public TranslationLanes? Lanes { get; set; }
             public List<int> Gates { get; } = [];
             public List<string> Asked { get; } = [];
             public string? FailNext { get; set; }
@@ -515,12 +529,13 @@ namespace Jularr.Backend.Tests
             public int BatchCharacters => Characters;
             public int BatchBlocks => PerRequest;
 
-            public Task<(string? Model, string? Problem)> OfferAsync(TranslationSetupV1 setup, CancellationToken ct) => Task.FromResult<(string?, string?)>(("model", _problem));
+            public (string? Model, string? Problem) Offer(TranslationSetupV1 setup) => ("model", _problem);
 
-            public Task<IReadOnlyList<string>> AvailableAsync(TranslationSetupV1 setup, CancellationToken ct) => Task.FromResult(Models);
+            public IReadOnlyList<string> Available(TranslationSetupV1 setup) => Models;
 
-            public Task<TranslationMachine?> ChooseAsync(TranslationSetupV1 setup, string? model, CancellationToken ct) =>
-                Task.FromResult(model == "model" ? new TranslationMachine(this, model, new Uri("chunky://local/")) : null);
+            public TranslationMachine? Choose(TranslationSetupV1 setup, string? model) => model == "model" ? new TranslationMachine(this, model, new Uri("chunky://local/")) : null;
+
+            public Task<TranslationMachine?> ChooseAsync(TranslationSetupV1 setup, string? model, CancellationToken ct) => Task.FromResult(Choose(setup, model));
 
             public Task<string> DigestAsync(TranslationMachine machine, CancellationToken ct) => Task.FromResult("chunky-1");
 
@@ -528,11 +543,11 @@ namespace Jularr.Backend.Tests
                 TranslateBlocksStreamAsync(machine, source, target, blocks, context, (_, _) => { }, ct);
 
             // A block comes out as soon as it is answered; with FailNext set the request fails at block FailAt of the request (after the first one: a stream that breaks).
-            public Task<string?[]> TranslateBlocksStreamAsync(TranslationMachine machine, string source, string target, IReadOnlyList<string> blocks, string? context, Action<int, string> onBlock,
+            public async Task<string?[]> TranslateBlocksStreamAsync(TranslationMachine machine, string source, string target, IReadOnlyList<string> blocks, string? context, Action<int, string> onBlock,
                 CancellationToken ct)
             {
                 _calls++;
-                Gates.Add(Gate?.HeavyWork.CurrentCount ?? -1);
+                Gates.Add(Lanes is null ? -1 : await IsFreeAsync(Lanes, Key) ? 1 : 0);
                 var answers = new string?[blocks.Count];
                 for (var index = 0; index < blocks.Count; index++)
                 {
@@ -550,7 +565,7 @@ namespace Jularr.Backend.Tests
                 }
 
                 _problem = null;
-                return Task.FromResult(answers);
+                return answers;
             }
 
             public Task<string?> TranslateBlockAsync(TranslationMachine machine, string source, string target, string text, string? context, CancellationToken ct) =>
@@ -581,10 +596,11 @@ namespace Jularr.Backend.Tests
             public IReadOnlyList<string> Models => ["model"];
             public bool IsAdminOnly => true;
 
-            public Task<IReadOnlyList<string>> AvailableAsync(TranslationSetupV1 setup, CancellationToken ct) => Task.FromResult(Models);
+            public IReadOnlyList<string> Available(TranslationSetupV1 setup) => Models;
 
-            public Task<TranslationMachine?> ChooseAsync(TranslationSetupV1 setup, string? model, CancellationToken ct) =>
-                Task.FromResult(model == "model" ? new TranslationMachine(this, model, new Uri("restricted://local/")) : null);
+            public TranslationMachine? Choose(TranslationSetupV1 setup, string? model) => model == "model" ? new TranslationMachine(this, model, new Uri("restricted://local/")) : null;
+
+            public Task<TranslationMachine?> ChooseAsync(TranslationSetupV1 setup, string? model, CancellationToken ct) => Task.FromResult(Choose(setup, model));
 
             public Task<string> DigestAsync(TranslationMachine machine, CancellationToken ct) => Task.FromResult("restricted-1");
 
