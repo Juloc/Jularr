@@ -214,6 +214,13 @@ namespace Jularr.Backend.Service.Core
             services.TryAddSingleton<ServiceTimings>();
             services.TryAddSingleton<ProviderObservations>();
             services.TryAddSingleton(new NewznabGate(NewznabGate.DefaultSpacing));
+
+            // Each provider's own request spacing, shared by every caller of the process.
+            services.TryAddSingleton(new RequestPace<OpenLibraryClient>(OpenLibraryClient.DefaultSpacing));
+            services.TryAddSingleton(new RequestPace<AniListClient>(AniListClient.DefaultSpacing));
+            services.TryAddSingleton(new RequestPace<MusicBrainzClient>(MusicBrainzClient.DefaultSpacing));
+            services.TryAddSingleton(new RequestPace<IgdbClient>(IgdbClient.DefaultSpacing));
+            services.TryAddSingleton(new NarouPace(NarouClient.RequestInterval));
             services.TryAddSingleton<HealthChecks>();
             services.TryAddSingleton<ResourceHistory>();
             services.AddHostedService(provider => provider.GetRequiredService<ResourceHistory>());

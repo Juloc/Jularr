@@ -7,6 +7,7 @@ using Jularr.Backend.Data.Enums.Account;
 using Jularr.Backend.Data.Logic.Account;
 using Jularr.Backend.Data.Public.Authentication.V1;
 using Jularr.Backend.Data.User.Session.V1;
+using Jularr.Integrations.Logic.Common;
 using Jularr.Integrations.Logic.Plex;
 using Jularr.Backend.Service.Core;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -534,55 +535,56 @@ namespace Jularr.Backend.Tests
             public IServiceProvider Services => _app.Services;
             public Dictionary<string, string> Cookies { get; } = new(StringComparer.Ordinal);
 
-            public static async Task<Host> CreateAsync(bool plexEnabled = false, bool razor = false, bool media = false, bool storage = false, bool library = false, IReadOnlyDictionary<string, string>? settings = null,
-                Action<IServiceCollection>? services = null, Action<IEndpointRouteBuilder>? endpoints = null)
+            // Hashed with the work factor of AccountLogic, once per process: signing in checks it without hashing and storing it again.
+            private static readonly Lazy<string> PasswordHash = new(() => new PasswordHasher<AccountAuthenticationData>(Options.Create(new PasswordHasherOptions { IterationCount = 600_000 }))
+                .HashPassword(new AccountAuthenticationData(41, 1, null, true, false), Password));
+
+            // What every host of a kind starts with: the instance baseline, the catalog baselines with the full migration ledger (library) or only the
+            // account migrations, and account 41 as Owner with the test password.
+            private static async Task InstallAsync(Fixture template, bool library, bool plexEnabled)
             {
-                // Catalog baselines are installed together, as in a fresh installation; Razor pages need all of them.
-                library |= media || storage || razor;
-                media = storage = library;
-                var fixture = await Fixture.CreateAsync(appliesAccountMigrations: false);
                 using (var schema = typeof(ServiceApi).Assembly.GetManifestResourceStream("Jularr.Database.Instance.sql")!)
                 using (var reader = new StreamReader(schema))
                 {
-                    await fixture.RunSqlAsync(await reader.ReadToEndAsync());
+                    await template.RunSqlAsync(await reader.ReadToEndAsync());
                 }
 
                 // The fixtures have several profiles per account; the default-off state has its own test.
-                await fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'Profiles'");
+                await template.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'Profiles'");
 
                 // Plex sign-in as the Owner sets it on a connected server.
                 if (plexEnabled)
                 {
-                    await fixture.RunSqlAsync("UPDATE \"Providers\" SET \"BaseUrl\" = 'https://plex-server.example.test/', \"ExternalId\" = 'connected-server' WHERE \"Key\" = 'plex'");
-                    await fixture.RunSqlAsync("UPDATE \"InstanceSettings\" SET \"PlexSignIn\" = TRUE, \"PlexRegistration\" = TRUE, \"PlexRegistrationSections\" = '{7}'");
-                }
-
-                if (media)
-                {
-                    // Install the requested baseline.
-                    using var schema = typeof(ServiceApi).Assembly.GetManifestResourceStream("Jularr.Database.Media.sql")!;
-                    using var reader = new StreamReader(schema);
-                    await fixture.RunSqlAsync(await reader.ReadToEndAsync());
-                    using var acquisitionSchema = typeof(ServiceApi).Assembly.GetManifestResourceStream("Jularr.Database.Acquisition.sql")!;
-                    using var acquisitionReader = new StreamReader(acquisitionSchema);
-                    await fixture.RunSqlAsync(await acquisitionReader.ReadToEndAsync());
-                }
-
-                if (storage)
-                {
-                    using var schema = typeof(ServiceApi).Assembly.GetManifestResourceStream("Jularr.Database.Storage.sql")!;
-                    using var reader = new StreamReader(schema);
-                    await fixture.RunSqlAsync(await reader.ReadToEndAsync());
+                    await template.RunSqlAsync("UPDATE \"Providers\" SET \"BaseUrl\" = 'https://plex-server.example.test/', \"ExternalId\" = 'connected-server' WHERE \"Key\" = 'plex'");
+                    await template.RunSqlAsync("UPDATE \"InstanceSettings\" SET \"PlexSignIn\" = TRUE, \"PlexRegistration\" = TRUE, \"PlexRegistrationSections\" = '{7}'");
                 }
 
                 if (library)
                 {
-                    await fixture.RunSqlAsync("DROP TABLE IF EXISTS \"ProfilePlaybackPreferences\"");
+                    // Install the requested baseline.
+                    using var schema = typeof(ServiceApi).Assembly.GetManifestResourceStream("Jularr.Database.Media.sql")!;
+                    using var reader = new StreamReader(schema);
+                    await template.RunSqlAsync(await reader.ReadToEndAsync());
+                    using var acquisitionSchema = typeof(ServiceApi).Assembly.GetManifestResourceStream("Jularr.Database.Acquisition.sql")!;
+                    using var acquisitionReader = new StreamReader(acquisitionSchema);
+                    await template.RunSqlAsync(await acquisitionReader.ReadToEndAsync());
+                }
+
+                if (library)
+                {
+                    using var schema = typeof(ServiceApi).Assembly.GetManifestResourceStream("Jularr.Database.Storage.sql")!;
+                    using var reader = new StreamReader(schema);
+                    await template.RunSqlAsync(await reader.ReadToEndAsync());
+                }
+
+                if (library)
+                {
+                    await template.RunSqlAsync("DROP TABLE IF EXISTS \"ProfilePlaybackPreferences\"");
                     foreach (var name in new[] { "Library", "Playback" })
                     {
                         using var schema = typeof(ServiceApi).Assembly.GetManifestResourceStream("Jularr.Database." + name + ".sql")!;
                         using var reader = new StreamReader(schema);
-                        await fixture.RunSqlAsync(await reader.ReadToEndAsync());
+                        await template.RunSqlAsync(await reader.ReadToEndAsync());
                     }
                 }
 
@@ -593,18 +595,18 @@ namespace Jularr.Backend.Tests
                     using (var schema = typeof(ServiceApi).Assembly.GetManifestResourceStream("Jularr.Database.Schema.sql")!)
                     using (var reader = new StreamReader(schema))
                     {
-                        await fixture.RunSqlAsync(await reader.ReadToEndAsync());
+                        await template.RunSqlAsync(await reader.ReadToEndAsync());
                     }
 
                     var migrations = DatabaseBaseline.Migrations;
-                    await fixture.RunSqlAsync($"""
+                    await template.RunSqlAsync($"""
                         INSERT INTO "DatabaseSchemaVersions" ("Version", "Name", "Fingerprint")
                         VALUES (1, 'baseline', '{DatabaseBaseline.Fingerprint(1, migrations)}');
                         """);
                     foreach (var migration in migrations)
                     {
-                        await fixture.RunSqlAsync(migration.Statement);
-                        await fixture.RunSqlAsync($"""
+                        await template.RunSqlAsync(migration.Statement);
+                        await template.RunSqlAsync($"""
                             INSERT INTO "DatabaseSchemaVersions" ("Version", "Name", "Fingerprint")
                             VALUES ({migration.Version}, '{migration.Name}', '{DatabaseBaseline.Fingerprint(migration.Version, migrations)}');
                             """);
@@ -618,19 +620,26 @@ namespace Jularr.Backend.Tests
                 {
                     foreach (var migration in ProfileReferenceVerticalTests.ProfileFixture.AccountMigrations)
                     {
-                        await fixture.RunSqlAsync(migration.Statement);
+                        await template.RunSqlAsync(migration.Statement);
                     }
                 }
 
-                var hasher = new PasswordHasher<AccountAuthenticationData>();
-                var hash = hasher.HashPassword(new AccountAuthenticationData(41, 1, null, true, false), Password);
-                await fixture.RunSqlAsync("UPDATE \"Accounts\" SET \"AccountRoleTypeId\" = 1 WHERE \"Id\" = 41");
-                await using (var connection = await fixture.Database.OpenConnectionAsync())
+                await template.RunSqlAsync("UPDATE \"Accounts\" SET \"AccountRoleTypeId\" = 1 WHERE \"Id\" = 41");
+                await using (var connection = await template.Database.OpenConnectionAsync())
                 await using (var command = new NpgsqlCommand("INSERT INTO \"AccountPasswords\" (\"AccountId\", \"PasswordHash\") VALUES (41, @hash)", connection))
                 {
-                    command.Parameters.AddWithValue("hash", hash);
+                    command.Parameters.AddWithValue("hash", PasswordHash.Value);
                     await command.ExecuteNonQueryAsync();
                 }
+            }
+
+            public static async Task<Host> CreateAsync(bool plexEnabled = false, bool razor = false, bool media = false, bool storage = false, bool library = false, IReadOnlyDictionary<string, string>? settings = null,
+                Action<IServiceCollection>? services = null, Action<IEndpointRouteBuilder>? endpoints = null)
+            {
+                // Catalog baselines are installed together, as in a fresh installation; Razor pages need all of them.
+                // Hosts of the same kind start from one database, installed once per test process and copied for each host.
+                library |= media || storage || razor;
+                var fixture = await Fixture.CreateAsync("host-" + (library ? "library" : "account") + (plexEnabled ? "-plex" : ""), template => InstallAsync(template, library, plexEnabled));
 
                 var builder = WebApplication.CreateBuilder(new WebApplicationOptions
                 {
@@ -639,7 +648,8 @@ namespace Jularr.Backend.Tests
                 });
                 builder.WebHost.UseTestServer();
                 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme).AddCookie();
-                builder.Configuration["JULARR_DB"] = fixture.ConnectionString;
+                // The host's own pool closes with the host.
+                builder.Configuration["JULARR_DB"] = new NpgsqlConnectionStringBuilder(fixture.ConnectionString) { Pooling = true }.ConnectionString;
                 builder.Configuration["Storage:RequireMountPoint"] = "false";
 
                 // Each host keeps its state apart; native tools stay off unless a test names them.
@@ -670,8 +680,13 @@ namespace Jularr.Backend.Tests
 
                 // Tests never reach a provider's image server; a test of covers names its own.
                 builder.Services.AddHttpClient<Jularr.Integrations.Logic.Media.CoverClient>().ConfigurePrimaryHttpMessageHandler(() => new NoImages());
-                // Indexer calls keep their spacing in production; a test does not wait for it.
+                // Indexer and provider calls keep their spacing in production; a test does not wait for it.
                 builder.Services.AddSingleton(new Jularr.Integrations.Logic.Newznab.NewznabGate(TimeSpan.Zero));
+                builder.Services.AddSingleton(new RequestPace<Jularr.Integrations.Logic.OpenLibrary.OpenLibraryClient>(TimeSpan.Zero));
+                builder.Services.AddSingleton(new RequestPace<Jularr.Integrations.Logic.AniList.AniListClient>(TimeSpan.Zero));
+                builder.Services.AddSingleton(new RequestPace<Jularr.Integrations.Logic.MusicBrainz.MusicBrainzClient>(TimeSpan.Zero));
+                builder.Services.AddSingleton(new RequestPace<Jularr.Integrations.Logic.Igdb.IgdbClient>(TimeSpan.Zero));
+                builder.Services.AddSingleton(new Jularr.Integrations.Logic.Narou.NarouPace(TimeSpan.Zero));
                 services?.Invoke(builder.Services);
 
                 var app = builder.Build();

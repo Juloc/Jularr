@@ -315,6 +315,14 @@ namespace Jularr.E2E.Tests
             foreach (var name in new[] { "Basic", "Audio", "Subtitles", "Playback", "Info" })
             {
                 await settings.GetByRole(AriaRole.Tab, new() { Name = name, Exact = true }).ClickAsync();
+
+                // Measured once the pane is complete: Info fills in the file's facts from the server, and fonts and layout are done.
+                if (name == "Info")
+                {
+                    await Assertions.Expect(settings.Locator("[data-role=fact-container]")).Not.ToBeEmptyAsync();
+                }
+
+                await page.EvaluateAsync("async () => { await document.fonts.ready; await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))); }");
                 var overflowing = await settings.EvaluateAsync<string[]>("""
                     popover => [popover, popover.querySelector('.player__settings-body'), popover.querySelector('.player__settings-pane:not([hidden])'), popover.querySelector('.navigation-tabs')]
                         .filter(element => element.scrollHeight > element.clientHeight || element.scrollWidth > element.clientWidth)

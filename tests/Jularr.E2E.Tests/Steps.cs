@@ -222,6 +222,55 @@ namespace Jularr.E2E.Tests
             await Assertions.Expect(button).ToHaveAttributeAsync("data-phase", new System.Text.RegularExpressions.Regex(".+"));
         }
 
+        // Runs a background job now, as the Owner's Run now on the Jobs page does, instead of waiting for its schedule; a pass already running is followed by
+        // another. For tests whose subject is what the job does, not when it runs.
+        public static async Task RunJobAsync(IPage page, string key) => await PostJobAsync(page, key, "run", null);
+
+        // Pauses a background job, as the Owner's Pause on the Jobs page does, and waits until a pass that was running has ended: for tests whose subject the
+        // job would otherwise change behind their back.
+        public static async Task PauseJobAsync(IPage page, string key)
+        {
+            await PostJobAsync(page, key, "pause", new { isPaused = true });
+            await WaitUntilAsync(async () => await JobStateAsync(page, key) == 2, "The job " + key + " did not stop", TimeSpan.FromSeconds(60));
+        }
+
+        // Waits for a condition the page or the database shows, looking again every quarter of a second until the deadline.
+        public static async Task WaitUntilAsync(Func<Task<bool>> condition, string failure, TimeSpan within)
+        {
+            var waited = Stopwatch.StartNew();
+            while (!await condition())
+            {
+                if (waited.Elapsed > within)
+                {
+                    throw new AssertFailedException(failure + " within " + within.TotalSeconds + " seconds.");
+                }
+
+                await Task.Delay(250);
+            }
+        }
+
+        // The job's state as the Jobs API reports it (1 running, 2 paused).
+        private static async Task<int> JobStateAsync(IPage page, string key)
+        {
+            var response = await page.APIRequest.GetAsync("/api/v1/admin/jobs");
+            Assert.AreEqual(200, response.Status, await response.TextAsync());
+            using var jobs = System.Text.Json.JsonDocument.Parse(await response.TextAsync());
+            return jobs.RootElement.EnumerateArray().Single(job => job.GetProperty("key").GetString() == key).GetProperty("workerJobStateTypeId").GetInt32();
+        }
+
+        // The service API's write of the Jobs page; every read of the API hands out the request token a write needs.
+        private static async Task PostJobAsync(IPage page, string key, string action, object? data)
+        {
+            var jobs = await page.APIRequest.GetAsync("/api/v1/admin/jobs");
+            Assert.AreEqual(200, jobs.Status, await jobs.TextAsync());
+            var response = await page.APIRequest.PostAsync("/api/v1/admin/jobs/" + key + "/" + action, new()
+            {
+                Headers = new Dictionary<string, string> { ["RequestVerificationToken"] = jobs.Headers["requestverificationtoken"] },
+                DataObject = data
+            });
+            Assert.AreEqual(200, response.Status, key + " " + action + ": " + await response.TextAsync());
+        }
+
         // A row of the admin list on the page (the list kit): the one whose text holds this.
         public static ILocator ListRow(IPage page, string text) => page.Locator(".list-body .list-row", new() { HasText = text });
 

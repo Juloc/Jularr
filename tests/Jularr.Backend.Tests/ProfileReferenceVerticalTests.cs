@@ -236,6 +236,7 @@ namespace Jularr.Backend.Tests
         internal sealed class ProfileFixture : IAsyncDisposable
         {
             private readonly NpgsqlDataSource _setup;
+            private readonly bool _isCopy;
 
             public NpgsqlDataSource Database { get; }
             public string ConnectionString { get; }
@@ -246,57 +247,53 @@ namespace Jularr.Backend.Tests
             public string SessionToken { get; } = Microsoft.AspNetCore.WebUtilities.WebEncoders.Base64UrlEncode(
                 System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
 
-            private ProfileFixture(NpgsqlDataSource setup, NpgsqlDataSource database, string connectionString)
+            // The fixture's data sources pool their connections and close them when it is disposed. ConnectionString has no pool, so a plain
+            // connection made from it ends with its test instead of waiting in a process-wide pool.
+            private ProfileFixture(string connectionString, bool isCopy)
             {
-                _setup = setup;
-                Database = database;
-                ConnectionString = connectionString;
+                var isolated = new NpgsqlConnectionStringBuilder(connectionString) { SearchPath = "\"ProfileReference\"" };
+                ConnectionString = isolated.ConnectionString;
+                isolated.Pooling = true;
+                _setup = new NpgsqlDataSourceBuilder(isolated.ConnectionString).Build();
+                Database = new NpgsqlDataSourceBuilder(isolated.ConnectionString).Build();
+                _isCopy = isCopy;
             }
 
             // The migrations that change the account and profile tables, for fixtures that install only the account schema.
             public static IReadOnlyList<DatabaseMigration> AccountMigrations => [.. DatabaseBaseline.Migrations.Where(migration => migration.Name is "0009_pwa_main_profile_accent" or "0011_profile_content_languages" or "0045_profile_language_original")];
 
-            public static async Task<ProfileFixture> CreateAsync(bool appliesAccountMigrations = true)
-            {
-                var cs = TestPostgres.ResolveConnectionString($"Data Source=profile-vertical-{Guid.NewGuid():N}");
-                var isolated = new NpgsqlConnectionStringBuilder(cs) { SearchPath = "\"ProfileReference\"" };
-                var setup = new NpgsqlDataSourceBuilder(isolated.ConnectionString).Build();
-                var database = new NpgsqlDataSourceBuilder(isolated.ConnectionString).Build();
-                var fixture = new ProfileFixture(setup, database, isolated.ConnectionString);
+            // Direct profile tests need the current account schema; full-host fixtures apply the complete migration ledger themselves.
+            public static Task<ProfileFixture> CreateAsync(bool appliesAccountMigrations = true) => appliesAccountMigrations
+                ? CreateAsync("profile", async template =>
+                {
+                    foreach (var migration in AccountMigrations)
+                    {
+                        await template.RunSqlAsync(migration.Statement);
+                    }
+                })
+                : CreateAsync("profile-without-migrations", _ => Task.CompletedTask);
 
+            // A copy of the named template, built once per test process: the account schema and rows below, then what prepare adds, the same for every copy.
+            // Each copy gets a session of its own and is dropped when the fixture is disposed.
+            internal static async Task<ProfileFixture> CreateAsync(string template, Func<ProfileFixture, Task> prepare)
+            {
+                var cs = await TestPostgres.CopyAsync(template, async connectionString =>
+                {
+                    await using var model = new ProfileFixture(connectionString, isCopy: false);
+                    await model.BootstrapAsync();
+                    await prepare(model);
+                });
+                var fixture = new ProfileFixture(cs, isCopy: true);
                 try
                 {
-                    await fixture.RunBootstrapAsync("CREATE SCHEMA \"ProfileReference\";");
-                    using var schema = typeof(ReadProfileV1).Assembly.GetManifestResourceStream("Jularr.Database.Account.sql")
-                        ?? throw new InvalidOperationException("The account schema is missing.");
-                    using var reader = new StreamReader(schema);
-                    await fixture.RunBootstrapAsync(await reader.ReadToEndAsync());
                     await fixture.RunBootstrapAsync(
                         """
-                        BEGIN;
-                        -- The profile read also reports the playback choice that belongs to the shell; a host that installs the playback schema drops this stand-in first.
-                        CREATE TABLE "ProfileReference"."ProfilePlaybackPreferences" ("ProfileId" bigint PRIMARY KEY, "AutoplayPreviews" boolean NOT NULL DEFAULT TRUE, "KeepScreenOn" boolean NOT NULL DEFAULT TRUE);
-                        INSERT INTO "UiLocales" ("Id", "Locale", "Name") VALUES (1, 'de-DE', 'Deutsch'), (2, 'en-GB', 'English');
-                        SELECT setval(pg_get_serial_sequence('"UiLocales"', 'Id'), 2);
-                        INSERT INTO "Accounts" ("Id", "Username", "Email", "DisplayName", "AccountRoleTypeId")
-                        VALUES (41, 'account_a', 'a@example.test', 'Account A', 2), (42, 'account_b', 'b@example.test', 'Account B', 2);
-                        INSERT INTO "ProfileReference"."Profiles" ("Id", "OwnerAccountId", "DisplayName", "UiLocaleId")
-                        VALUES (101, 41, 'Profile A', 1), (202, 42, 'Profile B', 1);
-                        INSERT INTO "ProfileReference"."AccountProfiles" ("AccountId", "ProfileId") VALUES (41, 101), (42, 202);
-                        INSERT INTO "ProfileReference"."AccountSessions" ("PublicId", "AccountId", "ActiveProfileId", "TokenHash", "ExpiresAt")
-                        VALUES (@SessionPublicId, 41, 101, @SessionTokenHash, now() + interval '1 hour');
-                        COMMIT;
+                        UPDATE "ProfileReference"."AccountSessions"
+                        SET "PublicId" = @SessionPublicId, "TokenHash" = @SessionTokenHash, "CreatedAt" = now(), "ExpiresAt" = now() + interval '1 hour'
+                        WHERE "AccountId" = 41;
                         """,
                         SqlParams.Create().Add("SessionPublicId", fixture.SessionPublicId)
                             .Add("SessionTokenHash", System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(fixture.SessionToken))).ToArray());
-                    // Direct profile tests need the current account schema; full-host fixtures apply the complete migration ledger themselves.
-                    if (appliesAccountMigrations)
-                    {
-                        foreach (var migration in AccountMigrations)
-                        {
-                            await fixture.RunSqlAsync(migration.Statement);
-                        }
-                    }
                     return fixture;
                 }
                 catch
@@ -304,6 +301,33 @@ namespace Jularr.Backend.Tests
                     await fixture.DisposeAsync();
                     throw;
                 }
+            }
+
+            private async Task BootstrapAsync()
+            {
+                await RunBootstrapAsync("CREATE SCHEMA \"ProfileReference\";");
+                using var schema = typeof(ReadProfileV1).Assembly.GetManifestResourceStream("Jularr.Database.Account.sql")
+                    ?? throw new InvalidOperationException("The account schema is missing.");
+                using var reader = new StreamReader(schema);
+                await RunBootstrapAsync(await reader.ReadToEndAsync());
+                await RunBootstrapAsync(
+                    """
+                    BEGIN;
+                    -- The profile read also reports the playback choice that belongs to the shell; a host that installs the playback schema drops this stand-in first.
+                    CREATE TABLE "ProfileReference"."ProfilePlaybackPreferences" ("ProfileId" bigint PRIMARY KEY, "AutoplayPreviews" boolean NOT NULL DEFAULT TRUE, "KeepScreenOn" boolean NOT NULL DEFAULT TRUE);
+                    INSERT INTO "UiLocales" ("Id", "Locale", "Name") VALUES (1, 'de-DE', 'Deutsch'), (2, 'en-GB', 'English');
+                    SELECT setval(pg_get_serial_sequence('"UiLocales"', 'Id'), 2);
+                    INSERT INTO "Accounts" ("Id", "Username", "Email", "DisplayName", "AccountRoleTypeId")
+                    VALUES (41, 'account_a', 'a@example.test', 'Account A', 2), (42, 'account_b', 'b@example.test', 'Account B', 2);
+                    INSERT INTO "ProfileReference"."Profiles" ("Id", "OwnerAccountId", "DisplayName", "UiLocaleId")
+                    VALUES (101, 41, 'Profile A', 1), (202, 42, 'Profile B', 1);
+                    INSERT INTO "ProfileReference"."AccountProfiles" ("AccountId", "ProfileId") VALUES (41, 101), (42, 202);
+                    INSERT INTO "ProfileReference"."AccountSessions" ("PublicId", "AccountId", "ActiveProfileId", "TokenHash", "ExpiresAt")
+                    VALUES (@SessionPublicId, 41, 101, @SessionTokenHash, now() + interval '1 hour');
+                    COMMIT;
+                    """,
+                    SqlParams.Create().Add("SessionPublicId", SessionPublicId)
+                        .Add("SessionTokenHash", System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(SessionToken))).ToArray());
             }
 
             internal ProfileGate NewGate() => new(Database, AccountAId, ProfileAId, SessionPublicId);
@@ -336,16 +360,14 @@ namespace Jularr.Backend.Tests
                 await command.ExecuteNonQueryAsync();
             }
 
+            // Closes the pools; a copy is dropped with them, a template stays for the next copies.
             public async ValueTask DisposeAsync()
             {
                 await Database.DisposeAsync();
-                try
+                await _setup.DisposeAsync();
+                if (_isCopy)
                 {
-                    await RunBootstrapAsync("DROP SCHEMA IF EXISTS \"ProfileReference\" CASCADE");
-                }
-                finally
-                {
-                    await _setup.DisposeAsync();
+                    await TestPostgres.DropAsync(ConnectionString);
                 }
             }
         }
