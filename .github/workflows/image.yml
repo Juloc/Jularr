@@ -35,12 +35,32 @@ jobs:
     if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    env:
+      DOCKER_BUILD_RECORD_UPLOAD: 'false'  # no build record artifact per build; the job summary still shows it
     steps:
       - uses: actions/checkout@v7
-      # Local builds are faster here than exporting gigabytes of remote layer cache.
-      # Docker Compose still validates the exact image this job just built.
+      # The release image (release.yml: same Dockerfile and platform; only the version differs). Docker Compose
+      # still validates the exact image this job just built.
+      - uses: docker/setup-buildx-action@v4
       - name: Build the image
-        run: docker build --tag ghcr.io/juloc/jularr:ci .
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/amd64
+          load: true
+          tags: ghcr.io/juloc/jularr:ci
+          cache-from: type=gha,scope=jularr-runtime-base
+      # A tag reads caches of main only: the release builds its tool layers from this one and writes none. Only the
+      # stage runtime-base (base image and tools, about 0.4 GB, new only when they change) is kept, not the app
+      # layer of every commit. Its layers are already built above.
+      - name: Keep the runtime base layers for the release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/amd64
+          target: runtime-base
+          cache-to: type=gha,mode=min,scope=jularr-runtime-base
       - name: Download the managed Chrome version for the runtime check
         run: |
           version=$(curl --fail --silent --show-error --retry 3 https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions.json | python3 -c 'import json,sys; print(json.load(sys.stdin)["channels"]["Stable"]["version"])')
