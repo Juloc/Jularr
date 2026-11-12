@@ -102,7 +102,7 @@ namespace Jularr.Frontend.Pages.Admin.Profile
                 {
                     // The allowed qualities as a short list, best first: arrows move one, a cross takes it out, a choice below adds one; upgrades stop at one of them or never start.
                     var allowed = order.Where(quality => input.AllowedQualities.Contains(quality, StringComparer.OrdinalIgnoreCase)).ToArray();
-                    section.Content(new P(new Text("profile.qualities.info")).Class("ui-field__help"));
+                    section.Content(new P(new Text("profile.qualities.info")).Class("ui-field__help profile-wide"));
                     var rows = allowed.Select((quality, index) => (IUiComponent)new Div(
                         new Input().Attribute("type", "hidden").Attribute("name", "AllowedQualities").Attribute("value", quality),
                         new Span(new ValueText(QualityLabel(input, quality))).Class("profile-quality__name"),
@@ -126,7 +126,7 @@ namespace Jularr.Frontend.Pages.Admin.Profile
                 fields.Section("profile.section.prefer", section =>
                 {
                     // What counts besides the quality, in plain words; the languages come from the profile languages, the details are the expert's.
-                    section.Content(new P(new Text("profile.prefer.info")).Class("ui-field__help"));
+                    section.Content(new P(new Text("profile.prefer.info")).Class("ui-field__help profile-wide"));
                     if (Family == QualityFamily.Video)
                     {
                         section.Select(item => item.BlockBadSources, "profile.prefer.badSources",
@@ -287,9 +287,9 @@ namespace Jularr.Frontend.Pages.Admin.Profile
                 return (IUiComponent)new Label(radio, new Span(new Text(choice.LabelKey))).Class("ui-segment");
             }).ToList();
             return new Div(new Input().Attribute("type", "hidden").Attribute("name", "GroupPreferenceWas").Attribute("value", current),
-                new Fieldset(new Legend(new Span(new Text("profile.prefer.groups")).Class("ui-field__label")).Class("ui-field__top"),
-                    new Div(new Div([.. segments]).Class("ui-segments")).Class("ui-field__control ui-field__control--segmented")).Class("ui-field__group"),
-                new P(new Text("profile.prefer.groups.info")).Class("ui-field__help")).Class("ui-field");
+                new Fieldset(new Legend(new Span(new Text("profile.prefer.groups")).Class("ui-field__label"), new FieldInfo("profile.prefer.groups.info", "profile-groups-info"))
+                        .Class("ui-field__top"),
+                    new Div(new Div([.. segments]).Class("ui-segments")).Class("ui-field__control ui-field__control--segmented")).Class("ui-field__group")).Class("ui-field");
         }
 
         private sealed class Fieldset(params IUiComponent[] children) : HtmlElement("fieldset", children);

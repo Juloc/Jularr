@@ -6,6 +6,12 @@
     .button--icon:first-child .ui-icon { transform: rotate(180deg); }
 }
 
+// A hint of a section spans its width, so the switches below it pair up in order.
+.profile-wide {
+    grid-column: 1 / -1;
+    margin: 0;
+}
+
 // The allowed qualities, best first: one row each with its name, the stop of upgrades and its buttons.
 .profile-qualities {
     grid-column: 1 / -1;
