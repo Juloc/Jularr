@@ -1934,6 +1934,8 @@ namespace Jularr.Backend.Tests
             var group = (await ReadAsync<PageResult<ReleaseGroupDetailsV1>>("/api/v1/admin/acquisition/release-groups")).Items.Single();
             Assert.AreEqual(("GRP", 2, (ReleaseGroupRating?)null), (group.Name, group.SeenCount, group.ReleaseGroupRatingId));
             Assert.IsNotNull(group.LastSeenAt);
+            CollectionAssert.AreEqual(new[] { AcquisitionMediaKind.Movie }, group.MediaKinds, "The search of a film counts its groups for films.");
+            Assert.AreEqual(2, Convert.ToInt32(await host.ScalarAsync("SELECT \"SeenCount\" FROM \"ReleaseGroupMediaKinds\" WHERE \"AcquisitionMediaKindId\" = 1")));
 
             // A group typed by hand in another case is the same group; a new one is not seen yet.
             using (var added = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/acquisition/release-groups", new AddReleaseGroupDataV1(" grp ")))
@@ -1951,6 +1953,18 @@ namespace Jularr.Backend.Tests
             var listed = (await ReadAsync<PageResult<ReleaseGroupDetailsV1>>("/api/v1/admin/acquisition/release-groups")).Items;
             CollectionAssert.AreEqual(new[] { "FLUX", "GRP" }, listed.Select(item => item.Name).ToArray());
             Assert.AreEqual("GRP", (await ReadAsync<PageResult<ReleaseGroupDetailsV1>>("/api/v1/admin/acquisition/release-groups?search=gr")).Items.Single().Name);
+
+            // A rating filter, a media type and another order narrow and sort the list; a group typed by hand has no media type yet.
+            async Task<string[]> NamesAsync(string query) =>
+                (await ReadAsync<PageResult<ReleaseGroupDetailsV1>>("/api/v1/admin/acquisition/release-groups?" + query)).Items.Select(item => item.Name).ToArray();
+            CollectionAssert.AreEqual(new[] { "FLUX" }, await NamesAsync("filter=NotRated"));
+            CollectionAssert.AreEqual(new[] { "GRP" }, await NamesAsync("filter=Good"));
+            Assert.AreEqual(0, (await NamesAsync("filter=Blocked")).Length);
+            CollectionAssert.AreEqual(new[] { "GRP" }, await NamesAsync("mediaKind=Movie"));
+            Assert.AreEqual(0, (await NamesAsync("mediaKind=Anime")).Length);
+            CollectionAssert.AreEqual(new[] { "FLUX", "GRP" }, await NamesAsync("sort=Name"));
+            CollectionAssert.AreEqual(new[] { "GRP", "FLUX" }, await NamesAsync("sort=SeenCount"));
+            CollectionAssert.AreEqual(new[] { "GRP", "FLUX" }, await NamesAsync("sort=LastSeen"));
             var figures = await ReadAsync<ReleaseGroupFiguresV1>("/api/v1/admin/acquisition/release-groups/figures?mediaTypeId=1");
             Assert.AreEqual((2, 1, 1, 0), (figures.GroupCount, figures.GoodCount, figures.NotRatedCount, figures.BlockedCount));
             var good = await SearchAsync();
@@ -2227,6 +2241,21 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(await dropped.Content.ReadAsStringAsync(), "default_required");
             using var deleted = await host.SendAsync(HttpMethod.Delete, Profiles + "/" + animeDefault + "?version=" + stored.Version);
             Assert.AreEqual(HttpStatusCode.BadRequest, deleted.StatusCode);
+
+            // Titles keep a profile and the refusal names them; a request rule that offers it loses it with the profile.
+            stored = (await ReadProfilesAsync(host)).Single(profile => profile.Id == bothId);
+            using (var used = await host.SendAsync(HttpMethod.Delete, Profiles + "/" + bothId + "?version=" + stored.Version))
+                StringAssert.Contains(await used.Content.ReadAsStringAsync(), "profile_has_titles");
+            using var offered = await CreateAsync("Offered only", [AcquisitionMediaKind.Movie], []);
+            var offeredId = (await offered.Content.ReadFromJsonAsync<CreateAcquisitionProfileResultV1>())!.Id;
+            await host.Fixture.RunSqlAsync($"UPDATE \"RequestRules\" SET \"AcquisitionProfileIds\" = ARRAY[{offeredId}, {bothId}]::bigint[] WHERE \"IsDefault\"");
+            var rule = await host.ScalarAsync("SELECT \"Version\" FROM \"RequestRules\" WHERE \"IsDefault\"");
+            stored = (await ReadProfilesAsync(host)).Single(profile => profile.Id == offeredId);
+            Assert.AreEqual((1, 0, 0), (stored.RuleCount, stored.OpenRequestCount, stored.WantedCount));
+            using (var removed = await host.SendAsync(HttpMethod.Delete, Profiles + "/" + offeredId + "?version=" + stored.Version))
+                Assert.AreEqual(HttpStatusCode.OK, removed.StatusCode, await removed.Content.ReadAsStringAsync());
+            Assert.AreEqual($"{{{bothId}}}", await host.ScalarAsync("SELECT \"AcquisitionProfileIds\"::text FROM \"RequestRules\" WHERE \"IsDefault\""));
+            Assert.AreEqual((long)rule! + 1, await host.ScalarAsync("SELECT \"Version\" FROM \"RequestRules\" WHERE \"IsDefault\""));
         }
 
         [TestMethod]

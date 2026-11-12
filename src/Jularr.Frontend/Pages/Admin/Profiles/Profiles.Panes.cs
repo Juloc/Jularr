@@ -19,7 +19,7 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
 
         private async Task LoadFormatsAsync(CancellationToken cancellation)
         {
-            // The formats (every profile names how it scores them), then the sections below them, each with its own page.
+            // The formats; every profile names how it scores them.
             _formats = await formats.ExecuteAsync<PageResult<CustomFormatDetailsV1>>(new ReadCustomFormatsParametersV1(PageOf(PagedList.DefaultKey)), cancellation);
             _profiles = await profiles.ExecuteAsync<BaseDataList<AcquisitionProfileDetailsV1>>(new ReadAcquisitionProfilesParametersV1(), cancellation);
             if (_format is null && Item == FormatItem && Edit is { } formatId)
@@ -27,9 +27,12 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
                 var item = await format.ExecuteAsync<CustomFormatDetailsV1>(new CustomFormatParametersV1(formatId), cancellation);
                 _format = new(item.Id, item.Name, item.IncludeWhenRenaming, item.Conditions, item.Version);
             }
+        }
 
+        // The release profiles and the tags they apply to, each with its own page.
+        private async Task LoadReleasesAsync(CancellationToken cancellation)
+        {
             _releases = await releases.ExecuteAsync<PageResult<ReleaseProfileDetailsV1>>(new ReadAcquisitionPolicyParametersV1(null, PageOf("releases")), cancellation);
-            _groups = await groups.ExecuteAsync<PageResult<ReleaseGroupDetailsV1>>(new ReadReleaseGroupsParametersV1(Search, PageOf("groups")), cancellation);
             _tags = await tags.ExecuteAsync<PageResult<AcquisitionTagDetailsV1>>(new ReadAcquisitionTagsParametersV1(PageOf("tags")), cancellation);
 
             // Every release card's chosen tags and indexer are offered besides the page of tags and indexers its pickers show.
@@ -47,7 +50,7 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
             _indexerChoices = new[] { new SelectOption("", texts["arr.anyIndexer"]) }.Concat(indexers.Select(item => new SelectOption(Number(item.Id), item.Name))).ToArray();
         }
 
-        // The custom formats once for every media type, then the rules that act on releases: release profiles, release groups and tags.
+        // The custom formats once for every media type.
         private void DefineFormats(Page page)
         {
             if (_formats is not { } result) return;
@@ -73,8 +76,18 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
             page.Content.Add(new ListPanel("arr.formats", columns, rows, empty).Modifier("formats-list").Paged(primary: true));
             DefineFormatDialogs(page);
 
+            var actions = new List<IUiComponent>
+            {
+                AddAction("arr.format.add", FormatItem),
+                Modal.Opener(new Button(Glyph("download", 16), new Span(new Text("arr.import")).Class("action-dock__text")).Soft(), "format-import")
+            };
+            page.Content.Add(new ActionDock(assets, "arr.actions", actions));
+        }
+
+        // The release profiles, then the tags a title carries and a release profile asks for.
+        private void DefineReleases(Page page)
+        {
             page.Content.Add(ReleaseSection());
-            page.Content.Add(GroupSection());
             page.Content.Add(TagSection());
             if (ConfirmDelete && Edit is { } removed && Item is ReleaseItem or TagItem)
             {
@@ -82,14 +95,7 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
                 if (version is { } current) page.Content.Add(DeleteDialog(removed, current, Item));
             }
 
-            var actions = new List<IUiComponent>
-            {
-                AddAction("arr.format.add", FormatItem),
-                Modal.Opener(new Button(Glyph("download", 16), new Span(new Text("arr.import")).Class("action-dock__text")).Soft(), "format-import"),
-                AddAction("arr.release.add", ReleaseItem),
-                AddAction("arr.tag.add", TagItem)
-            };
-            page.Content.Add(new ActionDock(assets, "arr.actions", actions));
+            page.Content.Add(new ActionDock(assets, "arr.actions", [AddAction("arr.release.add", ReleaseItem), AddAction("arr.tag.add", TagItem)]));
         }
 
         // A section of the tab under its own heading, reached by the address's anchor.
@@ -372,7 +378,7 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
         public async Task<IActionResult> OnPostReleaseAsync(long? id, string? name, bool isEnabled, MediaType? mediaTypeId, string? required, string? ignored,
             long? acquisitionConnectionId, long[]? tagIds, long? version, bool draft)
         {
-            Tab = DownloadPages.Formats;
+            Tab = DownloadPages.Releases;
             _release = new(id, mediaTypeId, name ?? "", isEnabled, Terms(required), Terms(ignored), acquisitionConnectionId, tagIds ?? [], version);
             if (draft) { await LoadDataAsync(); PreparePage(); return Page(); }
             await saveRelease.ExecuteAsync<SavedAcquisitionPolicyV1>(new SaveAcquisitionPolicyParametersV1(), _release, HttpContext.RequestAborted);
@@ -381,7 +387,7 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
 
         public async Task<IActionResult> OnPostTagAsync(long? id, string? label, long? version)
         {
-            Tab = DownloadPages.Formats;
+            Tab = DownloadPages.Releases;
             _tag = new(id, label ?? "", version);
             await saveTag.ExecuteAsync<SavedAcquisitionPolicyV1>(new SaveAcquisitionPolicyParametersV1(), _tag, HttpContext.RequestAborted);
             return LocalRedirect(Address());
@@ -389,7 +395,7 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
 
         public async Task<IActionResult> OnPostDeleteAsync(long version)
         {
-            Tab = DownloadPages.Formats;
+            Tab = Item == FormatItem ? DownloadPages.Formats : DownloadPages.Releases;
             var id = Edit ?? throw new KeyNotFoundException();
             switch (Item)
             {

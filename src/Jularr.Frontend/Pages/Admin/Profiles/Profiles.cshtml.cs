@@ -14,8 +14,9 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Jularr.Frontend.Pages.Admin.Profiles
 {
-    // The quality rules as Sonarr has them, in three tabs and without a media-type bar: one list of every profile (the media types it applies to and those it is the
-    // default of), the custom formats once for every type with the release profiles, release groups and tags as sections under them, and the quality sizes as sliders.
+    // The quality rules as Sonarr has them, in five tabs and without a media-type bar: one list of every profile (the media types it applies to, those it is the
+    // default of and whether anything uses it), the custom formats once for every type, the release groups with a live search, the release profiles with the tags,
+    // and the quality sizes as sliders.
     // A profile has its own page; adding is a dialog the address opens, settings of a card are inputs saved by the page's pill.
     public sealed partial class ProfilesModel(
         ReadAcquisitionProfilesV1 profiles, ReadMonitoredLanguagesV1 readMonitored, SaveMonitoredLanguagesV1 saveMonitored, ReadLanguageRulesV1 readRules, SaveLanguageRuleV1 saveRule,
@@ -41,6 +42,15 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
         [BindProperty(SupportsGet = true, Name = "delete")] public string? DeleteText { get; set; }
         [BindProperty(SupportsGet = true, Name = "item")] public string? ItemText { get; set; }
         [BindProperty(SupportsGet = true, Name = "q")] public string? Search { get; set; }
+
+        // The release groups tab: one rating or not rated, one media type and the order; an unknown value shows every group in the default order.
+        [BindProperty(SupportsGet = true, Name = "rating")] public string? RatingText { get; set; }
+        [BindProperty(SupportsGet = true, Name = "kind")] public string? KindText { get; set; }
+        [BindProperty(SupportsGet = true, Name = "sort")] public string? SortText { get; set; }
+
+        private ReleaseGroupFilter? RatingFilter => Enum.TryParse<ReleaseGroupFilter>(RatingText, true, out var value) && Enum.IsDefined(value) && !byte.TryParse(RatingText, out _) ? value : null;
+        private AcquisitionMediaKind? KindFilter => Enum.TryParse<AcquisitionMediaKind>(KindText, true, out var value) && Enum.IsDefined(value) && !byte.TryParse(KindText, out _) ? value : null;
+        private ReleaseGroupSort? GroupSort => Enum.TryParse<ReleaseGroupSort>(SortText, true, out var value) && Enum.IsDefined(value) && !byte.TryParse(SortText, out _) ? value : null;
 
         private string? _tab;
         private string Tab
@@ -85,6 +95,8 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
             page.Title(Tab switch
             {
                 DownloadPages.Formats => "arr.formats",
+                DownloadPages.Groups => "arr.releaseGroups",
+                DownloadPages.Releases => "arr.releaseProfiles",
                 DownloadPages.Quality => "arr.quality",
                 _ => "admin.profiles.title"
             });
@@ -94,13 +106,20 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
             page.Asset("Framework/Components/ActionDock.entry.ts");
             page.Asset("Framework/Components/Truncated.entry.ts");
             if (Tab == DownloadPages.Quality) page.Asset("Framework/Components/SizeRange.entry.ts");
+            if (Tab == DownloadPages.Groups)
+            {
+                page.Asset("Framework/Components/LiveSearch.entry.ts");
+                page.Asset("Framework/Components/ChoiceSelect.entry.ts");
+            }
 
-            // One row of tabs; the setup shows the profiles alone.
+            // One row of tabs; the setup shows the profiles alone. The groups tab puts its search and filters beside the tabs.
             page.NoPageRow();
-            if (!SetupWizard.IsActive(Request)) page.Content.Add(new ListToolbar(AdminMenu.Row(texts, Request, null, Tab)));
+            if (!SetupWizard.IsActive(Request) && Tab != DownloadPages.Groups) page.Content.Add(new ListToolbar(AdminMenu.Row(texts, Request, null, Tab)));
             switch (Tab)
             {
                 case DownloadPages.Formats: DefineFormats(page); break;
+                case DownloadPages.Groups: DefineGroups(page); break;
+                case DownloadPages.Releases: DefineReleases(page); break;
                 case DownloadPages.Quality: DefineQuality(page); break;
                 default: DefineProfiles(page); break;
             }
@@ -112,8 +131,8 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
             var empty = new Div(new IconTile(Glyph("layers", 22), UiTone.Neutral), new P(new Text("profile.none")).Attribute("role", "status"));
             var columns = new List<ListColumn>
             {
-                new("profile.name", ListRole.Main), new("profile.appliesTo", ListRole.Data, 1), new("profile.defaultFor", ListRole.Data, 1), new("profile.cutoff", ListRole.Data, 2),
-                new("profile.targets", ListRole.Data, 2), new("common.actions", ListRole.Actions)
+                new("profile.name", ListRole.Main), new("table.status", ListRole.Status), new("profile.appliesTo", ListRole.Data, 1), new("profile.defaultFor", ListRole.Data, 1),
+                new("profile.cutoff", ListRole.Data, 2), new("common.actions", ListRole.Actions)
             };
             var rows = _profiles.Select(item =>
             {
@@ -127,8 +146,7 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
                     : new Span(new Text("profile.noCutoff")).Class("list-value list-value--dim");
                 var caption = new List<IUiComponent> { ListPanel.Fact("profile.appliesTo", new ValueText(string.Join(", ", item.MediaKinds.Select(KindName)))) };
                 if (item.DefaultFor.Length > 0) caption.Add(ListPanel.Fact("profile.defaultFor", new ValueText(string.Join(", ", item.DefaultFor.Select(KindName)))));
-                return new ListRow([identity, appliesTo, defaultFor, cutoff, new Span(Count(item.WantedCount)).Class("list-value"), new Div(EditLink(editor)).Class("list-actions")], caption,
-                    item.Name);
+                return new ListRow([identity, Use(item), appliesTo, defaultFor, cutoff, new Div(EditLink(editor)).Class("list-actions")], caption, item.Name);
             }).ToList();
             page.Content.Add(new ListPanel("admin.profiles.title", columns, rows, empty).Modifier("profiles-list"));
             if (_monitored is not null && !SetupWizard.IsActive(Request)) page.Content.Add(MonitoredLanguages(_monitored));
@@ -144,6 +162,15 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
 
             page.Content.Add(new ActionDock(assets, "arr.actions", [AddAction("profile.new", ProfileItem)]));
         }
+
+        // Whether anything uses the profile: the titles that chose it, else its open requests, else nothing (a request rule that offers it does not count).
+        private IUiComponent Use(AcquisitionProfileDetailsV1 item) =>
+            item.WantedCount > 0 ? new StateChip(new ValueText(string.Format(CultureInfo.CurrentCulture, texts[item.WantedCount == 1 ? "profile.use.title" : "profile.use.titles"],
+                    item.WantedCount.ToString("N0", CultureInfo.CurrentCulture))), UiTone.Success, Glyph("check", 14))
+            : item.OpenRequestCount > 0 ? new StateChip(new ValueText(string.Format(CultureInfo.CurrentCulture, texts[item.OpenRequestCount == 1 ? "profile.use.request" : "profile.use.requests"],
+                    item.OpenRequestCount.ToString("N0", CultureInfo.CurrentCulture))), UiTone.Info, Glyph("clock", 14))
+            : item.DefaultFor.Length > 0 ? new StateChip(new Text("profile.use.default"), UiTone.Success, Glyph("check", 14))
+            : new StateChip(new Text("profile.use.none"), UiTone.Neutral, Glyph("minus", 14));
 
         // The languages of the titles nobody requested: the first language of every profile, or one chain.
         private UiSection MonitoredLanguages(MonitoredLanguagesV1 current)
@@ -202,6 +229,11 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
             if (item is not null) query.Add("item=" + item);
             if (isNew is not null) query.Add("new=" + isNew);
             if (!string.IsNullOrWhiteSpace(Search)) query.Add("q=" + Uri.EscapeDataString(Search.Trim()));
+            if (Tab == DownloadPages.Groups)
+            {
+                foreach (var (key, value) in GroupFilters()) query.Add(key + "=" + value);
+            }
+
             if (handler is not null) query.Add("handler=" + handler);
             return Home(Request) + (query.Count == 0 ? "" : "?" + string.Join("&", query));
         }
@@ -239,6 +271,13 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
                     break;
                 case DownloadPages.Formats:
                     await LoadFormatsAsync(cancellation);
+                    break;
+                case DownloadPages.Groups:
+                    _groups = await groups.ExecuteAsync<PageResult<ReleaseGroupDetailsV1>>(
+                        new ReadReleaseGroupsParametersV1(Search, PageOf("groups"), filter: RatingFilter, mediaKind: KindFilter, sort: GroupSort), cancellation);
+                    break;
+                case DownloadPages.Releases:
+                    await LoadReleasesAsync(cancellation);
                     break;
                 case DownloadPages.Quality:
                     foreach (var type in QualityTypes)

@@ -117,7 +117,7 @@ namespace Jularr.Frontend.Pages.Admin.Profile
                     {
                         var label = string.Format(CultureInfo.CurrentCulture, texts["profile.rateGroups"], figures.GroupCount.ToString("N0", CultureInfo.CurrentCulture),
                             figures.BlockedCount.ToString("N0", CultureInfo.CurrentCulture));
-                        section.Content(new Div(new A(new ValueText(label)).Class("button").Attribute("href", ProfilesModel.Home(Request) + "?tab=" + DownloadPages.Formats + "#release-groups"))
+                        section.Content(new Div(new A(new ValueText(label)).Class("button").Attribute("href", ProfilesModel.Home(Request) + "?tab=" + DownloadPages.Groups))
                             .Class("ui-field profile-groups"));
                     }
                 });
@@ -165,17 +165,28 @@ namespace Jularr.Frontend.Pages.Admin.Profile
             }, Address(), token, input, FormError);
             page.Content.Add(form);
 
-            // Back to the list, and the deletion of an unused profile behind a dialog.
+            // Back to the list, and the deletion of a profile that is no default behind a dialog: titles and open requests keep it, the request rules that offer it lose it.
             var actions = new List<IUiComponent> { new A(Glyph("chevron-left", 16), new Span(new Text("common.back")).Class("action-dock__text")).Class("button").Attribute("href", BackAddress()) };
             if (_profile is { } saved && saved.DefaultFor.Length == 0)
             {
                 actions.Add(Modal.Opener(new Button(Glyph("trash", 16), new Span(new Text("profile.delete")).Class("action-dock__text")).Warn(), "profile-delete"));
-                page.Content.Add(new Modal(assets, "profile-delete", "profile.deleteConfirm", [new Form<DeleteAcquisitionProfileParametersV1>(fields =>
+                var body = new List<IUiComponent>();
+                if (saved.WantedCount > 0) body.Add(new P(new Text("profile.delete.hasTitles")).Attribute("role", "alert"));
+                else if (saved.OpenRequestCount > 0) body.Add(new P(new Text("profile.delete.hasRequests")).Attribute("role", "alert"));
+                else if (saved.RuleCount > 0)
+                {
+                    body.Add(new P(new ValueText(string.Format(CultureInfo.CurrentCulture, texts[saved.RuleCount == 1 ? "profile.delete.rule" : "profile.delete.rules"],
+                        saved.RuleCount.ToString("N0", CultureInfo.CurrentCulture)))));
+                }
+
+                var blocked = saved.WantedCount > 0 || saved.OpenRequestCount > 0;
+                body.Add(new Form<DeleteAcquisitionProfileParametersV1>(fields =>
                 {
                     fields.Hidden(item => item.Version);
                     fields.Cancel();
-                    fields.Submit("profile.delete");
-                }, Address("Delete"), token, new DeleteAcquisitionProfileParametersV1(saved.Id, saved.Version), _input is null ? FormError : null)]));
+                    if (!blocked) fields.Submit("profile.delete");
+                }, Address("Delete"), token, new DeleteAcquisitionProfileParametersV1(saved.Id, saved.Version), _input is null ? FormError : null));
+                page.Content.Add(new Modal(assets, "profile-delete", "profile.deleteConfirm", [.. body]));
             }
 
             page.Content.Add(new ActionDock(assets, "arr.actions", actions));

@@ -47,7 +47,7 @@ namespace Jularr.E2E.Tests
                 await Assertions.Expect(page.Locator(".breadcrumb")).ToContainTextAsync("Settings");
                 Assert.AreEqual("same document", await page.EvaluateAsync<string>("window.menuMarker"));
 
-                // The quality rules are three tabs of one address in one row.
+                // The quality rules are five tabs of one address in one row.
                 await page.GotoAsync("/Admin/Acquisition/Profiles?tab=formats");
                 await Assertions.Expect(page.Locator("main .navigation-tabs")).ToHaveCountAsync(1);
                 await Assertions.Expect(page.Locator("main .navigation-tabs [aria-current=page]")).ToHaveTextAsync("Custom formats");

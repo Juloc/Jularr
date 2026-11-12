@@ -89,7 +89,7 @@ namespace Jularr.E2E.Tests
 
             // Shelves, choice selects, layout toggles and drawer buttons, the save pill's forms on cards and in lists, the queue's live rows, the size sliders.
             string[] paths = ["/", "/Library", "/Favorites", "/Notifications", "/Admin/Providers", "/Admin/Catalog", "/Admin/Downloads", "/Admin/Queue", "/Admin/Jobs/Tasks", "/Admin/Wanted", "/Account/Sessions",
-                "/Admin/Acquisition/Profiles", "/Admin/Acquisition/Profiles?tab=formats", "/Admin/Acquisition/Profiles?tab=quality"];
+                "/Admin/Acquisition/Profiles", "/Admin/Acquisition/Profiles?tab=formats", "/Admin/Acquisition/Profiles?tab=groups", "/Admin/Acquisition/Profiles?tab=releases", "/Admin/Acquisition/Profiles?tab=quality"];
             var shifts = new List<string>();
             try
             {

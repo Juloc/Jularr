@@ -191,8 +191,10 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
             BaseDataList<CustomFormatScoreV1>? formatScores, int minimumFormatScore, int cutoffFormatScore, int minimumUpgradeFormatScore,
             int wantedCount, long version, string[] monitoredTypes, string[] monitoredLanguages, int? minimumPages,
             string[]? languageOrder = null, LanguageFallbackType languageFallback = LanguageFallbackType.Any, int goodGroupScore = AcquisitionProfileDefinition.DefaultGoodGroupScore,
-            int badGroupScore = AcquisitionProfileDefinition.DefaultBadGroupScore)
+            int badGroupScore = AcquisitionProfileDefinition.DefaultBadGroupScore, int ruleCount = 0, int openRequestCount = 0)
         {
+            RuleCount = ruleCount;
+            OpenRequestCount = openRequestCount;
             Id = id;
             Name = name;
             MediaKinds = mediaKinds;
@@ -299,6 +301,13 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
 
         [DataField(typeof(ReleaseGroupFields), nameof(ReleaseGroupFields.BadScore))]
         public int BadGroupScore { get; }
+
+        // The request rules that offer the profile (deleting it takes it out of them) and the open requests that chose it (they keep it from being deleted).
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.WantedCount))]
+        public int RuleCount { get; }
+
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.WantedCount))]
+        public int OpenRequestCount { get; }
     }
     public sealed class CreateAcquisitionProfileResultV1 : BaseResponse
     {

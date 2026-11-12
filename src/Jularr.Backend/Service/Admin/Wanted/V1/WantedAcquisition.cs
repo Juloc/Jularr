@@ -237,7 +237,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                     await ctx.RecordIndexerUseAsync(new IndexerUseData(id, use.Queries, !use.Failed, use.RetryAfterSeconds > 0 ? use.RetryAfterSeconds : null), token);
                 }
 
-                await ctx.RecordReleaseGroupsAsync(new ReleaseGroupSightingsData(groups, now), token);
+                await ctx.RecordReleaseGroupsAsync(new ReleaseGroupSightingsData(groups, now, AcquisitionMediaKinds.Of(target.MediaTypeId, target.MediaSubtypeId)), token);
                 return true;
             }, ct);
 

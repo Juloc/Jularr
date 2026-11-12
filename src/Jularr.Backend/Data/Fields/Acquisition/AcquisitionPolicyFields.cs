@@ -60,6 +60,10 @@ namespace Jularr.Backend.Data.Fields.Acquisition
         public static readonly IntField Count = new() { Minimum = 0 };
         public static readonly DateTimeField LastSeenAt = new() { Required = false };
         public static readonly DateTimeField SeenAt = new();
+        public static readonly EnumField MediaKind = new(typeof(AcquisitionMediaKind)) { Required = false };
+        public static readonly EnumArrayField MediaKinds = new(typeof(AcquisitionMediaKind)) { MaximumLength = 8, IsSet = true };
+        public static readonly EnumField Filter = new(typeof(ReleaseGroupFilter)) { Required = false };
+        public static readonly EnumField Sort = new(typeof(ReleaseGroupSort)) { Required = false };
 
         // A profile's points for a group rated good (plus) or bad (minus).
         public static readonly IntField GoodScore = new() { Minimum = 0, Maximum = 1000000 };

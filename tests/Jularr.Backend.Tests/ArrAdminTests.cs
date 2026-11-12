@@ -116,8 +116,7 @@ namespace Jularr.Backend.Tests
             var list = await listPage.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, listPage.StatusCode, list);
             Assert.IsFalse(list.Contains("capsule-group", StringComparison.Ordinal), "No media-type bar.");
-            foreach (var tab in new[] { ">Profiles</a>", ">Custom formats</a>", ">Quality</a>" }) StringAssert.Contains(list, tab);
-            Assert.IsFalse(list.Contains(">Release profiles</a>", StringComparison.Ordinal));
+            foreach (var tab in new[] { ">Profiles</a>", ">Custom formats</a>", ">Release groups</a>", ">Release profiles</a>", ">Quality</a>" }) StringAssert.Contains(list, tab);
             Assert.AreEqual(1, list.Split(">HD - 720p/1080p<", StringSplitOptions.None).Length - 1, "The film and the series profile, alike, are one.");
             foreach (var type in new[] { "Movies", "Series", "Anime", "Books", "Manga", "Light novels", "Music", "Games" }) StringAssert.Contains(list, "class=\"tag tag--accent\">" + type + "<");
 
@@ -125,7 +124,7 @@ namespace Jularr.Backend.Tests
             foreach (var (from, to) in new[]
             {
                 ("?tab=profiles&mediaTypeId=5", Home), ("?mediaTypeId=2&subtype=Anime", Home), ("?tab=sizes&mediaTypeId=1", Home + "?tab=quality"),
-                ("?tab=release&mediaTypeId=1", Home + "?tab=formats#release-profiles"), ("?tab=groups&mediaTypeId=3", Home + "?tab=formats#release-groups"), ("?tab=tags", Home + "?tab=formats#tags")
+                ("?tab=release&mediaTypeId=1", Home + "?tab=releases"), ("?tab=groups&mediaTypeId=3", Home + "?tab=groups"), ("?tab=tags", Home + "?tab=releases#tags")
             })
             {
                 using var moved = await host.SendAsync(HttpMethod.Get, Home + from);
@@ -134,7 +133,7 @@ namespace Jularr.Backend.Tests
             }
 
             // No value of the address is refused.
-            foreach (var query in new[] { "?tab=unknown", "?tab=formats&edit=abc&item=x&new=nothing&pageNumber=-3&groups=zz", "?tab=quality&pageNumber=99999999999", "?new=profile&edit=%00" })
+            foreach (var query in new[] { "?tab=unknown", "?tab=formats&edit=abc&item=x&new=nothing&pageNumber=-3&groups=zz", "?tab=groups&rating=7&kind=Banana&sort=1&groups=-2", "?tab=quality&pageNumber=99999999999", "?new=profile&edit=%00" })
             {
                 using var odd = await host.SendAsync(HttpMethod.Get, Home + query);
                 Assert.AreEqual(HttpStatusCode.OK, odd.StatusCode, query);
@@ -167,7 +166,7 @@ namespace Jularr.Backend.Tests
             await using var host = await CreateAsync(razor: true);
             using var overview = await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Profiles");
             Assert.AreEqual(HttpStatusCode.OK, overview.StatusCode, string.Join(";", overview.Headers.Select(header => header.Key + "=" + string.Join(",", header.Value))));
-            foreach (var tab in new[] { "profiles", "formats", "quality" })
+            foreach (var tab in new[] { "profiles", "formats", "groups", "releases", "quality" })
             {
                 using var response = await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Profiles?tab=" + tab);
                 var html = await response.Content.ReadAsStringAsync();
@@ -175,9 +174,9 @@ namespace Jularr.Backend.Tests
                 Assert.AreEqual(2, html.Split("class=\"navigation-tabs navigation-tabs--filters\"", StringSplitOptions.None).Length);
                 Assert.IsFalse(html.Contains("delay", StringComparison.OrdinalIgnoreCase), "A delay is offered on " + tab);
                 Assert.IsFalse(html.Contains("FallbackQualities", StringComparison.Ordinal));
-                if (tab == "formats")
+                if (tab == "releases")
                 {
-                    using var saved = await host.SendAsync(HttpMethod.Post, "/Admin/Acquisition/Profiles?tab=formats&handler=Tag",
+                    using var saved = await host.SendAsync(HttpMethod.Post, "/Admin/Acquisition/Profiles?tab=releases&handler=Tag",
                         new FormUrlEncodedContent([new("__RequestVerificationToken", LibraryTests.Token(html)), new("Label", "arr-test")]));
                     Assert.AreEqual(HttpStatusCode.Redirect, saved.StatusCode, await saved.Content.ReadAsStringAsync());
                 }
@@ -186,7 +185,7 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
-        public async Task ReleaseGroupsSection_ListsEveryTypeNotRatedFirst_AndSavesARatingFromItsSegments()
+        public async Task ReleaseGroupsTab_ListsEveryTypeNotRatedFirst_FiltersLive_AndSavesARatingFromItsSegments()
         {
             await using var host = await CreateAsync(razor: true);
             await host.Fixture.RunSqlAsync("""
@@ -194,48 +193,69 @@ namespace Jularr.Backend.Tests
                     (901, 'GRP', 1, 14, now() - interval '2 hours'),
                     (902, 'FLUX', NULL, 5, now() - interval '3 days'),
                     (903, 'SeriesOnly', NULL, 1, now());
+                INSERT INTO "ReleaseGroupMediaKinds" ("ReleaseGroupId", "AcquisitionMediaKindId", "SeenCount", "LastSeenAt") VALUES
+                    (901, 1, 10, now()), (901, 3, 4, now()), (903, 2, 1, now());
                 """);
 
-            // One list for every media type under the custom formats: the find-or-add field, not rated first, one segmented control per group with the rating chosen.
-            using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Profiles?tab=formats");
+            // A tab of its own: the rating filter beside the tabs, a live search, the media type and the order; not rated first, one segmented control per group.
+            const string Tab = "/Admin/Acquisition/Profiles?tab=groups";
+            using var page = await host.SendAsync(HttpMethod.Get, Tab);
             var html = await page.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
             Assert.AreEqual(2, html.Split("class=\"navigation-tabs navigation-tabs--filters\"", StringSplitOptions.None).Length);
-            StringAssert.Contains(html, "navigation-tabs__link navigation-tabs__link--active\" aria-current=\"page\">Custom formats</a>");
-            StringAssert.Contains(html, "id=\"release-groups\"");
-            StringAssert.Contains(html, "placeholder=\"Find or add a group\"");
-            StringAssert.Contains(html, "Not rated &#xB7; seen 5 times, last 3 days ago");
-            StringAssert.Contains(html, "seen 14 times, last 2 hours ago");
+            StringAssert.Contains(html, "navigation-tabs__link navigation-tabs__link--active\" aria-current=\"page\">Release groups</a>");
+            StringAssert.Contains(html, "id=\"release-groups\" data-region=\"\"");
+            StringAssert.Contains(html, "data-search-live=\"\"");
+            StringAssert.Contains(html, "placeholder=\"Find a group\"");
+            StringAssert.Contains(html, "href=\"/Admin/Acquisition/Profiles?tab=groups&amp;rating=Blocked\"");
+            StringAssert.Contains(html, "name=\"kind\"");
+            StringAssert.Contains(html, "name=\"sort\"");
+            StringAssert.Contains(html, "seen 5 times, last 3 days ago");
+            StringAssert.Contains(html, "Movies, Anime &#xB7; seen 14 times, last 2 hours ago");
             Assert.IsTrue(html.IndexOf(">FLUX<", StringComparison.Ordinal) < html.IndexOf(">GRP<", StringComparison.Ordinal), "Not rated groups come first.");
-            StringAssert.Contains(html, ">SeriesOnly<");
             Assert.AreEqual(3, html.Split("class=\"ui-segments\"", StringSplitOptions.None).Length - 1);
             StringAssert.Contains(html, "data-form-submit=\"\"");
-            StringAssert.Contains(html, "id=\"release-groups-region\" data-region=\"\"");
             Assert.AreEqual(9, html.Split("data-form-clearable=\"\"", StringSplitOptions.None).Length - 1);
-            Assert.AreEqual(1, html.Split("title=\"Click again to clear\"", StringSplitOptions.None).Length - 1);
-            Assert.IsFalse(html.Contains("kpi-tile", StringComparison.Ordinal));
+            Assert.IsFalse(html.Contains("Add &#x201C;", StringComparison.Ordinal), "Without words nothing is offered to add.");
 
-            // A segment saves the rating at once; the field adds a group and shows it.
-            using var rated = await host.SendAsync(HttpMethod.Post, "/Admin/Acquisition/Profiles?tab=formats&edit=902&item=group&handler=Rate",
+            // The filter, the media type and the order narrow the list and stay in every address of the tab.
+            var anime = await (await host.SendAsync(HttpMethod.Get, Tab + "&kind=Anime&sort=Name")).Content.ReadAsStringAsync();
+            StringAssert.Contains(anime, ">GRP<");
+            Assert.IsFalse(anime.Contains(">FLUX<", StringComparison.Ordinal) || anime.Contains(">SeriesOnly<", StringComparison.Ordinal));
+            StringAssert.Contains(anime, "href=\"/Admin/Acquisition/Profiles?tab=groups&amp;rating=Good&amp;kind=Anime&amp;sort=Name\"");
+            var open = await (await host.SendAsync(HttpMethod.Get, Tab + "&rating=NotRated")).Content.ReadAsStringAsync();
+            Assert.IsFalse(open.Contains(">GRP<", StringComparison.Ordinal));
+            StringAssert.Contains(open, ">SeriesOnly<");
+
+            // A segment saves the rating at once and the tab shows again.
+            using var rated = await host.SendAsync(HttpMethod.Post, Tab + "&edit=902&item=group&handler=Rate",
                 new FormUrlEncodedContent([new("__RequestVerificationToken", LibraryTests.Token(html)), new("ReleaseGroupRatingId", "3")]));
             Assert.AreEqual(HttpStatusCode.Redirect, rated.StatusCode, await rated.Content.ReadAsStringAsync());
+            Assert.AreEqual("/Admin/Acquisition/Profiles?tab=groups", rated.Headers.Location!.OriginalString);
             Assert.AreEqual(3, Convert.ToInt32(await host.ScalarAsync("""SELECT "ReleaseGroupRatingId" FROM "ReleaseGroups" WHERE "Id" = 902""")));
 
             // The chosen segment clicked again sends no rating: the group is not rated again.
-            using var cleared = await host.SendAsync(HttpMethod.Post, "/Admin/Acquisition/Profiles?tab=formats&edit=901&item=group&handler=Rate",
+            using var cleared = await host.SendAsync(HttpMethod.Post, Tab + "&edit=901&item=group&handler=Rate",
                 new FormUrlEncodedContent([new("__RequestVerificationToken", LibraryTests.Token(html))]));
             Assert.AreEqual(HttpStatusCode.Redirect, cleared.StatusCode, await cleared.Content.ReadAsStringAsync());
             Assert.AreEqual(true, await host.ScalarAsync("""SELECT "ReleaseGroupRatingId" IS NULL FROM "ReleaseGroups" WHERE "Id" = 901"""));
-            var sorted = await (await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Profiles?tab=formats")).Content.ReadAsStringAsync();
+            var sorted = await (await host.SendAsync(HttpMethod.Get, Tab)).Content.ReadAsStringAsync();
             Assert.IsTrue(sorted.IndexOf(">GRP<", StringComparison.Ordinal) < sorted.IndexOf(">FLUX<", StringComparison.Ordinal), "The group no longer rated comes first again.");
-            using var added = await host.SendAsync(HttpMethod.Post, "/Admin/Acquisition/Profiles?tab=formats&handler=Group",
+
+            // Words that name no group offer to add it; the added group shows with the words.
+            var unknown = await (await host.SendAsync(HttpMethod.Get, Tab + "&q=danke-Empire")).Content.ReadAsStringAsync();
+            StringAssert.Contains(unknown, "Add &#x201C;danke-Empire&#x201D; as a group");
+            StringAssert.Contains(unknown, "No group matches.");
+            using var added = await host.SendAsync(HttpMethod.Post, Tab + "&q=danke-Empire&handler=Group",
                 new FormUrlEncodedContent([new("__RequestVerificationToken", LibraryTests.Token(html)), new("Name", " danke-Empire ")]));
             Assert.AreEqual(HttpStatusCode.Redirect, added.StatusCode, await added.Content.ReadAsStringAsync());
+            StringAssert.Contains(added.Headers.Location!.OriginalString, "tab=groups");
             StringAssert.Contains(added.Headers.Location!.OriginalString, "q=danke-Empire");
             Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "ReleaseGroups" WHERE "Name" = 'danke-Empire' AND "SeenCount" = 0"""));
             var found = await (await host.SendAsync(HttpMethod.Get, added.Headers.Location.OriginalString)).Content.ReadAsStringAsync();
-            StringAssert.Contains(found, "Not rated &#xB7; added by hand, not seen yet");
+            StringAssert.Contains(found, "added by hand, not seen yet");
             Assert.IsFalse(found.Contains(">GRP<", StringComparison.Ordinal));
+            Assert.IsFalse(found.Contains("Add &#x201C;", StringComparison.Ordinal), "A group that exists is not offered again.");
         }
 
         [TestMethod]

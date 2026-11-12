@@ -171,17 +171,39 @@ namespace Jularr.Backend.Logic.Acquisition
                 throw new DataValidationException(nameof(AcquisitionProfileInputData.DefaultFor), "default_required");
             }
 
+            // Titles and open requests that chose the profile keep it; the request rules that offer it lose it with the profile.
             var sql = new SqlStatement();
             sql.Statement =
                 """
+                SELECT
+                    EXISTS (SELECT 1 FROM "WantedItems" AS wanted WHERE wanted."AcquisitionProfileId" = @Id) AS "HasTitles",
+                    EXISTS (SELECT 1 FROM "AcquisitionRequests" AS request
+                        WHERE request."AcquisitionProfileId" = @Id AND request."AcquisitionRequestStatusTypeId" BETWEEN 1 AND 5) AS "HasRequests";
+                """;
+            sql.Parameters.Add(data);
+            var use = await ctx.ReadRequiredAsync<AcquisitionProfileBlockersData>(sql, ct);
+            if (use.HasTitles) throw new DataValidationException(nameof(data.Id), "profile_has_titles");
+            if (use.HasRequests) throw new DataValidationException(nameof(data.Id), "profile_has_requests");
+
+            sql = new SqlStatement();
+            sql.Statement =
+                """
+                WITH rules AS (
+                    UPDATE "RequestRules" AS rule
+                    SET "AcquisitionProfileIds" = array_remove(rule."AcquisitionProfileIds", @Id), "Version" = rule."Version" + 1
+                    WHERE @Id = ANY(rule."AcquisitionProfileIds")
+                ),
+                accounts AS (
+                    UPDATE "AccountRequestRules" AS rule
+                    SET "AcquisitionProfileIds" = array_remove(rule."AcquisitionProfileIds", @Id)
+                    WHERE @Id = ANY(rule."AcquisitionProfileIds")
+                )
                 DELETE FROM
                     "AcquisitionProfiles" AS profile
                 WHERE
                     profile."Id" = @Id
                     AND profile."Version" = @Version
                     AND NOT EXISTS (SELECT 1 FROM "WantedItems" AS wanted WHERE wanted."AcquisitionProfileId" = profile."Id")
-                    AND NOT EXISTS (SELECT 1 FROM "RequestRules" AS rule WHERE profile."Id" = ANY(rule."AcquisitionProfileIds"))
-                    AND NOT EXISTS (SELECT 1 FROM "AccountRequestRules" AS rule WHERE profile."Id" = ANY(rule."AcquisitionProfileIds"))
                     AND NOT EXISTS (SELECT 1 FROM "AcquisitionRequests" AS request WHERE request."AcquisitionProfileId" = profile."Id" AND request."AcquisitionRequestStatusTypeId" BETWEEN 1 AND 5);
                 """;
             sql.Parameters.Add(data);
@@ -189,7 +211,6 @@ namespace Jularr.Backend.Logic.Acquisition
             {
                 throw new DataValidationException(nameof(data.Id), "in_use");
             }
-
         }
 
         private static async Task SaveProfileKindsAsync(this LogicContext ctx, AcquisitionProfileKindsData data, CancellationToken ct)

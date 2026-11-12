@@ -20,30 +20,51 @@ namespace Jularr.Backend.Logic.Acquisition
         {
             if (data.Names.Length == 0) return;
 
-            // One statement for every group of the search: a new one is stored as first seen, a known one counts once more.
+            // One statement for every group of the search: a new one is stored as first seen, a known one counts once more, and so does its media type.
             var sql = new SqlStatement();
             sql.Statement =
                 """
+                WITH seen AS (
+                    INSERT INTO
+                        "ReleaseGroups" ("Name", "SeenCount", "LastSeenAt")
+                    SELECT
+                        named."Name",
+                        1,
+                        @SeenAt
+                    FROM
+                        (
+                            SELECT DISTINCT ON (lower(name))
+                                name AS "Name"
+                            FROM
+                                unnest(@Names::varchar(64)[]) AS name
+                            ORDER BY
+                                lower(name),
+                                name
+                        ) AS named
+                    ON CONFLICT ((lower("Name"))) DO UPDATE
+                    SET
+                        "SeenCount" = least("ReleaseGroups"."SeenCount", 2147483646) + 1,
+                        "LastSeenAt" = greatest("ReleaseGroups"."LastSeenAt", excluded."LastSeenAt")
+                    RETURNING
+                        "Id"
+                )
                 INSERT INTO
-                    "ReleaseGroups" ("Name", "SeenCount", "LastSeenAt")
+                    "ReleaseGroupMediaKinds" ("ReleaseGroupId", "AcquisitionMediaKindId", "SeenCount", "LastSeenAt")
                 SELECT
-                    seen."Name",
+                    seen."Id",
+                    @MediaKind::smallint,
                     1,
                     @SeenAt
                 FROM
-                    (
-                        SELECT DISTINCT ON (lower(name))
-                            name AS "Name"
-                        FROM
-                            unnest(@Names::varchar(64)[]) AS name
-                        ORDER BY
-                            lower(name),
-                            name
-                    ) AS seen
-                ON CONFLICT ((lower("Name"))) DO UPDATE
+                    seen
+                WHERE
+                    @MediaKind::smallint IS NOT NULL
+                ORDER BY
+                    seen."Id"
+                ON CONFLICT ("ReleaseGroupId", "AcquisitionMediaKindId") DO UPDATE
                 SET
-                    "SeenCount" = least("ReleaseGroups"."SeenCount", 2147483646) + 1,
-                    "LastSeenAt" = greatest("ReleaseGroups"."LastSeenAt", excluded."LastSeenAt");
+                    "SeenCount" = least("ReleaseGroupMediaKinds"."SeenCount", 2147483646) + 1,
+                    "LastSeenAt" = greatest("ReleaseGroupMediaKinds"."LastSeenAt", excluded."LastSeenAt");
                 """;
             sql.Parameters.Add(data);
             await ctx.ExecuteAsyncForAffectedRows(sql, ct);

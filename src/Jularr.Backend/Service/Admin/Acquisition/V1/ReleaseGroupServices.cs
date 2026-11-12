@@ -9,7 +9,7 @@ using Jularr.Backend.Service.Core;
 
 namespace Jularr.Backend.Service.Admin.Acquisition.V1
 {
-    // A media type's release groups: not rated ones first, then good, bad and blocked, each by how often searches found them.
+    // The release groups: by default not rated ones first, then good, bad and blocked, each by how often searches found them; a filter of rating and media type, a search and another order narrow it.
     [ServiceEndpoint("GET", "/api/v1/admin/acquisition/release-groups")]
     public sealed class ReadReleaseGroupsV1 : AdminService<ReadReleaseGroupsParametersV1>
     {
@@ -28,14 +28,27 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                     item."Name",
                     item."ReleaseGroupRatingId",
                     item."SeenCount",
-                    item."LastSeenAt"
+                    item."LastSeenAt",
+                    coalesce(kinds."MediaKinds", '{}') AS "MediaKinds"
                 FROM
                     "ReleaseGroups" AS item
+                    LEFT JOIN LATERAL (
+                        SELECT array_agg(seen."AcquisitionMediaKindId" ORDER BY seen."SeenCount" DESC, seen."AcquisitionMediaKindId") AS "MediaKinds"
+                        FROM "ReleaseGroupMediaKinds" AS seen
+                        WHERE seen."ReleaseGroupId" = item."Id"
+                    ) AS kinds ON TRUE
                 WHERE
                     (@Search::text IS NULL OR strpos(lower(item."Name"), lower(@Search::text)) > 0)
+                    AND (@Filter::smallint IS NULL
+                        OR (@Filter = 1 AND item."ReleaseGroupRatingId" IS NULL)
+                        OR item."ReleaseGroupRatingId" = @Filter - 1)
+                    AND (@MediaKind::smallint IS NULL
+                        OR EXISTS (SELECT 1 FROM "ReleaseGroupMediaKinds" AS seen WHERE seen."ReleaseGroupId" = item."Id" AND seen."AcquisitionMediaKindId" = @MediaKind))
                 ORDER BY
-                    item."ReleaseGroupRatingId" NULLS FIRST,
-                    item."SeenCount" DESC,
+                    CASE WHEN @Sort = 1 THEN item."ReleaseGroupRatingId" END NULLS FIRST,
+                    CASE WHEN @Sort = 2 THEN item."LastSeenAt" END DESC NULLS LAST,
+                    CASE WHEN @Sort IN (1, 3) THEN item."SeenCount" END DESC,
+                    CASE WHEN @Sort = 4 THEN lower(item."Name") END,
                     item."LastSeenAt" DESC NULLS LAST,
                     lower(item."Name"),
                     item."Id"
@@ -43,7 +56,7 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                 OFFSET @Offset;
                 """;
             sql.Page = Page;
-            sql.Parameters.Add(new ReleaseGroupFilterData(Parameters.Search));
+            sql.Parameters.Add(new ReleaseGroupFilterData(Parameters.Search, Parameters.Filter, Parameters.MediaKind, Parameters.Sort));
             return new PageResult<ReleaseGroupDetailsV1>(await Context.ReadSql.ReadListAsync<ReleaseGroupDetailsV1>(sql, CancellationToken), Page!);
         }
     }
