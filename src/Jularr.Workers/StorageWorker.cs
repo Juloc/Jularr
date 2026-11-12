@@ -1,15 +1,19 @@
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.System.Acquisition.V1;
 using Jularr.Backend.Data.Enums.Worker;
+using Jularr.Backend.Data.System.Library.V1;
 using Jularr.Backend.Data.System.Operation.V1;
 using Jularr.Backend.Data.System.Storage.V1;
 using Jularr.Backend.Service.Core;
+using Jularr.Backend.Service.System.Acquisition.V1;
+using Jularr.Backend.Service.System.Library.V1;
 using Jularr.Backend.Service.System.Operation.V1;
 using Jularr.Backend.Service.System.Storage.V1;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Jularr.Workers
 {
-    // Storage is checked again (failed soon, available hourly) and libraries rescan in the background.
+    // Storage is checked again (failed soon, available hourly), libraries rescan in the background and the rename plan and the Wanted states are kept current.
     internal sealed class StorageWorker(TimeProvider time, WorkerJobs jobs, WorkerJobRunner runner) : PeriodicWorker(time, jobs, runner, WorkerGroupType.Storage)
     {
         protected override async Task RunOnceAsync(CancellationToken ct)
@@ -18,6 +22,10 @@ namespace Jularr.Workers
                 services.GetRequiredService<CheckStorageMountsV1>().ExecuteAsync<UpdateResult>(new StorageChecksParametersV1(), default, token), ct);
             await Runner.RunAsync("scanScheduling", (services, token) =>
                 services.GetRequiredService<ScheduleLibraryScansV1>().ExecuteAsync<UpdateResult>(new LibraryScanScheduleParametersV1(), default, token), ct);
+            await Runner.RunAsync("renamePlan", (services, token) =>
+                services.GetRequiredService<RefreshLibraryRenamePlanV1>().ExecuteAsync<UpdateResult>(new LibraryRenamePlanParametersV1(), default, token), ct);
+            await Runner.RunAsync("wantedState", (services, token) =>
+                services.GetRequiredService<RefreshWantedStatesV1>().ExecuteAsync<UpdateResult>(new WantedStateParametersV1(), default, token), ct);
         }
     }
 }

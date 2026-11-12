@@ -1,11 +1,14 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Enums.Sql;
 using Jularr.Backend.Data.Logic.Acquisition;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Acquisition;
+using Jularr.Backend.Data.System.Acquisition.V1;
+using Jularr.Backend.Service.System.Acquisition.V1;
 using Microsoft.Extensions.DependencyInjection;
 using Jularr.Backend.Data.Public.Authentication.V1;
 using Host = Jularr.Backend.Tests.AuthenticationTests.Host;
@@ -92,6 +95,67 @@ namespace Jularr.Backend.Tests
                 Assert.AreEqual((await listed.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("items").GetRawText(), page.GetProperty("entries").GetProperty("items").GetRawText(), query);
                 Assert.AreEqual((await counted.Content.ReadFromJsonAsync<JsonElement>()).GetRawText(), page.GetProperty("summary").GetRawText(), query);
             }
+
+            // The states the worker keeps give exactly the same pages; a change makes the list work them out again at once, until the worker has refreshed.
+            string[] queries = ["?pageSize=48&wantedViewTypeId=0", "?pageSize=3&wantedViewTypeId=1", "?pageSize=48&wantedViewTypeId=2", "?pageSize=48&wantedViewTypeId=0&mediaTypeIds=3",
+                "?page=2&pageSize=3&wantedViewTypeId=0", "?page=9&pageSize=3&wantedViewTypeId=0"];
+            async Task<string[]> PagesAsync()
+            {
+                var pages = new List<string>();
+                foreach (var query in queries)
+                {
+                    using var combined = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/wanted/page" + query);
+                    Assert.AreEqual(HttpStatusCode.OK, combined.StatusCode, await combined.Content.ReadAsStringAsync());
+                    pages.Add(await combined.Content.ReadAsStringAsync());
+                }
+
+                return [.. pages];
+            }
+
+            async Task<bool> RefreshAsync()
+            {
+                await using var scope = host.Services.CreateAsyncScope();
+                return (await scope.ServiceProvider.GetRequiredService<RefreshWantedStatesV1>().ExecuteAsync<UpdateResult>(new WantedStateParametersV1(), default)).Success;
+            }
+
+            async Task<bool> IsCurrentAsync()
+            {
+                await using var sql = new SqlContext(host.Services.GetRequiredService<SqlDatabase>().DataSource);
+                await sql.BeginAsync(SqlAccessMode.ReadOnly);
+                var current = await new LogicContext(sql).IsWantedStateCurrentAsync(default);
+                await sql.CommitAsync();
+                return current;
+            }
+
+            var live = await PagesAsync();
+            Assert.IsFalse(await IsCurrentAsync());
+            Assert.IsTrue(await RefreshAsync());
+            Assert.IsTrue(await IsCurrentAsync());
+            Assert.IsFalse(await RefreshAsync());
+            CollectionAssert.AreEqual(live, await PagesAsync());
+
+            // An Indonesian file for the first book: at once covered, also before the worker came.
+            await host.Fixture.RunSqlAsync($"""
+                INSERT INTO "StoredFiles" ("LibraryRootId", "RelativePath", "SizeBytes", "ModifiedAt", "MediaAssetId", "LastSeenAt", "ReleaseLanguages") VALUES
+                    ({root}, 'a-id.epub', 1, now(), 1, now(), ARRAY['id']::varchar[]);
+                """);
+            Assert.IsFalse(await IsCurrentAsync());
+            Assert.AreEqual("A film:--,None:de-,None:id-", string.Join(',', (await EntriesAsync(1)).Select(Describe).Order(StringComparer.Ordinal)));
+            live = await PagesAsync();
+            Assert.IsTrue(await RefreshAsync());
+            CollectionAssert.AreEqual(live, await PagesAsync());
+
+            // A change that the states do not read asks for nothing; a pause is read with the list.
+            await host.Fixture.RunSqlAsync("UPDATE \"WantedItems\" SET \"IsPaused\" = TRUE, \"LastSearchedAt\" = now() WHERE \"Id\" = 804");
+            Assert.IsTrue(await IsCurrentAsync());
+            Assert.AreEqual("None:de-,None:id-", string.Join(',', (await EntriesAsync(1)).Select(Describe).Order(StringComparer.Ordinal)));
+
+            // A target that leaves takes its states along.
+            await host.Fixture.RunSqlAsync("DELETE FROM \"WantedItems\" WHERE \"Id\" = 803");
+            Assert.IsFalse(await IsCurrentAsync());
+            Assert.IsTrue(await RefreshAsync());
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"WantedBookLanguageStates\" WHERE \"WantedItemId\" = 803"));
+            Assert.AreEqual(3L, await host.ScalarAsync("SELECT count(*) FROM \"WantedItemStates\""));
         }
     }
 }

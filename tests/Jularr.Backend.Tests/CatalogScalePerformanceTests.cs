@@ -7,9 +7,11 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Media;
+using Jularr.Backend.Data.System.Acquisition.V1;
 using Jularr.Backend.Data.System.Media.V1;
 using Jularr.Backend.Data.User.Discover.V1;
 using Jularr.Backend.Infrastructure.Sql;
+using Jularr.Backend.Service.System.Acquisition.V1;
 using Jularr.Backend.Service.System.Media.V1;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -70,6 +72,15 @@ namespace Jularr.Backend.Tests
             var countMilliseconds = Stopwatch.GetElapsedTime(counting).TotalMilliseconds;
             TestContext.WriteLine($"Catalog count (CountCatalogTitlesV1): {countMilliseconds:F0} ms.");
 
+            // The Wanted list reads the states the worker keeps, as after its first refresh.
+            var refreshing = Stopwatch.GetTimestamp();
+            await using (var scope = host.Services.CreateAsyncScope())
+            {
+                Assert.IsTrue((await scope.ServiceProvider.GetRequiredService<RefreshWantedStatesV1>().ExecuteAsync<UpdateResult>(new WantedStateParametersV1(), default)).Success);
+            }
+            var refreshMilliseconds = Stopwatch.GetElapsedTime(refreshing).TotalMilliseconds;
+            TestContext.WriteLine($"Wanted states (RefreshWantedStatesV1): {refreshMilliseconds:F0} ms.");
+
             Access[] accesses =
             [
                 new("catalog-syncs", HttpMethod.Get, "/api/v1/admin/catalog/syncs"),
@@ -81,6 +92,7 @@ namespace Jularr.Backend.Tests
                 new("wanted-list", HttpMethod.Get, "/api/v1/admin/wanted?pageSize=48"),
                 new("wanted-summary", HttpMethod.Get, "/api/v1/admin/wanted/summary"),
                 new("wanted-page", HttpMethod.Get, "/api/v1/admin/wanted/page?pageSize=48&wantedViewTypeId=1"),
+                new("rename-plan-build", HttpMethod.Post, "/api/v1/admin/library/renames/plan"),
                 new("rename-plan", HttpMethod.Get, "/api/v1/admin/library/renames?pageSize=100"),
                 new("rename-plan-work", HttpMethod.Get, "/api/v1/admin/library/renames?pageSize=100&workId=1"),
                 new("translation-progress", HttpMethod.Get, "/api/v1/admin/translation/progress"),
@@ -107,8 +119,9 @@ namespace Jularr.Backend.Tests
                 accesses = [.. accesses.Where(access => only.Contains(access.Name, StringComparer.Ordinal))];
             }
 
-            // Shared code paths are compiled before the first measured read.
+            // Shared code paths are compiled before the first measured read. The Rename tab reads the plan the worker keeps, as after its first build.
             using (var warmup = await host.SendAsync(HttpMethod.Get, "/api/v1/auth")) Assert.AreEqual(HttpStatusCode.OK, warmup.StatusCode);
+            using (var built = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/library/renames/plan")) Assert.AreEqual(HttpStatusCode.OK, built.StatusCode);
 
             // Cold: the first call of each read in this process, on a fresh connection (PostgreSQL's buffers stay as the seed left them). Warm: the following calls.
             // A page also names its shell and data parts (Server-Timing); the rest of its time is rendering.
@@ -159,6 +172,7 @@ namespace Jularr.Backend.Tests
             var report = new StringBuilder();
             report.AppendLine(CultureInfo.InvariantCulture, $"Catalog scale {scale}, library {libraryTitles}, {samples} warm samples; milliseconds in the test server (in-process HTTP).");
             report.AppendLine(CultureInfo.InvariantCulture, $"The worker's catalog count (CountCatalogTitlesV1) took {countMilliseconds:F0} ms.");
+            report.AppendLine(CultureInfo.InvariantCulture, $"The worker's Wanted states (RefreshWantedStatesV1) took {refreshMilliseconds:F0} ms.");
             report.AppendLine("read                      cold   warm median   warm p95   shell    data");
             foreach (var (access, cold, median, p95, shell, data) in results)
             {

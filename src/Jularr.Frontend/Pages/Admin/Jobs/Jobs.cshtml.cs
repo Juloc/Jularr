@@ -52,6 +52,8 @@ namespace Jularr.Frontend.Pages.Admin.Jobs
             ["catalogCleanup"] = ("layers", UiTone.Accent),
             ["storage"] = ("drive", UiTone.Success),
             ["scanScheduling"] = ("calendar", UiTone.Success),
+            ["renamePlan"] = ("pencil", UiTone.Success),
+            ["wantedState"] = ("search", UiTone.Success),
             ["backup"] = ("shield", UiTone.Success),
             ["maintenance"] = ("settings", UiTone.Accent),
             ["trickplay"] = ("play", UiTone.Accent),

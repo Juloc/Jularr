@@ -1,7 +1,10 @@
 using System.Diagnostics;
 using System.Net;
 using System.Text.Json;
+using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Public.Authentication.V1;
+using Jularr.Backend.Data.System.Acquisition.V1;
+using Jularr.Backend.Service.System.Acquisition.V1;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Enums.Sql;
 using Jularr.Backend.Data.Logic.Acquisition;
@@ -80,6 +83,15 @@ namespace Jularr.Backend.Tests
                 SELECT "Id", "Id" % 7 = 0, CASE WHEN "Id" % 5 = 0 THEN 2 ELSE 1 END FROM "Works";
                 """);
             if (Environment.GetEnvironmentVariable("JULARR_TEST_WANTED_ANALYZE") == "1") await host.Fixture.RunSqlAsync("ANALYZE");
+
+            // The list reads the states the worker keeps, as after its first refresh; JULARR_TEST_WANTED_LIVE=1 measures the states worked out on each read.
+            if (Environment.GetEnvironmentVariable("JULARR_TEST_WANTED_LIVE") != "1")
+            {
+                var refreshing = Stopwatch.GetTimestamp();
+                await using var scope = host.Services.CreateAsyncScope();
+                Assert.IsTrue((await scope.ServiceProvider.GetRequiredService<RefreshWantedStatesV1>().ExecuteAsync<UpdateResult>(new WantedStateParametersV1(), default)).Success);
+                TestContext.WriteLine($"Wanted states (RefreshWantedStatesV1): {Stopwatch.GetElapsedTime(refreshing).TotalMilliseconds:F0} ms");
+            }
 
             var samples = int.TryParse(Environment.GetEnvironmentVariable("JULARR_TEST_WANTED_SAMPLES"), out var configured) ? configured : 30;
             var budget = double.TryParse(Environment.GetEnvironmentVariable("JULARR_TEST_WANTED_MAX_MS"), System.Globalization.CultureInfo.InvariantCulture, out var maximum) ? maximum : double.PositiveInfinity;

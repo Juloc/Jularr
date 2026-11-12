@@ -10,6 +10,22 @@ namespace Jularr.Backend.Data.Admin.Library.V1
     {
     }
 
+    // The plan of all libraries was built again: when its files were read and how many files it renames.
+    public sealed class LibraryRenamePlanBuiltV1 : BaseResponse
+    {
+        public LibraryRenamePlanBuiltV1(DateTime builtAt, long total)
+        {
+            BuiltAt = builtAt;
+            Total = total;
+        }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.LastSeenAt))]
+        public DateTime BuiltAt { get; }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.FileCount))]
+        public long Total { get; }
+    }
+
     public sealed class ReadLibraryRenamesParametersV1 : BaseParameters
     {
         public ReadLibraryRenamesParametersV1(int page = 1, int pageSize = 100, long? workId = null)
@@ -53,12 +69,17 @@ namespace Jularr.Backend.Data.Admin.Library.V1
     // One page of the whole plan; applying needs the fingerprint of exactly this plan.
     public sealed class LibraryRenamePlanV1 : BaseResponse
     {
-        public LibraryRenamePlanV1(BaseDataList<LibraryRenameV1> items, string fingerprint, long total = 0)
+        public LibraryRenamePlanV1(BaseDataList<LibraryRenameV1> items, string fingerprint, long total = 0, DateTime? builtAt = null)
         {
             Items = items;
             Fingerprint = fingerprint;
             Total = total;
+            BuiltAt = builtAt;
         }
+
+        // When the kept plan of all libraries read its files; empty for one title's part, which is planned on each read, and before the first build.
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.MissingSince))]
+        public DateTime? BuiltAt { get; }
 
         // How many files the whole plan renames; one page of them is listed.
         [DataField(typeof(StoredFileFields), nameof(StoredFileFields.FileCount))]

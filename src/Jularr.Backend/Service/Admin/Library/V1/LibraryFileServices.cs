@@ -4,6 +4,7 @@ using Jularr.Backend.Data.Admin.Library.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Library;
 using Jularr.Backend.Data.Enums.Service;
+using Jularr.Backend.Data.Enums.Sql;
 using Jularr.Backend.Data.Logic.Library;
 using Jularr.Backend.Data.Logic.Operation;
 using Jularr.Backend.Infrastructure.Sql;
@@ -128,6 +129,7 @@ namespace Jularr.Backend.Service.Admin.Library.V1
             var data = new StoredFileAssignmentData(Parameters.StoredFileId, Data.WorkId, Data.Title, Data.WorkUnitTypeId, Data.UnitNumber, Data.ParentUnitNumber, Data.GamePlatformId,
                 true);
             var asset = await Context.AssignStoredFileAsync(data, CancellationToken);
+            await Context.RequestLibraryRenamePlanAsync(CancellationToken);
             await Context.RecordActivityAsync(new ActivityEventData(ActivityEventType.ManualImport, storedFileId: Parameters.StoredFileId, accountId: Auth.AccountId), CancellationToken);
             return new AssignLibraryFileResultV1(asset.Id);
         }
@@ -176,6 +178,7 @@ namespace Jularr.Backend.Service.Admin.Library.V1
             var asset = await Context.ExecuteBatchAsync(async (ctx, ct) =>
             {
                 var assigned = await ctx.AssignStoredFileAsync(data, ct);
+                await ctx.RequestLibraryRenamePlanAsync(ct);
                 await ctx.RecordActivityAsync(new ActivityEventData(ActivityEventType.ManualImport, storedFileId: Parameters.StoredFileId, accountId: Auth.AccountId), ct);
                 return assigned;
             }, CancellationToken);
@@ -191,7 +194,13 @@ namespace Jularr.Backend.Service.Admin.Library.V1
         protected override ModuleRequirement GetInstanceModules(UpdateLibraryFileFactsParametersV1 parameters) => ModuleRequirement.All("Library");
         protected override ServicePermission GetPermission(UpdateLibraryFileFactsParametersV1 parameters, Type resultType) => new("media.manual.update");
 
-        protected override async Task<IServiceOutput> OnUpdate() => new UpdateLibraryFileFactsResultV1(await Context.UpdateStoredFileFactsAsync(Data, CancellationToken));
+        protected override async Task<IServiceOutput> OnUpdate()
+        {
+            // Quality and languages may be part of a file's name.
+            var updated = await Context.UpdateStoredFileFactsAsync(Data, CancellationToken);
+            await Context.RequestLibraryRenamePlanAsync(CancellationToken);
+            return new UpdateLibraryFileFactsResultV1(updated);
+        }
     }
 
     [ServiceEndpoint("DELETE", "/api/v1/admin/library/files/{storedFileId:long}/assignment")]
@@ -205,6 +214,7 @@ namespace Jularr.Backend.Service.Admin.Library.V1
         protected override async Task<IServiceOutput> OnDelete()
         {
             await Context.UnassignStoredFileAsync(new StoredFileParameters(Parameters.StoredFileId), CancellationToken);
+            await Context.RequestLibraryRenamePlanAsync(CancellationToken);
             return new UpdateResult(true);
         }
     }
@@ -244,11 +254,35 @@ namespace Jularr.Backend.Service.Admin.Library.V1
 
         protected override async Task<IServiceOutput> OnRead()
         {
-            // The whole plan is fingerprinted; one page is shown.
+            // The plan of all libraries is the one the worker kept (one page of it, with its time); before its first build it is empty and has no time.
+            if (Parameters.WorkId is null)
+            {
+                var (plan, page) = await Context.ReadLibraryRenamePlanPageAsync(Page, CancellationToken);
+                return new LibraryRenamePlanV1(new BaseDataList<LibraryRenameV1>(page.Items), plan?.Fingerprint ?? LibraryRenameLogic.Fingerprint([]), plan?.RenameCount ?? 0, plan?.BuiltAt);
+            }
+
+            // One title's part is planned now; the whole plan is fingerprinted, one page is shown.
             var renames = LibraryRenameLogic.PlanFor(await Context.ReadLibraryRenameFilesAsync(Parameters.WorkId, CancellationToken), await Context.ReadNamingPatternsAsync(CancellationToken), Parameters.WorkId);
             var items = renames.Skip((Page.Page - 1) * Page.PageSize).Take(Page.PageSize)
                 .Select(rename => new LibraryRenameV1(rename.StoredFileId, rename.LibraryRootName, rename.RelativePath, rename.TargetPath));
             return new LibraryRenamePlanV1(new BaseDataList<LibraryRenameV1>(items), LibraryRenameLogic.Fingerprint(renames), renames.Count);
+        }
+    }
+
+    // The Owner asks for the plan of all libraries as the files are now; the tab shows it at once.
+    [ServiceEndpoint("POST", "/api/v1/admin/library/renames/plan")]
+    public sealed class BuildLibraryRenamePlanV1 : AdminService<LibraryRenamesParametersV1, NoData>
+    {
+        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<LibraryRenamePlanBuiltV1>()];
+        protected override ModuleRequirement GetInstanceModules(LibraryRenamesParametersV1 parameters) => ModuleRequirement.All("Library");
+        protected override ServicePermission GetPermission(LibraryRenamesParametersV1 parameters, Type resultType) => new("storage.read");
+
+        protected override async Task<IServiceOutput> OnExecute()
+        {
+            var plan = await Context.ExecuteBatchAsync((ctx, ct) => ctx.PlanLibraryRenamesAsync(ct), CancellationToken, mode: SqlAccessMode.ReadOnly);
+            await Context.ExecuteBatchAsync((ctx, ct) => ctx.SaveLibraryRenamePlanAsync(plan, ct), CancellationToken);
+            return new LibraryRenamePlanBuiltV1(plan.BuiltAt, plan.Renames.Count);
         }
     }
 
@@ -269,9 +303,11 @@ namespace Jularr.Backend.Service.Admin.Library.V1
 
         protected override async Task<IServiceOutput> OnExecute()
         {
-            var (renames, roots) = await Context.ExecuteBatchAsync(async (ctx, ct) =>
+            var (whole, renames, roots) = await Context.ExecuteBatchAsync(async (ctx, ct) =>
             {
-                var plan = LibraryRenameLogic.PlanFor(await ctx.ReadLibraryRenameFilesAsync(Data.WorkId, ct), await ctx.ReadNamingPatternsAsync(ct), Data.WorkId);
+                // The plan of all libraries is planned anew as it is kept, so it replaces the kept one once the files have moved.
+                var whole = Data.WorkId is null ? await ctx.PlanLibraryRenamesAsync(ct) : null;
+                var plan = whole?.Renames ?? LibraryRenameLogic.PlanFor(await ctx.ReadLibraryRenameFilesAsync(Data.WorkId, ct), await ctx.ReadNamingPatternsAsync(ct), Data.WorkId);
                 var locations = new List<LibraryRootLocationData>();
                 foreach (var rootId in plan.Select(rename => rename.LibraryRootId).Distinct())
                 {
@@ -281,10 +317,16 @@ namespace Jularr.Backend.Service.Admin.Library.V1
                     }
                 }
 
-                return (plan, locations);
+                return (whole, plan, locations);
             }, CancellationToken);
             if (LibraryRenameLogic.Fingerprint(renames) != Data.Fingerprint)
             {
+                // The tab showed an older plan: it now shows this one.
+                if (whole is not null)
+                {
+                    await Context.ExecuteBatchAsync((ctx, ct) => ctx.SaveLibraryRenamePlanAsync(whole, ct), CancellationToken);
+                }
+
                 throw new DataValidationException(nameof(ApplyLibraryRenamesDataV1.Fingerprint), "library_rename_changed");
             }
 
@@ -323,6 +365,17 @@ namespace Jularr.Backend.Service.Admin.Library.V1
                 {
                     // Left for the next rename.
                 }
+            }
+
+            // The moved files change the plan of all libraries: the whole one is planned again at once, a title's part asks the worker for it.
+            if (whole is not null)
+            {
+                var plan = await Context.ExecuteBatchAsync((ctx, ct) => ctx.PlanLibraryRenamesAsync(ct), CancellationToken.None, mode: SqlAccessMode.ReadOnly);
+                await Context.ExecuteBatchAsync((ctx, ct) => ctx.SaveLibraryRenamePlanAsync(plan, ct), CancellationToken.None);
+            }
+            else if (renamed > 0)
+            {
+                await Context.ExecuteBatchAsync((ctx, ct) => ctx.RequestLibraryRenamePlanAsync(ct), CancellationToken.None);
             }
 
             return new ApplyLibraryRenamesResultV1(renamed, renames.Count - renamed);
@@ -472,6 +525,7 @@ namespace Jularr.Backend.Service.Admin.Library.V1
         protected override async Task<IServiceOutput> OnUpdate()
         {
             await Context.SaveNamingPatternAsync(new NamingPatternSaveData(Parameters.MediaTypeId, null, NamingPattern.Join(string.IsNullOrEmpty(Data.SeasonFolder) ? Data.Folder : NamingPattern.Join(Data.Folder, Data.SeasonFolder), Data.File), Data.Version, Data.DailyFile), CancellationToken);
+            await Context.RequestLibraryRenamePlanAsync(CancellationToken);
             return new UpdateResult(true);
         }
     }
@@ -487,6 +541,7 @@ namespace Jularr.Backend.Service.Admin.Library.V1
         protected override async Task<IServiceOutput> OnUpdate()
         {
             await Context.SaveNamingPatternAsync(new NamingPatternSaveData(Parameters.MediaTypeId, Parameters.MediaSubtypeId, NamingPattern.Join(string.IsNullOrEmpty(Data.SeasonFolder) ? Data.Folder : NamingPattern.Join(Data.Folder, Data.SeasonFolder), Data.File), Data.Version, Data.DailyFile), CancellationToken);
+            await Context.RequestLibraryRenamePlanAsync(CancellationToken);
             return new UpdateResult(true);
         }
     }
@@ -514,6 +569,7 @@ namespace Jularr.Backend.Service.Admin.Library.V1
         {
             await Context.SaveNamingSettingsAsync(new NamingSettingsData(Parameters.MediaTypeId, Data.ReplacesIllegalCharacters, Data.ColonReplacementId, Data.CustomColonReplacement,
                 Data.SpecialsFolder, Data.Version, Data.RenamesFiles, Data.MultiEpisodeStyleId), CancellationToken);
+            await Context.RequestLibraryRenamePlanAsync(CancellationToken);
             return new UpdateResult(true);
         }
     }

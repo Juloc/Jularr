@@ -200,4 +200,39 @@ namespace Jularr.Backend.Data.Logic.Library
         [DataField(typeof(StoredFileFields), nameof(StoredFileFields.TargetPath))]
         public string TargetPath { get; }
     }
+
+    // The renames of a plan to keep, in the order they are listed (as JSON).
+    internal sealed class LibraryRenamePlanItemsData : BaseData
+    {
+        public LibraryRenamePlanItemsData(string payload)
+        {
+            Payload = payload;
+        }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.Payload))]
+        public string Payload { get; }
+    }
+
+    // The stored plan of all libraries: when its files were read, its fingerprint and how many files it renames.
+    internal sealed class LibraryRenamePlanStateData : BaseData
+    {
+        public LibraryRenamePlanStateData(DateTime builtAt, string fingerprint, int renameCount)
+        {
+            BuiltAt = builtAt;
+            Fingerprint = fingerprint;
+            RenameCount = renameCount;
+        }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.LastSeenAt))]
+        public DateTime BuiltAt { get; }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.RenameFingerprint))]
+        public string Fingerprint { get; }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.RenamedCount))]
+        public int RenameCount { get; }
+    }
+
+    // The plan of all libraries as it is now, and when its files were read.
+    internal sealed record LibraryRenamePlanBuild(DateTime BuiltAt, IReadOnlyList<LibraryRenameData> Renames);
 }

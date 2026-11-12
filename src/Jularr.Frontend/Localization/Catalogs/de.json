@@ -7877,6 +7877,22 @@
    "Files renamed: {0}. Skipped: {1}.",
    "Umbenannte Dateien: {0}. Übersprungen: {1}."
   ],
+  "library.renamePlanBuilt": [
+   "Plan from",
+   "Plan von"
+  ],
+  "library.renamePlanPending": [
+   "The plan is being prepared and appears here shortly.",
+   "Der Plan wird gerade erstellt und erscheint hier gleich."
+  ],
+  "library.renamePlanRebuild": [
+   "Plan again",
+   "Neu planen"
+  ],
+  "library.renamePlanRebuilt": [
+   "Plan updated: {0} files to rename.",
+   "Plan aktualisiert: {0} Dateien umzubenennen."
+  ],
   "library.file": [
    "File",
    "Datei"
@@ -12561,6 +12577,14 @@
    "Scan scheduling",
    "Scan-Planung"
   ],
+  "jobs.job.renamePlan": [
+   "Rename plan",
+   "Umbenennungsplan"
+  ],
+  "jobs.job.wantedState": [
+   "Wanted states",
+   "Gesucht-Zustände"
+  ],
   "jobs.job.backup": [
    "Automatic backup",
    "Automatisches Backup"
@@ -13185,6 +13209,14 @@
   "jobs.about.scanScheduling": [
    "Starts library scans that are due on their schedule.",
    "Startet fällige Bibliotheksscans nach ihrem Zeitplan."
+  ],
+  "jobs.about.renamePlan": [
+   "Plans the renames of the Rename tab again after scans, downloads and naming changes, at the latest every hour.",
+   "Plant die Umbenennungen des Tabs Umbenennen nach Scans, Downloads und Namensänderungen neu, spätestens jede Stunde."
+  ],
+  "jobs.about.wantedState": [
+   "Works out again which targets lack their media or are below their cutoff, soon after something they depend on changed.",
+   "Ermittelt neu, welchen Zielen Medien fehlen oder welche unter ihrem Qualitätsziel liegen, kurz nachdem sich etwas dafür Relevantes geändert hat."
   ],
   "jobs.about.backup": [
    "Creates a backup when the newest one is older than the interval set by the Owner.",
