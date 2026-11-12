@@ -67,6 +67,16 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(WorkListStatus.Downloading, all.Single(item => item.Id == 905).WorkListStatusId);
             Assert.AreEqual((2, true), (all.Single(item => item.Id == 906).TargetCount, all.Single(item => item.Id == 906).IsMonitored));
 
+            // The list works its rows out per table, with the same result as the view that works them out title by title.
+            foreach (var item in all)
+            {
+                Assert.AreEqual(await host.ScalarAsync($"""
+                    SELECT concat_ws('|', "TargetCount", "IsMonitored", "WantedItemId", "ProfileName", "LibraryName", "FileCount", "SizeBytes", "WorkListStatusId")
+                    FROM "WorkListEntries" WHERE "Id" = {item.Id}
+                    """), string.Join('|', new object?[] { item.TargetCount, item.IsMonitored ? "t" : "f", item.WantedItemId, item.ProfileName, item.LibraryName, item.FileCount, item.SizeBytes,
+                        (int)item.WorkListStatusId }.Where(value => value is not null)), item.CanonicalTitle);
+            }
+
             // Filters
             CollectionAssert.AreEqual(new long[] { 903 }, (await ReadAsync(host, "mediaTypeIds=2")).Select(item => item.Id).ToArray());
             CollectionAssert.AreEqual(new long[] { 903, 906 }, (await ReadAsync(host, "mediaTypeIds=2&mediaTypeIds=7")).Select(item => item.Id).Order().ToArray());
