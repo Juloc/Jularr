@@ -390,9 +390,16 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.OK, settings.StatusCode, await settings.Content.ReadAsStringAsync());
             Assert.IsTrue(File.Exists(original));
 
-            using var preview = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/library/renames");
-            Assert.AreEqual(HttpStatusCode.OK, preview.StatusCode, await preview.Content.ReadAsStringAsync());
-            var plan = (await preview.Content.ReadFromJsonAsync<LibraryRenamePlanV1>())!;
+            // The naming changes ask the worker for a new plan.
+            Assert.IsNull(await host.ScalarAsync("SELECT \"RequestedAt\" FROM \"LibraryRenamePlans\""));
+            var plan = await LibraryTests.BuildRenamePlanAsync(host);
+            using (var again = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/library/naming/Series/settings",
+                new UpdateNamingSettingsDataV1(true, ColonReplacement.Smart, null, "Specials - {ImdbId}", 2)))
+            {
+                Assert.AreEqual(HttpStatusCode.OK, again.StatusCode, await again.Content.ReadAsStringAsync());
+            }
+
+            Assert.IsNotNull(await host.ScalarAsync("SELECT \"RequestedAt\" FROM \"LibraryRenamePlans\""));
             const string target = "Example Show/Specials - tt12345/Example Show - S00E03.mkv";
             Assert.AreEqual(target, plan.Items.Single().TargetPath);
             Assert.IsTrue(File.Exists(original));

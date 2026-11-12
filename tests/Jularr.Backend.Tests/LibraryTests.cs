@@ -13,10 +13,12 @@ using Jularr.Backend.Data.Enums.Sql;
 using Jularr.Backend.Data.Enums.Storage;
 using Jularr.Backend.Data.Logic.Library;
 using Jularr.Backend.Data.Public.Authentication.V1;
+using Jularr.Backend.Data.System.Library.V1;
 using Jularr.Backend.Data.System.Operation.V1;
 using Jularr.Backend.Data.User.Media.V1;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Library;
+using Jularr.Backend.Service.System.Library.V1;
 using Jularr.Backend.Service.System.Operation.V1;
 using Jularr.Integrations.Logic.Media;
 using Jularr.Integrations.Logic.Tmdb;
@@ -1365,10 +1367,16 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.OK, assigned.StatusCode, await assigned.Content.ReadAsStringAsync());
             await host.Fixture.RunSqlAsync("UPDATE \"Works\" SET \"ReleaseYear\" = 2020");
 
+            // The tab reads the kept plan: none before its first build.
+            using var unbuilt = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/library/renames");
+            Assert.AreEqual(HttpStatusCode.OK, unbuilt.StatusCode, await unbuilt.Content.ReadAsStringAsync());
+            var none = (await unbuilt.Content.ReadFromJsonAsync<LibraryRenamePlanV1>())!;
+            Assert.AreEqual(0, none.Items.Count);
+            Assert.IsNull(none.BuiltAt);
+
             // The preview names every move; a taken name gets a counter; nothing moves yet.
-            using var preview = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/library/renames");
-            Assert.AreEqual(HttpStatusCode.OK, preview.StatusCode, await preview.Content.ReadAsStringAsync());
-            var plan = (await preview.Content.ReadFromJsonAsync<LibraryRenamePlanV1>())!;
+            var plan = await BuildRenamePlanAsync(host);
+            Assert.IsNotNull(plan.BuiltAt);
             CollectionAssert.AreEquivalent(new[] { "Example Movie (2020)/Example Movie (2020) [Bluray-1080p] (2).mkv", "Example Movie (2020)/Example Movie (2020) [Bluray-1080p] (2).en.srt" },
                 plan.Items.Select(item => item.TargetPath).ToArray());
             Assert.IsTrue(File.Exists(Path.Combine(movies, "Some Folder", "movie file [Bluray-1080p].mkv")));
@@ -1393,6 +1401,22 @@ namespace Jularr.Backend.Tests
             using var changed = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/library/renames", new ApplyLibraryRenamesDataV1(new string('0', 64)));
             Assert.AreEqual(HttpStatusCode.BadRequest, changed.StatusCode);
             StringAssert.Contains(await changed.Content.ReadAsStringAsync(), "library_rename_changed");
+
+            // A kept plan that no longer matches the files is refused, and the tab then shows the current one.
+            await host.Fixture.RunSqlAsync("UPDATE \"Works\" SET \"ReleaseYear\" = 2021");
+            using var stale = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/library/renames");
+            var stalePlan = (await stale.Content.ReadFromJsonAsync<LibraryRenamePlanV1>())!;
+            Assert.AreEqual(plan.Fingerprint, stalePlan.Fingerprint);
+            using var outdated = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/library/renames", new ApplyLibraryRenamesDataV1(stalePlan.Fingerprint));
+            Assert.AreEqual(HttpStatusCode.BadRequest, outdated.StatusCode);
+            StringAssert.Contains(await outdated.Content.ReadAsStringAsync(), "library_rename_changed");
+            using var current = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/library/renames");
+            var currentPlan = (await current.Content.ReadFromJsonAsync<LibraryRenamePlanV1>())!;
+            Assert.AreNotEqual(plan.Fingerprint, currentPlan.Fingerprint);
+            StringAssert.Contains(currentPlan.Items[0].TargetPath, "(2021)");
+            Assert.IsTrue(File.Exists(Path.Combine(movies, "Some Folder", "movie file [Bluray-1080p].mkv")));
+            await host.Fixture.RunSqlAsync("UPDATE \"Works\" SET \"ReleaseYear\" = 2020");
+            Assert.AreEqual(plan.Fingerprint, (await BuildRenamePlanAsync(host)).Fingerprint);
             using var applied = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/library/renames", new ApplyLibraryRenamesDataV1(plan.Fingerprint));
             Assert.AreEqual(HttpStatusCode.OK, applied.StatusCode, await applied.Content.ReadAsStringAsync());
             var result = (await applied.Content.ReadFromJsonAsync<ApplyLibraryRenamesResultV1>())!;
@@ -1415,8 +1439,17 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.OK, second.StatusCode, await second.Content.ReadAsStringAsync());
             Directory.CreateDirectory(Path.Combine(movies, "Second Movie"));
             File.WriteAllText(Path.Combine(movies, "Second Movie", "Second Movie.mkv"), "unscanned");
+            // The assignment asks the worker for a new plan; it builds it when due.
+            Assert.IsNotNull(await host.ScalarAsync("SELECT \"RequestedAt\" FROM \"LibraryRenamePlans\""));
+            await using (var scope = host.Services.CreateAsyncScope())
+            {
+                Assert.IsTrue((await scope.ServiceProvider.GetRequiredService<RefreshLibraryRenamePlanV1>().ExecuteAsync<UpdateResult>(new LibraryRenamePlanParametersV1(), default)).Success);
+                Assert.IsFalse((await scope.ServiceProvider.GetRequiredService<RefreshLibraryRenamePlanV1>().ExecuteAsync<UpdateResult>(new LibraryRenamePlanParametersV1(), default)).Success);
+            }
+
             using var blockedPreview = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/library/renames");
             var blockedPlan = (await blockedPreview.Content.ReadFromJsonAsync<LibraryRenamePlanV1>())!;
+            Assert.IsNull(await host.ScalarAsync("SELECT \"RequestedAt\" FROM \"LibraryRenamePlans\""));
             Assert.AreEqual(2, blockedPlan.Items.Count);
             using var blocked = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/library/renames", new ApplyLibraryRenamesDataV1(blockedPlan.Fingerprint));
             var blockedResult = (await blocked.Content.ReadFromJsonAsync<ApplyLibraryRenamesResultV1>())!;
@@ -1429,6 +1462,18 @@ namespace Jularr.Backend.Tests
             await host.Fixture.RunSqlAsync("UPDATE \"Accounts\" SET \"AccountRoleTypeId\" = 3 WHERE \"Id\" = 41");
             using var denied = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/library/renames");
             Assert.AreEqual(HttpStatusCode.Forbidden, denied.StatusCode);
+        }
+
+        // The Owner plans the renames of all libraries now; the tab then reads that plan.
+        internal static async Task<LibraryRenamePlanV1> BuildRenamePlanAsync(Host host)
+        {
+            using var built = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/library/renames/plan");
+            Assert.AreEqual(HttpStatusCode.OK, built.StatusCode, await built.Content.ReadAsStringAsync());
+            using var preview = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/library/renames");
+            Assert.AreEqual(HttpStatusCode.OK, preview.StatusCode, await preview.Content.ReadAsStringAsync());
+            var plan = (await preview.Content.ReadFromJsonAsync<LibraryRenamePlanV1>())!;
+            Assert.AreEqual((await built.Content.ReadFromJsonAsync<LibraryRenamePlanBuiltV1>())!.Total, plan.Total);
+            return plan;
         }
 
         [TestMethod]

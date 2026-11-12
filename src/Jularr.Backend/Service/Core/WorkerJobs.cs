@@ -115,6 +115,8 @@ namespace Jularr.Backend.Service.Core
             new("catalogCleanup", WorkerGroupType.Media, TimeSpan.FromHours(24), TimeSpan.FromSeconds(58), canPauseWhileUsed: true, pausesWhileUsedByDefault: true),
             new("storage", WorkerGroupType.Storage, TimeSpan.FromMinutes(1), TimeSpan.FromSeconds(5)),
             new("scanScheduling", WorkerGroupType.Storage, TimeSpan.FromMinutes(1), TimeSpan.FromSeconds(15), canPauseWhileUsed: true, pausesWhileUsedByDefault: true),
+            // Looks every minute whether the kept rename plan is due (RefreshLibraryRenamePlanV1) and builds it again then.
+            new("renamePlan", WorkerGroupType.Storage, TimeSpan.FromMinutes(1), TimeSpan.FromSeconds(20), canPauseWhileUsed: true),
             // Looks every half hour whether a backup is due; the Owner's interval says how old the newest may get.
             new("backup", WorkerGroupType.Backup, TimeSpan.FromMinutes(30), TimeSpan.FromSeconds(90), intervalSetting: WorkerIntervalSettingType.BackupHours),
             new("maintenance", WorkerGroupType.Maintenance, TimeSpan.FromHours(1), TimeSpan.FromSeconds(120)),

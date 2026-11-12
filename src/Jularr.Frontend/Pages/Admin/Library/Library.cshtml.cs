@@ -28,7 +28,7 @@ namespace Jularr.Frontend.Pages.Admin.Library
     }
 
     public sealed class LibraryModel(ReadLibraryFilesV1 readFiles, AssignLibraryFileV1 assign, UnassignLibraryFileV1 unassign, ReadLibraryRenamesV1 readRenames,
-        ApplyLibraryRenamesV1 applyRenames, ReadReplacementSettingsV1 readReplacement, UpdateReplacementSettingsV1 updateReplacement, KeepOnlyLibraryFileV1 keepOnly, ProtectLibraryFileV1 protect, ReadStorageMountsV1 readMounts, ReadLibraryOverviewV1 readOverview,
+        ApplyLibraryRenamesV1 applyRenames, BuildLibraryRenamePlanV1 buildRenames, ReadReplacementSettingsV1 readReplacement, UpdateReplacementSettingsV1 updateReplacement, KeepOnlyLibraryFileV1 keepOnly, ProtectLibraryFileV1 protect, ReadStorageMountsV1 readMounts, ReadLibraryOverviewV1 readOverview,
         QueueLibraryScanV1 queueScan, CreateLibraryRootV1 createLibraryRoot, ReadStorageDirectoriesV1 readDirectories, SearchMetadataV1 search, IdentifyLibraryFileV1 identify, FrontendAssets assets,
         IAntiforgery antiforgery, UiText texts) : JularrPage
     {
@@ -125,9 +125,13 @@ namespace Jularr.Frontend.Pages.Admin.Library
 
             if (_renames is { } renames)
             {
+                // The kept plan of all libraries: when it read the files, and planning them now.
+                page.Content.Add(new Div(
+                    renames.BuiltAt is { } built ? new Span(new Text("library.renamePlanBuilt"), new ValueText(" "), new LocalTime(built)) : new Span(new Text("library.renamePlanPending")),
+                    new PostForm(Address(handler: "RenamePlan"), csrf, [], new Button(new Text("library.renamePlanRebuild")).Attribute("type", "submit"))).Class("page-actions"));
                 if (renames.Items.Count == 0)
                 {
-                    page.Content.Add(new P(new Text("library.renameEmpty")));
+                    if (renames.BuiltAt is not null) page.Content.Add(new P(new Text("library.renameEmpty")));
                 }
                 else
                 {
@@ -390,6 +394,13 @@ namespace Jularr.Frontend.Pages.Admin.Library
         {
             _replacementInput = new UpdateReplacementSettingsDataV1(keepsReleases, recycleModeId, recycleStorageMountId, recyclePath, recycleDays, version, unmonitorsDeletedUnits);
             await updateReplacement.ExecuteAsync<UpdateResult>(new ReplacementSettingsParametersV1(), _replacementInput, HttpContext.RequestAborted);
+            return LocalRedirect(Address());
+        }
+
+        public async Task<IActionResult> OnPostRenamePlanAsync()
+        {
+            var built = await buildRenames.ExecuteAsync<LibraryRenamePlanBuiltV1>(new LibraryRenamesParametersV1(), default, HttpContext.RequestAborted);
+            Hint("library.renamePlanRebuilt", built.Total);
             return LocalRedirect(Address());
         }
 

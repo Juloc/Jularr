@@ -81,6 +81,7 @@ namespace Jularr.Backend.Tests
                 new("wanted-list", HttpMethod.Get, "/api/v1/admin/wanted?pageSize=48"),
                 new("wanted-summary", HttpMethod.Get, "/api/v1/admin/wanted/summary"),
                 new("wanted-page", HttpMethod.Get, "/api/v1/admin/wanted/page?pageSize=48&wantedViewTypeId=1"),
+                new("rename-plan-build", HttpMethod.Post, "/api/v1/admin/library/renames/plan"),
                 new("rename-plan", HttpMethod.Get, "/api/v1/admin/library/renames?pageSize=100"),
                 new("rename-plan-work", HttpMethod.Get, "/api/v1/admin/library/renames?pageSize=100&workId=1"),
                 new("translation-progress", HttpMethod.Get, "/api/v1/admin/translation/progress"),
@@ -107,8 +108,9 @@ namespace Jularr.Backend.Tests
                 accesses = [.. accesses.Where(access => only.Contains(access.Name, StringComparer.Ordinal))];
             }
 
-            // Shared code paths are compiled before the first measured read.
+            // Shared code paths are compiled before the first measured read. The Rename tab reads the plan the worker keeps, as after its first build.
             using (var warmup = await host.SendAsync(HttpMethod.Get, "/api/v1/auth")) Assert.AreEqual(HttpStatusCode.OK, warmup.StatusCode);
+            using (var built = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/library/renames/plan")) Assert.AreEqual(HttpStatusCode.OK, built.StatusCode);
 
             // Cold: the first call of each read in this process, on a fresh connection (PostgreSQL's buffers stay as the seed left them). Warm: the following calls.
             // A page also names its shell and data parts (Server-Timing); the rest of its time is rendering.
