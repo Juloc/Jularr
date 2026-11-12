@@ -967,7 +967,7 @@ namespace Jularr.Backend.Tests
                 return Task.FromResult<BrowserPage?>(null);
             }
 
-            public Task SaveFileAsync(Uri file, string destination, long? maximumBytes, Func<long, IDisposable>? reserveWrite, CancellationToken ct)
+            public Task SaveFileAsync(Uri file, string destination, long? maximumBytes, Func<long, IDisposable>? reserveWrite, CancellationToken ct, Func<long, long?, Task>? progress = null)
             {
                 Saved++;
                 File.WriteAllBytes(destination, SaveHtml ? Encoding.UTF8.GetBytes("<html>checking</html>") : [0x50, 0x4B, 0x03, 0x04, 0x00]);

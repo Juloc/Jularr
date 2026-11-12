@@ -19,7 +19,8 @@ namespace Jularr.Backend.Logic.Worker
                     job."LastFinishedAt",
                     job."LastResultTypeId",
                     job."LastErrorKey",
-                    job."NextRunAt"
+                    job."NextRunAt",
+                    job."LastErrorDetail"
                 FROM
                     "WorkerJobs" AS job
                 ORDER BY
@@ -81,6 +82,7 @@ namespace Jularr.Backend.Logic.Worker
                         "LastFinishedAt" = @FinishedAt,
                         "LastResultTypeId" = @ResultTypeId,
                         "LastErrorKey" = @ErrorKey,
+                        "LastErrorDetail" = CASE WHEN @ErrorKey IS NOT NULL THEN @ErrorDetail END,
                         "NextRunAt" = @NextRunAt
                     WHERE
                         job."Key" = @Key
@@ -88,12 +90,13 @@ namespace Jularr.Backend.Logic.Worker
                         job."Key"
                 ), noticed AS (
                     INSERT INTO
-                        "Operations" ("OperationTypeId", "OperationStatusTypeId", "WorkerJobKey", "ErrorKey", "StartedAt", "FinishedAt")
+                        "Operations" ("OperationTypeId", "OperationStatusTypeId", "WorkerJobKey", "ErrorKey", "ErrorDetail", "StartedAt", "FinishedAt")
                     SELECT
                         4,
                         4,
                         saved."Key",
                         @ErrorKey,
+                        @ErrorDetail,
                         @StartedAt,
                         @FinishedAt
                     FROM
@@ -117,6 +120,7 @@ namespace Jularr.Backend.Logic.Worker
                     ON CONFLICT ("WorkerJobKey") WHERE "OperationTypeId" = 4 AND "DismissedAt" IS NULL DO UPDATE
                     SET
                         "ErrorKey" = EXCLUDED."ErrorKey",
+                        "ErrorDetail" = EXCLUDED."ErrorDetail",
                         "FinishedAt" = EXCLUDED."FinishedAt"
                     RETURNING
                         "Id"

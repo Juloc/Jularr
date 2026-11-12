@@ -350,6 +350,60 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task FailedPass_KeepsItsCauseWithoutSecrets_OnTheJobItsNoticeAndTheLogs_AndTheSameKnownFailureIsLoggedOnce()
+        {
+            using var storage = new LibraryTests.TemporaryDirectory();
+            var time = new FixedTime(Start);
+            await using var host = await LibraryTests.CreateHostAsync(storage.Path, razor: true, services: services => services.AddSingleton<TimeProvider>(time));
+            var runner = host.Services.GetRequiredService<WorkerJobRunner>();
+            var logs = host.Services.GetRequiredService<RecentLogs>();
+            logs.Enable(true);
+
+            // An unexpected error keeps its type and message; the address loses its query and sign-in, a named secret its value.
+            time.Now = Start.AddHours(2);
+            Assert.AreEqual(WorkerJobResultType.Failed, await runner.RunAsync("subtitles",
+                (_, _) => throw new InvalidOperationException("No answer from https://bob:hunter2@subs.example.test/api?apikey=s3cret-key, token=abc123."), default));
+            var detail = (string)(await host.ScalarAsync("SELECT \"LastErrorDetail\" FROM \"WorkerJobs\" WHERE \"Key\" = 'subtitles'"))!;
+            Assert.AreEqual("InvalidOperationException: No answer from https://subs.example.test/api?… token=…", detail);
+            Assert.AreEqual(detail, await host.ScalarAsync("SELECT \"ErrorDetail\" FROM \"Operations\" WHERE \"WorkerJobKey\" = 'subtitles'"));
+
+            // The schedule and the logs show it beside the error's text.
+            using var listed = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/jobs");
+            Assert.AreEqual(detail, (await listed.Content.ReadFromJsonAsync<BaseDataList<WorkerJobV1>>())!.Single(job => job.Key == "subtitles").LastErrorDetail);
+            using var read = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/system/logs?source=Job");
+            var entry = (await read.Content.ReadFromJsonAsync<PageResult<Jularr.Backend.Data.Admin.System.V1.LogEntryV1>>())!.Items.Single(item => item.Origin == "subtitles");
+            Assert.AreEqual("internal_error", entry.Message);
+            Assert.AreEqual(detail, entry.Detail);
+            using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Logs");
+            var html = await page.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
+            StringAssert.Contains(html, "An unknown error occurred. (InvalidOperationException: No answer from https://subs.example.test/api?");
+            Assert.IsFalse(html.Contains("s3cret", StringComparison.Ordinal) || html.Contains("hunter2", StringComparison.Ordinal) || html.Contains("abc123", StringComparison.Ordinal));
+
+            // A statement cut by its batch's own limit reads as a busy database, and says so.
+            time.Now = time.Now.AddHours(1);
+            await runner.RunAsync("subtitles", (_, _) => throw new OperationCanceledException("Query was cancelled",
+                new Npgsql.PostgresException("canceling statement due to user request", "ERROR", "ERROR", Npgsql.PostgresErrorCodes.QueryCanceled)), default);
+            Assert.AreEqual("database_busy", await host.ScalarAsync("SELECT \"LastErrorKey\" FROM \"WorkerJobs\" WHERE \"Key\" = 'subtitles'"));
+            Assert.AreEqual("OperationCanceledException: Query was cancelled", await host.ScalarAsync("SELECT \"LastErrorDetail\" FROM \"WorkerJobs\" WHERE \"Key\" = 'subtitles'"));
+
+            // A known state with nothing behind it keeps no detail, and the same state again is no new warning.
+            for (var pass = 0; pass < 3; pass++)
+            {
+                time.Now = time.Now.AddHours(1);
+                await runner.RunAsync("subtitles", (_, _) => throw new ServiceUnavailableException("provider_unavailable"), default);
+            }
+
+            Assert.AreEqual(1, logs.Read(1000).Count(log => log.Message == "subtitles failed: provider_unavailable."));
+            Assert.AreEqual(DBNull.Value, await host.ScalarAsync("SELECT \"LastErrorDetail\" FROM \"WorkerJobs\" WHERE \"Key\" = 'subtitles'"));
+
+            // A pass that runs well clears it.
+            time.Now = time.Now.AddHours(1);
+            await runner.RunAsync("subtitles", (_, _) => Task.CompletedTask, default);
+            Assert.AreEqual(DBNull.Value, await host.ScalarAsync("SELECT \"LastErrorDetail\" FROM \"WorkerJobs\" WHERE \"Key\" = 'subtitles'"));
+        }
+
+        [TestMethod]
         public async Task JobsPage_AFailedPass_SaysWhy_InTheRowAndInTheHistory_AndAnUnknownCodeReadsAsUnknownError()
         {
             using var storage = new LibraryTests.TemporaryDirectory();

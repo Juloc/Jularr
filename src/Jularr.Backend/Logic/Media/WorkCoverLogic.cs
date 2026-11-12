@@ -8,8 +8,8 @@ namespace Jularr.Backend.Logic.Media
     // Provider images kept on disk: which ones are still to fetch, and what a fetch changes.
     internal static class WorkCoverLogic
     {
-        // The poster and backdrop facts that still name a provider, then season and episode images; a failed address waits a day.
-        public static async Task<IReadOnlyList<WorkCoverTargetData>> ReadPendingCoversAsync(this LogicContext ctx, WorkCoverQueryData query, CancellationToken ct)
+        // One Work's poster and backdrop facts that still name a provider; a failed address waits a day.
+        public static Task<IReadOnlyList<WorkCoverTargetData>> ReadPendingCoversAsync(this LogicContext ctx, WorkCoverQueryData query, CancellationToken ct)
         {
             var sql = new SqlStatement();
             sql.Statement =
@@ -22,8 +22,8 @@ namespace Jularr.Backend.Logic.Media
                 FROM
                     "WorkMetadataFacts" AS fact
                 WHERE
-                    fact."FactKey" IN ('Poster', 'Backdrop')
-                    AND (@WorkId::bigint IS NULL OR fact."WorkId" = @WorkId)
+                    fact."WorkId" = @WorkId
+                    AND fact."FactKey" IN ('Poster', 'Backdrop')
                     AND fact."Value" ~ '^https?://'
                     AND length(fact."Value") <= 500
                     AND fact."Id" = (
@@ -52,49 +52,106 @@ namespace Jularr.Backend.Logic.Media
                             AND (cover."StoredAt" IS NOT NULL OR cover."FailedAt" > now() - interval '1 day')
                     )
                 ORDER BY
-                    fact."WorkId",
                     fact."FactKey"
                 LIMIT @Limit;
                 """;
             sql.Parameters.Add(query);
-            var targets = (await ctx.ReadSql.ReadListAsync<WorkCoverTargetData>(sql, ct)).ToList();
-            if (query.WorkId is not null || targets.Count >= query.Limit)
-            {
-                return targets;
-            }
+            return ctx.ReadSql.ReadListAsync<WorkCoverTargetData>(sql, ct);
+        }
 
-            sql = new SqlStatement();
+        // The next poster and backdrop facts that name a provider's address, after the last one looked at. The window is bounded, so a library with many
+        // addresses that failed today is walked in short statements; each says whether it is still to fetch (the Work's effective fact, not stored, not failed within a day).
+        public static Task<IReadOnlyList<WorkCoverCandidateData>> ReadCoverFactWindowAsync(this LogicContext ctx, WorkCoverWindowData window, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
             sql.Statement =
                 """
                 SELECT
+                    fact."Id" AS "CandidateId",
+                    fact."WorkId",
+                    CASE fact."FactKey" WHEN 'Poster' THEN 1 ELSE 2 END::smallint AS "CoverKindId",
+                    NULL::bigint AS "WorkUnitId",
+                    CASE
+                        WHEN length(fact."Value") <= 500
+                            AND fact."Id" = (
+                                SELECT
+                                    effective."Id"
+                                FROM
+                                    "WorkMetadataFacts" AS effective
+                                WHERE
+                                    effective."WorkId" = fact."WorkId"
+                                    AND effective."FactKey" = fact."FactKey"
+                                ORDER BY
+                                    effective."IsManual" DESC,
+                                    effective."Id"
+                                LIMIT 1
+                            )
+                            AND NOT EXISTS (
+                                SELECT
+                                    1
+                                FROM
+                                    "WorkCovers" AS cover
+                                WHERE
+                                    cover."WorkId" = fact."WorkId"
+                                    AND cover."WorkUnitId" IS NULL
+                                    AND cover."CoverKindId" = CASE fact."FactKey" WHEN 'Poster' THEN 1 ELSE 2 END
+                                    AND cover."SourceUrl" = fact."Value"
+                                    AND (cover."StoredAt" IS NOT NULL OR cover."FailedAt" > now() - interval '1 day')
+                            )
+                        THEN fact."Value"
+                    END AS "PendingUrl"
+                FROM
+                    "WorkMetadataFacts" AS fact
+                WHERE
+                    fact."FactKey" IN ('Poster', 'Backdrop')
+                    AND fact."Value" ~ '^https?://'
+                    AND fact."Id" > @After
+                ORDER BY
+                    fact."Id"
+                LIMIT @Window;
+                """;
+            sql.Parameters.Add(window);
+            return ctx.ReadSql.ReadListAsync<WorkCoverCandidateData>(sql, ct);
+        }
+
+        // The next season and episode images that name a provider's address, after the last one looked at; as bounded as the facts' window.
+        public static Task<IReadOnlyList<WorkCoverCandidateData>> ReadCoverUnitWindowAsync(this LogicContext ctx, WorkCoverWindowData window, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    unit."Id" AS "CandidateId",
                     unit."WorkId",
                     3::smallint AS "CoverKindId",
                     unit."Id" AS "WorkUnitId",
-                    unit."ImageUrl" AS "SourceUrl"
+                    CASE
+                        WHEN length(unit."ImageUrl") <= 500
+                            AND NOT EXISTS (
+                                SELECT
+                                    1
+                                FROM
+                                    "WorkCovers" AS cover
+                                WHERE
+                                    cover."WorkId" = unit."WorkId"
+                                    AND cover."WorkUnitId" = unit."Id"
+                                    AND cover."CoverKindId" = 3
+                                    AND cover."SourceUrl" = unit."ImageUrl"
+                                    AND (cover."StoredAt" IS NOT NULL OR cover."FailedAt" > now() - interval '1 day')
+                            )
+                        THEN unit."ImageUrl"
+                    END AS "PendingUrl"
                 FROM
                     "WorkUnits" AS unit
                 WHERE
                     unit."ImageUrl" ~ '^https?://'
-                    AND NOT EXISTS (
-                        SELECT
-                            1
-                        FROM
-                            "WorkCovers" AS cover
-                        WHERE
-                            cover."WorkId" = unit."WorkId"
-                            AND cover."WorkUnitId" = unit."Id"
-                            AND cover."CoverKindId" = 3
-                            AND cover."SourceUrl" = unit."ImageUrl"
-                            AND (cover."StoredAt" IS NOT NULL OR cover."FailedAt" > now() - interval '1 day')
-                    )
+                    AND unit."Id" > @After
                 ORDER BY
-                    unit."WorkId",
                     unit."Id"
-                LIMIT @Limit;
+                LIMIT @Window;
                 """;
-            sql.Parameters.Add(new WorkCoverQueryData(null, query.Limit - targets.Count));
-            targets.AddRange(await ctx.ReadSql.ReadListAsync<WorkCoverTargetData>(sql, ct));
-            return targets;
+            sql.Parameters.Add(window);
+            return ctx.ReadSql.ReadListAsync<WorkCoverCandidateData>(sql, ct);
         }
 
         // The stored file becomes what the facts and the unit show; the provider's address stays here to recognise an unchanged one.
@@ -148,6 +205,7 @@ namespace Jularr.Backend.Logic.Media
         }
 
         // The Works of the library whose books carry a cover in their own file: books with a readable EPUB or comic archive and no poster at all, not tried within a week.
+        // It starts from the library's book files, never from every book the catalogs know.
         public static Task<IReadOnlyList<ReadingSourceData>> ReadFileCoverTargetsAsync(this LogicContext ctx, WorkCoverQueryData query, CancellationToken ct)
         {
             var sql = new SqlStatement();
@@ -191,7 +249,15 @@ namespace Jularr.Backend.Logic.Media
                     JOIN "LibraryRoots" AS root ON root."Id" = file."LibraryRootId"
                     JOIN "StorageMounts" AS mount ON mount."Id" = root."StorageMountId"
                 WHERE
-                    work."MediaTypeId" = 3
+                    work."Id" IN (
+                        SELECT
+                            book."WorkId"
+                        FROM
+                            "MediaAssets" AS book
+                        WHERE
+                            book."MediaAssetTypeId" IN (3, 4)
+                    )
+                    AND work."MediaTypeId" = 3
                     AND NOT EXISTS (
                         SELECT
                             1

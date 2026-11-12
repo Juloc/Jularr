@@ -449,6 +449,39 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task WorkerErrorDetail_UpgradeKeepsFailedJobsAndTheirNotices_AndAddsTheCoverIndexes()
+        {
+            using var folder = new LibraryTests.TemporaryDirectory();
+            var cs = TestPostgres.ResolveConnectionString(nameof(WorkerErrorDetail_UpgradeKeepsFailedJobsAndTheirNotices_AndAddsTheCoverIndexes));
+            var options = Backup(folder.Path, out _);
+            var tools = Tools(cs, FakeDump(folder.Path, true), null);
+            var version = DatabaseBaseline.Migrations.Single(migration => migration.Name == "0058_worker_error_detail_and_cover_indexes").Version;
+            await new DatabaseBaseline(cs, migrations: DatabaseBaseline.Migrations.Where(migration => migration.Version < version).ToArray()).StartAsync(CancellationToken.None);
+            await ExecuteAsync(cs,
+                """
+                INSERT INTO "WorkerJobs" ("Key", "LastResultTypeId", "LastErrorKey", "LastFinishedAt") VALUES ('covers', 2, 'internal_error', now());
+                INSERT INTO "Operations" ("OperationTypeId", "OperationStatusTypeId", "WorkerJobKey", "ErrorKey", "FinishedAt") VALUES (4, 4, 'covers', 'internal_error', now());
+                """);
+            await new DatabaseBaseline(cs, options, tools).StartAsync(CancellationToken.None);
+
+            // The failed job and its notice stay, without a cause that was never kept.
+            Assert.AreEqual("internal_error", await ScalarAsync(cs, """SELECT "LastErrorKey" FROM "WorkerJobs" WHERE "Key" = 'covers'"""));
+            Assert.AreEqual(1L, await ScalarAsync(cs, """SELECT count(*) FROM "Operations" WHERE "WorkerJobKey" = 'covers' AND "ErrorDetail" IS NULL"""));
+            Assert.AreEqual(DBNull.Value, await ScalarAsync(cs, """SELECT "LastErrorDetail" FROM "WorkerJobs" WHERE "Key" = 'covers'"""));
+
+            // A cause belongs to an error; a long one does not fit.
+            await ExecuteAsync(cs, """UPDATE "WorkerJobs" SET "LastErrorDetail" = 'InvalidOperationException: broken' WHERE "Key" = 'covers'""");
+            await Assert.ThrowsExactlyAsync<PostgresException>(() => ExecuteAsync(cs, """UPDATE "WorkerJobs" SET "LastErrorKey" = NULL, "LastResultTypeId" = 1 WHERE "Key" = 'covers'"""));
+            await Assert.ThrowsExactlyAsync<PostgresException>(() => ExecuteAsync(cs, """UPDATE "Operations" SET "ErrorDetail" = repeat('x', 301) WHERE "WorkerJobKey" = 'covers'"""));
+
+            // The cover job's indexes are there.
+            Assert.AreEqual(3L, await ScalarAsync(cs, """
+                SELECT count(*) FROM pg_indexes WHERE indexname IN ('IX_WorkMetadataFacts_RemoteImage', 'IX_WorkUnits_RemoteImage', 'IX_MediaAssets_Book')
+                """));
+            Assert.AreEqual(version, await ScalarAsync(cs, """SELECT "Version" FROM "DatabaseSchemaVersions" WHERE "Name" = '0058_worker_error_detail_and_cover_indexes'"""));
+        }
+
+        [TestMethod]
         public async Task ManualImportReleaseNames_UpgradeGivesAssignedFilmsAndEpisodesTheirReleaseName_AndLeavesEveryOtherFileAlone()
         {
             using var folder = new LibraryTests.TemporaryDirectory();

@@ -244,6 +244,48 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task HealthJob_AnOptionalServiceThatDoesNotAnswer_IsLoggedOnceWhenItGoes_AndFailsNothing()
+        {
+            using var storage = new LibraryTests.TemporaryDirectory();
+            var servers = new FakeServers();
+            var time = new FixedTime(Start);
+            await using var host = await CreateHostAsync(storage.Path, servers, services => services.AddSingleton<TimeProvider>(time));
+            await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" IN ('ProgressSync', 'Library')");
+            using var jellyfin = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/media-servers/Jellyfin", new SaveMediaServerDataV1("http://jellyfin.example.test:8096", FakeServers.Key));
+            Assert.AreEqual(HttpStatusCode.OK, jellyfin.StatusCode, await jellyfin.Content.ReadAsStringAsync());
+            var logs = host.Services.GetRequiredService<RecentLogs>();
+            logs.Enable(true);
+            var worker = new HealthWorker(time, host.Services.GetRequiredService<WorkerJobs>(), host.Services.GetRequiredService<WorkerJobRunner>());
+            var pass = typeof(HealthWorker).GetMethod("RunOnceAsync", BindingFlags.Instance | BindingFlags.NonPublic)!;
+            async Task RunAsync()
+            {
+                time.Now = time.Now.AddMinutes(3);
+                await (Task)pass.Invoke(worker, [CancellationToken.None])!;
+            }
+
+            int Warnings(string text) => logs.Read(1000).Count(entry => entry.Message.Contains(text, StringComparison.Ordinal));
+
+            // The media server stops answering: the log says so once, however many checks follow, and the job neither fails nor leaves a notice.
+            servers.JellyfinAvailable = false;
+            await RunAsync();
+            await RunAsync();
+            await RunAsync();
+            Assert.AreEqual(1, Warnings("Not answering: Jellyfin."));
+            Assert.AreEqual(0, Warnings("health failed"));
+            Assert.AreEqual((short)1, await host.ScalarAsync("SELECT \"LastResultTypeId\" FROM \"WorkerJobs\" WHERE \"Key\" = 'health'"));
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"Operations\" WHERE \"WorkerJobKey\" = 'health'"));
+            Assert.IsFalse((await CheckNowAsync(host)).IsStable, "The Dashboard still shows it.");
+
+            // It answers again, then stops once more: that is a new change and is logged again.
+            servers.JellyfinAvailable = true;
+            await RunAsync();
+            Assert.AreEqual(1, Warnings("Not answering: Jellyfin."));
+            servers.JellyfinAvailable = false;
+            await RunAsync();
+            Assert.AreEqual(2, Warnings("Not answering: Jellyfin."));
+        }
+
+        [TestMethod]
         public async Task Pages_DashboardPerformanceAndLogs_RenderForTheOwner_AndCheckNowAsksAgain()
         {
             using var storage = new LibraryTests.TemporaryDirectory();

@@ -42,7 +42,8 @@ namespace Jularr.Backend.Service.Admin.System.V1
                         entry."Level",
                         entry."Source",
                         entry."Origin",
-                        entry."Message"
+                        entry."Message",
+                        entry."Detail"
                     FROM
                         (
                             SELECT
@@ -50,7 +51,8 @@ namespace Jularr.Backend.Service.Admin.System.V1
                                 CASE WHEN event."ActivityEventTypeId" = 2 THEN 2 ELSE 1 END AS "Level",
                                 1 AS "Source",
                                 kind."Key" AS "Origin",
-                                left(event."WorkTitle" || coalesce(' · ' || event."ReleaseTitle", ''), 4000) AS "Message"
+                                left(event."WorkTitle" || coalesce(' · ' || event."ReleaseTitle", ''), 4000) AS "Message",
+                                NULL::varchar AS "Detail"
                             FROM
                                 "ActivityEvents" AS event
                                 JOIN "ActivityEventTypes" AS kind ON kind."Id" = event."ActivityEventTypeId"
@@ -60,7 +62,8 @@ namespace Jularr.Backend.Service.Admin.System.V1
                                 3 AS "Level",
                                 2 AS "Source",
                                 operation."WorkerJobKey" AS "Origin",
-                                operation."ErrorKey" AS "Message"
+                                operation."ErrorKey" AS "Message",
+                                operation."ErrorDetail" AS "Detail"
                             FROM
                                 "Operations" AS operation
                             WHERE
@@ -70,7 +73,8 @@ namespace Jularr.Backend.Service.Admin.System.V1
                     WHERE
                         (@Source::smallint IS NULL OR entry."Source" = @Source)
                         AND (@Level::smallint IS NULL OR entry."Level" = @Level)
-                        AND (@Search::text IS NULL OR strpos(lower(entry."Message"), lower(@Search)) > 0 OR strpos(lower(entry."Origin"), lower(@Search)) > 0)
+                        AND (@Search::text IS NULL OR strpos(lower(entry."Message"), lower(@Search)) > 0 OR strpos(lower(entry."Origin"), lower(@Search)) > 0
+                            OR strpos(lower(entry."Detail"), lower(@Search)) > 0)
                     ORDER BY
                         entry."At" DESC
                     LIMIT @Take;

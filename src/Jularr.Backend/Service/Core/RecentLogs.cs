@@ -4,7 +4,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Jularr.Backend.Service.Core
 {
-    // The last warnings and errors of this process for the Owner; exceptions keep their type and message, never a stack trace.
+    // The last warnings and errors of this process for the Owner; exceptions keep their type and message without secrets, never a stack trace.
     internal sealed class RecentLogs(TimeProvider time) : ILoggerProvider
     {
         private const int Capacity = 1000;
@@ -50,7 +50,8 @@ namespace Jularr.Backend.Service.Core
                 }
 
                 var message = formatter(state, exception);
-                if (exception is not null) message += " (" + exception.GetType().Name + ": " + exception.Message + ")";
+                // The exception's message can carry an address with its key; it is told as a job's cause is, without secrets.
+                if (exception is not null) message += " (" + ErrorDetail.Of(exception) + ")";
                 owner.Add(new RecentLogEntry(owner.Now(), logLevel, category, TextLimit.Cut(message, 2000)!));
             }
         }

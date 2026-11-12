@@ -51,7 +51,7 @@ namespace Jularr.Integrations.Logic.Common
             catch (DirectDownloadException exception) when (exception.Failure == DirectDownloadFailure.Gate)
             {
                 if (progress is not null) await progress(0, null);
-                await browser.SaveFileAsync(uri, destination, maximumBytes, reserveWrite, ct);
+                await browser.SaveFileAsync(uri, destination, maximumBytes, reserveWrite, ct, progress);
             }
         }
 

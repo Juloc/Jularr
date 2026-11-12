@@ -16,6 +16,10 @@ namespace Jularr.Backend.Data.Fields.Media
         public static readonly LongField WorkIdRequired = new() { Minimum = 1 };
         public static readonly StringField Name = new(NpgsqlDbType.Varchar) { MaximumLength = 40, Required = false, Trim = true };
         public static readonly IntField Limit = new() { Minimum = 1, Maximum = 500 };
+        public static readonly LongField CandidateId = new() { Minimum = 1 };
+        public static readonly LongField After = new() { Minimum = 0 };
+        public static readonly IntField Window = new() { Minimum = 1, Maximum = 5000 };
+        public static readonly StringField PendingUrl = new(NpgsqlDbType.Varchar) { MaximumLength = 500, AllowBlank = false, Required = false };
         public static readonly LongArrayField WorkIds = new();
     }
 }

@@ -14535,8 +14535,8 @@
    "{0} von {1} Diensten erreichbar"
   ],
   "jobs.about.health": [
-   "Asks every configured service whether it answers. A service that does not makes the pass fail, and Activity tells you.",
-   "Fragt jeden eingerichteten Dienst, ob er antwortet. Antwortet einer nicht, schlägt der Lauf fehl und die Aktivität meldet es."
+   "Asks every configured service whether it answers. When the database, a storage or a download client does not, the pass fails and Activity tells you; the Dashboard shows the others.",
+   "Fragt jeden eingerichteten Dienst, ob er antwortet. Antworten die Datenbank, ein Speicher oder ein Download-Client nicht, schlägt der Lauf fehl und die Aktivität meldet es; die übrigen zeigt das Dashboard."
   ],
   "admin.catalog.tvdb": [
    "TVDB",
