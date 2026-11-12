@@ -130,7 +130,8 @@ namespace Jularr.Backend.Service.User.Library.V1
             ) AS workProgress
             """;
 
-        // One ordered page: sorting and cards share the unit progress counts. Per-title availability runs for the selected Works alone.
+        // One ordered page. The unit progress counts of every started Work are read only when the candidates sort or filter by progress
+        // (PageProgressJoin); the cards count their own Work alone, like the availability, which runs for the selected Works alone.
         public static string Page(string candidates, string isWatchlisted) =>
             $$"""
             WITH "UnitProgressCounts" AS MATERIALIZED (
@@ -155,7 +156,7 @@ namespace Jularr.Backend.Service.User.Library.V1
                     OFFSET 0
                 ) AS visible ON TRUE
                 {{CardJoins}}
-                {{PageProgressJoin}}
+                {{ProgressJoin}}
             ORDER BY
                 picked."Place";
             """;
