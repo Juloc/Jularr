@@ -399,7 +399,7 @@ namespace Jularr.Backend.Tests
                 Assert.AreEqual(HttpStatusCode.OK, again.StatusCode, await again.Content.ReadAsStringAsync());
             }
 
-            Assert.IsNotNull(await host.ScalarAsync("SELECT \"RequestedAt\" FROM \"LibraryRenamePlans\""));
+            Assert.IsInstanceOfType<DateTime>(await host.ScalarAsync("SELECT \"RequestedAt\" FROM \"LibraryRenamePlans\""));
             const string target = "Example Show/Specials - tt12345/Example Show - S00E03.mkv";
             Assert.AreEqual(target, plan.Items.Single().TargetPath);
             Assert.IsTrue(File.Exists(original));

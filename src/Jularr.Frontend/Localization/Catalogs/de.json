@@ -12581,6 +12581,10 @@
    "Rename plan",
    "Umbenennungsplan"
   ],
+  "jobs.job.wantedState": [
+   "Wanted states",
+   "Gesucht-Zustände"
+  ],
   "jobs.job.backup": [
    "Automatic backup",
    "Automatisches Backup"
@@ -13209,6 +13213,10 @@
   "jobs.about.renamePlan": [
    "Plans the renames of the Rename tab again after scans, downloads and naming changes, at the latest every hour.",
    "Plant die Umbenennungen des Tabs Umbenennen nach Scans, Downloads und Namensänderungen neu, spätestens jede Stunde."
+  ],
+  "jobs.about.wantedState": [
+   "Works out again which targets lack their media or are below their cutoff, soon after something they depend on changed.",
+   "Ermittelt neu, welchen Zielen Medien fehlen oder welche unter ihrem Qualitätsziel liegen, kurz nachdem sich etwas dafür Relevantes geändert hat."
   ],
   "jobs.about.backup": [
    "Creates a backup when the newest one is older than the interval set by the Owner.",

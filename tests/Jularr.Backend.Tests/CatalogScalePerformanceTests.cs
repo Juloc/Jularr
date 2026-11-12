@@ -7,9 +7,11 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Media;
+using Jularr.Backend.Data.System.Acquisition.V1;
 using Jularr.Backend.Data.System.Media.V1;
 using Jularr.Backend.Data.User.Discover.V1;
 using Jularr.Backend.Infrastructure.Sql;
+using Jularr.Backend.Service.System.Acquisition.V1;
 using Jularr.Backend.Service.System.Media.V1;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -69,6 +71,15 @@ namespace Jularr.Backend.Tests
             }
             var countMilliseconds = Stopwatch.GetElapsedTime(counting).TotalMilliseconds;
             TestContext.WriteLine($"Catalog count (CountCatalogTitlesV1): {countMilliseconds:F0} ms.");
+
+            // The Wanted list reads the states the worker keeps, as after its first refresh.
+            var refreshing = Stopwatch.GetTimestamp();
+            await using (var scope = host.Services.CreateAsyncScope())
+            {
+                Assert.IsTrue((await scope.ServiceProvider.GetRequiredService<RefreshWantedStatesV1>().ExecuteAsync<UpdateResult>(new WantedStateParametersV1(), default)).Success);
+            }
+            var refreshMilliseconds = Stopwatch.GetElapsedTime(refreshing).TotalMilliseconds;
+            TestContext.WriteLine($"Wanted states (RefreshWantedStatesV1): {refreshMilliseconds:F0} ms.");
 
             Access[] accesses =
             [
@@ -161,6 +172,7 @@ namespace Jularr.Backend.Tests
             var report = new StringBuilder();
             report.AppendLine(CultureInfo.InvariantCulture, $"Catalog scale {scale}, library {libraryTitles}, {samples} warm samples; milliseconds in the test server (in-process HTTP).");
             report.AppendLine(CultureInfo.InvariantCulture, $"The worker's catalog count (CountCatalogTitlesV1) took {countMilliseconds:F0} ms.");
+            report.AppendLine(CultureInfo.InvariantCulture, $"The worker's Wanted states (RefreshWantedStatesV1) took {refreshMilliseconds:F0} ms.");
             report.AppendLine("read                      cold   warm median   warm p95   shell    data");
             foreach (var (access, cold, median, p95, shell, data) in results)
             {

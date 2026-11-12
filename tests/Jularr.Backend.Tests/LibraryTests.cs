@@ -375,6 +375,18 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.OK, details.StatusCode, await details.Content.ReadAsStringAsync());
             StringAssert.Contains(await details.Content.ReadAsStringAsync(), ">Versions<");
 
+            // The tab shows the kept plan; before the worker's first one it offers to plan now.
+            using var unplanned = await host.SendAsync(HttpMethod.Get, "/Admin/Library/Rename");
+            html = await unplanned.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, unplanned.StatusCode, html);
+            StringAssert.Contains(html, "handler=RenamePlan");
+            Assert.IsFalse(html.Contains("Film/Film [HDTV-1080p].mkv", StringComparison.Ordinal));
+            using var planned = await host.SendAsync(HttpMethod.Post, "/Admin/Library/Rename?PageNumber=1&handler=RenamePlan", new Dictionary<string, string>
+            {
+                ["__RequestVerificationToken"] = Token(html)
+            });
+            Assert.AreEqual(HttpStatusCode.Redirect, planned.StatusCode, await planned.Content.ReadAsStringAsync());
+
             // Renaming moves files through the confirmed preview only.
             using var preview = await host.SendAsync(HttpMethod.Get, "/Admin/Library/Rename");
             html = await preview.Content.ReadAsStringAsync();
@@ -1440,7 +1452,7 @@ namespace Jularr.Backend.Tests
             Directory.CreateDirectory(Path.Combine(movies, "Second Movie"));
             File.WriteAllText(Path.Combine(movies, "Second Movie", "Second Movie.mkv"), "unscanned");
             // The assignment asks the worker for a new plan; it builds it when due.
-            Assert.IsNotNull(await host.ScalarAsync("SELECT \"RequestedAt\" FROM \"LibraryRenamePlans\""));
+            Assert.IsInstanceOfType<DateTime>(await host.ScalarAsync("SELECT \"RequestedAt\" FROM \"LibraryRenamePlans\""));
             await using (var scope = host.Services.CreateAsyncScope())
             {
                 Assert.IsTrue((await scope.ServiceProvider.GetRequiredService<RefreshLibraryRenamePlanV1>().ExecuteAsync<UpdateResult>(new LibraryRenamePlanParametersV1(), default)).Success);
@@ -1449,7 +1461,7 @@ namespace Jularr.Backend.Tests
 
             using var blockedPreview = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/library/renames");
             var blockedPlan = (await blockedPreview.Content.ReadFromJsonAsync<LibraryRenamePlanV1>())!;
-            Assert.IsNull(await host.ScalarAsync("SELECT \"RequestedAt\" FROM \"LibraryRenamePlans\""));
+            Assert.AreEqual(DBNull.Value, await host.ScalarAsync("SELECT \"RequestedAt\" FROM \"LibraryRenamePlans\""));
             Assert.AreEqual(2, blockedPlan.Items.Count);
             using var blocked = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/library/renames", new ApplyLibraryRenamesDataV1(blockedPlan.Fingerprint));
             var blockedResult = (await blocked.Content.ReadFromJsonAsync<ApplyLibraryRenamesResultV1>())!;

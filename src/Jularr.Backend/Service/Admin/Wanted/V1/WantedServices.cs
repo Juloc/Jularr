@@ -14,122 +14,18 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
     [ServiceEndpoint("GET", "/api/v1/admin/wanted")]
     public sealed class ReadWantedV1 : AdminService<ReadWantedParametersV1>
     {
-        // Share the cutoff set and keep file existence checks as indexed probes, including with sparse scan statistics.
-        internal const string WantedState =
-            """
-                    WITH cutoff_state AS MATERIALIZED (
-                        SELECT
-                            below."WantedItemId"
-                        FROM
-                            "WantedBelowCutoff" AS below
-                    ), language_state AS MATERIALIZED (
-                        -- The films and series none of whose first languages their files have (the reason of their place below the cutoff).
-                        SELECT DISTINCT
-                            language."WantedItemId"
-                        FROM
-                            "WantedVideoLanguages" AS language
-                        WHERE
-                            language."IsNoneCovered"
-                    )
-                    SELECT
-                        wanted."Id",
-                        wanted."WorkId",
-                        work."MediaTypeId",
-                        work."MediaSubtypeId",
-                        work."CanonicalTitle",
-                        wanted."IsPaused",
-                        wanted."WantedPriorityTypeId",
-                        wanted."MonitorsNewUnits",
-                        wanted."LastSearchedAt",
-                        wanted."LastOutcomeKey",
-                        wanted."AcquisitionProfileId",
-                        wanted."LibraryRootId",
-                        wanted."GamePlatformId",
-                        wanted."Version",
-                        EXISTS (
-                            SELECT
-                                1
-                            FROM
-                                "MediaAssets" AS asset
-                            WHERE
-                                asset."WorkId" = wanted."WorkId"
-                                AND EXISTS (
-                                    SELECT
-                                        1
-                                    FROM
-                                        "StoredFiles" AS available
-                                    WHERE
-                                        available."MediaAssetId" = asset."Id"
-                                        AND available."MissingSince" IS NULL
-                                    OFFSET 0
-                                )
-                                AND (
-                                    wanted."GamePlatformId" IS NULL
-                                    OR EXISTS (
-                                        SELECT
-                                            1
-                                        FROM
-                                            "GameReleases" AS game
-                                        WHERE
-                                            game."WorkVersionId" = asset."WorkVersionId"
-                                            AND game."GamePlatformId" = wanted."GamePlatformId"
-                                    )
-                                )
-                        ) AND NOT EXISTS (
-                            SELECT
-                                1
-                            FROM
-                                "WorkUnits" AS unit
-                            WHERE
-                                unit."WorkId" = wanted."WorkId"
-                                AND unit."IsMonitored" AND (unit."WorkUnitTypeId" = 2 OR unit."WorkUnitTypeId" = 3 AND work."MediaSubtypeId" = 2)
-                                AND (unit."ReleasedOn" <= current_date OR unit."WorkUnitTypeId" = 3 AND unit."ReleasedOn" IS NULL)
-                                AND NOT EXISTS (
-                                    SELECT
-                                        1
-                                    FROM
-                                        "MediaAssets" AS asset
-                                    WHERE
-                                        asset."WorkId" = unit."WorkId"
-                                        AND asset."WorkUnitId" = unit."Id"
-                                        AND EXISTS (
-                                            SELECT
-                                                1
-                                            FROM
-                                                "StoredFiles" AS available
-                                            WHERE
-                                                available."MediaAssetId" = asset."Id"
-                                                AND available."MissingSince" IS NULL
-                                            OFFSET 0
-                                        )
-                                )
-                        ) AS "HasMedia",
-                        wanted."Id" IN (
-                            SELECT
-                                cutoff_state."WantedItemId"
-                            FROM
-                                cutoff_state
-                        ) AS "IsCutoffUnmet",
-                        wanted."Id" IN (
-                            SELECT
-                                language_state."WantedItemId"
-                            FROM
-                                language_state
-                        ) AS "IsLanguageOpen"
-                    FROM
-                        "WantedItems" AS wanted
-                    INNER JOIN
-                        "Works" AS work ON work."Id" = wanted."WorkId"
-                    WHERE
-                        cardinality(@MediaTypeIds::smallint[]) + cardinality(@MediaSubtypeIds::smallint[]) = 0
-                        OR work."MediaSubtypeId" IS NULL AND work."MediaTypeId" = ANY(@MediaTypeIds::smallint[])
-                        OR work."MediaSubtypeId" = ANY(@MediaSubtypeIds::smallint[])
-            """;
-
         // The entries of the list: a target, and for a book one entry per language it is wanted in (its own status: the language is there or missing). The rest of the statement
         // continues the body of "wanted_state".
-        internal const string WantedEntries =
-            "WITH wanted_base AS (" + WantedState + """
+        internal static readonly string WantedEntries = Entries(WantedStateLogic.LiveState, "\"WantedBookLanguages\"");
+
+        // The same entries from the states the worker kept, while they are current (WantedStateLogic).
+        internal static readonly string StoredWantedEntries = Entries(WantedStateLogic.StoredState, "\"WantedBookLanguageStates\"");
+
+        // The kept states while they are current, else the states worked out now.
+        internal static async Task<string> EntriesAsync(LogicContext ctx, CancellationToken ct) => await ctx.IsWantedStateCurrentAsync(ct) ? StoredWantedEntries : WantedEntries;
+
+        private static string Entries(string state, string bookLanguages) =>
+            ("WITH wanted_base AS (" + state + """
                 ), book_languages AS MATERIALIZED (
                     -- Once: joined as it is, the view is evaluated again for every row of the list.
                     SELECT
@@ -137,7 +33,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                         language."Language",
                         language."IsCovered"
                     FROM
-                        "WantedBookLanguages" AS language
+                        BOOK_LANGUAGES AS language
                 ), wanted_state AS (
                     SELECT
                         base."Id",
@@ -162,7 +58,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                         wanted_base AS base
                         LEFT JOIN book_languages AS language ON language."WantedItemId" = base."Id"
                         LEFT JOIN "WantedBookLanguageSearches" AS searched ON searched."WantedItemId" = language."WantedItemId" AND searched."Language" = language."Language"
-            """;
+            """).Replace("BOOK_LANGUAGES", bookLanguages, StringComparison.Ordinal);
 
         // One page of the entries of a view with everything its rows show, as "wanted_rows"; the rest of the statement continues the body of "wanted_state".
         internal const string WantedPageRows =
@@ -259,7 +155,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
         {
             // Enrich only the bounded page. Missing: nothing or a monitored aired unit without media; cutoff unmet: the view WantedBelowCutoff.
             var sql = new SqlStatement();
-            sql.Statement = WantedEntries + WantedPageRows +
+            sql.Statement = await EntriesAsync(Context, CancellationToken) + WantedPageRows +
                 """
                 )
                 SELECT
@@ -309,7 +205,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
         {
             // How many targets each view of the list holds, and how many are high priority or paused.
             var sql = new SqlStatement();
-            sql.Statement = ReadWantedV1.WantedEntries +
+            sql.Statement = await ReadWantedV1.EntriesAsync(Context, CancellationToken) +
                 """
                 )
                 SELECT
@@ -340,7 +236,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
         {
             // Every row carries the numbers; an empty page is one row of numbers without an entry.
             var sql = new SqlStatement();
-            sql.Statement = ReadWantedV1.WantedEntries +
+            sql.Statement = await ReadWantedV1.EntriesAsync(Context, CancellationToken) +
                 """
                 ), wanted_summary AS (
                     SELECT
