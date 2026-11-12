@@ -171,7 +171,7 @@ namespace Jularr.Backend.Tests
                 using var response = await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Profiles?tab=" + tab);
                 var html = await response.Content.ReadAsStringAsync();
                 Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, html);
-                Assert.AreEqual(2, html.Split("class=\"navigation-tabs navigation-tabs--filters\"", StringSplitOptions.None).Length);
+                Assert.AreEqual(tab == "groups" ? 3 : 2, html.Split("class=\"navigation-tabs navigation-tabs--filters\"", StringSplitOptions.None).Length, tab);
                 Assert.IsFalse(html.Contains("delay", StringComparison.OrdinalIgnoreCase), "A delay is offered on " + tab);
                 Assert.IsFalse(html.Contains("FallbackQualities", StringComparison.Ordinal));
                 if (tab == "releases")
@@ -197,12 +197,12 @@ namespace Jularr.Backend.Tests
                     (901, 1, 10, now()), (901, 3, 4, now()), (903, 2, 1, now());
                 """);
 
-            // A tab of its own: the rating filter beside the tabs, a live search, the media type and the order; not rated first, one segmented control per group.
+            // A tab of its own: below the tabs the rating filter, a live search, the media type and the order; not rated first, one segmented control per group.
             const string Tab = "/Admin/Acquisition/Profiles?tab=groups";
             using var page = await host.SendAsync(HttpMethod.Get, Tab);
             var html = await page.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
-            Assert.AreEqual(2, html.Split("class=\"navigation-tabs navigation-tabs--filters\"", StringSplitOptions.None).Length);
+            Assert.AreEqual(3, html.Split("class=\"navigation-tabs navigation-tabs--filters\"", StringSplitOptions.None).Length, "The tabs, then the filters with the search.");
             StringAssert.Contains(html, "navigation-tabs__link navigation-tabs__link--active\" aria-current=\"page\">Release groups</a>");
             StringAssert.Contains(html, "id=\"release-groups\" data-region=\"\"");
             StringAssert.Contains(html, "data-search-live=\"\"");

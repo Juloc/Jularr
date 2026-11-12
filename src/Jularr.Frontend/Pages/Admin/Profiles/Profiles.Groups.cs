@@ -25,7 +25,9 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
             var kinds = new List<ChoiceOption> { new("arr.groups.allKinds", "", KindFilter is null) };
             kinds.AddRange(Enum.GetValues<AcquisitionMediaKind>().Select(kind => new ChoiceOption("", kind.ToString(), KindFilter == kind, KindName(kind))));
             var orders = Enum.GetValues<ReleaseGroupSort>().Select(sort => new ChoiceOption("arr.groups.sort." + sort, sort.ToString(), (GroupSort ?? ReleaseGroupSort.Rating) == sort)).ToList();
-            page.Content.Add(new ListToolbar(AdminMenu.Row(texts, Request, chips, Tab, "arr.groups.filters"),
+            // The tabs in their own row like on every tab; below them the rating filter beside the search, the media type and the order.
+            page.Content.Add(new ListToolbar(AdminMenu.Row(texts, Request, null, Tab)));
+            page.Content.Add(new ListToolbar(new NavigationTabs(chips, "arr.groups.filters", "filters"),
                 new SearchBox(Home(Request), "arr.groups.search", Search, filters, null, Glyph("search", 15), live: true),
                 new ChoiceSelect(Home(Request), "kind", "arr.groups.kind", kinds, Without(keepWords, "kind")),
                 new ChoiceSelect(Home(Request), "sort", "arr.groups.order", orders, Without(keepWords, "sort"))));
