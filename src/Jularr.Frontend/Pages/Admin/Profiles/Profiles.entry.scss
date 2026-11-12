@@ -72,3 +72,35 @@
 
 // The editor of conditions needs room.
 #format-editor { width: min(760px, calc(100vw - 32px)); }
+
+// The release test: the field, what the name says, then one row per video profile with its points and whether it would take it.
+.release-test {
+    &__facts {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin: 10px 0;
+    }
+
+    &__rows { display: grid; }
+
+    &__row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px 12px;
+        padding: 8px 0;
+        border-top: 1px solid var(--border);
+
+        &:first-child { border-top: 0; }
+    }
+
+    &__name { min-width: 160px; font-weight: 600; }
+
+    &__points {
+        display: flex;
+        flex: 1;
+        flex-wrap: wrap;
+        gap: 4px;
+    }
+}

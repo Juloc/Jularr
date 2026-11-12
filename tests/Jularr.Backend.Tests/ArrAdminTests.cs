@@ -291,6 +291,23 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(1, scores.Count);
             Assert.AreEqual((format.Id, 75), (scores[0].FormatId, scores[0].Score));
 
+            // The release test of the formats tab tries a name against every video profile: the matching format adds its points, a quality the profile does not allow is named.
+            var tried = await (await host.SendAsync(HttpMethod.Get, Root + "release-test?title=" + Uri.EscapeDataString("Example.Movie.2020.1080p.WEB-DL.HDR.H264-GRP")))
+                .Content.ReadFromJsonAsync<ReleaseTestV1>();
+            Assert.AreEqual(("WEBDL-1080p", "GRP"), (tried!.Quality, tried.ReleaseGroup));
+            var matrix = tried.Profiles.Single(profile => profile.Id == profileId);
+            Assert.AreEqual((true, 75), (matrix.Accepted, matrix.Score));
+            Assert.AreEqual(("CustomFormat", "Matrix format", 75), matrix.Points.Select(point => (point.Code, point.Value, point.Points)).Single());
+            var cinema = (await (await host.SendAsync(HttpMethod.Get, Root + "release-test?title=" + Uri.EscapeDataString("Example.Movie.2020.HDCAM.H264-GRP")))
+                .Content.ReadFromJsonAsync<ReleaseTestV1>())!.Profiles.Single(profile => profile.Id == profileId);
+            Assert.IsFalse(cinema.Accepted);
+            var tab = await (await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Profiles?tab=formats&q=" + Uri.EscapeDataString("Example.Movie.2020.1080p.WEB-DL.HDR.H264-GRP")))
+                .Content.ReadAsStringAsync();
+            StringAssert.Contains(tab, "id=\"release-test\"");
+            StringAssert.Contains(tab, "data-search-live=\"\"");
+            StringAssert.Contains(tab, "Matrix format &#x2B;75");
+            StringAssert.Contains(tab, "Would be taken &#xB7; &#x2B;75");
+
             // The format list shows it as used and its editor is a dialog; no page offers a waiting time.
             using var formats = await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Profiles?tab=formats&item=format&edit=" + format.Id);
             var list = await formats.Content.ReadAsStringAsync();

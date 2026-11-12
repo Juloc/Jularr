@@ -20,7 +20,7 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
     // A profile has its own page; adding is a dialog the address opens, settings of a card are inputs saved by the page's pill.
     public sealed partial class ProfilesModel(
         ReadAcquisitionProfilesV1 profiles, ReadMonitoredLanguagesV1 readMonitored, SaveMonitoredLanguagesV1 saveMonitored, ReadLanguageRulesV1 readRules, SaveLanguageRuleV1 saveRule,
-        ReadCustomFormatsV1 formats, ReadCustomFormatV1 format, SaveCustomFormatV1 saveFormat, DeleteCustomFormatV1 deleteFormat, ImportCustomFormatsV1 importFormats,
+        ReadCustomFormatsV1 formats, ReadCustomFormatV1 format, SaveCustomFormatV1 saveFormat, DeleteCustomFormatV1 deleteFormat, ImportCustomFormatsV1 importFormats, TestReleaseV1 testRelease,
         ReadQualityDefinitionsV1 sizes, SaveQualityDefinitionsV1 saveSizes,
         ReadReleaseProfilesV1 releases, ReadReleaseProfileV1 release, SaveReleaseProfileV1 saveRelease, DeleteReleaseProfileV1 deleteRelease,
         ReadReleaseGroupsV1 groups, AddReleaseGroupV1 addGroup, RateReleaseGroupV1 rateGroup,
@@ -89,6 +89,7 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
         private readonly Dictionary<MediaType, SaveQualityDefinitionsDataV1> _sizes = [];
         private MediaType? _sizesPosted;
         private ImportCustomFormatsDataV1? _import;
+        private ReleaseTestV1? _test;
 
         protected override void Define(Page page)
         {
@@ -106,11 +107,8 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
             page.Asset("Framework/Components/ActionDock.entry.ts");
             page.Asset("Framework/Components/Truncated.entry.ts");
             if (Tab == DownloadPages.Quality) page.Asset("Framework/Components/SizeRange.entry.ts");
-            if (Tab == DownloadPages.Groups)
-            {
-                page.Asset("Framework/Components/LiveSearch.entry.ts");
-                page.Asset("Framework/Components/ChoiceSelect.entry.ts");
-            }
+            if (Tab is DownloadPages.Groups or DownloadPages.Formats) page.Asset("Framework/Components/LiveSearch.entry.ts");
+            if (Tab == DownloadPages.Groups) page.Asset("Framework/Components/ChoiceSelect.entry.ts");
 
             // One row of tabs; the setup shows the profiles alone. The groups tab puts its search and filters beside the tabs.
             page.NoPageRow();

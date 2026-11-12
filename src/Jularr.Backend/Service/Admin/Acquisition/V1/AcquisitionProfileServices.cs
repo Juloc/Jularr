@@ -171,7 +171,10 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                 LanguageOrder = data.LanguageOrder,
                 LanguageFallback = data.LanguageFallback,
                 GoodGroupScore = data.GoodGroupScore,
-                BadGroupScore = data.BadGroupScore
+                BadGroupScore = data.BadGroupScore,
+                BlockBadSources = data.BlockBadSources,
+                CodecPreference = data.CodecPreference,
+                SizePreference = data.SizePreference
             };
 
         public static AcquisitionProfileDetailsV1 Read(AcquisitionProfileReadData row)
@@ -184,7 +187,8 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                 definition.MinimumFormatScore, definition.CutoffFormatScore, definition.MinimumUpgradeFormatScore, row.WantedCount, row.Version,
                 [.. (definition.Monitoring?.PrimaryTypes ?? []).Concat(definition.Monitoring?.SecondaryTypes ?? []).Concat(definition.Monitoring?.ReleaseStatuses ?? [])],
                 definition.Monitoring?.Languages ?? [], definition.Monitoring?.MinimumPages, definition.LanguageOrder, definition.LanguageFallback,
-                definition.GoodGroupScore, definition.BadGroupScore, row.RuleCount, row.OpenRequestCount);
+                definition.GoodGroupScore, definition.BadGroupScore, row.RuleCount, row.OpenRequestCount, definition.BlockBadSources, definition.CodecPreference,
+                definition.SizePreference);
         }
     }
 }

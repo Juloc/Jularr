@@ -1,9 +1,37 @@
-// A quality row's two round arrows; up is the down arrow turned over.
+// A quality row's two round arrows and its cross; up is the down arrow turned over.
 .profile-move {
     display: flex;
     gap: 6px;
 
     .button--icon:first-child .ui-icon { transform: rotate(180deg); }
+}
+
+// The allowed qualities, best first: one row each with its name, the stop of upgrades and its buttons.
+.profile-qualities {
+    grid-column: 1 / -1;
+    display: grid;
+}
+
+.profile-quality {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 0;
+    border-top: 1px solid var(--border);
+
+    &:first-child { border-top: 0; }
+
+    &__name { flex: 1; min-width: 0; }
+}
+
+// The choice that adds a quality, beside its button.
+.profile-add-quality {
+    grid-column: 1 / -1;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+
+    select { max-width: 240px; }
 }
 
 // The link to the rating of the release groups sits at the foot of its column.
@@ -13,7 +41,7 @@
     .button { justify-self: start; }
 }
 
-// Quality groups and the format scores, closed until asked for.
+// Everything for experts, closed until asked for.
 .profile-advanced {
     grid-column: 1 / -1;
     margin: 8px 0;

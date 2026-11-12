@@ -25,4 +25,20 @@ namespace Jularr.Backend.Data.Enums.Acquisition
         SeenCount = 3,
         Name = 4
     }
+
+    // A video profile's choice about x265: alike, liked (points) or avoided (points off).
+    public enum CodecPreference : byte
+    {
+        Any = 0,
+        PreferHevc = 1,
+        AvoidHevc = 2
+    }
+
+    // A video profile's choice between two releases of the same quality and points: alike, the smaller or the larger file.
+    public enum SizePreference : byte
+    {
+        Any = 0,
+        Smaller = 1,
+        Larger = 2
+    }
 }

@@ -34,6 +34,8 @@ namespace Jularr.Backend.Logic.Acquisition
                 .ThenBy(evaluation => evaluation.Decision switch { SelectionDecision.Eligible => 0, SelectionDecision.ManualReview => 1, _ => 2 })
                 .ThenBy(evaluation => evaluation.QualityRank)
                 .ThenByDescending(evaluation => evaluation.Score?.FormatScore ?? 0)
+                .ThenBy(evaluation => !profile.IsVideo || evaluation.Candidate.SizeBytes is not { } size ? 0L
+                    : profile.SizePreference switch { SizePreference.Smaller => size, SizePreference.Larger => -size, _ => 0L })
                 .ThenBy(evaluation => UpgradePolicy.LanguageRank(profile, evaluation.Candidate.Languages))
                 .ThenByDescending(evaluation => evaluation.Candidate.ContextScore)
                 .ThenBy(evaluation => evaluation.Candidate.Identity.Confidence)

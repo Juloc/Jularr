@@ -70,6 +70,12 @@ namespace Jularr.Backend.Data.Fields.Acquisition
         public static readonly IntField BadScore = new() { Minimum = -1000000, Maximum = 0 };
     }
 
+    public static class ReleaseTestFields
+    {
+        public static readonly StringField Title = new() { MaximumLength = 500, AllowBlank = false, Trim = true };
+        public static readonly StringField Quality = new() { MaximumLength = 128, Required = false };
+    }
+
     public static class AcquisitionTagFields
     {
         public static readonly LongField Id = new() { Minimum = 1 };

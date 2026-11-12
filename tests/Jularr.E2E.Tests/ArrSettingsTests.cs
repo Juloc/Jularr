@@ -87,12 +87,20 @@ namespace Jularr.E2E.Tests
                 await Assertions.Expect(page.Locator("main [role=alert]")).ToHaveCountAsync(0);
                 await Assertions.Expect(profile.Locator(".ui-form__row", new() { HasText = "Browser format" }).Locator("input[name$='.Score']")).ToHaveValueAsync("100");
 
-                // The round arrows move a quality; the first row cannot move up.
-                var qualities = profile.Locator(".ui-choice-table", new() { Has = page.Locator("[name=AllowedQualities]") }).Locator("tbody tr");
+                // The allowed qualities are a short list: the round arrows move one (the first cannot move up), the choice below adds one, the cross takes it out again.
+                var qualities = profile.Locator(".profile-quality");
                 await Assertions.Expect(qualities.First.GetByRole(AriaRole.Button, new() { Name = "Move up", Exact = true })).ToBeDisabledAsync();
-                var first = await qualities.First.Locator("th").InnerTextAsync();
+                var first = await qualities.First.Locator(".profile-quality__name").InnerTextAsync();
                 await qualities.First.GetByRole(AriaRole.Button, new() { Name = "Move down", Exact = true }).ClickAsync();
-                await Assertions.Expect(qualities.Nth(1).Locator("th")).ToHaveTextAsync(first);
+                await Assertions.Expect(qualities.Nth(1).Locator(".profile-quality__name")).ToHaveTextAsync(first);
+                var count = await qualities.CountAsync();
+                await profile.Locator("[name=addQuality]").SelectOptionAsync("Bluray-2160p");
+                await profile.GetByRole(AriaRole.Button, new() { Name = "Add quality", Exact = true }).ClickAsync();
+                await Assertions.Expect(qualities).ToHaveCountAsync(count + 1);
+                await Assertions.Expect(qualities.Last.Locator(".profile-quality__name")).ToHaveTextAsync("Bluray-2160p");
+                await qualities.Last.GetByRole(AriaRole.Button, new() { Name = "Remove", Exact = true }).ClickAsync();
+                await Assertions.Expect(qualities).ToHaveCountAsync(count);
+                await Assertions.Expect(profile.Locator("[name=CodecPreference]")).ToHaveCountAsync(3);
 
                 // The profile also applies to anime and becomes its default: the list names both, and the series profile no longer is Anime's default.
                 await profile.Locator("[name=MediaKinds][value=Anime]").CheckAsync(new() { Force = true });

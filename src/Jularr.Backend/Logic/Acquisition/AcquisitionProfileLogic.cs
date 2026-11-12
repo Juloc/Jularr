@@ -57,6 +57,7 @@ namespace Jularr.Backend.Logic.Acquisition
                 throw new DataValidationException(nameof(input.MinimumFormatScore), "out_of_range");
             if (input.GoodGroupScore is < 0 or > 1000000) throw new DataValidationException(nameof(input.GoodGroupScore), "out_of_range");
             if (input.BadGroupScore is < -1000000 or > 0) throw new DataValidationException(nameof(input.BadGroupScore), "out_of_range");
+            if (!Enum.IsDefined(input.CodecPreference) || !Enum.IsDefined(input.SizePreference)) throw new DataValidationException(nameof(input.CodecPreference), "out_of_range");
 
             // The languages of the choice are known two-letter codes, each once and in the given order.
             var languages = input.LanguageOrder.Select(LanguageCodes.ToTwoLetter).ToArray();
@@ -76,7 +77,10 @@ namespace Jularr.Backend.Logic.Acquisition
                 LanguageOrder = languageOrder,
                 LanguageFallback = input.LanguageFallback,
                 GoodGroupScore = input.GoodGroupScore,
-                BadGroupScore = input.BadGroupScore
+                BadGroupScore = input.BadGroupScore,
+                BlockBadSources = input.BlockBadSources,
+                CodecPreference = input.CodecPreference,
+                SizePreference = input.SizePreference
             };
             return JsonSerializer.Serialize(definition, AcquisitionSelectionLogic.DefinitionOptions);
         }

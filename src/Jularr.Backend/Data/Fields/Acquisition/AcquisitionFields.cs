@@ -115,6 +115,11 @@ namespace Jularr.Backend.Data.Fields.Acquisition
         public static readonly IntField MinimumSizeMb = new() { Minimum = 0, Maximum = 1_000_000, Required = false };
         public static readonly IntField MaximumSizeMb = new() { Minimum = 1, Maximum = 1_000_000, Required = false };
         public static readonly IntField WantedCount = new() { Minimum = 0 };
+
+        // The simple switches of a profile: bad sources never taken, x265 liked or avoided, the smaller or the larger file first.
+        public static readonly BoolField BlockBadSources = new();
+        public static readonly EnumField CodecPreference = new(typeof(CodecPreference));
+        public static readonly EnumField SizePreference = new(typeof(SizePreference));
         public static readonly LongField Version = new() { Minimum = 1 };
 
         // Taken-over monitoring: release types and statuses, book languages and least pages.
