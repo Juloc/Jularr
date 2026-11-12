@@ -110,7 +110,7 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
             if (Tab is DownloadPages.Groups or DownloadPages.Formats) page.Asset("Framework/Components/LiveSearch.entry.ts");
             if (Tab == DownloadPages.Groups) page.Asset("Framework/Components/ChoiceSelect.entry.ts");
 
-            // One row of tabs; the setup shows the profiles alone. The groups tab puts its search and filters beside the tabs.
+            // One row of tabs; the setup shows the profiles alone. The groups tab adds a row of its filters and search below.
             page.NoPageRow();
             if (!SetupWizard.IsActive(Request) && Tab != DownloadPages.Groups) page.Content.Add(new ListToolbar(AdminMenu.Row(texts, Request, null, Tab)));
             switch (Tab)

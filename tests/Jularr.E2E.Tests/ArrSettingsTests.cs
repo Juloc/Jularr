@@ -23,13 +23,13 @@ namespace Jularr.E2E.Tests
             {
                 await Owner.SetUpAndSignInAsync(page);
 
-                // One row of five tabs joins the quality rules, without a media-type bar, and no tab offers a waiting time; the groups add their rating filter to the row.
+                // One row of five tabs joins the quality rules, without a media-type bar, and no tab offers a waiting time; the groups add a row of their filters below.
                 foreach (var label in new[] { "Profiles", "Custom formats", "Release groups", "Release profiles", "Quality" })
                 {
                     await page.GotoAsync("/Admin/Acquisition/Profiles");
                     await page.Locator(".navigation-tabs").GetByRole(AriaRole.Link, new() { Name = label, Exact = true }).ClickAsync();
-                    await Assertions.Expect(page.Locator(".navigation-tabs")).ToHaveCountAsync(1);
-                    await Assertions.Expect(page.Locator(".navigation-tabs__link")).ToHaveCountAsync(label == "Release groups" ? 10 : 5);
+                    await Assertions.Expect(page.Locator(".navigation-tabs")).ToHaveCountAsync(label == "Release groups" ? 2 : 1);
+                    await Assertions.Expect(page.Locator(".navigation-tabs").First.Locator(".navigation-tabs__link")).ToHaveCountAsync(5);
                     await Assertions.Expect(page.Locator("main .capsule-bar")).ToHaveCountAsync(0);
                     await Assertions.Expect(page.Locator("main [role=alert]")).ToHaveCountAsync(0);
                     var text = (await page.Locator("main").InnerTextAsync()).ToLowerInvariant();
