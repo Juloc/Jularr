@@ -208,6 +208,7 @@ namespace Jularr.Backend.Service.Core
                         state.LastFinishedAt = row.LastFinishedAt;
                         state.LastResult = row.LastResultTypeId;
                         state.LastErrorKey = row.LastErrorKey;
+                        state.LastErrorDetail = row.LastErrorDetail;
                     }
                 }
 
@@ -264,8 +265,9 @@ namespace Jularr.Backend.Service.Core
         }
 
         // The pass is over. What has to be kept is returned; a quiet success is only kept once a minute.
-        public RecordWorkerJobDataV1? Finish(string key, WorkerJobResultType result, string? errorKey)
+        public RecordWorkerJobDataV1? Finish(string key, WorkerJobResultType result, string? errorKey, string? errorDetail = null)
         {
+            errorDetail = errorKey is null ? null : errorDetail;
             var definition = Definition(key);
             lock (_gate)
             {
@@ -275,14 +277,26 @@ namespace Jularr.Backend.Service.Core
                 state.LastFinishedAt = now;
                 state.LastResult = result;
                 state.LastErrorKey = errorKey;
+                state.LastErrorDetail = errorDetail;
                 state.NextRunAt = now + (Cadence(definition) ?? TimeSpan.Zero);
-                var isChange = state.PersistedResult != result || state.PersistedErrorKey != errorKey || state.PersistedAt is null || now - state.PersistedAt >= PersistEvery;
+                var isChange = state.PersistedResult != result || state.PersistedErrorKey != errorKey || state.PersistedErrorDetail != errorDetail || state.PersistedAt is null || now - state.PersistedAt >= PersistEvery;
                 if (!isChange) return null;
 
                 state.PersistedResult = result;
                 state.PersistedErrorKey = errorKey;
+                state.PersistedErrorDetail = errorDetail;
                 state.PersistedAt = now;
-                return new RecordWorkerJobDataV1(state.LastStartedAt, now, result, errorKey, Cadence(definition) is null ? null : state.NextRunAt);
+                return new RecordWorkerJobDataV1(state.LastStartedAt, now, result, errorKey, Cadence(definition) is null ? null : state.NextRunAt, errorDetail);
+            }
+        }
+
+        // How the job's last pass ended, before the one that runs now is finished: the error key of a failure, else null.
+        internal string? LastFailure(string key)
+        {
+            lock (_gate)
+            {
+                var state = _states[key];
+                return state.LastResult == WorkerJobResultType.Failed ? state.LastErrorKey : null;
             }
         }
 
@@ -397,6 +411,7 @@ namespace Jularr.Backend.Service.Core
                 var hasRun = state.LastFinishedAt is not null;
                 var result = hasRun ? state.LastResult : row?.LastResultTypeId;
                 var error = hasRun ? state.LastErrorKey : row?.LastErrorKey;
+                var detail = hasRun ? state.LastErrorDetail : row?.LastErrorDetail;
                 var stateType = state.IsRunning ? WorkerJobStateType.Running
                     : isPaused ? WorkerJobStateType.Paused
                     : state.IsWaitingForUse ? WorkerJobStateType.WaitingForUse
@@ -408,7 +423,7 @@ namespace Jularr.Backend.Service.Core
                         _ => WorkerJobStateType.Pending
                     };
                 return new WorkerJobStatus(stateType, isPaused, pausesWhileUsed, IntervalOf(definition), hasRun ? state.LastStartedAt : row?.LastStartedAt, hasRun ? state.LastFinishedAt : row?.LastFinishedAt, error,
-                    isPaused || Cadence(definition) is null ? null : state.NextRunAt);
+                    isPaused || Cadence(definition) is null ? null : state.NextRunAt, detail);
             }
         }
 
@@ -427,14 +442,17 @@ namespace Jularr.Backend.Service.Core
             public DateTime? LastFinishedAt { get; set; }
             public WorkerJobResultType? LastResult { get; set; }
             public string? LastErrorKey { get; set; }
+            public string? LastErrorDetail { get; set; }
             public DateTime NextRunAt { get; set; }
             public WorkerJobResultType? PersistedResult { get; set; }
             public string? PersistedErrorKey { get; set; }
+            public string? PersistedErrorDetail { get; set; }
             public DateTime? PersistedAt { get; set; }
         }
     }
 
-    internal sealed class WorkerJobStatus(WorkerJobStateType state, bool isPaused, bool pausesWhileUsed, TimeSpan? interval, DateTime? lastStartedAt, DateTime? lastFinishedAt, string? lastErrorKey, DateTime? nextRunAt)
+    internal sealed class WorkerJobStatus(WorkerJobStateType state, bool isPaused, bool pausesWhileUsed, TimeSpan? interval, DateTime? lastStartedAt, DateTime? lastFinishedAt, string? lastErrorKey, DateTime? nextRunAt,
+        string? lastErrorDetail = null)
     {
         public WorkerJobStateType State { get; } = state;
         public bool IsPaused { get; } = isPaused;
@@ -443,6 +461,7 @@ namespace Jularr.Backend.Service.Core
         public DateTime? LastStartedAt { get; } = lastStartedAt;
         public DateTime? LastFinishedAt { get; } = lastFinishedAt;
         public string? LastErrorKey { get; } = lastErrorKey;
+        public string? LastErrorDetail { get; } = lastErrorDetail;
         public DateTime? NextRunAt { get; } = nextRunAt;
     }
 }

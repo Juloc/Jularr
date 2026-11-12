@@ -14,15 +14,20 @@ using Jularr.Integrations.Logic.Storage;
 
 namespace Jularr.Backend.Service.System.Media.V1
 {
-    // Fetches the covers still named by a provider (titles that existed before covers were kept, a provider that was down) and the season and episode images; true while more are waiting.
+    // Fetches the covers still named by a provider (titles that existed before covers were kept, a provider that was down) and the season and episode images.
+    // A round walks a bounded window of the provider addresses from where the last round stopped and fetches up to twenty of them; true until the walk has
+    // been through all of them, so no statement grows with the addresses that failed today and the pass still sees every one.
     public sealed class StoreCoversV1 : SystemService<CoverParametersV1, NoData>
     {
         private const int PassSize = 20;
+        internal const int Window = 1000;
         private readonly CoverStore _covers;
+        private readonly CoverSweep _sweep;
 
-        internal StoreCoversV1(CoverStore covers)
+        internal StoreCoversV1(CoverStore covers, CoverSweep sweep)
         {
             _covers = covers;
+            _sweep = sweep;
         }
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
@@ -37,14 +42,54 @@ namespace Jularr.Backend.Service.System.Media.V1
                 return new UpdateResult(false);
             }
 
-            var targets = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadPendingCoversAsync(new WorkCoverQueryData(null, PassSize), ct), CancellationToken);
-            if (targets.Count == 0)
+            var targets = new List<WorkCoverTargetData>();
+            var (isUnits, after) = _sweep.Position;
+            var scanned = 0;
+            var isThrough = false;
+            while (targets.Count < PassSize && scanned < Window)
             {
-                return new UpdateResult(false);
+                var window = new WorkCoverWindowData(after, Window - scanned);
+                var units = isUnits;
+                var candidates = await Context.ExecuteBatchAsync((ctx, ct) => units ? ctx.ReadCoverUnitWindowAsync(window, ct) : ctx.ReadCoverFactWindowAsync(window, ct), CancellationToken);
+                var taken = 0;
+                foreach (var candidate in candidates)
+                {
+                    taken++;
+                    after = candidate.CandidateId;
+                    if (candidate.PendingUrl is { } url)
+                    {
+                        targets.Add(new WorkCoverTargetData(candidate.WorkId, candidate.CoverKindId, candidate.WorkUnitId, url));
+                        if (targets.Count == PassSize) break;
+                    }
+                }
+
+                scanned += taken;
+                if (taken < candidates.Count || candidates.Count == window.Window)
+                {
+                    continue;
+                }
+
+                // This kind is walked through: the images of the units follow, after them the walk is done and begins again with the next pass.
+                after = 0;
+                if (!isUnits)
+                {
+                    isUnits = true;
+                    continue;
+                }
+
+                isUnits = false;
+                isThrough = true;
+                break;
             }
 
-            await _covers.StoreAsync(Context, targets, CancellationToken);
-            return new UpdateResult(targets.Count == PassSize);
+            // Kept before the fetches, so a round that fails goes on after its window and the address is tried again on the next walk.
+            _sweep.Position = (isUnits, after);
+            if (targets.Count > 0)
+            {
+                await _covers.StoreAsync(Context, targets, CancellationToken);
+            }
+
+            return new UpdateResult(!isThrough);
         }
     }
 

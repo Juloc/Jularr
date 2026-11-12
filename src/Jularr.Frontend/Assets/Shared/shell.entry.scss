@@ -110,6 +110,7 @@ body[data-page-wait]::before {
 .page-skeleton--covers { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
 .page-skeleton--covers .page-skeleton__item { aspect-ratio: 2 / 3; border-radius: var(--radius-tile); }
 .deferred-section { display: grid; align-content: start; gap: 10px; }
+@for $step from 1 through 20 { .deferred-section--h#{$step * 40} { min-height: #{$step * 40}px; } }
 .deferred-section__skeleton { height: 100%; min-height: inherit; }
 .deferred-section__failed { margin: 0; color: var(--muted); }
 @keyframes page-wait { from { transform: scaleX(0); } 70% { transform: scaleX(.85); } to { transform: scaleX(.95); opacity: .4; } }

@@ -32,8 +32,9 @@ namespace Jularr.Backend.Data.Admin.System.V1
     // One message. The origin is the kind of event, the job or the application's area; the message of a job is its error key.
     public sealed class LogEntryV1 : BaseResponse
     {
-        public LogEntryV1(DateTime at, LogLevelType level, LogSourceType source, string origin, string message)
+        public LogEntryV1(DateTime at, LogLevelType level, LogSourceType source, string origin, string message, string? detail = null)
         {
+            Detail = detail;
             At = at;
             Level = level;
             Source = source;
@@ -55,5 +56,9 @@ namespace Jularr.Backend.Data.Admin.System.V1
 
         [DataField(typeof(LogFields), nameof(LogFields.Message))]
         public string Message { get; }
+
+        // A failed job's cause behind its error key: exception type and message, without secrets.
+        [DataField(typeof(LogFields), nameof(LogFields.Detail))]
+        public string? Detail { get; }
     }
 }

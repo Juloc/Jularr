@@ -134,6 +134,8 @@ namespace Jularr.Backend.Service.Core
             using var shutdown = new ShutdownGraceSource(Stopping, ct, time);
             var result = WorkerJobResultType.Succeeded;
             string? errorKey = null;
+            string? errorDetail = null;
+            var previousFailure = jobs.LastFailure(key);
             try
             {
                 if (!await pass(shutdown.Token))
@@ -156,10 +158,20 @@ namespace Jularr.Backend.Service.Core
             {
                 errorKey = ServiceError.FromException(exception).Code;
 
-                // A service that is not available is a known state, not a fault worth a stack trace.
+                // The key says what kind of failure it is; the detail keeps its cause for the Jobs and Logs pages. A known state with nothing behind it needs none.
+                errorDetail = exception is ServiceUnavailableException { InnerException: null } ? null : ErrorDetail.Of(exception);
+
+                // A service that is not available is a known state, not a fault worth a stack trace; the same state again is not news.
                 if (exception is ServiceUnavailableException)
                 {
-                    logger.LogWarning("{Job} failed: {Error}.", key, errorKey);
+                    if (previousFailure == errorKey)
+                    {
+                        logger.LogDebug("{Job} failed again: {Error}.", key, errorKey);
+                    }
+                    else
+                    {
+                        logger.LogWarning("{Job} failed: {Error}.", key, errorKey);
+                    }
                 }
                 else
                 {
@@ -169,7 +181,7 @@ namespace Jularr.Backend.Service.Core
                 result = WorkerJobResultType.Failed;
             }
 
-            await ReportAsync(key, jobs.Finish(key, result, errorKey), shutdown.Token);
+            await ReportAsync(key, jobs.Finish(key, result, errorKey, errorDetail), shutdown.Token);
             return result;
         }
 

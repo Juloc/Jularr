@@ -4243,7 +4243,7 @@ namespace Jularr.Frontend.Localization
             new("logs.search", "Filter messages"),
             new("logs.empty", "No messages for this filter."),
             new("jobs.job.health", "Health check"),
-            new("jobs.about.health", "Asks every configured service whether it answers. A service that does not makes the pass fail, and Activity tells you."),
+            new("jobs.about.health", "Asks every configured service whether it answers. When the database, a storage or a download client does not, the pass fails and Activity tells you; the Dashboard shows the others."),
             new("jobs.job.translationMachines", "Translation machine check"),
             new("jobs.about.translationMachines", "Asks every translation machine and Codex every 30 seconds how they are, so the translation page and the Reader show their state without asking them."),
             new("jobs.worker.Health", "Health"),

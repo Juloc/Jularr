@@ -44,6 +44,50 @@ namespace Jularr.Backend.Data.Logic.Media
         public string SourceUrl { get; }
     }
 
+    // A window of the provider addresses the cover job walks: the next ones after the last it looked at.
+    internal sealed class WorkCoverWindowData : BaseData
+    {
+        public WorkCoverWindowData(long after, int window)
+        {
+            After = after;
+            Window = window;
+        }
+
+        [DataField(typeof(WorkCoverFields), nameof(WorkCoverFields.After))]
+        public long After { get; }
+
+        [DataField(typeof(WorkCoverFields), nameof(WorkCoverFields.Window))]
+        public int Window { get; }
+    }
+
+    // One provider address of the window; its source address only while it is still to fetch (not stored, not failed within a day).
+    internal sealed class WorkCoverCandidateData : BaseData
+    {
+        public WorkCoverCandidateData(long candidateId, long workId, CoverKind coverKindId, long? workUnitId, string? pendingUrl)
+        {
+            CandidateId = candidateId;
+            WorkId = workId;
+            CoverKindId = coverKindId;
+            WorkUnitId = workUnitId;
+            PendingUrl = pendingUrl;
+        }
+
+        [DataField(typeof(WorkCoverFields), nameof(WorkCoverFields.CandidateId))]
+        public long CandidateId { get; }
+
+        [DataField(typeof(WorkCoverFields), nameof(WorkCoverFields.WorkId))]
+        public long WorkId { get; }
+
+        [DataField(typeof(WorkCoverFields), nameof(WorkCoverFields.CoverKindId))]
+        public CoverKind CoverKindId { get; }
+
+        [DataField(typeof(WorkCoverFields), nameof(WorkCoverFields.WorkUnitId))]
+        public long? WorkUnitId { get; }
+
+        [DataField(typeof(WorkCoverFields), nameof(WorkCoverFields.PendingUrl))]
+        public string? PendingUrl { get; }
+    }
+
     // A fetched image kept on disk.
     internal sealed class WorkCoverStoredData : BaseData
     {

@@ -41,7 +41,7 @@ namespace Jularr.Backend.Service.System.Worker.V1
         protected override async Task<IServiceOutput> OnUpdate()
         {
             _ = WorkerJobs.Definition(Parameters.Key);
-            await Context.SaveWorkerJobRunAsync(new WorkerJobRunData(Parameters.Key, Data.StartedAt, Data.FinishedAt, Data.ResultTypeId, Data.ErrorKey, Data.NextRunAt), CancellationToken);
+            await Context.SaveWorkerJobRunAsync(new WorkerJobRunData(Parameters.Key, Data.StartedAt, Data.FinishedAt, Data.ResultTypeId, Data.ErrorKey, Data.NextRunAt, Data.ErrorDetail), CancellationToken);
             return new UpdateResult(true);
         }
     }

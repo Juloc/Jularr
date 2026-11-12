@@ -13,6 +13,142 @@ namespace Jularr.Backend.Service.Admin.Media.V1
     [ServiceEndpoint("GET", "/api/v1/admin/works")]
     public sealed class ReadWorksV1 : AdminService<ReadWorksParametersV1>
     {
+        // Every library title (catalog titles are not listed) with what the list shows of it, as the view WorkListEntries gives it, but worked out once per table
+        // instead of once per title: its first target, its present files, whether one of its releases is on its way and whether a monitored aired unit still lacks a file.
+        // A title is monitored while one of its targets is not paused; it is filed when it has a file and no monitored aired unit still lacks one.
+        internal const string ListedWorks =
+            """
+                managed AS MATERIALIZED (
+                    SELECT DISTINCT
+                        tie."WorkId"
+                    FROM
+                        "WorkManagedRelations" AS tie
+                ), targets AS MATERIALIZED (
+                    SELECT
+                        wanted."WorkId",
+                        (array_agg(wanted."Id" ORDER BY wanted."Id"))[1] AS "Id",
+                        (array_agg(wanted."AcquisitionProfileId" ORDER BY wanted."Id"))[1] AS "AcquisitionProfileId",
+                        (array_agg(wanted."LibraryRootId" ORDER BY wanted."Id"))[1] AS "LibraryRootId",
+                        count(*)::integer AS "Targets",
+                        bool_or(NOT wanted."IsPaused") AS "IsMonitored"
+                    FROM
+                        "WantedItems" AS wanted
+                    GROUP BY
+                        wanted."WorkId"
+                ), files AS MATERIALIZED (
+                    SELECT
+                        asset."WorkId",
+                        count(*)::integer AS "FileCount",
+                        sum(file."SizeBytes")::bigint AS "SizeBytes",
+                        (array_agg(file."LibraryRootId" ORDER BY file."Id"))[1] AS "LibraryRootId"
+                    FROM
+                        "MediaAssets" AS asset
+                        JOIN "StoredFiles" AS file ON file."MediaAssetId" = asset."Id" AND file."MissingSince" IS NULL AND NOT file."IsSubtitle"
+                    GROUP BY
+                        asset."WorkId"
+                ), downloading AS MATERIALIZED (
+                    SELECT DISTINCT
+                        wanted."WorkId"
+                    FROM
+                        "WantedItems" AS wanted
+                        JOIN "AcquisitionReleases" AS release ON release."WantedItemId" = wanted."Id"
+                        JOIN "Operations" AS operation ON operation."AcquisitionReleaseId" = release."Id"
+                    WHERE
+                        operation."OperationStatusTypeId" IN (1, 2)
+                ), lacking AS MATERIALIZED (
+                    -- Only a title with files can be filed, so only those are looked at.
+                    SELECT DISTINCT
+                        unit."WorkId"
+                    FROM
+                        files
+                        JOIN "Works" AS work ON work."Id" = files."WorkId"
+                        JOIN "WorkUnits" AS unit ON unit."WorkId" = files."WorkId"
+                    WHERE
+                        unit."IsMonitored" AND (unit."WorkUnitTypeId" = 2 OR unit."WorkUnitTypeId" = 3 AND work."MediaSubtypeId" = 2)
+                        AND (unit."ReleasedOn" <= current_date OR unit."WorkUnitTypeId" = 3 AND unit."ReleasedOn" IS NULL)
+                        AND unit."Id" NOT IN (
+                            -- The units a present file covers, once as a set rather than probed unit by unit.
+                            SELECT
+                                asset."WorkUnitId"
+                            FROM
+                                "MediaAssets" AS asset
+                                JOIN "StoredFiles" AS present ON present."MediaAssetId" = asset."Id" AND present."MissingSince" IS NULL
+                            WHERE
+                                asset."WorkUnitId" IS NOT NULL
+                        )
+                ), listed AS MATERIALIZED (
+                    SELECT
+                        work."Id",
+                        work."MediaTypeId",
+                        work."MediaSubtypeId",
+                        work."CanonicalTitle",
+                        work."ReleaseYear"::integer AS "ReleaseYear",
+                        work."CreatedAt",
+                        target."Id" AS "WantedItemId",
+                        coalesce(target."Targets", 0) AS "TargetCount",
+                        coalesce(target."IsMonitored", FALSE) AS "IsMonitored",
+                        target."AcquisitionProfileId",
+                        target."LibraryRootId",
+                        profile."Name" AS "ProfileName",
+                        coalesce(targetRoot."Name", fileRoot."Name") AS "LibraryName",
+                        coalesce(files."FileCount", 0) AS "FileCount",
+                        coalesce(files."SizeBytes", 0) AS "SizeBytes",
+                        CASE
+                            WHEN downloading."WorkId" IS NOT NULL THEN 3
+                            WHEN files."FileCount" > 0 AND lacking."WorkId" IS NULL THEN 1
+                            WHEN coalesce(target."IsMonitored", FALSE) THEN 2
+                            ELSE 4
+                        END::smallint AS "WorkListStatusId"
+                    FROM
+                        managed
+                        JOIN "Works" AS work ON work."Id" = managed."WorkId"
+                        LEFT JOIN targets AS target ON target."WorkId" = work."Id"
+                        LEFT JOIN "AcquisitionProfiles" AS profile ON profile."Id" = target."AcquisitionProfileId"
+                        LEFT JOIN "LibraryRoots" AS targetRoot ON targetRoot."Id" = target."LibraryRootId"
+                        LEFT JOIN files ON files."WorkId" = work."Id"
+                        LEFT JOIN "LibraryRoots" AS fileRoot ON fileRoot."Id" = files."LibraryRootId"
+                        LEFT JOIN downloading ON downloading."WorkId" = work."Id"
+                        LEFT JOIN lacking ON lacking."WorkId" = work."Id"
+            """;
+
+        // The same titles with only what ordering and the other filters read; the page's rows then read their facts from the view, title by title.
+        internal const string LeanListedWorks =
+            """
+                managed AS MATERIALIZED (
+                    SELECT DISTINCT
+                        tie."WorkId"
+                    FROM
+                        "WorkManagedRelations" AS tie
+                ), targets AS MATERIALIZED (
+                    SELECT
+                        wanted."WorkId",
+                        (array_agg(wanted."AcquisitionProfileId" ORDER BY wanted."Id"))[1] AS "AcquisitionProfileId",
+                        (array_agg(wanted."LibraryRootId" ORDER BY wanted."Id"))[1] AS "LibraryRootId",
+                        bool_or(NOT wanted."IsPaused") AS "IsMonitored"
+                    FROM
+                        "WantedItems" AS wanted
+                    GROUP BY
+                        wanted."WorkId"
+                ), listed AS MATERIALIZED (
+                    SELECT
+                        work."Id",
+                        work."MediaTypeId",
+                        work."MediaSubtypeId",
+                        work."CanonicalTitle",
+                        work."ReleaseYear"::integer AS "ReleaseYear",
+                        work."CreatedAt",
+                        coalesce(target."IsMonitored", FALSE) AS "IsMonitored",
+                        target."AcquisitionProfileId",
+                        target."LibraryRootId",
+                        0 AS "FileCount",
+                        0::bigint AS "SizeBytes",
+                        NULL::smallint AS "WorkListStatusId"
+                    FROM
+                        managed
+                        JOIN "Works" AS work ON work."Id" = managed."WorkId"
+                        LEFT JOIN targets AS target ON target."WorkId" = work."Id"
+            """;
+
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<PageResult<WorkListItemV1>>()];
         protected override ModuleRequirement GetInstanceModules(ReadWorksParametersV1 parameters) => ModuleRequirement.All("Library");
         protected override ServicePermission GetPermission(ReadWorksParametersV1 parameters, Type resultType) => new("media.read");
@@ -20,18 +156,12 @@ namespace Jularr.Backend.Service.Admin.Media.V1
 
         protected override async Task<IServiceOutput> OnRead()
         {
-            // One bounded read: only titles with a tie to the library (catalog titles are not listed), filtered and ordered first, only the page gets its cover. A title is monitored while one of its targets is not paused;
-            // it is filed when it has a file and no monitored aired unit still lacks one, and downloading while one of its releases is on its way.
-            // The library's titles come first, then their order: it reads only what its filters and sort need (a parameter folds the rest away), and only the page
-            // reads the other facts of the list.
+            // One bounded read: the library's titles are filtered and ordered first, and only the page reads its cover and description.
+            // Only a status filter or an order by size or files needs every title's files and state.
+            var full = Parameters.WorkListStatusId is not null || Parameters.WorkSortTypeId is WorkSortType.Size or WorkSortType.Files;
             var sql = new SqlStatement { DisableJit = true };
-            sql.Statement =
+            sql.Statement = "WITH " + (full ? ListedWorks : LeanListedWorks) +
                 """
-                WITH managed AS MATERIALIZED (
-                    SELECT DISTINCT
-                        tie."WorkId"
-                    FROM
-                        "WorkManagedRelations" AS tie
                 ), ordered AS (
                     SELECT
                         listed."Id",
@@ -53,8 +183,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                                 listed."Id"
                         ) AS "Position"
                     FROM
-                        managed
-                        JOIN "WorkListEntries" AS listed ON listed."Id" = managed."WorkId"
+                        listed
                     WHERE
                         (cardinality(@MediaTypeIds::smallint[]) + cardinality(@MediaSubtypeIds::smallint[]) = 0
                             OR listed."MediaSubtypeId" IS NULL AND listed."MediaTypeId" = ANY(@MediaTypeIds::smallint[])
@@ -91,7 +220,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                     listed."WorkListStatusId"
                 FROM
                     ordered
-                    JOIN "WorkListEntries" AS listed ON listed."Id" = ordered."Id"
+                    JOIN PAGE_SOURCE AS listed ON listed."Id" = ordered."Id"
                     LEFT JOIN LATERAL (
                         SELECT
                             (array_agg(fact."Value" ORDER BY fact."IsManual" DESC) FILTER (WHERE fact."FactKey" = 'Poster'))[1] AS "PosterUrl",
@@ -107,7 +236,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                     AND ordered."Position" <= @Offset + @PageSize
                 ORDER BY
                     ordered."Position";
-                """;
+                """.Replace("PAGE_SOURCE", full ? "listed" : "\"WorkListEntries\"", StringComparison.Ordinal);
             sql.Parameters.Add(new AdminWorkListFilterData(Parameters.MediaTypeIds, Parameters.MediaSubtypeIds, Parameters.IsMonitored, Parameters.WorkListStatusId, Parameters.LibraryRootId, Parameters.AcquisitionProfileId, Parameters.Query,
                 Parameters.WorkSortTypeId, Parameters.IsDescending));
             sql.Page = Page;
@@ -127,22 +256,16 @@ namespace Jularr.Backend.Service.Admin.Media.V1
         {
             // Each title's state is worked out once (the materialized set), not again for every count that reads it.
             var sql = new SqlStatement { DisableJit = true };
-            sql.Statement =
+            sql.Statement = "WITH " + ReadWorksV1.ListedWorks +
                 """
-                WITH managed AS MATERIALIZED (
-                    SELECT DISTINCT
-                        tie."WorkId"
-                    FROM
-                        "WorkManagedRelations" AS tie
-                ), listed AS MATERIALIZED (
+                ), filtered AS (
                     SELECT
                         listed."WorkListStatusId",
                         listed."IsMonitored",
                         listed."FileCount",
                         listed."SizeBytes"
                     FROM
-                        managed
-                        JOIN "WorkListEntries" AS listed ON listed."Id" = managed."WorkId"
+                        listed
                     WHERE
                         (cardinality(@MediaTypeIds::smallint[]) + cardinality(@MediaSubtypeIds::smallint[]) = 0
                             OR listed."MediaSubtypeId" IS NULL AND listed."MediaTypeId" = ANY(@MediaTypeIds::smallint[])
@@ -160,15 +283,15 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                 )
                 SELECT
                     count(*)::integer AS "TotalCount",
-                    count(*) FILTER (WHERE listed."WorkListStatusId" = 1)::integer AS "AvailableCount",
-                    count(*) FILTER (WHERE listed."WorkListStatusId" = 2)::integer AS "MissingCount",
-                    count(*) FILTER (WHERE listed."WorkListStatusId" = 3)::integer AS "DownloadingCount",
-                    count(*) FILTER (WHERE listed."WorkListStatusId" = 4)::integer AS "UnmonitoredCount",
-                    count(*) FILTER (WHERE listed."IsMonitored")::integer AS "MonitoredCount",
-                    coalesce(sum(listed."FileCount"), 0)::integer AS "FileCount",
-                    coalesce(sum(listed."SizeBytes"), 0)::bigint AS "SizeBytes"
+                    count(*) FILTER (WHERE filtered."WorkListStatusId" = 1)::integer AS "AvailableCount",
+                    count(*) FILTER (WHERE filtered."WorkListStatusId" = 2)::integer AS "MissingCount",
+                    count(*) FILTER (WHERE filtered."WorkListStatusId" = 3)::integer AS "DownloadingCount",
+                    count(*) FILTER (WHERE filtered."WorkListStatusId" = 4)::integer AS "UnmonitoredCount",
+                    count(*) FILTER (WHERE filtered."IsMonitored")::integer AS "MonitoredCount",
+                    coalesce(sum(filtered."FileCount"), 0)::integer AS "FileCount",
+                    coalesce(sum(filtered."SizeBytes"), 0)::bigint AS "SizeBytes"
                 FROM
-                    listed;
+                    filtered;
                 """;
             sql.Parameters.Add(new AdminWorkListFilterData(Parameters.MediaTypeIds, Parameters.MediaSubtypeIds, null, null, Parameters.LibraryRootId, Parameters.AcquisitionProfileId, Parameters.Query, WorkSortType.Title, false));
             return await Context.ReadSql.ReadRequiredAsync<WorksSummaryV1>(sql, CancellationToken);

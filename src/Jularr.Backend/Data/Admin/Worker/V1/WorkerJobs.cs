@@ -45,8 +45,10 @@ namespace Jularr.Backend.Data.Admin.Worker.V1
     public sealed class WorkerJobV1 : BaseResponse
     {
         public WorkerJobV1(string key, WorkerGroupType workerGroupTypeId, WorkerJobStateType workerJobStateTypeId, int? intervalSeconds, bool isPaused, bool pausesWhileUsed, bool canPauseWhileUsed,
-            bool canRunNow, DateTime? lastStartedAt, DateTime? lastFinishedAt, DateTime? nextRunAt, string? lastErrorKey, string? parentKey)
+            bool canRunNow, DateTime? lastStartedAt, DateTime? lastFinishedAt, DateTime? nextRunAt, string? lastErrorKey, string? parentKey,
+            string? lastErrorDetail = null)
         {
+            LastErrorDetail = lastErrorDetail;
             ParentKey = parentKey;
             Key = key;
             WorkerGroupTypeId = workerGroupTypeId;
@@ -102,5 +104,9 @@ namespace Jularr.Backend.Data.Admin.Worker.V1
 
         [DataField(typeof(WorkerJobFields), nameof(WorkerJobFields.LastErrorKey))]
         public string? LastErrorKey { get; }
+
+        // The cause behind the key: exception type and message, without secrets.
+        [DataField(typeof(WorkerJobFields), nameof(WorkerJobFields.ErrorDetail))]
+        public string? LastErrorDetail { get; }
     }
 }

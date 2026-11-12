@@ -86,6 +86,7 @@ namespace Jularr.Frontend.Pages.User.Library
             page.Asset("Framework/Components/LayoutToggle.entry.ts");
             page.Asset("Framework/Components/InfiniteList.entry.ts");
             page.Asset("Framework/Components/LiveSearch.entry.ts");
+            page.Asset("Framework/Components/Deferred.entry.ts");
 
             // The media-type bar with the filter at its end, then search, order and layout, then the titles.
             var narrowed = new List<IUiComponent> { new Icon("filter", assets) };
@@ -143,21 +144,34 @@ namespace Jularr.Frontend.Pages.User.Library
                 return;
             }
 
+            // One bounded page of what the narrowed list holds; the filter panel's genres and languages read the whole library and load right after the page.
+            _items = await read.ExecuteAsync<PageResult<LibraryItemV1>>(await ParametersAsync(), HttpContext.RequestAborted);
+        }
+
+        // Only the genre and language choices of the filter panel, for its deferred part.
+        public async Task<IActionResult> OnGetFilterOptionsAsync()
+        {
+            if (!texts.CanReadMedia()) return NotFound();
+            _options = await readOptions.ExecuteAsync<LibraryFilterOptionsV1>(await ParametersAsync(), HttpContext.RequestAborted);
+            using var writer = new StringWriter(CultureInfo.InvariantCulture);
+            foreach (var group in OptionGroups()) group.WriteTo(writer, global::System.Text.Encodings.Web.HtmlEncoder.Default, texts);
+            Response.Headers.CacheControl = "no-store";
+            return Content(writer.ToString(), "text/html");
+        }
+
+        // The profile's categories, then the narrowed list's parameters.
+        private async Task<ReadLibraryParametersV1> ParametersAsync()
+        {
             var token = HttpContext.RequestAborted;
             var profileId = (await authentication.ExecuteAsync<AuthenticationResultV1>(cancellationToken: token)).ProfileId
                 ?? throw new UnauthorizedAccessException("An active profile is required.");
             _media = await readMedia.ExecuteAsync<BaseDataList<ProfileMediaV1>>(new ReadProfileParametersV1(profileId), token);
             _scopes = null;
-
-            // One bounded page of what the narrowed list holds.
             var (types, subtypes) = Scopes.Filter();
             var (yearFrom, yearTo) = YearChoice.Range(Year);
             var state = Current;
-            var parameters = new ReadLibraryParametersV1(types, state.Query, Sort, state.Page, 48, subtypes, yearFrom, yearTo,
+            return new ReadLibraryParametersV1(types, state.Query, Sort, state.Page, 48, subtypes, yearFrom, yearTo,
                 state.Availability, state.Progress, state.Genres, state.Audio, state.Subtitles, state.Rating);
-            _items = await read.ExecuteAsync<PageResult<LibraryItemV1>>(parameters, token);
-            // Appended pages only consume the grid and its next link.
-            if (Request.Headers["X-Jularr-Infinite"] != "1") _options = await readOptions.ExecuteAsync<LibraryFilterOptionsV1>(parameters, token);
         }
 
         private int FilterCount => (ValidYear is null ? 0 : 1) + (Available.SequenceEqual([LibraryAvailabilityType.Available]) ? 0 : 1)
@@ -178,9 +192,6 @@ namespace Jularr.Frontend.Pages.User.Library
         private IReadOnlyList<IUiComponent> FilterGroups()
         {
             var state = Current;
-            ChoiceGroup Languages(string key, string name, string[] options, string[] selected) => new(assets, key, name,
-                [.. options.Concat(selected).Distinct().OrderBy(LanguageLabel.Name).Select(code => new ChoicePick(code, selected.Contains(code), Label: LanguageLabel.Name(code)))],
-                new ChoiceOptions(Multiple: true, Layout: ChoiceLayout.Checks));
             return [
                 new ChoiceGroup(assets, "library.filter.availability", "availability",
                     [.. Enum.GetValues<LibraryAvailabilityType>().Select(value => new ChoicePick(value.ToString(), state.Availability.Contains(value), "library.availability." + value))], new ChoiceOptions(Multiple: true)),
@@ -189,16 +200,28 @@ namespace Jularr.Frontend.Pages.User.Library
                     new("NotStarted", state.Progress == ProgressStateType.NotStarted, "favorites.status.notStarted"),
                     new("InProgress", state.Progress == ProgressStateType.InProgress, "favorites.status.inProgress"),
                     new("Finished", state.Progress == ProgressStateType.Finished, "favorites.status.finished")]),
-                new ChoiceGroup(assets, "library.filter.genres", "genre",
-                    [.. _options.Genres.Concat(state.Genres).Distinct().Order().Select(value => new ChoicePick(value, state.Genres.Contains(value), Label: texts.Genre(value)))], new ChoiceOptions(Multiple: true, Layout: ChoiceLayout.Checks)),
-                Languages("library.filter.audio", "audio", _options.AudioLanguages, state.Audio),
-                Languages("library.filter.subtitles", "subtitle", _options.SubtitleLanguages, state.Subtitles),
+                new DeferredSection(Address(state with { Page = 1 }, "FilterOptions"), 360),
                 new ChoiceGroup(assets, "library.filter.rating", "rating",
                     [new("", state.Rating is null, "discover.all"), .. Enumerable.Range(1, 10).Select(value => new ChoicePick(value.ToString(CultureInfo.InvariantCulture), state.Rating == value))])
             ];
         }
 
-        private string Address(State state)
+        // The genres and languages the narrowed library holds, with what is chosen even when the library no longer holds it.
+        private IReadOnlyList<IUiComponent> OptionGroups()
+        {
+            var state = Current;
+            ChoiceGroup Languages(string key, string name, string[] options, string[] selected) => new(assets, key, name,
+                [.. options.Concat(selected).Distinct().OrderBy(LanguageLabel.Name).Select(code => new ChoicePick(code, selected.Contains(code), Label: LanguageLabel.Name(code)))],
+                new ChoiceOptions(Multiple: true, Layout: ChoiceLayout.Checks));
+            return [
+                new ChoiceGroup(assets, "library.filter.genres", "genre",
+                    [.. _options.Genres.Concat(state.Genres).Distinct().Order().Select(value => new ChoicePick(value, state.Genres.Contains(value), Label: texts.Genre(value)))], new ChoiceOptions(Multiple: true, Layout: ChoiceLayout.Checks)),
+                Languages("library.filter.audio", "audio", _options.AudioLanguages, state.Audio),
+                Languages("library.filter.subtitles", "subtitle", _options.SubtitleLanguages, state.Subtitles)
+            ];
+        }
+
+        private string Address(State state, string? handler = null)
         {
             var values = FilterValues(state).Select(pair => pair.Key + "=" + Uri.EscapeDataString(pair.Value)).ToList();
             if (Scopes.Parameter(state.Types) is { } types) values.Add("type=" + Uri.EscapeDataString(types).Replace("%2C", ","));
@@ -206,6 +229,7 @@ namespace Jularr.Frontend.Pages.User.Library
             if (state.Year is not null) values.Add("year=" + state.Year);
             if (state.Query is not null) values.Add("q=" + Uri.EscapeDataString(state.Query));
             if (state.Page > 1) values.Add("p=" + state.Page.ToString(CultureInfo.InvariantCulture));
+            if (handler is not null) values.Insert(0, "handler=" + handler);
             return values.Count == 0 ? "/Library" : "/Library?" + string.Join('&', values);
         }
     }

@@ -108,6 +108,9 @@ namespace Jularr.Backend.Service.Core
             // A statement past its limit, a lock not granted in time or no free connection in the lane's pool.
             PostgresException { SqlState: PostgresErrorCodes.QueryCanceled or PostgresErrorCodes.LockNotAvailable } => new(StatusCodes.Status503ServiceUnavailable, "database_busy"),
             NpgsqlException { InnerException: TimeoutException } => new(StatusCodes.Status503ServiceUnavailable, "database_busy"),
+
+            // A statement cancelled by its batch's own limit (not the caller) reads as busy too.
+            OperationCanceledException { InnerException: PostgresException { SqlState: PostgresErrorCodes.QueryCanceled } } => new(StatusCodes.Status503ServiceUnavailable, "database_busy"),
             IOException => new(StatusCodes.Status503ServiceUnavailable, "storage_unavailable"),
             ServiceUnavailableException unavailable => new(StatusCodes.Status503ServiceUnavailable, unavailable.Code),
             ServiceGoneException gone => new(StatusCodes.Status410Gone, gone.Code),

@@ -9,8 +9,9 @@ namespace Jularr.Backend.Data.Logic.Worker
     internal sealed class WorkerJobRowData : BaseData
     {
         public WorkerJobRowData(string key, bool isPaused, bool? pausesWhileUsedChoice, DateTime? lastStartedAt, DateTime? lastFinishedAt, WorkerJobResultType? lastResultTypeId, string? lastErrorKey,
-            DateTime? nextRunAt)
+            DateTime? nextRunAt, string? lastErrorDetail = null)
         {
+            LastErrorDetail = lastErrorDetail;
             Key = key;
             IsPaused = isPaused;
             PausesWhileUsedChoice = pausesWhileUsedChoice;
@@ -42,6 +43,9 @@ namespace Jularr.Backend.Data.Logic.Worker
         [DataField(typeof(WorkerJobFields), nameof(WorkerJobFields.LastErrorKey))]
         public string? LastErrorKey { get; }
 
+        [DataField(typeof(WorkerJobFields), nameof(WorkerJobFields.ErrorDetail))]
+        public string? LastErrorDetail { get; }
+
         [DataField(typeof(WorkerJobFields), nameof(WorkerJobFields.NextRunAt))]
         public DateTime? NextRunAt { get; }
     }
@@ -49,8 +53,9 @@ namespace Jularr.Backend.Data.Logic.Worker
     // One finished pass of a job.
     internal sealed class WorkerJobRunData : BaseData
     {
-        public WorkerJobRunData(string key, DateTime? startedAt, DateTime finishedAt, WorkerJobResultType resultTypeId, string? errorKey, DateTime? nextRunAt)
+        public WorkerJobRunData(string key, DateTime? startedAt, DateTime finishedAt, WorkerJobResultType resultTypeId, string? errorKey, DateTime? nextRunAt, string? errorDetail = null)
         {
+            ErrorDetail = errorDetail;
             Key = key;
             StartedAt = startedAt;
             FinishedAt = finishedAt;
@@ -73,6 +78,10 @@ namespace Jularr.Backend.Data.Logic.Worker
 
         [DataField(typeof(WorkerJobFields), nameof(WorkerJobFields.ErrorKey))]
         public string? ErrorKey { get; }
+
+        // The cause behind the key: exception type and message, without secrets.
+        [DataField(typeof(WorkerJobFields), nameof(WorkerJobFields.ErrorDetail))]
+        public string? ErrorDetail { get; }
 
         [DataField(typeof(WorkerJobFields), nameof(WorkerJobFields.NextRunAt))]
         public DateTime? NextRunAt { get; }

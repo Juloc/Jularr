@@ -18,6 +18,10 @@ namespace Jularr.Integrations.Logic.Browser
         public int Port { get; set; }
         public int PageTimeoutSeconds { get; set; } = 30;
         public int DownloadTimeoutSeconds { get; set; } = 600;
+
+        // A download that has not begun this long after the file was opened (the source answered with a page) or has not grown this long ends.
+        public int DownloadStartSeconds { get; set; } = 60;
+        public int DownloadIdleSeconds { get; set; } = 120;
         public bool NoSandbox { get; set; }
 
         // Local HTTP test fixtures need access that production source navigation must not have.
@@ -438,7 +442,7 @@ namespace Jularr.Integrations.Logic.Browser
             }
         }
 
-        public async Task SaveFileAsync(Uri file, string destination, long? maximumBytes, Func<long, IDisposable>? reserveWrite, CancellationToken ct)
+        public async Task SaveFileAsync(Uri file, string destination, long? maximumBytes, Func<long, IDisposable>? reserveWrite, CancellationToken ct, Func<long, long?, Task>? progress = null)
         {
             if (!IsAvailable)
             {
@@ -463,7 +467,8 @@ namespace Jularr.Integrations.Logic.Browser
 
                 await _client!.SendAsync("Browser.setDownloadBehavior", new { behavior = "allowAndName", downloadPath = _downloads }, ct);
                 await _client.SendAsync("Page.navigate", new { url = file.AbsoluteUri }, ct);
-                var downloaded = await WaitForFileAsync(ct);
+                var downloaded = await WaitForDownloadAsync(_downloads, TimeSpan.FromSeconds(_options.DownloadStartSeconds), TimeSpan.FromSeconds(_options.DownloadIdleSeconds),
+                    TimeSpan.FromSeconds(_options.DownloadTimeoutSeconds), progress, TimeProvider.System, ct);
                 try
                 {
                     await using var source = new FileStream(downloaded, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, useAsync: true);
@@ -891,25 +896,67 @@ namespace Jularr.Integrations.Logic.Browser
             }
         }
 
-        // The file is complete when the browser drops its partial name.
-        private async Task<string> WaitForFileAsync(CancellationToken ct)
+        // The file is complete when the browser drops its partial name. A download that has not begun within the start limit (the source showed a page
+        // instead of a file), stops growing for the idle limit or runs past the total ends, so a stuck download never holds the one browser for long.
+        // The bytes so far are reported every few seconds.
+        internal static async Task<string> WaitForDownloadAsync(string folder, TimeSpan start, TimeSpan idle, TimeSpan total, Func<long, long?, Task>? progress, TimeProvider time,
+            CancellationToken ct)
         {
-            var deadline = DateTime.UtcNow.AddSeconds(_options.DownloadTimeoutSeconds);
-            while (DateTime.UtcNow < deadline)
+            var began = time.GetTimestamp();
+            long? grewAt = null;
+            var size = -1L;
+            var reportedAt = 0L;
+            while (time.GetElapsedTime(began) < total)
             {
-                foreach (var file in Directory.GetFiles(_downloads))
+                var partial = 0L;
+                var isPartial = false;
+                foreach (var file in Directory.GetFiles(folder))
                 {
                     if (!file.EndsWith(".crdownload", StringComparison.OrdinalIgnoreCase))
                     {
                         return file;
                     }
+
+                    isPartial = true;
+                    try
+                    {
+                        partial += new FileInfo(file).Length;
+                    }
+                    catch (IOException)
+                    {
+                        // The browser renamed or removed it meanwhile; the next look sees what it became.
+                    }
                 }
 
-                await Task.Delay(500, ct);
+                if (isPartial && partial > size)
+                {
+                    size = partial;
+                    grewAt = time.GetTimestamp();
+                    if (progress is not null && (reportedAt == 0 || time.GetElapsedTime(reportedAt) >= DownloadReportEvery))
+                    {
+                        reportedAt = time.GetTimestamp();
+                        await progress(size, null);
+                    }
+                }
+
+                if (grewAt is null && time.GetElapsedTime(began) >= start)
+                {
+                    throw new SourceBrowserException("The browser did not start the download.");
+                }
+
+                if (grewAt is { } grew && time.GetElapsedTime(grew) >= idle)
+                {
+                    throw new SourceBrowserException("The browser download stopped.");
+                }
+
+                await Task.Delay(DownloadLook, time, ct);
             }
 
             throw new SourceBrowserException("The browser did not fetch the file.");
         }
+
+        private static readonly TimeSpan DownloadLook = TimeSpan.FromMilliseconds(500);
+        private static readonly TimeSpan DownloadReportEvery = TimeSpan.FromSeconds(5);
 
         private static string Location(string address)
         {

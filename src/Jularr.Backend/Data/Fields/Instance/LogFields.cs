@@ -11,6 +11,7 @@ namespace Jularr.Backend.Data.Fields.Instance
         public static readonly EnumField SourceFilter = new(typeof(LogSourceType)) { Required = false };
         public static readonly StringField Origin = new() { MaximumLength = 500 };
         public static readonly StringField Message = new() { MaximumLength = 4000 };
+        public static readonly StringField Detail = new() { MaximumLength = 300, Required = false };
         public static readonly StringField Search = new() { MaximumLength = 200, Required = false, Trim = true };
         public static readonly IntField Take = new() { Minimum = 1, Maximum = 100_100 };
     }
