@@ -20,5 +20,6 @@ namespace Jularr.Backend.Data.Fields.Library
         public static readonly LongField TotalBytes = new() { Minimum = 0 };
         public static readonly DateTimeField LastScanAt = new() { Required = false };
         public static readonly BoolField IsScanning = new();
+        public static readonly BoolField WithFigures = new();
     }
 }

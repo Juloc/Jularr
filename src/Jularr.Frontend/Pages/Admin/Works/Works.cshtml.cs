@@ -279,7 +279,7 @@ namespace Jularr.Frontend.Pages.Admin.Works
             var (types, subtypes) = Scopes.Filter();
             _works = await read.ExecuteAsync<PageResult<WorkListItemV1>>(new ReadWorksParametersV1(PageNumber, PageSize, types, subtypes, MonitoredFilter, StatusFilter, LibraryFilter, ProfileFilter, QueryFilter, Sort, IsDescending), ct);
             _summary = await readSummary.ExecuteAsync<WorksSummaryV1>(new ReadWorksParametersV1(1, PageSize, types, subtypes, null, null, LibraryFilter, ProfileFilter, QueryFilter), ct);
-            _libraries = await readLibraries.ExecuteAsync<BaseDataList<LibraryOverviewV1>>(new ReadLibraryOverviewParametersV1(), ct);
+            _libraries = await readLibraries.ExecuteAsync<BaseDataList<LibraryOverviewV1>>(new ReadLibraryOverviewParametersV1(withFigures: false), ct);
 
             // Profiles belong to Arr+.
             if (CanAcquire)

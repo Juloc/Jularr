@@ -59,7 +59,7 @@ namespace Jularr.Backend.Service.Admin.Library.V1
 
         protected override async Task<IServiceOutput> OnRead()
         {
-            // Subtitle files belong to their video and are not counted apart.
+            // Subtitle files belong to their video and are not counted apart. Without figures only the libraries are read.
             var sql = new SqlStatement();
             sql.Statement =
                 """
@@ -91,7 +91,8 @@ namespace Jularr.Backend.Service.Admin.Library.V1
                             "StoredFiles" AS file
                             LEFT JOIN "MediaAssets" AS asset ON asset."Id" = file."MediaAssetId"
                         WHERE
-                            file."LibraryRootId" = root."Id"
+                            @WithFigures
+                            AND file."LibraryRootId" = root."Id"
                             AND NOT file."IsSubtitle"
                     ) AS files ON TRUE
                     LEFT JOIN LATERAL (
@@ -101,7 +102,8 @@ namespace Jularr.Backend.Service.Admin.Library.V1
                         FROM
                             "Operations" AS operation
                         WHERE
-                            operation."LibraryRootId" = root."Id"
+                            @WithFigures
+                            AND operation."LibraryRootId" = root."Id"
                             AND operation."OperationTypeId" = 1
                     ) AS scans ON TRUE
                 ORDER BY
@@ -109,6 +111,7 @@ namespace Jularr.Backend.Service.Admin.Library.V1
                     root."Name",
                     root."Id";
                 """;
+            sql.Parameters.Add(Parameters);
             return new BaseDataList<LibraryOverviewV1>(await Context.ReadSql.ReadListAsync<LibraryOverviewV1>(sql, CancellationToken));
         }
     }

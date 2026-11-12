@@ -172,6 +172,14 @@ namespace Jularr.Backend.Data.Admin.Library.V1
 
     public sealed class ReadLibraryOverviewParametersV1 : BaseParameters
     {
+        public ReadLibraryOverviewParametersV1(bool withFigures = true)
+        {
+            WithFigures = withFigures;
+        }
+
+        // Without them only the libraries themselves are read (for a choice of library); their counts and last scan stay zero and empty.
+        [DataField(typeof(LibraryRootFields), nameof(LibraryRootFields.WithFigures))]
+        public bool WithFigures { get; }
     }
 
     // One library with its titles, files, size, problems and last scan.
