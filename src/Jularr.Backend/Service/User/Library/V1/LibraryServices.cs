@@ -26,6 +26,17 @@ namespace Jularr.Backend.Service.User.Library.V1
         {
             // Cards and filter options share the same visibility and availability boundary.
             var scope = """
+                -- The present files are read once: their Works pass the filter and carry the day they were added.
+                WITH available AS MATERIALIZED (
+                    SELECT
+                        asset."WorkId",
+                        max(file."CreatedAt") AS "AddedAt"
+                    FROM
+                        "MediaAssets" AS asset
+                        JOIN "StoredFiles" AS file ON file."MediaAssetId" = asset."Id" AND file."MissingSince" IS NULL AND NOT file."IsSubtitle"
+                    GROUP BY
+                        asset."WorkId"
+                )
                 SELECT
                     work."Id",
                     visible."Title",
@@ -34,26 +45,16 @@ namespace Jularr.Backend.Service.User.Library.V1
                 FROM
                     "ProfileWorks" AS visible
                     JOIN "Works" AS work ON work."Id" = visible."WorkId"
-                    LEFT JOIN (
-                        SELECT
-                            asset."WorkId",
-                            max(file."CreatedAt") AS "AddedAt"
-                        FROM
-                            "MediaAssets" AS asset
-                            JOIN "StoredFiles" AS file ON file."MediaAssetId" = asset."Id" AND file."MissingSince" IS NULL AND NOT file."IsSubtitle"
-                        GROUP BY
-                            asset."WorkId"
-                    ) AS available ON available."WorkId" = work."Id"
+                    LEFT JOIN available ON available."WorkId" = work."Id"
                 WHERE
                     visible."ProfileId" = @ProfileId
                     AND NOT visible."IsHidden"
                     -- Only Works with a present file or an open request can pass, so the profile's view is read for those ids alone, never for the catalog.
                     AND visible."WorkId" = ANY(ARRAY(
                         SELECT
-                            asset."WorkId"
+                            present."WorkId"
                         FROM
-                            "MediaAssets" AS asset
-                            JOIN "StoredFiles" AS file ON file."MediaAssetId" = asset."Id" AND file."MissingSince" IS NULL AND NOT file."IsSubtitle"
+                            available AS present
                         WHERE
                             1 = ANY(@AvailabilityTypeIds::smallint[])
                         UNION

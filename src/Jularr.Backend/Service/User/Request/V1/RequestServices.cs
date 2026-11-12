@@ -23,8 +23,8 @@ namespace Jularr.Backend.Service.User.Request.V1
 
         protected override async Task<IServiceOutput> OnRead()
         {
-            // Own profile, one bounded read.
-            var sql = new SqlStatement();
+            // Own profile, one bounded read: the page is chosen first on the request, its visibility and sort key alone; titles, steps, downloads and posters are read for its rows only.
+            var sql = new SqlStatement { DisableJit = true };
             sql.Statement =
                 """
                 SELECT
@@ -68,8 +68,53 @@ namespace Jularr.Backend.Service.User.Request.V1
                     ) AS "PosterUrl",
                     quality."Name" AS "QualityName",
                     request."AcquisitionRequestStatusTypeId" IN (1, 2, 3, 4, 5) AS "IsWithdrawable"
-                FROM
-                    "AcquisitionRequests" AS request
+                FROM (
+                    -- The page alone; the title is computed here only when it is the sort key.
+                    SELECT
+                        request."Id"
+                    FROM
+                        "AcquisitionRequests" AS request
+                    INNER JOIN
+                        "Works" AS work ON work."Id" = request."WorkId"
+                    INNER JOIN LATERAL (
+                        -- The view is read for the request's own Work only; joined as a whole it walks the catalog.
+                        SELECT
+                            scoped."Title",
+                            scoped."MediaSubtypeId"
+                        FROM
+                            "ProfileWorks" AS scoped
+                        WHERE
+                            scoped."WorkId" = request."WorkId"
+                            AND scoped."ProfileId" = request."RequestedByProfileId"
+                        OFFSET 0
+                    ) AS visible ON TRUE
+                    WHERE
+                        request."RequestedByProfileId" = @ProfileId
+                        AND (cardinality(@MediaTypeIds::smallint[]) + cardinality(@MediaSubtypeIds::smallint[]) = 0
+                            OR visible."MediaSubtypeId" IS NULL AND work."MediaTypeId" = ANY(@MediaTypeIds::smallint[])
+                            OR visible."MediaSubtypeId" = ANY(@MediaSubtypeIds::smallint[]))
+                        AND CASE @RequestListFilterTypeId::smallint
+                            WHEN 1 THEN request."AcquisitionRequestStatusTypeId" = 1
+                            WHEN 2 THEN request."AcquisitionRequestStatusTypeId" BETWEEN 2 AND 5
+                            WHEN 3 THEN request."AcquisitionRequestStatusTypeId" = 6
+                            WHEN 4 THEN request."AcquisitionRequestStatusTypeId" = 8
+                            WHEN 5 THEN request."AcquisitionRequestStatusTypeId" IN (6, 7, 9)
+                            ELSE TRUE
+                        END
+                    ORDER BY
+                        CASE WHEN @RequestSortTypeId = 3 THEN
+                            CASE request."AcquisitionRequestStatusTypeId" WHEN 8 THEN 0 WHEN 1 THEN 1 WHEN 2 THEN 2 WHEN 3 THEN 3 WHEN 4 THEN 4 WHEN 5 THEN 5 WHEN 6 THEN 6 ELSE 7 END
+                        END,
+                        CASE WHEN @RequestSortTypeId = 4 THEN lower(visible."Title") END,
+                        CASE WHEN @RequestSortTypeId = 2 THEN request."CreatedAt" END,
+                        CASE WHEN @RequestSortTypeId = 2 THEN request."Id" END,
+                        request."CreatedAt" DESC,
+                        request."Id" DESC
+                    LIMIT @PageSize
+                    OFFSET @Offset
+                ) AS page
+                INNER JOIN
+                    "AcquisitionRequests" AS request ON request."Id" = page."Id"
                 INNER JOIN
                     "Works" AS work ON work."Id" = request."WorkId"
                 INNER JOIN LATERAL (
@@ -125,19 +170,6 @@ namespace Jularr.Backend.Service.User.Request.V1
                         event."Id" DESC
                     LIMIT 1
                 ) AS step ON TRUE
-                WHERE
-                    request."RequestedByProfileId" = @ProfileId
-                    AND (cardinality(@MediaTypeIds::smallint[]) + cardinality(@MediaSubtypeIds::smallint[]) = 0
-                        OR visible."MediaSubtypeId" IS NULL AND work."MediaTypeId" = ANY(@MediaTypeIds::smallint[])
-                        OR visible."MediaSubtypeId" = ANY(@MediaSubtypeIds::smallint[]))
-                    AND CASE @RequestListFilterTypeId::smallint
-                        WHEN 1 THEN request."AcquisitionRequestStatusTypeId" = 1
-                        WHEN 2 THEN request."AcquisitionRequestStatusTypeId" BETWEEN 2 AND 5
-                        WHEN 3 THEN request."AcquisitionRequestStatusTypeId" = 6
-                        WHEN 4 THEN request."AcquisitionRequestStatusTypeId" = 8
-                        WHEN 5 THEN request."AcquisitionRequestStatusTypeId" IN (6, 7, 9)
-                        ELSE TRUE
-                    END
                 ORDER BY
                     CASE WHEN @RequestSortTypeId = 3 THEN
                         CASE request."AcquisitionRequestStatusTypeId" WHEN 8 THEN 0 WHEN 1 THEN 1 WHEN 2 THEN 2 WHEN 3 THEN 3 WHEN 4 THEN 4 WHEN 5 THEN 5 WHEN 6 THEN 6 ELSE 7 END
@@ -146,9 +178,7 @@ namespace Jularr.Backend.Service.User.Request.V1
                     CASE WHEN @RequestSortTypeId = 2 THEN request."CreatedAt" END,
                     CASE WHEN @RequestSortTypeId = 2 THEN request."Id" END,
                     request."CreatedAt" DESC,
-                    request."Id" DESC
-                LIMIT @PageSize
-                OFFSET @Offset;
+                    request."Id" DESC;
                 """;
             sql.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));
             sql.Parameters.Add(new AccountParameters(Auth.AccountId!.Value));
