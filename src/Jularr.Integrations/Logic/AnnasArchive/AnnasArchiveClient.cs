@@ -354,7 +354,7 @@ namespace Jularr.Integrations.Logic.AnnasArchive
 
                 File.Delete(destination);
                 if (progress is not null) await progress(0, null);
-                await browser.SaveFileAsync(file, destination, maximumBytes, reserveWrite, ct);
+                await browser.SaveFileAsync(file, destination, maximumBytes, reserveWrite, ct, progress);
                 if (!await IsDocumentAsync(destination, ct))
                 {
                     throw new AnnasArchiveException(AnnasArchiveFailure.InvalidResponse, "The browser did not download a supported book file.");

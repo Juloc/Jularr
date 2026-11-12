@@ -61,7 +61,7 @@ namespace Jularr.Frontend.Pages.Admin.Logs
             var (origin, message) = entry.Source switch
             {
                 LogSourceType.Activity => (texts["history.event." + entry.Origin], entry.Message),
-                LogSourceType.Job => (texts["jobs.job." + entry.Origin], ErrorText(entry.Message)),
+                LogSourceType.Job => (texts["jobs.job." + entry.Origin], ErrorText(entry.Message) + (entry.Detail is { } cause ? " (" + cause + ")" : "")),
                 _ => (entry.Origin, entry.Message)
             };
             return new Div(new Span(new LocalTime(entry.At)).Class("logs-list__when"), new StateChip(new Text("logs.level." + entry.Level), tone),

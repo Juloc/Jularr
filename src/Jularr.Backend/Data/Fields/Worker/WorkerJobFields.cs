@@ -24,5 +24,6 @@ namespace Jularr.Backend.Data.Fields.Worker
         public static readonly DateTimeField NextRunAt = new() { Required = false };
         public static readonly StringField ErrorKey = new(NpgsqlDbType.Varchar) { MaximumLength = 64, Required = false };
         public static readonly StringField LastErrorKey = new(NpgsqlDbType.Varchar) { MaximumLength = 64, Required = false };
+        public static readonly StringField ErrorDetail = new(NpgsqlDbType.Varchar) { MaximumLength = 300, Required = false };
     }
 }

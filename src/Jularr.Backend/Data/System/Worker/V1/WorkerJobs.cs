@@ -22,8 +22,9 @@ namespace Jularr.Backend.Data.System.Worker.V1
     // One finished pass of a job as the worker reports it.
     public sealed class RecordWorkerJobDataV1 : BaseData
     {
-        public RecordWorkerJobDataV1(DateTime? startedAt, DateTime finishedAt, WorkerJobResultType resultTypeId, string? errorKey, DateTime? nextRunAt)
+        public RecordWorkerJobDataV1(DateTime? startedAt, DateTime finishedAt, WorkerJobResultType resultTypeId, string? errorKey, DateTime? nextRunAt, string? errorDetail = null)
         {
+            ErrorDetail = errorDetail;
             StartedAt = startedAt;
             FinishedAt = finishedAt;
             ResultTypeId = resultTypeId;
@@ -42,6 +43,9 @@ namespace Jularr.Backend.Data.System.Worker.V1
 
         [DataField(typeof(WorkerJobFields), nameof(WorkerJobFields.ErrorKey))]
         public string? ErrorKey { get; }
+
+        [DataField(typeof(WorkerJobFields), nameof(WorkerJobFields.ErrorDetail))]
+        public string? ErrorDetail { get; }
 
         [DataField(typeof(WorkerJobFields), nameof(WorkerJobFields.NextRunAt))]
         public DateTime? NextRunAt { get; }

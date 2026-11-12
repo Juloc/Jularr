@@ -436,6 +436,7 @@ namespace Jularr.Backend.Service.Core
             services.AddSingleton(covers);
             AddClient<CoverClient>(services, ExternalCallLimits.Answer(30), null, agent: true, handler: () => CoverClient.CreateHandler(covers));
             services.TryAddTransient<CoverStore>();
+            services.TryAddSingleton<CoverSweep>();
 
             // Throttle public requests.
             services.AddRateLimiter(options =>

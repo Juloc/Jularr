@@ -258,7 +258,7 @@ namespace Jularr.Backend.Tests
                 Reads++;
                 return Task.FromResult(Page is { } html ? new BrowserPage(addresses[0], html) : null);
             }
-            public Task SaveFileAsync(Uri file, string destination, long? maximumBytes, Func<long, IDisposable>? reserveWrite, CancellationToken ct) => throw new NotSupportedException();
+            public Task SaveFileAsync(Uri file, string destination, long? maximumBytes, Func<long, IDisposable>? reserveWrite, CancellationToken ct, Func<long, long?, Task>? progress = null) => throw new NotSupportedException();
             public Task<SourceBrowserStatus> StartAsync(CancellationToken ct) => Task.FromResult(Status);
             public Task StopAsync() => Task.CompletedTask;
             public Task ResetAsync() => Task.CompletedTask;

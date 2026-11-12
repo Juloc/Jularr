@@ -328,6 +328,65 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task StoreCovers_ManyAddressesThatFailedToday_AreWalkedInBoundedWindows_AndThePendingOnesAfterThemAreFetched()
+        {
+            var images = new FakeImages();
+            await using var host = await CreateHostAsync(images);
+            var provider = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Providers\" WHERE \"Key\" = 'tmdb'"))!;
+
+            // More posters than one window whose addresses failed today, then a poster and an episode image still to fetch.
+            var failed = StoreCoversV1.Window + 200;
+            await host.Fixture.RunSqlAsync($"""
+                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle") OVERRIDING SYSTEM VALUE SELECT number, 1, 'Title ' || number FROM generate_series(1, {failed + 2}) AS number;
+                INSERT INTO "WorkMetadataFacts" ("WorkId", "FactKey", "Value", "ProviderId")
+                SELECT number, 'Poster', 'https://image.tmdb.org/t/p/w500/' || number || '.png', {provider} FROM generate_series(1, {failed + 1}) AS number;
+                INSERT INTO "WorkCovers" ("WorkId", "CoverKindId", "SourceUrl", "FailedAt")
+                SELECT number, 1, 'https://image.tmdb.org/t/p/w500/' || number || '.png', now() - interval '1 hour' FROM generate_series(1, {failed}) AS number;
+                INSERT INTO "WorkUnits" ("WorkId", "WorkUnitTypeId", "Number", "ImageUrl") VALUES ({failed + 2}, 1, 1, 'https://image.tmdb.org/t/p/w500/season.png');
+                """);
+
+            async Task<bool> RoundAsync()
+            {
+                await using var scope = host.Services.CreateAsyncScope();
+                return (await scope.ServiceProvider.GetRequiredService<StoreCoversV1>().ExecuteAsync<UpdateResult>(new CoverParametersV1(), default)).Success;
+            }
+
+            // The first round looks at one window only: nothing is fetched yet, and there is more to walk.
+            Assert.IsTrue(await RoundAsync());
+            Assert.AreEqual(0, images.Requests.Count);
+
+            // The next round walks the rest, fetches the two that wait and ends the walk; a failed address is not asked again today.
+            Assert.IsFalse(await RoundAsync());
+            CollectionAssert.AreEquivalent(new[] { $"/t/p/w500/{failed + 1}.png", "/t/p/w500/season.png" }, images.Requests.Select(uri => uri.AbsolutePath).ToArray());
+            Assert.AreEqual(2L, await host.ScalarAsync("SELECT count(*) FROM \"WorkCovers\" WHERE \"StoredAt\" IS NOT NULL"));
+
+            // A new walk begins at the first address again and finds nothing new.
+            Assert.IsTrue(await RoundAsync());
+            Assert.IsFalse(await RoundAsync());
+            Assert.AreEqual(2, images.Requests.Count);
+        }
+
+        [TestMethod]
+        public async Task BookFileCovers_FindTheLibraryBooks_AmongManyCatalogBooksWithoutAFile()
+        {
+            using var storage = new LibraryTests.TemporaryDirectory();
+            await using var host = await LibraryTests.CreateHostAsync(storage.Path);
+            await ReadingTests.CreateBooksAsync(host, storage.Path, "Covered Book", "Second Book");
+
+            // Many catalog books without a poster and without a file stand before the library's books.
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "Works" ("MediaTypeId", "CanonicalTitle") SELECT 3, 'Catalog ' || number FROM generate_series(1, 300) AS number;
+                """);
+            await using var scope = host.Services.CreateAsyncScope();
+            var sql = new Jularr.Backend.Infrastructure.Sql.SqlContext(host.Services.GetRequiredService<Jularr.Backend.Infrastructure.Sql.SqlDatabase>().DataSource);
+            await using var _ = sql;
+            await sql.BeginAsync(Jularr.Backend.Data.Enums.Sql.SqlAccessMode.ReadOnly);
+            var books = await new Jularr.Backend.Infrastructure.Sql.LogicContext(sql).ReadFileCoverTargetsAsync(new Jularr.Backend.Data.Logic.Media.WorkCoverQueryData(null, 5), default);
+            await sql.CommitAsync();
+            CollectionAssert.AreEquivalent(new[] { "Covered Book", "Second Book" }, books.Select(book => book.Title).ToArray());
+        }
+
+        [TestMethod]
         public async Task CoverSweep_RemovesFilesNoStoredCoverRefersTo_AndKeepsTheRest()
         {
             var images = new FakeImages();

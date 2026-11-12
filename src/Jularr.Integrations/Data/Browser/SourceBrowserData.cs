@@ -16,8 +16,9 @@ namespace Jularr.Integrations.Data.Browser
         // Several addresses at the same time; the first that answers wins.
         Task<BrowserPage?> ReadPagesAsync(IReadOnlyList<Uri> addresses, CancellationToken ct);
 
-        // The file is written to the destination; the limit and the write reservation are the caller's rules.
-        Task SaveFileAsync(Uri file, string destination, long? maximumBytes, Func<long, IDisposable>? reserveWrite, CancellationToken ct);
+        // The file is written to the destination; the limit and the write reservation are the caller's rules. The bytes the browser has so far are
+        // reported while it downloads; a download that does not start or stops growing fails instead of holding the browser.
+        Task SaveFileAsync(Uri file, string destination, long? maximumBytes, Func<long, IDisposable>? reserveWrite, CancellationToken ct, Func<long, long?, Task>? progress = null);
 
         // The browser starts, stops and begins again as a new client.
         Task<SourceBrowserStatus> StartAsync(CancellationToken ct);

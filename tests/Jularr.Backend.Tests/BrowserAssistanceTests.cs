@@ -499,7 +499,7 @@ namespace Jularr.Backend.Tests
                 }
                 return null;
             }
-            public Task SaveFileAsync(Uri file, string destination, long? maximumBytes, Func<long, IDisposable>? reserveWrite, CancellationToken ct) => Task.CompletedTask;
+            public Task SaveFileAsync(Uri file, string destination, long? maximumBytes, Func<long, IDisposable>? reserveWrite, CancellationToken ct, Func<long, long?, Task>? progress = null) => Task.CompletedTask;
             public Task<SourceBrowserStatus> StartAsync(CancellationToken ct) => Task.FromResult(Status);
             public Task StopAsync() => Task.CompletedTask;
             public Task ResetAsync() => Task.CompletedTask;

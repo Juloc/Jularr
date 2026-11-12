@@ -29,7 +29,7 @@ namespace Jularr.Backend.Service.Admin.Worker.V1
             {
                 var status = _jobs.Describe(definition.Key, rows.GetValueOrDefault(definition.Key));
                 return new WorkerJobV1(definition.Key, definition.Group, status.State, status.Interval is { } interval ? (int)interval.TotalSeconds : null, status.IsPaused, status.PausesWhileUsed,
-                    definition.CanPauseWhileUsed, definition.CanRunNow, status.LastStartedAt, status.LastFinishedAt, status.NextRunAt, status.LastErrorKey, definition.ParentKey);
+                    definition.CanPauseWhileUsed, definition.CanRunNow, status.LastStartedAt, status.LastFinishedAt, status.NextRunAt, status.LastErrorKey, definition.ParentKey, status.LastErrorDetail);
             })]);
         }
     }

@@ -206,7 +206,7 @@ namespace Jularr.Frontend.Pages.Admin.Jobs
             var drawer = "job-" + job.Key;
             var name = new Text("jobs.job." + job.Key);
             var subline = child ? new Text("jobs.job." + job.ParentKey) : (IUiComponent)new Span(new Text("jobs.worker." + job.WorkerGroupTypeId), new ValueText(" · "), Cadence(job.IntervalSeconds));
-            var note = job.LastErrorKey is { } failure ? new Truncated(Failure(failure)) : null;
+            var note = job.LastErrorKey is { } failure ? new Truncated(Failure(failure, job.LastErrorDetail)) : null;
             var identity = new ListIdentity(new IconTile(Glyph(icon, child ? 15 : 18), tone, child), ListIdentity.TitleButton(name, drawer), subline, note);
 
             var waits = job.CanPauseWhileUsed && job.PausesWhileUsed;
@@ -258,7 +258,7 @@ namespace Jularr.Frontend.Pages.Admin.Jobs
                 Drawer.State("table.status", StateChipOf(job)),
                 Drawer.Facts(("jobs.last", Time(job.LastFinishedAt)), ("jobs.next", Time(job.NextRunAt)), ("jobs.area", new Text("jobs.worker." + job.WorkerGroupTypeId)), ("jobs.interval", Cadence(interval)))
             };
-            if (job.LastErrorKey is { } key) body.Add(Drawer.Block("jobs.error", new P(Time(job.LastFinishedAt), new ValueText(" · "), new ValueText(Failure(key)))));
+            if (job.LastErrorKey is { } key) body.Add(Drawer.Block("jobs.error", new P(Time(job.LastFinishedAt), new ValueText(" · "), new ValueText(Failure(key, job.LastErrorDetail)))));
             body.Add(Drawer.Block("jobs.about", new P(new Text("jobs.about." + job.Key))));
             if (job.Key == "bookTranslations" && _translation is not null)
             {
@@ -306,7 +306,9 @@ namespace Jularr.Frontend.Pages.Admin.Jobs
         }
 
         // The text of a failure's error code; a code without text reads as an unknown error, never as the raw exception.
-        private string Failure(string key) => texts.Has("errors." + key) ? texts["errors." + key] : texts["errors.internal_error"];
+        // The error's text and, when the job kept one, its cause as the log names it.
+        private string Failure(string key, string? detail = null) =>
+            (texts.Has("errors." + key) ? texts["errors." + key] : texts["errors.internal_error"]) + (detail is { } cause ? " (" + cause + ")" : "");
 
         // A failed history entry says why: the outcome of a download, the error of anything else, an unknown error when none was kept.
         private string HistoryFailure(ActivityItemV1 item) =>
