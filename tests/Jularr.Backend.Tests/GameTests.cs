@@ -479,15 +479,21 @@ namespace Jularr.Backend.Tests
             await scope.ServiceProvider.GetRequiredService<TService>().ExecuteAsync<UpdateResult>(new AcquisitionCycleParametersV1(), default);
         }
 
+        // Serves the DAT only for the platform its header names; every other platform gets a DAT with one unrelated dump, as the real files never share a dump.
         private sealed class FakeLibretro(string dat) : HttpMessageHandler
         {
-            public int Requests { get; private set; }
+            private readonly string _platform = System.Text.RegularExpressions.Regex.Match(dat, "name \"([^\"]+)\"").Groups[1].Value;
+            private int _requests;
+
+            public int Requests => Volatile.Read(ref _requests);
 
             protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
             {
-                Requests++;
+                Interlocked.Increment(ref _requests);
                 StringAssert.StartsWith(request.RequestUri!.AbsolutePath, "/libretro/libretro-database/master/metadat/no-intro/Nintendo%20-%20");
-                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(dat) });
+                var requested = Path.GetFileNameWithoutExtension(Uri.UnescapeDataString(request.RequestUri.AbsolutePath));
+                var body = requested.Contains(_platform, StringComparison.Ordinal) ? dat : $"clrmamepro (\n\tname \"{requested}\"\n)\n\ngame (\n\tname \"Placeholder (World)\"\n\trom ( name \"Placeholder (World).bin\" size 1 crc 00000000 md5 00 sha1 {new string('f', 40)} )\n)\n";
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(body) });
             }
         }
 
