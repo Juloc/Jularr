@@ -45,7 +45,17 @@
     display: flex;
     gap: 2px;
 
-    .button--icon { width: 28px; height: 28px; min-width: 28px; }
+    .button--icon {
+        display: inline-grid;
+        place-items: center;
+        width: 30px;
+        height: 30px;
+        min-width: 30px;
+        min-height: 30px;
+        padding: 0;
+        border-radius: 50%;
+        aspect-ratio: 1;
+    }
     .button--icon:first-child .ui-icon { transform: rotate(180deg); }
 }
 
@@ -137,9 +147,8 @@
             grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr));
             align-content: start;
             gap: 10px 16px;
-            padding: 14px 0 4px;
+            padding: 12px 0 4px;
             border: 0;
-            border-top: 1px solid var(--border);
             border-radius: 0;
             background: none;
             box-shadow: none;
@@ -149,7 +158,14 @@
         }
 
         // The quality groups' buttons sit side by side under their rows.
-        > .ui-form__section:has(> [name=addGroup]) > button { grid-column: auto / span 1; width: max-content; }
+        > .ui-form__section:has(> [name=addGroup]) {
+            display: flex;
+            flex-wrap: wrap;
+            align-content: start;
+            gap: 10px;
+
+            > legend, > .ui-form__row { width: 100%; }
+        }
 
         // The score of every format: a name and a narrow number per line, in columns across the card.
         > .ui-form__section:has([name$='.Score']) {
@@ -162,8 +178,7 @@
                 align-items: center;
                 justify-content: space-between;
                 gap: 12px;
-                padding: 4px 0;
-                border-bottom: 1px solid var(--border);
+                padding: 2px 0;
 
                 > p { margin: 0; }
                 .ui-field { max-width: 130px; }
