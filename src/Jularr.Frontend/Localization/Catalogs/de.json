@@ -4789,6 +4789,7 @@
    "Play",
    "Spielen"
   ],
+  "mode.tab": ["Mode: {0}", "Modus: {0}"],
   "mode.switch": [
    "Switch mode",
    "Modus wechseln"

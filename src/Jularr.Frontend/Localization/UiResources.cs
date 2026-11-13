@@ -2128,6 +2128,7 @@ namespace Jularr.Frontend.Localization
             new("mode.read", "Read"),
             new("mode.hear", "Listen"),
             new("mode.play", "Play"),
+            new("mode.tab", "Mode: {0}"),
             new("mode.switch", "Switch mode"),
             new("mode.searchAll", "Everywhere"),
             new("mode.searchAllTip", "Search in every mode"),
