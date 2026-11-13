@@ -1,56 +1,53 @@
-// The profile on one screen: General and Prefer side by side, the qualities below them across the width, the expert part last.
+// The profile on one screen: General and Prefer on the left, the qualities as a list on the right, the expert part last across the width.
 .ui-form:has(.profile-qualities) {
     @media (min-width: 1100px) {
-        > .ui-form__section { grid-column: auto; }
-        > .ui-form__section:has([name=Name]) { grid-column: 1; grid-row: 1; }
-        > .ui-form__section:has([name=GroupPreference]) { grid-column: 2; grid-row: 1; }
-        > .ui-form__section:has(.profile-qualities),
+        > .ui-form__section { grid-column: 1; }
+        > .ui-form__section:has([name=Name]) { grid-row: 1; }
+        > .ui-form__section:has([name=GroupPreference]) { grid-row: 2; }
+        > .ui-form__section:has(.profile-qualities) { grid-column: 2; grid-row: 1 / span 2; }
         > .ui-form__section:has([name=GroupPreference]) ~ .ui-form__section { grid-column: 1 / -1; }
-        > .ui-form__section:has([name=Name]) > .ui-field,
-        > .ui-form__section:has([name=GroupPreference]) > .ui-field { grid-column: 1 / -1; }
+        > .ui-form__section > .ui-field { grid-column: 1 / -1; }
     }
 
     > .ui-form__section { gap: 12px 20px; padding: 14px 18px 16px; }
 }
 
-// A quality's two small arrows and its cross; earlier points left, later right.
+// A quality's two small round arrows and its cross; up is the down arrow turned over.
 .profile-move {
     display: flex;
     gap: 2px;
 
-    .button--icon { width: 26px; height: 26px; min-width: 26px; }
-    .button--icon:first-child .ui-icon { transform: rotate(90deg); }
-    .button--icon:nth-child(2) .ui-icon { transform: rotate(-90deg); }
+    .button--icon { width: 28px; height: 28px; min-width: 28px; }
+    .button--icon:first-child .ui-icon { transform: rotate(180deg); }
 }
 
-// The allowed qualities as one line of chips, best first; the stop of upgrades is marked.
+// The allowed qualities as a tight list, best first; the stop of upgrades is marked.
 .profile-qualities {
     grid-column: 1 / -1;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
+    display: grid;
 }
 
 .profile-quality {
-    display: inline-flex;
+    display: flex;
     align-items: center;
-    gap: 6px;
-    padding: 2px 3px 2px 12px;
-    border: 1px solid var(--border);
-    border-radius: 999px;
-    background: var(--surface);
+    gap: 8px;
+    padding: 3px 0;
+    border-top: 1px solid var(--border);
 
-    &__name { white-space: nowrap; font-size: var(--text-small, .875rem); }
+    &:first-child { border-top: 0; }
+
+    &__name { flex: 1; min-width: 0; font-size: var(--text-small, .875rem); }
     .tag { padding: 1px 8px; }
 }
 
-// The choice that adds a quality, beside its button and the stop of upgrades.
+// The choice that adds a quality, beside its button.
 .profile-add-quality {
+    grid-column: 1 / -1;
     display: flex;
     gap: 8px;
-    align-items: end;
+    align-items: center;
 
-    select { max-width: 220px; }
+    select { flex: 1; min-width: 0; }
 }
 
 // A hint of a section spans its width.
