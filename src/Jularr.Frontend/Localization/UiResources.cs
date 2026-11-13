@@ -132,7 +132,7 @@ namespace Jularr.Frontend.Localization
             new("profile.section.size", "Size"),
             new("profile.qualities.info", "Best first. The search takes the highest it finds; upgrades replace a file until the quality to stop at."),
             new("profile.addQuality", "Add quality"),
-            new("profile.cutoffTag", "Upgrades stop here"),
+            new("profile.cutoffTag", "Goal"),
             new("profile.section.prefer", "Prefer"),
             new("profile.prefer.info", "What counts besides the quality. Languages come from the profile languages."),
             new("profile.prefer.badSources", "Bad sources"),

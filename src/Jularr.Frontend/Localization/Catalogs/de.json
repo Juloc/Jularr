@@ -11492,7 +11492,7 @@
   ],
   "profile.qualities.info": ["Best first. The search takes the highest it finds; upgrades replace a file until the quality to stop at.", "Beste zuerst. Die Suche nimmt die höchste, die sie findet; Upgrades ersetzen eine Datei bis zur Qualität, bei der sie aufhören."],
   "profile.addQuality": ["Add quality", "Qualität hinzufügen"],
-  "profile.cutoffTag": ["Upgrades stop here", "Upgrades enden hier"],
+  "profile.cutoffTag": ["Goal", "Ziel"],
   "profile.section.prefer": ["Prefer", "Bevorzugen"],
   "profile.prefer.info": ["What counts besides the quality. Languages come from the profile languages.", "Was neben der Qualität zählt. Sprachen kommen aus den Profilsprachen."],
   "profile.prefer.badSources": ["Bad sources", "Schlechte Quellen"],

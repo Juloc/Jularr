@@ -1,43 +1,62 @@
-// A quality row's two round arrows and its cross; up is the down arrow turned over.
+// The profile on one screen: General and Prefer side by side, the qualities below them across the width, the expert part last.
+.ui-form:has(.profile-qualities) {
+    @media (min-width: 1100px) {
+        > .ui-form__section { grid-column: auto; }
+        > .ui-form__section:has([name=Name]) { grid-column: 1; grid-row: 1; }
+        > .ui-form__section:has([name=GroupPreference]) { grid-column: 2; grid-row: 1; }
+        > .ui-form__section:has(.profile-qualities),
+        > .ui-form__section:has([name=GroupPreference]) ~ .ui-form__section { grid-column: 1 / -1; }
+        > .ui-form__section:has([name=Name]) > .ui-field,
+        > .ui-form__section:has([name=GroupPreference]) > .ui-field { grid-column: 1 / -1; }
+    }
+
+    > .ui-form__section { gap: 12px 20px; padding: 14px 18px 16px; }
+}
+
+// A quality's two small arrows and its cross; earlier points left, later right.
 .profile-move {
     display: flex;
-    gap: 6px;
+    gap: 2px;
 
-    .button--icon:first-child .ui-icon { transform: rotate(180deg); }
+    .button--icon { width: 26px; height: 26px; min-width: 26px; }
+    .button--icon:first-child .ui-icon { transform: rotate(90deg); }
+    .button--icon:nth-child(2) .ui-icon { transform: rotate(-90deg); }
 }
 
-// A hint of a section spans its width, so the switches below it pair up in order.
-.profile-wide {
-    grid-column: 1 / -1;
-    margin: 0;
-}
-
-// The allowed qualities, best first: one row each with its name, the stop of upgrades and its buttons.
+// The allowed qualities as one line of chips, best first; the stop of upgrades is marked.
 .profile-qualities {
     grid-column: 1 / -1;
-    display: grid;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
 }
 
 .profile-quality {
-    display: flex;
+    display: inline-flex;
     align-items: center;
-    gap: 10px;
-    padding: 6px 0;
-    border-top: 1px solid var(--border);
+    gap: 6px;
+    padding: 2px 3px 2px 12px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--surface);
 
-    &:first-child { border-top: 0; }
-
-    &__name { flex: 1; min-width: 0; }
+    &__name { white-space: nowrap; font-size: var(--text-small, .875rem); }
+    .tag { padding: 1px 8px; }
 }
 
-// The choice that adds a quality, beside its button.
+// The choice that adds a quality, beside its button and the stop of upgrades.
 .profile-add-quality {
-    grid-column: 1 / -1;
     display: flex;
     gap: 8px;
-    align-items: center;
+    align-items: end;
 
-    select { max-width: 240px; }
+    select { max-width: 220px; }
+}
+
+// A hint of a section spans its width.
+.profile-wide {
+    grid-column: 1 / -1;
+    margin: 0;
 }
 
 // The link to the rating of the release groups sits at the foot of its column.
