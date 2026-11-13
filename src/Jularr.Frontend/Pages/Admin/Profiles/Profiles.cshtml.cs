@@ -81,6 +81,7 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
         private PageResult<CustomFormatDetailsV1>? _formats;
         private PageResult<ReleaseProfileDetailsV1>? _releases;
         private PageResult<AcquisitionTagDetailsV1>? _tags;
+        private IReadOnlyList<AcquisitionTagDetailsV1> _autoTagList = [];
         private PageResult<ReleaseGroupDetailsV1>? _groups;
         private AddReleaseGroupDataV1? _group;
         private SaveCustomFormatDataV1? _format;

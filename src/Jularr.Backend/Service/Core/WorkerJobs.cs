@@ -108,6 +108,8 @@ namespace Jularr.Backend.Service.Core
             new("metadataFill", WorkerGroupType.Media, TimeSpan.FromMinutes(10), TimeSpan.FromSeconds(28), canPauseWhileUsed: true),
             // Titles with files and no target (a media server's sync) get a paused target, so every title page has the same buttons.
             new("wantedTargets", WorkerGroupType.Media, TimeSpan.FromMinutes(10), TimeSpan.FromSeconds(26), canPauseWhileUsed: true),
+            // The tags Jularr keeps itself on every title with a target (RefreshAutoTagsV1): media type, original language, genres, requesters.
+            new("autoTags", WorkerGroupType.Media, TimeSpan.FromMinutes(10), TimeSpan.FromSeconds(27), canPauseWhileUsed: true),
             new("covers", WorkerGroupType.Media, TimeSpan.FromMinutes(10), TimeSpan.FromSeconds(35), canPauseWhileUsed: true),
             // Brings stored covers into the Owner's format, a few at a time, and only while nobody uses Jularr.
             new("coverBackfill", WorkerGroupType.Media, TimeSpan.FromMinutes(10), TimeSpan.FromSeconds(55), canPauseWhileUsed: true, pausesWhileUsedByDefault: true),

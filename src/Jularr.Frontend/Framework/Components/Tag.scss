@@ -17,3 +17,10 @@
     .ui-icon { width: 14px; height: 14px; }
     &--warning { border-color: var(--warning-soft); background: var(--warning-soft); color: var(--warning); }
 }
+
+// The tags Jularr keeps itself on a title or in the release profiles: chips that wrap, nothing to edit.
+.auto-tags__chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}

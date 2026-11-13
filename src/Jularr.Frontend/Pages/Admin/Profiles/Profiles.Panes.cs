@@ -35,14 +35,15 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
         private async Task LoadReleasesAsync(CancellationToken cancellation)
         {
             _releases = await releases.ExecuteAsync<PageResult<ReleaseProfileDetailsV1>>(new ReadAcquisitionPolicyParametersV1(null, PageOf("releases")), cancellation);
-            _tags = await tags.ExecuteAsync<PageResult<AcquisitionTagDetailsV1>>(new ReadAcquisitionTagsParametersV1(PageOf("tags")), cancellation);
+            _tags = await tags.ExecuteAsync<PageResult<AcquisitionTagDetailsV1>>(new ReadAcquisitionTagsParametersV1(PageOf("tags"), automatic: false), cancellation);
+            _autoTagList = (await tags.ExecuteAsync<PageResult<AcquisitionTagDetailsV1>>(new ReadAcquisitionTagsParametersV1(1, 100, automatic: true), cancellation)).Items;
 
             // Every release card's chosen tags and indexer are offered besides the page of tags and indexers its pickers show.
             _tagPage = await tags.ExecuteAsync<PageResult<AcquisitionTagDetailsV1>>(new ReadAcquisitionTagsParametersV1(PageOf("tagChoices")), cancellation);
             var choices = _tagPage.Items.ToList();
             foreach (var id in (_release?.TagIds ?? []).Concat(_releases.Items.SelectMany(item => item.TagIds)).Distinct().Where(id => !choices.Any(choice => choice.Id == id)).Take(100).ToList())
                 choices.Add(await tag.ExecuteAsync<AcquisitionTagDetailsV1>(new AcquisitionTagParametersV1(id), cancellation));
-            _tagChoices = choices.Select(item => new SelectOption(Number(item.Id), item.Label)).ToArray();
+            _tagChoices = choices.Select(item => TagLabels.Choice(item, texts)).ToArray();
             _indexerPage = await connections.ExecuteAsync<PageResult<AcquisitionConnectionDetailsV1>>(
                 new ReadAcquisitionConnectionsParametersV1(PageOf("indexerChoices"), acquisitionConnectionRoleId: AcquisitionConnectionRole.Search), cancellation);
             var indexers = _indexerPage.Items.ToList();
@@ -92,6 +93,11 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
         {
             page.Content.Add(ReleaseSection());
             page.Content.Add(TagSection());
+            if (_autoTagList.Count > 0)
+            {
+                page.Content.Add(PaneSection("auto-tags", "arr.tags.auto", new P(new Text("arr.tags.auto.info")),
+                    new Div([.. _autoTagList.Select(item => (IUiComponent)new Tag(new ValueText(TagLabels.Label(item, texts))))]).Class("auto-tags__chips")));
+            }
             if (ConfirmDelete && Edit is { } removed && Item is ReleaseItem or TagItem)
             {
                 var version = Item == ReleaseItem ? _releases?.Items.FirstOrDefault(item => item.Id == removed)?.Version : _tags?.Items.FirstOrDefault(item => item.Id == removed)?.Version;

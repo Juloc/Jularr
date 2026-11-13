@@ -47,6 +47,7 @@ namespace Jularr.Frontend.Pages.Admin.Jobs
             ["aniListSync"] = ("sync", UiTone.Warning),
             ["metadataFill"] = ("layers", UiTone.Accent),
             ["wantedTargets"] = ("search", UiTone.Accent),
+            ["autoTags"] = ("tag", UiTone.Accent),
             ["covers"] = ("grid", UiTone.Accent),
             ["coverBackfill"] = ("grid", UiTone.Accent),
             ["catalogCleanup"] = ("layers", UiTone.Accent),
