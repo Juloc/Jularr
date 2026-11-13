@@ -2325,6 +2325,20 @@ namespace Jularr.Backend.Tests
             movies = (await ReadProfilesAsync(host)).Single(profile => profile.Id == movies.Id);
             Assert.AreEqual((0, 0, false, CodecPreference.AvoidHevc, SizePreference.Smaller),
                 (movies.GoodGroupScore, movies.BadGroupScore, movies.BlockBadSources, movies.CodecPreference, movies.SizePreference));
+
+            // A switch changed before an arrow is clicked stays changed in the draft that the arrow shows.
+            using (var draft = await host.SendAsync(HttpMethod.Post, "/Admin/Acquisition/Profiles/" + movies.Id + "?handler=Draft", new FormUrlEncodedContent(
+            [
+                new("__RequestVerificationToken", LibraryTests.Token(html)), new("Version", movies.Version.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                .. KindFields(movies), new("Name", movies.Name), new("AllowedQualities", "WEBDL-1080p"), new("AllowedQualities", "WEBDL-720p"), new("GoodGroupScore", "0"),
+                new("BadGroupScore", "0"), new("GroupPreference", "respect"), new("GroupPreferenceWas", "ignore"), new("moveDown", "WEBDL-1080p")
+            ])))
+            {
+                var shown = await draft.Content.ReadAsStringAsync();
+                Assert.AreEqual(HttpStatusCode.OK, draft.StatusCode, shown);
+                StringAssert.Contains(shown, "name=\"GroupPreference\" value=\"respect\" id=\"profile-groups-1\" checked=\"checked\"");
+                Assert.IsTrue(shown.IndexOf("value=\"WEBDL-720p\"", StringComparison.Ordinal) < shown.IndexOf("value=\"WEBDL-1080p\"", StringComparison.Ordinal), "The arrow moved it.");
+            }
             using var refused = await host.SendAsync(HttpMethod.Post, "/Admin/Acquisition/Profiles/" + movies.Id, new FormUrlEncodedContent(
             [
                 new("__RequestVerificationToken", LibraryTests.Token(html)), new("Version", movies.Version.ToString(System.Globalization.CultureInfo.InvariantCulture)),

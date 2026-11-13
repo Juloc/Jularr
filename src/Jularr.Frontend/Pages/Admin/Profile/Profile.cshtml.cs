@@ -414,7 +414,6 @@ namespace Jularr.Frontend.Pages.Admin.Profile
 
             AllowedQualities = [.. allowed];
             QualityOrder = string.Join(", ", allowed.Concat(order.Where(quality => !allowed.Contains(quality))));
-            GroupPreference = GroupPreferenceWas;
             _input = Posted();
             PreparePage();
             return Page();
