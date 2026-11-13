@@ -13,8 +13,9 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
     public sealed class RunTakeoverDataV1 : BaseData
     {
         public RunTakeoverDataV1(TakeoverSourceType takeoverSourceTypeId, string baseUrl, string apiKey, bool apply, string[]? rootFolders = null,
-            BaseDataList<TakeoverConnectionKeyV1>? connectionKeys = null, BaseDataList<TakeoverLibraryV1>? newLibraries = null)
+            BaseDataList<TakeoverConnectionKeyV1>? connectionKeys = null, BaseDataList<TakeoverLibraryV1>? newLibraries = null, string[]? overwriteSizes = null)
         {
+            OverwriteSizes = overwriteSizes;
             TakeoverSourceTypeId = takeoverSourceTypeId;
             BaseUrl = baseUrl;
             ApiKey = apiKey;
@@ -41,6 +42,10 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
         // The libraries chosen for its root folders; titles in others take the default library.
         [DataField(typeof(TakeoverFields), nameof(TakeoverFields.RootFolders), false)]
         public string[]? RootFolders { get; }
+
+        // The qualities whose sizes the preview showed as different and the person chose to take over; the others keep Jularr's.
+        [DataField(typeof(TakeoverFields), nameof(TakeoverFields.OverwriteSizes), false)]
+        public string[]? OverwriteSizes { get; }
 
         public BaseDataList<TakeoverConnectionKeyV1> ConnectionKeys { get; }
         public BaseDataList<TakeoverLibraryV1> NewLibraries { get; }

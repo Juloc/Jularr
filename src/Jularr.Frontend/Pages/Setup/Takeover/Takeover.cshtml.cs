@@ -140,6 +140,10 @@ namespace Jularr.Frontend.Pages.Setup.Takeover
             TakeoverItemType.Book => "book",
             TakeoverItemType.Profile => "sliders",
             TakeoverItemType.Format => "tag",
+            TakeoverItemType.Tag => "tag",
+            TakeoverItemType.ReleaseProfile => "shield",
+            TakeoverItemType.QualitySize => "sliders",
+            TakeoverItemType.ReleaseGroup => "layers",
             _ => "folder"
         };
 
@@ -151,7 +155,7 @@ namespace Jularr.Frontend.Pages.Setup.Takeover
         }
 
         public async Task<IActionResult> OnPostRunAsync([BindRequired] TakeoverSourceType takeoverSourceTypeId, string? baseUrl, string? apiKey, string? keySeal, [BindRequired] bool apply,
-            string[]? rootFolders, List<ConnectionKeyRow>? connectionKeys, List<LibraryRow>? newLibraries, bool draft = false)
+            string[]? rootFolders, List<ConnectionKeyRow>? connectionKeys, List<LibraryRow>? newLibraries, string[]? overwriteSizes, bool draft = false)
         {
             // A key typed for the preview comes back sealed; the takeover needs no second typing.
             _ran = takeoverSourceTypeId;
@@ -169,7 +173,7 @@ namespace Jularr.Frontend.Pages.Setup.Takeover
 
             // The page is built inside the run, so the seal for the takeover that follows a preview exists before it.
             if (!apply && !string.IsNullOrEmpty(apiKey)) _seal = Sealer.Protect(apiKey, TimeSpan.FromMinutes(10));
-            await RunAsync(takeoverSourceTypeId, baseUrl, apiKey, apply, rootFolders, connectionKeys, newLibraries, draft);
+            await RunAsync(takeoverSourceTypeId, baseUrl, apiKey, apply, rootFolders, connectionKeys, newLibraries, draft, overwriteSizes);
             return Page();
         }
 

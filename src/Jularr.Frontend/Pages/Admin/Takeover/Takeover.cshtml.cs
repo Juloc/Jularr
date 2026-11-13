@@ -73,6 +73,16 @@ namespace Jularr.Frontend.Pages.Admin.Takeover
                 }
                 else foreach (var folder in input.RootFolders ?? [])
                     form.Content(new Input().Attribute("type", "hidden").Attribute("name", nameof(input.RootFolders)).Attribute("value", folder));
+
+                // Quality sizes that differ from Jularr's are taken over only where the person ticks them; alike ones need nothing.
+                var sizes = (Items ?? []).Where(item => item is { TakeoverItemTypeId: TakeoverItemType.QualitySize, OutcomeKey: "takeover_size_differs" }).ToArray();
+                if (sizes.Length > 0)
+                {
+                    form.Section("takeover.sizes", section => section.Choices(item => item.OverwriteSizes, "takeover.sizes.choose",
+                        sizes.Select(item => new SelectOption(SizeQuality(item), item.Name))));
+                }
+                else foreach (var quality in input.OverwriteSizes ?? [])
+                    form.Content(new Input().Attribute("type", "hidden").Attribute("name", nameof(input.OverwriteSizes)).Attribute("value", quality));
                 if (input.ConnectionKeys.Count > 0) form.Section("takeover.inlineKeys", section => section.Rows(item => item.ConnectionKeys, (row, key) =>
                 {
                     row.Hidden(item => item.TakeoverItemTypeId);
@@ -108,18 +118,19 @@ namespace Jularr.Frontend.Pages.Admin.Takeover
         }
 
         public async Task<IActionResult> OnPostAsync([BindRequired] TakeoverSourceType takeoverSourceTypeId, string? baseUrl, string? apiKey, [BindRequired] bool apply,
-            string[]? rootFolders, List<ConnectionKeyRow>? connectionKeys, List<LibraryRow>? newLibraries, bool draft = false)
+            string[]? rootFolders, List<ConnectionKeyRow>? connectionKeys, List<LibraryRow>? newLibraries, string[]? overwriteSizes, bool draft = false)
         {
-            await RunAsync(takeoverSourceTypeId, baseUrl, apiKey, apply, rootFolders, connectionKeys, newLibraries, draft);
+            await RunAsync(takeoverSourceTypeId, baseUrl, apiKey, apply, rootFolders, connectionKeys, newLibraries, draft, overwriteSizes);
             return Page();
         }
 
         // The preview or the takeover of one source; a draft only shows the page again with what was typed.
-        protected async Task RunAsync(TakeoverSourceType source, string? baseUrl, string? apiKey, bool apply, string[]? rootFolders, List<ConnectionKeyRow>? connectionKeys, List<LibraryRow>? newLibraries, bool draft)
+        protected async Task RunAsync(TakeoverSourceType source, string? baseUrl, string? apiKey, bool apply, string[]? rootFolders, List<ConnectionKeyRow>? connectionKeys, List<LibraryRow>? newLibraries, bool draft,
+            string[]? overwriteSizes = null)
         {
             Input = new RunTakeoverDataV1(source, baseUrl ?? "", apiKey ?? "", apply, rootFolders,
                 new((connectionKeys ?? []).Select(item => new TakeoverConnectionKeyV1(item.TakeoverItemTypeId, item.BaseUrl ?? "", item.ApiKey))),
-                new((newLibraries ?? []).Select(item => new TakeoverLibraryV1(item.SourcePath ?? "", item.Name ?? "", item.StorageMountId, item.RelativePath ?? ""))));
+                new((newLibraries ?? []).Select(item => new TakeoverLibraryV1(item.SourcePath ?? "", item.Name ?? "", item.StorageMountId, item.RelativePath ?? ""))), overwriteSizes);
             if (!draft) Items = await run.ExecuteAsync<BaseDataList<TakeoverItemV1>>(new TakeoverParametersV1(), Input, HttpContext.RequestAborted);
             await LoadDataAsync();
             PreparePage();
@@ -142,8 +153,11 @@ namespace Jularr.Frontend.Pages.Admin.Takeover
                         path.TrimEnd('/', '\\').Split('/', '\\')[^1])).ToArray();
             return new(posted.TakeoverSourceTypeId, posted.BaseUrl, "", posted.Apply,
                 folders.Count > 0 ? [.. folders.Where(folder => folder.OutcomeKey is "takeover_suggested" or "takeover_assigned").Select(Choice)] : posted.RootFolders,
-                new(keys), new(libraries));
+                new(keys), new(libraries), posted.OverwriteSizes);
         }
+
+        // The quality a size line names: "WEBDL-1080p: 5 / 20 / 100 MB/min" is WEBDL-1080p.
+        private static string SizeQuality(TakeoverItemV1 item) => item.Name.IndexOf(": ", StringComparison.Ordinal) is > 0 and var end ? item.Name[..end] : item.Name;
 
         protected override async Task LoadDataAsync()
         {

@@ -114,7 +114,19 @@ namespace Jularr.Integrations.Data.Servarr
         // An album's primary type, such as "Album", "EP" or "Single"; the metadata profile its artist or author follows.
         public string? AlbumType { get; init; }
         public int? MetadataProfileId { get; init; }
+
+        // The tags the title carries there.
+        public int[] TagIds { get; init; } = [];
     }
+
+    // A tag of Sonarr or Radarr.
+    internal sealed record ServarrTag(int Id, string Label);
+
+    // A release profile: terms a release must hold one of or must not hold, for the titles carrying one of its tags (none: every title).
+    internal sealed record ServarrReleaseProfile(string Name, bool IsEnabled, string[] Required, string[] Ignored, int[] TagIds);
+
+    // The sizes of one quality in megabytes per minute; none is no limit.
+    internal sealed record ServarrQualitySize(string Quality, decimal Minimum, decimal? Preferred, decimal? Maximum);
 
     // One quality of a profile with its source and resolution, allowed alone or through its group.
     internal sealed class ServarrQuality

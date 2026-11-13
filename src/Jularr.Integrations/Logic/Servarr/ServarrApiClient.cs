@@ -42,7 +42,7 @@ namespace Jularr.Integrations.Logic.Servarr
         {
             using var document = await GetAsync(connection, "movie", ct);
             return [.. Items(document).Select(item => new ServarrTitle(Text(item, "title") ?? "", Int(item, "year"), Int(item, "tmdbId") is > 0 and var id ? id : null, Bool(item, "monitored") ?? false,
-                Bool(item, "hasFile") == false, qualityProfileId: Int(item, "qualityProfileId")) { Path = Text(item, "path") }).Where(title => title.Title.Length > 0)];
+                Bool(item, "hasFile") == false, qualityProfileId: Int(item, "qualityProfileId")) { Path = Text(item, "path"), TagIds = Numbers(item, "tags") }).Where(title => title.Title.Length > 0)];
         }
 
         public async Task<IReadOnlyList<ServarrTitle>> ReadSeriesAsync(ServarrConnection connection, CancellationToken ct)
@@ -58,7 +58,8 @@ namespace Jularr.Integrations.Logic.Servarr
                 {
                     Path = Text(item, "path"),
                     TvdbId = Int(item, "tvdbId") is > 0 and var tvdb ? tvdb : null,
-                    ImdbId = Text(item, "imdbId") is { Length: >= 9 and <= 16 } imdb && imdb.StartsWith("tt", StringComparison.Ordinal) ? imdb : null
+                    ImdbId = Text(item, "imdbId") is { Length: >= 9 and <= 16 } imdb && imdb.StartsWith("tt", StringComparison.Ordinal) ? imdb : null,
+                    TagIds = Numbers(item, "tags")
                 };
             }).Where(title => title.Title.Length > 0)];
         }
@@ -270,6 +271,58 @@ namespace Jularr.Integrations.Logic.Servarr
                 throw new ServarrException(ServarrFailure.Unavailable, "The application could not be reached.", exception);
             }
         }
+
+        // Tags, release profiles and quality sizes come along when the application has them; an older one without these lists brings none.
+        public async Task<IReadOnlyList<ServarrTag>> ReadTagsAsync(ServarrConnection connection, CancellationToken ct)
+        {
+            using var document = await GetOptionalAsync(connection, "tag", ct);
+            return document is null ? [] : [.. Items(document).Select(item => (Id: Int(item, "id"), Label: Text(item, "label"))).Where(tag => tag.Id is > 0 && tag.Label is not null)
+                .Select(tag => new ServarrTag(tag.Id!.Value, tag.Label!))];
+        }
+
+        public async Task<IReadOnlyList<ServarrReleaseProfile>> ReadReleaseProfilesAsync(ServarrConnection connection, CancellationToken ct)
+        {
+            // Sonarr 4 sends the terms as lists, Sonarr 3 as one text separated by commas.
+            using var document = await GetOptionalAsync(connection, "releaseprofile", ct);
+            return document is null ? [] : [.. Items(document).Select(item => new ServarrReleaseProfile(Text(item, "name") ?? "", Bool(item, "enabled") ?? true, Terms(item, "required"),
+                Terms(item, "ignored"), Numbers(item, "tags"))).Where(profile => profile.Required.Length > 0 || profile.Ignored.Length > 0)];
+        }
+
+        public async Task<IReadOnlyList<ServarrQualitySize>> ReadQualitySizesAsync(ServarrConnection connection, CancellationToken ct)
+        {
+            using var document = await GetOptionalAsync(connection, "qualitydefinition", ct);
+            return document is null ? [] : [.. Items(document).Select(item =>
+            {
+                var quality = item.TryGetProperty("quality", out var value) && value.ValueKind == JsonValueKind.Object ? Text(value, "name") : null;
+                return quality is null ? null : new ServarrQualitySize(quality, Decimal(item, "minSize") ?? 0, Decimal(item, "preferredSize"), Decimal(item, "maxSize"));
+            }).OfType<ServarrQualitySize>()];
+        }
+
+        private async Task<JsonDocument?> GetOptionalAsync(ServarrConnection connection, string resource, CancellationToken ct)
+        {
+            try
+            {
+                return await GetAsync(connection, resource, ct);
+            }
+            catch (ServarrException exception) when (exception.Failure is ServarrFailure.Unavailable or ServarrFailure.InvalidResponse)
+            {
+                return null;
+            }
+        }
+
+        private static string[] Terms(JsonElement item, string property) =>
+            !item.TryGetProperty(property, out var value) ? []
+            : value.ValueKind == JsonValueKind.Array ? [.. value.EnumerateArray().Where(term => term.ValueKind == JsonValueKind.String).Select(term => term.GetString()!.Trim()).Where(term => term.Length is > 0 and <= 500).Distinct().Take(100)]
+            : value.ValueKind == JsonValueKind.String ? [.. value.GetString()!.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).Where(term => term.Length <= 500).Distinct().Take(100)]
+            : [];
+
+        private static int[] Numbers(JsonElement item, string property) =>
+            item.ValueKind == JsonValueKind.Object && item.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.Array
+                ? [.. value.EnumerateArray().Where(number => number.ValueKind == JsonValueKind.Number && number.TryGetInt32(out var id) && id > 0).Select(number => number.GetInt32()).Distinct().Take(100)]
+                : [];
+
+        private static decimal? Decimal(JsonElement element, string property) =>
+            element.ValueKind == JsonValueKind.Object && element.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.Number && value.TryGetDecimal(out var number) ? number : null;
 
         private static IEnumerable<JsonElement> Items(JsonDocument document) =>
             document.RootElement.ValueKind == JsonValueKind.Array ? document.RootElement.EnumerateArray().Where(item => item.ValueKind == JsonValueKind.Object).Take(10_000) : [];
