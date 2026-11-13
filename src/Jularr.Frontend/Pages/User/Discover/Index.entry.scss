@@ -183,3 +183,17 @@ html[data-discover-layout="grid"] {
     color: var(--muted);
     font-size: var(--text-body);
 }
+
+// The hero is a short stage on a wide screen and gives its room to the shelves on a phone.
+.discover-results .hero-carousel { height: clamp(220px, 17vw, 260px); }
+@media (max-width: 640px) {
+    .discover-results .hero-carousel { display: none; }
+}
+
+// The recommendations keep the margins of what they hold inside, so the part arriving never moves their top edge.
+#discover-recommendations { display: flow-root; }
+
+// Without the hero the shelves start high on a phone: the next part that loads keeps a shelf's height free, so the one arriving pushes nothing.
+@media (max-width: 640px) {
+    .discover-paging[data-automatic]:has([data-discover-recommendations]) { min-height: 364px; }
+}

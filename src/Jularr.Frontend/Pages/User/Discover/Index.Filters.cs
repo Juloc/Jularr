@@ -197,12 +197,12 @@ namespace Jularr.Frontend.Pages.User.Discover
             {
                 var years = Enumerable.Range(FirstYear, DateTime.UtcNow.Year + 2 - FirstYear).Reverse()
                     .Select(year => new ChoiceOption("", year.ToString(CultureInfo.InvariantCulture), Year == year, year.ToString(CultureInfo.InvariantCulture)));
-                parts.Add(SelectFilter("year", "discover.filter.year", [new("discover.filter.any", "", Year is null), .. years]));
+                parts.Add(SelectFilter("year", "discover.filter.year", [new("discover.filter.year", "", Year is null), .. years]));
             }
 
             if (Offers(DiscoverFilter.Season))
             {
-                parts.Add(SelectFilter("season", "discover.filter.season", [new("discover.filter.any", "", Season is null),
+                parts.Add(SelectFilter("season", "discover.filter.season", [new("discover.filter.season", "", Season is null),
                     .. Enumerable.Range(1, 4).Select(season => new ChoiceOption("discover.season." + season, season.ToString(CultureInfo.InvariantCulture), Season == season))]));
             }
 
@@ -214,7 +214,7 @@ namespace Jularr.Frontend.Pages.User.Discover
 
             // More counts what it holds (the availability too); clearing keeps only the types.
             var more = (Availability is not null ? 1 : 0) + FilterCount - (Genres.Length > 0 ? 1 : 0) - (Year is not null || YearFrom is not null || YearTo is not null ? 1 : 0) - (Season is not null ? 1 : 0) - (Formats.Length > 0 ? 1 : 0);
-            var moreLabel = new List<IUiComponent> { new Icon("sliders", assets, 16), new Span(new Text("discover.filter.more")) };
+            var moreLabel = new List<IUiComponent> { new Span(new Text("discover.filter.more")) };
             if (more > 0) moreLabel.Add(new Span(new ValueText(more.ToString(CultureInfo.CurrentCulture))).Class("capsule-bar__badge"));
             parts.Add(Drawer.Opener(new Button([.. moreLabel]).Class("button discover-filter__more"), "discover-panel", "filter"));
             if (FilterCount > 0)
@@ -382,9 +382,10 @@ namespace Jularr.Frontend.Pages.User.Discover
         {
             var id = "discover-filter-" + name;
             var summary = string.Join(", ", chosen);
+            // A pill named by its filter while nothing is chosen, by the choices once something is; the name stays for assistive technology.
             return new Div(
-                new Span(new Text(labelKey)).Class("discover-filter__label").Attribute("id", id + "-label"),
-                new Button(new Span(summary.Length > 0 ? new ValueText(summary) : new Text("discover.filter.any")).Class("discover-filter__value"))
+                new Span(new Text(labelKey)).Class("discover-filter__label visually-hidden").Attribute("id", id + "-label"),
+                new Button(new Span(summary.Length > 0 ? new ValueText(summary) : new Text(labelKey)).Class("discover-filter__value"), new Icon("chevron-down", assets, 14))
                     .Class("discover-filter__button").Attribute("popovertarget", id).Attribute("aria-haspopup", "dialog").Attribute("aria-expanded", "false")
                     .Attribute("aria-describedby", id + "-label"),
                 new Div(new ChoiceGroup(assets, labelKey, name, picks, new ChoiceOptions(Multiple: true, Layout: ChoiceLayout.Checks))).Class("discover-filter__popup")
@@ -394,7 +395,7 @@ namespace Jularr.Frontend.Pages.User.Discover
         private IUiComponent SelectFilter(string name, string labelKey, IReadOnlyList<ChoiceOption> options)
         {
             var id = "discover-filter-" + name;
-            return new Div(new Label(new Text(labelKey)).Class("discover-filter__label").Attribute("for", id),
+            return new Div(new Label(new Text(labelKey)).Class("discover-filter__label visually-hidden").Attribute("for", id),
                 new Select([.. options.Select(option =>
                 {
                     var item = new Option(option.LabelValue is { } value ? new ValueText(value) : new Text(option.LabelKey)).Attribute("value", option.Value);

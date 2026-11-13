@@ -171,9 +171,8 @@ namespace Jularr.Frontend.Pages.User.Discover
             var selected = Selected;
             var searching = !string.IsNullOrWhiteSpace(Query);
 
-            // One row of media types and the filters under it; a ranking opened from its shelf names itself and leads back.
+            // One row: the media types, then the filters as pills; a ranking opened from its shelf names itself and leads back.
             page.Content.Add(TypeBar());
-            if (FilterRow() is { } filters) page.Content.Add(filters);
             if (selected is not null && View is { } view && !searching)
             {
                 var heading = new List<IUiComponent>
@@ -294,10 +293,9 @@ namespace Jularr.Frontend.Pages.User.Discover
             var filter = new List<IUiComponent> { new Icon("filter", assets, 16) };
             if (narrowed > 0) filter.Add(new Span(new ValueText(narrowed.ToString(CultureInfo.CurrentCulture))).Class("capsule-bar__badge"));
             // The filter row's More opens the filter when the row is there.
-            var tools = new List<IUiComponent>
-            {
-                Drawer.Opener(new Button(new Icon("sliders", assets, 16)).IconOnly(texts["discover.view.open"]).Class("button button--icon capsule-bar__tool"), "discover-panel", "view")
-            };
+            var tools = new List<IUiComponent>();
+            if (FilterRow() is { } filters) tools.Add(filters);
+            tools.Add(Drawer.Opener(new Button(new Icon("sliders", assets, 16)).IconOnly(texts["discover.view.open"]).Class("button button--icon capsule-bar__tool"), "discover-panel", "view"));
             if (Offered is null || !string.IsNullOrWhiteSpace(Query))
             {
                 tools.Add(Drawer.Opener(new Button([.. filter]).IconOnly(texts["discover.filter.open"]).Class("button button--icon capsule-bar__tool"), "discover-panel", "filter"));
