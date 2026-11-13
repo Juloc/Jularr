@@ -169,11 +169,13 @@ namespace Jularr.Frontend.Pages.Admin.Profile
                 {
                     advanced.Section("profile.section.size", section =>
                     {
+                        section.Content(ExpertInfo("profile.expert.size"));
                         section.Number(item => item.MinimumSizeMb, "profile.minimumSize", affix: FieldAffix.Unit("unit.megabytes"));
                         section.Number(item => item.MaximumSizeMb, "profile.maximumSize", affix: FieldAffix.Unit("unit.megabytes"));
                     });
                     advanced.Section("arr.releaseGroups", section =>
                     {
+                        section.Content(ExpertInfo("profile.expert.groups"));
                         section.Number(item => item.GoodGroupScore, "profile.goodGroupScore", new FieldHelp(Info: "profile.goodGroupScore.info"));
                         section.Number(item => item.BadGroupScore, "profile.badGroupScore", new FieldHelp(Info: "profile.badGroupScore.info"));
                         if (_groupFigures is { } figures)
@@ -186,12 +188,30 @@ namespace Jularr.Frontend.Pages.Admin.Profile
                     });
                     advanced.Section("profile.section.upgrades", section =>
                     {
+                        section.Content(ExpertInfo("profile.expert.upgrades"));
                         section.Number(item => item.MinimumFormatScore, "arr.minimumScore", new FieldHelp(Info: "profile.minimumScore.info"));
                         section.Number(item => item.CutoffFormatScore, "arr.cutoffScore", new FieldHelp(Info: "profile.cutoffScore.info"));
                         section.Number(item => item.MinimumUpgradeFormatScore, "arr.upgradeScore", new FieldHelp(Info: "profile.upgradeScore.info"));
                     });
+                    // The matrix: every custom format with this profile's score (0 leaves it out).
+                    if (input.FormatScores.Count > 0) advanced.Section("arr.scores", section =>
+                    {
+                        section.Content(ExpertInfo("profile.expert.scores"));
+                        section.Rows(item => item.FormatScores, (row, score) =>
+                        {
+                            row.Hidden(item => item.FormatId);
+                            if (_formats.FirstOrDefault(format => format.Id == score.FormatId) is { } named)
+                            {
+                                row.Content(new P(new ValueText(named.Name)));
+                                row.Number(item => item.Score, "wanted.search.score");
+                            }
+                            else row.Hidden(item => item.Score);
+                        });
+                    });
+
                     advanced.Section("arr.qualityGroups", section =>
                     {
+                        section.Content(ExpertInfo("profile.expert.qualityGroups"));
                         section.Rows(item => item.QualityGroups, (row, group) =>
                         {
                             row.Hidden(item => item.Id);
@@ -203,17 +223,6 @@ namespace Jularr.Frontend.Pages.Admin.Profile
                         section.Content(Draft("arr.refreshGroups", "refreshGroups", "true"));
                     });
 
-                    // The matrix: every custom format with this profile's score (0 leaves it out).
-                    if (input.FormatScores.Count > 0) advanced.Section("arr.scores", section => section.Rows(item => item.FormatScores, (row, score) =>
-                    {
-                        row.Hidden(item => item.FormatId);
-                        if (_formats.FirstOrDefault(format => format.Id == score.FormatId) is { } named)
-                        {
-                            row.Content(new P(new ValueText(named.Name)));
-                            row.Number(item => item.Score, "wanted.search.score");
-                        }
-                        else row.Hidden(item => item.Score);
-                    }));
                 });
                 fields.Save();
             }, Address(), token, input, FormError);
@@ -294,6 +303,9 @@ namespace Jularr.Frontend.Pages.Admin.Profile
                         .Class("ui-field__top"),
                     new Div(new Div([.. segments]).Class("ui-segments")).Class("ui-field__control ui-field__control--segmented")).Class("ui-field__group")).Class("ui-field");
         }
+
+        // The one sentence under the heading of an expert part.
+        private static IUiComponent ExpertInfo(string key) => new P(new Text(key)).Class("profile-expert__info");
 
         // One line per media type with two switches: the profile applies to it, and it is the type's default.
         private IUiComponent KindSwitches(IReadOnlyList<SelectOption> kinds, IEnumerable<AcquisitionMediaKind> applies, IEnumerable<AcquisitionMediaKind> defaults)

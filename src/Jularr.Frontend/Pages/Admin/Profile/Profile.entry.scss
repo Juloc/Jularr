@@ -135,50 +135,56 @@
     &__chevron { margin-left: auto; color: var(--muted); transition: transform .15s ease; }
     &[open] &__chevron { transform: rotate(180deg); }
 
+    // The parts as soft tiles: size and groups side by side, then upgrades, the format points and the quality groups across the width.
     &__body {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(min(100%, 440px), 1fr));
-        align-items: start;
-        gap: 0 32px;
-        padding: 0 18px 16px;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        align-items: stretch;
+        gap: 14px;
+        padding: 2px 18px 18px;
+
+        @media (max-width: 900px) { grid-template-columns: minmax(0, 1fr); }
 
         > .ui-form__section {
             grid-column: auto;
-            grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
             align-content: start;
             gap: 10px 16px;
-            padding: 12px 0 4px;
+            padding: 14px 16px 16px;
             border: 0;
-            border-radius: 0;
-            background: none;
+            border-radius: 14px;
+            background: color-mix(in srgb, var(--accent-soft) 40%, var(--surface));
             box-shadow: none;
 
-            > legend { font-size: var(--text-base, 1rem); }
-            > button, > .ui-form__actions { justify-self: start; }
+            > legend { margin-bottom: 0; font-size: var(--text-base, 1rem); }
+            > .profile-expert__info { grid-column: 1 / -1; margin: -6px 0 2px; color: var(--muted); font-size: var(--text-small, .8125rem); }
+            .ui-field__control { background: var(--surface); }
         }
 
-        // The quality groups' buttons sit side by side under their rows.
+        > .ui-form__section:has([name=MinimumFormatScore]),
+        > .ui-form__section:has([name$='.Score']),
+        > .ui-form__section:has(> [name=addGroup]) { grid-column: 1 / -1; }
+
+        // The quality groups: their rows, then the two buttons side by side.
         > .ui-form__section:has(> [name=addGroup]) {
             display: flex;
             flex-wrap: wrap;
             align-content: start;
             gap: 10px;
 
-            > legend, > .ui-form__row { width: 100%; }
+            > legend, > .profile-expert__info, > .ui-form__row { width: 100%; }
         }
 
-        // The score of every format: a name and a narrow number per line, in columns across the card.
+        // The points of every format: a name and a narrow number per line, in columns across the tile.
         > .ui-form__section:has([name$='.Score']) {
-            grid-column: 1 / -1;
             grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr));
-            gap: 4px 28px;
+            gap: 6px 28px;
 
             > .ui-form__row {
                 display: flex;
                 align-items: center;
                 justify-content: space-between;
                 gap: 12px;
-                padding: 2px 0;
 
                 > p { margin: 0; }
                 .ui-field { max-width: 130px; }

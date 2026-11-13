@@ -11523,6 +11523,11 @@
   "arr.test.taken": ["Would be taken · {0}", "Würde genommen · {0}"],
   "arr.test.noProfiles": ["No profile for films, series or anime yet.", "Noch kein Profil für Filme, Serien oder Anime."],
   "profile.advanced.info": ["Custom formats, points and limits, as in Sonarr", "Eigene Formate, Punkte und Grenzen, wie in Sonarr"],
+  "profile.expert.size": ["Releases outside these limits are never taken.", "Releases außerhalb dieser Grenzen werden nie genommen."],
+  "profile.expert.groups": ["Points a good or a bad group adds; the switch under Prefer sets them for you.", "Punkte, die eine gute oder schlechte Gruppe bringt; der Schalter unter Bevorzugen setzt sie für dich."],
+  "profile.expert.upgrades": ["Custom format points a release needs at least, and when upgrades stop.", "Punkte aus eigenen Formaten, die ein Release mindestens braucht, und wann Upgrades aufhören."],
+  "profile.expert.scores": ["Points of every custom format for this profile; 0 leaves it out.", "Punkte jedes eigenen Formats für dieses Profil; 0 lässt es aus."],
+  "profile.expert.qualityGroups": ["Qualities that count as one, as in Sonarr.", "Qualitäten, die als eine zählen, wie in Sonarr."],
   "profile.deleteConfirm": ["Delete this profile?", "Dieses Profil löschen?"],
   "acquisition.reason.FormatEvaluationFailed": [
    "Custom format could not be evaluated",
