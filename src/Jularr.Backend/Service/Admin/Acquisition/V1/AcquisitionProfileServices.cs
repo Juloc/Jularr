@@ -36,7 +36,11 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                     ), '{}') AS "DefaultFor",
                     profile."Definition"::text AS "Definition",
                     (SELECT count(*)::integer FROM "WantedItems" AS wanted WHERE wanted."AcquisitionProfileId" = profile."Id") AS "WantedCount",
-                    profile."Version"
+                    profile."Version",
+                    ((SELECT count(*) FROM "RequestRules" AS rule WHERE profile."Id" = ANY(rule."AcquisitionProfileIds"))
+                        + (SELECT count(*) FROM "AccountRequestRules" AS rule WHERE profile."Id" = ANY(rule."AcquisitionProfileIds")))::integer AS "RuleCount",
+                    (SELECT count(*)::integer FROM "AcquisitionRequests" AS request
+                        WHERE request."AcquisitionProfileId" = profile."Id" AND request."AcquisitionRequestStatusTypeId" BETWEEN 1 AND 5) AS "OpenRequestCount"
                 FROM
                     "AcquisitionProfiles" AS profile
                 WHERE
@@ -92,7 +96,11 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                     ), '{}') AS "DefaultFor",
                     profile."Definition"::text AS "Definition",
                     (SELECT count(*)::integer FROM "WantedItems" AS wanted WHERE wanted."AcquisitionProfileId" = profile."Id") AS "WantedCount",
-                    profile."Version"
+                    profile."Version",
+                    ((SELECT count(*) FROM "RequestRules" AS rule WHERE profile."Id" = ANY(rule."AcquisitionProfileIds"))
+                        + (SELECT count(*) FROM "AccountRequestRules" AS rule WHERE profile."Id" = ANY(rule."AcquisitionProfileIds")))::integer AS "RuleCount",
+                    (SELECT count(*)::integer FROM "AcquisitionRequests" AS request
+                        WHERE request."AcquisitionProfileId" = profile."Id" AND request."AcquisitionRequestStatusTypeId" BETWEEN 1 AND 5) AS "OpenRequestCount"
                 FROM
                     "AcquisitionProfiles" AS profile
                 WHERE
@@ -176,7 +184,7 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                 definition.MinimumFormatScore, definition.CutoffFormatScore, definition.MinimumUpgradeFormatScore, row.WantedCount, row.Version,
                 [.. (definition.Monitoring?.PrimaryTypes ?? []).Concat(definition.Monitoring?.SecondaryTypes ?? []).Concat(definition.Monitoring?.ReleaseStatuses ?? [])],
                 definition.Monitoring?.Languages ?? [], definition.Monitoring?.MinimumPages, definition.LanguageOrder, definition.LanguageFallback,
-                definition.GoodGroupScore, definition.BadGroupScore);
+                definition.GoodGroupScore, definition.BadGroupScore, row.RuleCount, row.OpenRequestCount);
         }
     }
 }

@@ -101,6 +101,8 @@ namespace Jularr.Frontend.Framework
                 [
                     new("arr.profiles", "/Admin/Acquisition/Profiles", Acquisition, ["Acquisition"], "profiles", true),
                     new("arr.formats", "/Admin/Acquisition/Profiles", Acquisition, ["Acquisition"], "formats"),
+                    new("arr.releaseGroups", "/Admin/Acquisition/Profiles", Acquisition, ["Acquisition"], "groups"),
+                    new("arr.releaseProfiles", "/Admin/Acquisition/Profiles", Acquisition, ["Acquisition"], "releases"),
                     new("arr.quality", "/Admin/Acquisition/Profiles", Acquisition, ["Acquisition"], "quality")
                 ]),
                 new("sources", "admin.sources.title", "swap",

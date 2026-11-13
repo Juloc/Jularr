@@ -23,22 +23,22 @@ namespace Jularr.E2E.Tests
             {
                 await Owner.SetUpAndSignInAsync(page);
 
-                // One row of three tabs joins the quality rules, without a media-type bar, and no tab offers a waiting time.
-                foreach (var label in new[] { "Profiles", "Custom formats", "Quality" })
+                // One row of five tabs joins the quality rules, without a media-type bar, and no tab offers a waiting time; the groups add a row of their filters below.
+                foreach (var label in new[] { "Profiles", "Custom formats", "Release groups", "Release profiles", "Quality" })
                 {
                     await page.GotoAsync("/Admin/Acquisition/Profiles");
                     await page.Locator(".navigation-tabs").GetByRole(AriaRole.Link, new() { Name = label, Exact = true }).ClickAsync();
-                    await Assertions.Expect(page.Locator(".navigation-tabs")).ToHaveCountAsync(1);
-                    await Assertions.Expect(page.Locator(".navigation-tabs__link")).ToHaveCountAsync(3);
+                    await Assertions.Expect(page.Locator(".navigation-tabs")).ToHaveCountAsync(label == "Release groups" ? 2 : 1);
+                    await Assertions.Expect(page.Locator(".navigation-tabs").First.Locator(".navigation-tabs__link")).ToHaveCountAsync(5);
                     await Assertions.Expect(page.Locator("main .capsule-bar")).ToHaveCountAsync(0);
                     await Assertions.Expect(page.Locator("main [role=alert]")).ToHaveCountAsync(0);
                     var text = (await page.Locator("main").InnerTextAsync()).ToLowerInvariant();
                     Assert.IsFalse(text.Contains("delay", StringComparison.Ordinal) || text.Contains("wait", StringComparison.Ordinal), "A waiting time is offered on " + label);
                 }
 
-                // An address of the former panes leads to the section that holds it now.
+                // An address of the former panes leads to the tab that holds it now.
                 await page.GotoAsync("/Admin/Acquisition/Profiles?tab=groups&mediaTypeId=5");
-                await Assertions.Expect(page).ToHaveURLAsync(new Regex("/Admin/Acquisition/Profiles\\?tab=formats#release-groups$"));
+                await Assertions.Expect(page).ToHaveURLAsync(new Regex("/Admin/Acquisition/Profiles\\?tab=groups$"));
                 await Assertions.Expect(page.Locator("#release-groups")).ToBeVisibleAsync();
 
                 // A custom format with its conditions is a dialog of the list; it belongs to every media type.
@@ -105,7 +105,7 @@ namespace Jularr.E2E.Tests
                 await Assertions.Expect(page.Locator(".tag--accent", new() { HasTextString = "Anime" })).ToHaveCountAsync(1);
 
                 // A release profile is added in a dialog with Cancel; afterwards its settings are inputs of its card, saved by the page's pill.
-                await page.GotoAsync("/Admin/Acquisition/Profiles?tab=formats");
+                await page.GotoAsync("/Admin/Acquisition/Profiles?tab=releases");
                 await Steps.FollowAsync(page, page.GetByRole(AriaRole.Link, new() { Name = "New release profile", Exact = true }));
                 Assert.AreEqual(1, await page.Locator("dialog#release-editor").GetByRole(AriaRole.Button, new() { Name = "Cancel", Exact = true }).CountAsync());
                 var release = page.Locator("dialog#release-editor form").First;
@@ -125,9 +125,11 @@ namespace Jularr.E2E.Tests
                 await page.ReloadAsync();
                 Assert.AreEqual("x265", await Card(page, "Browser release").Locator("[name=Ignored]").InputValueAsync());
 
-                // A release group is found or added in one field; a click on its rating saves it at once, without a reload.
-                await page.Locator(".release-groups-bar [name=Name]").FillAsync("Browser-Group");
-                await Steps.SubmitAsync(page, page.Locator(".release-groups-bar form").First);
+                // The groups tab searches while typing; words that name no group offer to add it. A click on its rating saves it at once, without a reload.
+                await page.GotoAsync("/Admin/Acquisition/Profiles?tab=groups");
+                await page.GetByRole(AriaRole.Searchbox, new() { Name = "Find a group" }).FillAsync("Browser-Group");
+                await Assertions.Expect(page).ToHaveURLAsync(new Regex("q=Browser-Group"));
+                await Steps.SubmitAsync(page, page.Locator("form", new() { Has = page.Locator(".release-groups-add") }).First);
                 var groupRow = Row(page, "Browser-Group");
                 await Assertions.Expect(groupRow).ToContainTextAsync("Not rated");
                 await Assertions.Expect(groupRow.Locator("[data-form-submit-fallback]")).ToBeHiddenAsync();
@@ -151,7 +153,8 @@ namespace Jularr.E2E.Tests
                 await page.Keyboard.PressAsync("Enter");
                 await Assertions.Expect(Row(page, "Browser-Group").Locator("input:checked")).ToHaveCountAsync(0);
 
-                // A tag is a card whose label is its input; removing asks in a dialog with Cancel.
+                // A tag is a card whose label is its input, beside the release profiles; removing asks in a dialog with Cancel.
+                await page.GotoAsync("/Admin/Acquisition/Profiles?tab=releases");
                 await Steps.FollowAsync(page, page.GetByRole(AriaRole.Link, new() { Name = "New tag", Exact = true }));
                 var tag = page.Locator("dialog#tag-editor form").First;
                 await tag.Locator("[name=Label]").FillAsync("browser-tag");

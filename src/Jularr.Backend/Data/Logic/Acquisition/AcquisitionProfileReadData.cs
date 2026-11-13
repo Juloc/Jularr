@@ -6,7 +6,8 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 {
     internal sealed class AcquisitionProfileReadData : BaseData
     {
-        public AcquisitionProfileReadData(long id, string name, AcquisitionMediaKind[] mediaKinds, AcquisitionMediaKind[] defaultFor, string definition, int wantedCount, long version)
+        public AcquisitionProfileReadData(long id, string name, AcquisitionMediaKind[] mediaKinds, AcquisitionMediaKind[] defaultFor, string definition, int wantedCount, long version, int ruleCount = 0,
+            int openRequestCount = 0)
         {
             Id = id;
             Name = name;
@@ -15,6 +16,8 @@ namespace Jularr.Backend.Data.Logic.Acquisition
             Definition = definition;
             WantedCount = wantedCount;
             Version = version;
+            RuleCount = ruleCount;
+            OpenRequestCount = openRequestCount;
         }
 
         [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.Id))]
@@ -37,6 +40,12 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
         [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.Version))]
         public long Version { get; }
+
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.WantedCount))]
+        public int RuleCount { get; }
+
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.WantedCount))]
+        public int OpenRequestCount { get; }
     }
 
 }

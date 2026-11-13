@@ -35,10 +35,10 @@ namespace Jularr.Backend.Tests
                 StringAssert.Contains(page, "class=\"menu-entry is-active\" href=\"" + address + "\"", address);
             }
 
-            // The quality profiles are an entry of their own: their three tabs are its chips.
+            // The quality profiles are an entry of their own: their five tabs are its chips.
             var rules = Row(await GetAsync(host, "/Admin/Acquisition/Profiles"));
-            foreach (var pane in new[] { "profiles", "formats", "quality" }) StringAssert.Contains(rules, "tab=" + pane);
-            foreach (var pane in new[] { "sizes", "release", "groups", "tags" }) Assert.IsFalse(rules.Contains("tab=" + pane, StringComparison.Ordinal), pane);
+            foreach (var pane in new[] { "profiles", "formats", "groups", "releases", "quality" }) StringAssert.Contains(rules, "tab=" + pane);
+            foreach (var pane in new[] { "sizes", "release\"", "tags" }) Assert.IsFalse(rules.Contains("tab=" + pane, StringComparison.Ordinal), pane);
             Assert.IsFalse(rules.Contains("href=\"/Admin/Acquisition\"", StringComparison.Ordinal));
 
             // A module that is off takes its entries and chips with it.

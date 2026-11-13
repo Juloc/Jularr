@@ -170,6 +170,22 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         public long Version { get; }
     }
 
+    // What keeps a profile from being deleted: titles that chose it and open requests for it.
+    internal sealed class AcquisitionProfileBlockersData : BaseData
+    {
+        public AcquisitionProfileBlockersData(bool hasTitles, bool hasRequests)
+        {
+            HasTitles = hasTitles;
+            HasRequests = hasRequests;
+        }
+
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.IsInUse))]
+        public bool HasTitles { get; }
+
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.IsInUse))]
+        public bool HasRequests { get; }
+    }
+
     internal sealed class AcquisitionProfileKeyData : BaseData
     {
         public AcquisitionProfileKeyData(long id, long? version = null)

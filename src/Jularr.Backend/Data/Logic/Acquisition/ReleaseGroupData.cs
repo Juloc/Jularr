@@ -7,11 +7,16 @@ namespace Jularr.Backend.Data.Logic.Acquisition
     // The groups one search saw; each counts once per search.
     internal sealed class ReleaseGroupSightingsData : BaseData
     {
-        public ReleaseGroupSightingsData(string[] names, DateTime seenAt)
+        public ReleaseGroupSightingsData(string[] names, DateTime seenAt, AcquisitionMediaKind? mediaKind = null)
         {
             Names = names;
             SeenAt = seenAt;
+            MediaKind = mediaKind;
         }
+
+        // The media type the search was for; none counts the group only.
+        [DataField(typeof(ReleaseGroupFields), nameof(ReleaseGroupFields.MediaKind), false)]
+        public AcquisitionMediaKind? MediaKind { get; }
 
         [DataField(typeof(ReleaseGroupFields), nameof(ReleaseGroupFields.Names))]
         public string[] Names { get; }
@@ -51,13 +56,25 @@ namespace Jularr.Backend.Data.Logic.Acquisition
     // The groups whose name holds the search text in any case; no text lists them all.
     internal sealed class ReleaseGroupFilterData : BaseData
     {
-        public ReleaseGroupFilterData(string? search)
+        public ReleaseGroupFilterData(string? search, ReleaseGroupFilter? filter = null, AcquisitionMediaKind? mediaKind = null, ReleaseGroupSort? sort = null)
         {
             Search = search;
+            Filter = filter;
+            MediaKind = mediaKind;
+            Sort = sort ?? ReleaseGroupSort.Rating;
         }
 
         [DataField(typeof(ReleaseGroupFields), nameof(ReleaseGroupFields.Search))]
         public string? Search { get; }
+
+        [DataField(typeof(ReleaseGroupFields), nameof(ReleaseGroupFields.Filter), false)]
+        public ReleaseGroupFilter? Filter { get; }
+
+        [DataField(typeof(ReleaseGroupFields), nameof(ReleaseGroupFields.MediaKind), false)]
+        public AcquisitionMediaKind? MediaKind { get; }
+
+        [DataField(typeof(ReleaseGroupFields), nameof(ReleaseGroupFields.Sort))]
+        public ReleaseGroupSort Sort { get; }
     }
 
     internal sealed class ReleaseGroupKeyData : BaseData

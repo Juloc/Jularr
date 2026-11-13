@@ -179,6 +179,8 @@ namespace Jularr.Backend.Service.Core.Localization
             new("errors.validation.mixed_quality_lists", "These media types have different quality lists. A profile joins films, series and anime, or books and light novels, or stays with manga, music or games."),
             new("errors.validation.default_required", "Every media type keeps a default profile. Make another profile its default first."),
             new("errors.validation.kind_in_use", "Titles of this media type chose this profile. Give them another profile first."),
+            new("errors.validation.profile_has_titles", "Titles still use this profile. Give them another profile first."),
+            new("errors.validation.profile_has_requests", "Open requests still use this profile. Settle them first."),
             new("errors.validation.search_in_progress", "A library search is already queued or running. Finish or cancel it before starting a different selection."),
             new("errors.validation.no_search_targets", "No monitored search targets match this selection. Monitoring was not changed."),
             new("errors.validation.invalid_pin", "The PIN is incorrect."),
