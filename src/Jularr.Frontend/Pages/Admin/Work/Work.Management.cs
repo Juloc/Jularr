@@ -796,6 +796,7 @@ namespace Jularr.Frontend.Pages.Admin.Work
                 }
 
                 form.Choices(data => data.TagIds, "arr.tags", _tagChoices);
+                if (_autoTags.Length > 0) form.Content(AutoTagChips(_autoTags));
                 form.Cancel();
                 form.Submit("common.save");
             }, Address(Tab, "Choice") + (ownTarget ? "&wantedItemId=" + wanted.Id.ToString(CultureInfo.InvariantCulture) : ""), csrf,

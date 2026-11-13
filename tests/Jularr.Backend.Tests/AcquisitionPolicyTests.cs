@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using Microsoft.Extensions.DependencyInjection;
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Acquisition.V1;
 using Jularr.Backend.Data.Common;
@@ -40,6 +41,71 @@ namespace Jularr.Backend.Tests
             await host.Fixture.RunSqlAsync("UPDATE \"AcquisitionProfiles\" SET \"Definition\" = \"Definition\" - 'FormatScores' WHERE \"Id\" = 1");
             using var deleted = await host.SendAsync(HttpMethod.Delete, Root + "custom-formats/" + key.Id + "?version=2");
             Assert.AreEqual(HttpStatusCode.OK, deleted.StatusCode, await deleted.Content.ReadAsStringAsync());
+        }
+
+        [TestMethod]
+        public async Task AutoTags_FollowTheTitles_StayBesideAPersonsTags_AndCannotBeChanged()
+        {
+            await using var host = await CreateHostAsync();
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle", "OriginalLanguage", "GenreIds") VALUES (9001, 1, 'Auto Movie', 'en', '{1,3}');
+                INSERT INTO "WantedItems" ("Id", "WorkId") VALUES (9101, 9001);
+                INSERT INTO "AcquisitionRequests" ("Id", "WorkId", "RequestedByProfileId", "RequestedByAccountId", "UiLocaleId", "AcquisitionRequestStatusTypeId")
+                SELECT 9201, 9001, profile."Id", profile."OwnerAccountId", 1, 1 FROM "Profiles" AS profile ORDER BY profile."Id" LIMIT 1;
+                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle", "OriginalLanguage") VALUES (9002, 1, 'Catalog only', 'fr');
+                """);
+            var profileId = await host.ScalarAsync("""SELECT "RequestedByProfileId" FROM "AcquisitionRequests" WHERE "Id" = 9201""");
+
+            // A run gives the title with a target its media type, language, genres and requester; a title without a target gets none.
+            await RefreshAsync();
+            Assert.AreEqual($"genre:1,genre:3,kind:movie,language:en,requester:{profileId}", await Keys(9001));
+            Assert.AreEqual("", await Keys(9002));
+            using (var listed = await host.SendAsync(HttpMethod.Get, Root + "tags?automatic=true&page=1&pageSize=50"))
+            {
+                var tags = (await listed.Content.ReadFromJsonAsync<PageResult<AcquisitionTagDetailsV1>>())!.Items;
+                Assert.AreEqual(5, tags.Count);
+                Assert.IsNotNull(tags.Single(tag => tag.AutoKey!.StartsWith("requester:", StringComparison.Ordinal)).AutoName);
+            }
+
+            // A person's tag joins and leaves beside them; the kept ones stay.
+            using var mine = await host.SendAsync(HttpMethod.Put, Root + "tags", new SaveAcquisitionTagDataV1(null, "mine", null));
+            var mineId = (await mine.Content.ReadFromJsonAsync<SavedAcquisitionPolicyV1>())!.Id;
+            var autoId = (long)(await host.ScalarAsync("""SELECT "Id" FROM "Tags" WHERE "AutoKey" = 'kind:movie'"""))!;
+            await SetTagsAsync([mineId, autoId]);
+            Assert.AreEqual(6L, await host.ScalarAsync("""SELECT count(*) FROM "WorkTags" WHERE "WorkId" = 9001"""));
+            await SetTagsAsync([]);
+            Assert.AreEqual(5L, await host.ScalarAsync("""SELECT count(*) FROM "WorkTags" WHERE "WorkId" = 9001"""));
+
+            // A kept tag is neither renamed nor removed by hand.
+            using (var renamed = await host.SendAsync(HttpMethod.Put, Root + "tags", new SaveAcquisitionTagDataV1(autoId, "renamed", 1)))
+                Assert.AreEqual(HttpStatusCode.BadRequest, renamed.StatusCode);
+            using (var removed = await host.SendAsync(HttpMethod.Delete, Root + "tags/" + autoId + "?version=1"))
+                Assert.AreEqual(HttpStatusCode.BadRequest, removed.StatusCode);
+
+            // Another language replaces the old tag, which leaves once nothing carries it.
+            await host.Fixture.RunSqlAsync("""UPDATE "Works" SET "OriginalLanguage" = 'ja', "GenreIds" = '{1}' WHERE "Id" = 9001""");
+            await RefreshAsync();
+            Assert.AreEqual($"genre:1,kind:movie,language:ja,requester:{profileId}", await Keys(9001));
+            Assert.AreEqual(0L, await host.ScalarAsync("""SELECT count(*) FROM "Tags" WHERE "AutoKey" IN ('language:en', 'genre:3')"""));
+
+            async Task RefreshAsync()
+            {
+                await using var scope = host.Services.CreateAsyncScope();
+                await scope.ServiceProvider.GetRequiredService<Service.System.Acquisition.V1.RefreshAutoTagsV1>()
+                    .ExecuteAsync<UpdateResult>(new Data.System.Acquisition.V1.AutoTagParametersV1(), default);
+            }
+
+            async Task<string> Keys(long workId) => (string)(await host.ScalarAsync($"""
+                SELECT coalesce(string_agg(tag."AutoKey", ',' ORDER BY tag."AutoKey"), '') FROM "WorkTags" AS tagged JOIN "Tags" AS tag ON tag."Id" = tagged."TagId"
+                WHERE tagged."WorkId" = {workId} AND tag."AutoKey" IS NOT NULL
+                """))!;
+
+            async Task SetTagsAsync(long[] tagIds)
+            {
+                var version = (long)(await host.ScalarAsync("""SELECT "Version" FROM "WantedItems" WHERE "Id" = 9101"""))!;
+                using var updated = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/wanted/9101", new Data.Admin.Wanted.V1.UpdateWantedDataV1(false, version, tagIds: tagIds));
+                Assert.AreEqual(HttpStatusCode.OK, updated.StatusCode, await updated.Content.ReadAsStringAsync());
+            }
         }
 
         [TestMethod]

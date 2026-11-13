@@ -127,19 +127,23 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                 SELECT
                     item."Id",
                     item."Label",
-                    item."Version"
+                    item."Version",
+                    item."AutoKey",
+                    requester."DisplayName" AS "AutoName"
                 FROM
                     "Tags" AS item
+                    LEFT JOIN "Profiles" AS requester ON item."AutoKey" LIKE 'requester:%' AND requester."Id"::text = split_part(item."AutoKey", ':', 2)
                 WHERE
-                    cardinality(@AcquisitionTagIds::bigint[]) = 0
-                    OR item."Id" = ANY(@AcquisitionTagIds::bigint[])
+                    (cardinality(@AcquisitionTagIds::bigint[]) = 0 OR item."Id" = ANY(@AcquisitionTagIds::bigint[]))
+                    AND (@Automatic::boolean IS NULL OR (item."AutoKey" IS NOT NULL) = @Automatic)
                 ORDER BY
+                    item."AutoKey" IS NOT NULL,
                     item."Label",
                     item."Id"
                 LIMIT @PageSize
                 OFFSET @Offset;
                 """;
-            sql.Parameters.Add(new AcquisitionTagFilterData(Parameters.AcquisitionTagIds));
+            sql.Parameters.Add(new AcquisitionTagFilterData(Parameters.AcquisitionTagIds, Parameters.Automatic));
             sql.Page = Page;
 
             return new PageResult<AcquisitionTagDetailsV1>(await Context.ReadSql.ReadListAsync<AcquisitionTagDetailsV1>(sql, CancellationToken), Page!);
@@ -161,9 +165,12 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                 SELECT
                     item."Id",
                     item."Label",
-                    item."Version"
+                    item."Version",
+                    item."AutoKey",
+                    requester."DisplayName" AS "AutoName"
                 FROM
                     "Tags" AS item
+                    LEFT JOIN "Profiles" AS requester ON item."AutoKey" LIKE 'requester:%' AND requester."Id"::text = split_part(item."AutoKey", ':', 2)
                 WHERE
                     item."Id" = @AcquisitionTagId;
                 """;

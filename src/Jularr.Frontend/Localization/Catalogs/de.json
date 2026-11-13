@@ -12783,6 +12783,14 @@
    "Missing metadata",
    "Fehlende Metadaten"
   ],
+  "jobs.job.autoTags": ["Automatic tags", "Automatische Tags"],
+  "jobs.about.autoTags": ["Keeps the automatic tags of every title with a target current: media type, original language, genres and who requested it.", "Hält die automatischen Tags jedes Titels mit Ziel aktuell: Medientyp, Originalsprache, Genres und wer ihn angefragt hat."],
+  "arr.tag.auto": ["{0} (automatic)", "{0} (automatisch)"],
+  "arr.tag.auto.language": ["Language: {0}", "Sprache: {0}"],
+  "arr.tag.auto.genre": ["Genre: {0}", "Genre: {0}"],
+  "arr.tag.auto.requester": ["Requested by {0}", "Angefragt von {0}"],
+  "arr.tags.auto": ["Automatic tags", "Automatische Tags"],
+  "arr.tags.auto.info": ["Jularr gives every title these tags itself. Release profiles can ask for them.", "Diese Tags vergibt Jularr selbst an jeden Titel. Release-Profile können sie verlangen."],
   "jobs.job.wantedTargets": [
    "Targets for titles",
    "Ziele für Titel"

@@ -157,10 +157,14 @@ namespace Jularr.Backend.Data.Logic.Acquisition
     // The tags a list is narrowed to; none lists them all.
     internal sealed class AcquisitionTagFilterData : BaseData
     {
-        public AcquisitionTagFilterData(long[] acquisitionTagIds)
+        public AcquisitionTagFilterData(long[] acquisitionTagIds, bool? automatic = null)
         {
             AcquisitionTagIds = acquisitionTagIds;
+            Automatic = automatic;
         }
+
+        [DataField(typeof(AcquisitionTagFields), nameof(AcquisitionTagFields.Automatic), false)]
+        public bool? Automatic { get; }
 
         [DataField(typeof(AcquisitionPolicyFields), nameof(AcquisitionPolicyFields.TagIds))]
         public long[] AcquisitionTagIds { get; }

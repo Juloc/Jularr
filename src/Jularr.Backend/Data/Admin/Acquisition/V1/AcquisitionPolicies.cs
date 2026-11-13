@@ -27,12 +27,17 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
     }
     public sealed class ReadAcquisitionTagsParametersV1 : BaseParameters
     {
-        public ReadAcquisitionTagsParametersV1(int page = 1, int pageSize = 25, long[]? acquisitionTagIds = null)
+        public ReadAcquisitionTagsParametersV1(int page = 1, int pageSize = 25, long[]? acquisitionTagIds = null, bool? automatic = null)
         {
             Page = page;
             PageSize = pageSize;
             AcquisitionTagIds = acquisitionTagIds ?? [];
+            Automatic = automatic;
         }
+
+        // Only the tags Jularr keeps itself, only those a person named, or both.
+        [DataField(typeof(AcquisitionTagFields), nameof(AcquisitionTagFields.Automatic), false)]
+        public bool? Automatic { get; }
 
         public int Page { get; }
         public int PageSize { get; }
@@ -169,12 +174,21 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
     }
     public sealed class AcquisitionTagDetailsV1 : BaseResponse
     {
-        public AcquisitionTagDetailsV1(long id, string label, long version)
+        public AcquisitionTagDetailsV1(long id, string label, long version, string? autoKey = null, string? autoName = null)
         {
             Id = id;
             Label = label;
             Version = version;
+            AutoKey = autoKey;
+            AutoName = autoName;
         }
+
+        // A tag Jularr keeps itself: what it stands for, and the requester's name for a requester tag. A person neither renames nor removes it.
+        [DataField(typeof(AcquisitionTagFields), nameof(AcquisitionTagFields.AutoKey), false)]
+        public string? AutoKey { get; }
+
+        [DataField(typeof(AcquisitionTagFields), nameof(AcquisitionTagFields.AutoName), false)]
+        public string? AutoName { get; }
 
         [DataField(typeof(AcquisitionTagFields), nameof(AcquisitionTagFields.Id))]
         public long Id { get; }

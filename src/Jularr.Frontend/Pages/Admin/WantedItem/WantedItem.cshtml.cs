@@ -27,6 +27,7 @@ namespace Jularr.Frontend.Pages.Admin.WantedItem
         private IReadOnlyList<WantedUnitV1> _units = [];
         private PageResult<AcquisitionTagDetailsV1>? _tags;
         private SelectOption[] _tagChoices = [];
+        private string[] _autoTags = [];
         private UpdateWantedDataV1? _choice;
         [BindProperty(SupportsGet = true)] public int TagPage { get; set; } = 1;
 
@@ -95,6 +96,7 @@ namespace Jularr.Frontend.Pages.Admin.WantedItem
             form.Select(data => data.LibraryRootId, "wanted.library", [new SelectOption("", texts["wanted.library.default"]),
                 .. _libraries.Select(library => new SelectOption(library.Id.ToString(CultureInfo.InvariantCulture), library.Name))]);
             form.Choices(data => data.TagIds, "arr.tags", _tagChoices);
+            if (_autoTags.Length > 0) form.Content(Work.WorkModel.AutoTagChips(_autoTags));
             form.Content(new Input().Attribute("type", "hidden").Attribute("name", "saveTags").Attribute("value", "true"));
             if (_tags is { } tagPage)
             {
@@ -257,11 +259,12 @@ namespace Jularr.Frontend.Pages.Admin.WantedItem
             {
                 _profiles = await profiles.ExecuteAsync<BaseDataList<AcquisitionProfileDetailsV1>>(new ReadAcquisitionProfilesParametersV1(Id), ct);
                 _libraries = await libraries.ExecuteAsync<BaseDataList<WantedLibraryV1>>(new WantedItemParametersV1(Id), ct);
-                _tags = await tags.ExecuteAsync<PageResult<AcquisitionTagDetailsV1>>(new ReadAcquisitionTagsParametersV1(TagPage), ct);
+                _tags = await tags.ExecuteAsync<PageResult<AcquisitionTagDetailsV1>>(new ReadAcquisitionTagsParametersV1(TagPage, automatic: false), ct);
                 var choices = _tags.Items.ToList();
                 foreach (var id in (_choice?.TagIds ?? _item.TagIds).Where(id => !choices.Any(item => item.Id == id)).Take(100))
                     choices.Add(await tag.ExecuteAsync<AcquisitionTagDetailsV1>(new AcquisitionTagParametersV1(id), ct));
-                _tagChoices = choices.Select(item => new SelectOption(item.Id.ToString(CultureInfo.InvariantCulture), item.Label)).ToArray();
+                _tagChoices = choices.Where(item => item.AutoKey is null).Select(item => new SelectOption(item.Id.ToString(CultureInfo.InvariantCulture), item.Label)).ToArray();
+                _autoTags = [.. choices.Where(item => item.AutoKey is not null).Select(item => Profiles.TagLabels.Label(item, texts))];
             }
         }
 
