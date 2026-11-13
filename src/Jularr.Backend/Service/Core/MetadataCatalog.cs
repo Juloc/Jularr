@@ -97,15 +97,11 @@ namespace Jularr.Backend.Service.Core
             else if (GameMetadata.Handles(mediaType))
             {
                 var connection = await games.ConnectAsync(context, ct);
-                results.AddRange((await games.SearchAsync(connection, query, year, ct)).Select(result => new MetadataSearchResultV1(GameMetadata.Namespace,
-                    result.Id.ToString(CultureInfo.InvariantCulture), result.Name, null, result.Year is >= 1950 and <= 2200 ? result.Year : null,
-                    TextLimit.Cut(string.Join(", ", result.Platforms.Select(platform => platform.Abbreviation ?? platform.Name)), 4000), null, TextLimit.Cut(string.Join(", ", result.Developers), 4000),
-                    result.CoverImageId is { } cover ? IgdbClient.CoverUrl(cover) : null)));
+                results.AddRange((await games.SearchAsync(connection, query, year, ct)).Select(Game));
             }
             else if (MusicMetadata.Handles(mediaType))
             {
-                results.AddRange((await music.SearchAsync(query, year, ct)).Select(result => new MetadataSearchResultV1(MusicMetadata.Namespace, result.Id,
-                    result.Title, null, result.Year is >= 1800 and <= 2200 ? result.Year : null, result.PrimaryType, null, result.Artist, MusicBrainzClient.CoverUrl(result.Id))));
+                results.AddRange((await music.SearchAsync(query, year, ct)).Select(Album));
             }
             else if (mediaType == MediaType.Series)
             {
@@ -259,6 +255,18 @@ namespace Jularr.Backend.Service.Core
             await KeepWorksAsync(context, new ExternalWorkListData(BookMetadata.Namespace, MediaType.Book, null),
                 [.. (await books.SearchFilteredAsync(subjects, yearFrom, yearTo, language, newest, page, ct)).Select(book => ExternalWork(Book(book)))], ct);
 
+        // Games and albums narrowed by Discover's filter, kept as Works like every card's.
+        public async Task<IReadOnlyList<ExternalWorkData>> ReadFilteredGamesAsync(LogicContext context, Integrations.Data.Igdb.IgdbDiscoverQuery query, int page, CancellationToken ct)
+        {
+            var connection = await games.ConnectAsync(context, ct);
+            return await KeepWorksAsync(context, new ExternalWorkListData(GameMetadata.Namespace, MediaType.Game, null),
+                [.. (await games.DiscoverAsync(connection, query, page, ct)).Select(game => ExternalWork(Game(game)))], ct);
+        }
+
+        public async Task<IReadOnlyList<ExternalWorkData>> ReadFilteredMusicAsync(LogicContext context, IReadOnlyList<string> tags, int? yearFrom, int? yearTo, int page, CancellationToken ct) =>
+            await KeepWorksAsync(context, new ExternalWorkListData(MusicMetadata.Namespace, MediaType.Music, null),
+                [.. (await music.DiscoverAsync(tags, yearFrom, yearTo, page, ct)).Select(album => ExternalWork(Album(album)))], ct);
+
         // Ranked catalog lists: Open Library trends books, AniList ranks manga, light novels and anime, page by page. A kept list already names its Works;
         // a list in another than its own order is never kept.
         public async Task<IReadOnlyList<ExternalWorkData>?> ReadCachedFeedInBatchAsync(LogicContext context, MediaType mediaType, MediaSubtype? subtype, DiscoverFeedType feed, int page,
@@ -393,6 +401,14 @@ namespace Jularr.Backend.Service.Core
         {
             CatalogFormatId = CatalogFactValues.Value(CatalogFactValues.AniListFormats, aniListFormat)
         };
+
+        private static MetadataSearchResultV1 Game(Integrations.Data.Igdb.IgdbGame result) => new(GameMetadata.Namespace,
+            result.Id.ToString(CultureInfo.InvariantCulture), result.Name, null, result.Year is >= 1950 and <= 2200 ? result.Year : null,
+            TextLimit.Cut(string.Join(", ", result.Platforms.Select(platform => platform.Abbreviation ?? platform.Name)), 4000), null, TextLimit.Cut(string.Join(", ", result.Developers), 4000),
+            result.CoverImageId is { } cover ? IgdbClient.CoverUrl(cover) : null);
+
+        private static MetadataSearchResultV1 Album(Integrations.Data.MusicBrainz.MusicBrainzAlbum result) => new(MusicMetadata.Namespace, result.Id,
+            result.Title, null, result.Year is >= 1800 and <= 2200 ? result.Year : null, result.PrimaryType, null, result.Artist, MusicBrainzClient.CoverUrl(result.Id));
 
         private static MetadataSearchResultV1 Book(OpenLibraryResult result) => new(BookMetadata.Namespace, result.WorkId, TextLimit.Cut(result.Title, 500)!, null,
             result.Year is >= 1800 and <= 2200 ? result.Year : null, null, null, TextLimit.Cut(string.Join(", ", result.Authors), 4000), OpenLibraryClient.CoverUrl(result.CoverId));
