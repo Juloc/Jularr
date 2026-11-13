@@ -96,7 +96,7 @@ namespace Jularr.Frontend.Pages.Admin.Profile
                     section.Text(item => item.Name, "profile.name");
 
                     // The media types of one quality list: those it applies to, and those whose default it is (one default per type; another profile takes it over).
-                    section.ChoiceTable("profile.appliesTo", kinds, [section.Column(item => item.MediaKinds, "profile.appliesTo"), section.Column(item => item.DefaultFor, "profile.defaultFor")]);
+                    section.Content(KindSwitches(kinds, input.MediaKinds, input.DefaultFor));
                 });
                 fields.Section("profile.section.qualities", section =>
                 {
@@ -160,7 +160,10 @@ namespace Jularr.Frontend.Pages.Admin.Profile
                 var advancedOpen = _advancedOpen || FormError?.Field is { } field && expertFields.Any(name => field.StartsWith(name, StringComparison.Ordinal));
                 fields.Wrap(parts =>
                 {
-                    var advanced = new Details(new Summary(new Text("profile.advanced")), new Div([.. parts]).Class("profile-advanced__body")).Class("profile-advanced");
+                    var advanced = new Details(new Summary(new Span(Glyph("sliders", 18)).Class("profile-advanced__icon"),
+                            new Span(new Span(new Text("profile.advanced")).Class("profile-advanced__title"), new Span(new Text("profile.advanced.info")).Class("profile-advanced__info")),
+                            new Span(Glyph("chevron-down", 18)).Class("profile-advanced__chevron")),
+                        new Div([.. parts]).Class("profile-advanced__body")).Class("profile-advanced");
                     return advancedOpen ? advanced.Attribute("open", "open") : advanced;
                 }, advanced =>
                 {
@@ -290,6 +293,22 @@ namespace Jularr.Frontend.Pages.Admin.Profile
                 new Fieldset(new Legend(new Span(new Text("profile.prefer.groups")).Class("ui-field__label"), new FieldInfo("profile.prefer.groups.info", "profile-groups-info"))
                         .Class("ui-field__top"),
                     new Div(new Div([.. segments]).Class("ui-segments")).Class("ui-field__control ui-field__control--segmented")).Class("ui-field__group")).Class("ui-field");
+        }
+
+        // One line per media type with two switches: the profile applies to it, and it is the type's default.
+        private IUiComponent KindSwitches(IReadOnlyList<SelectOption> kinds, IEnumerable<AcquisitionMediaKind> applies, IEnumerable<AcquisitionMediaKind> defaults)
+        {
+            var on = applies.Select(kind => kind.ToString()).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var standard = defaults.Select(kind => kind.ToString()).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var rows = new List<IUiComponent>
+            {
+                new Div(new Span(), new Span(new Text("profile.appliesTo")), new Span(new Text("profile.defaultFor"))).Class("profile-kinds__head").Attribute("aria-hidden", "true")
+            };
+            rows.AddRange(kinds.Select(kind => (IUiComponent)new Div(new Span(new ValueText(kind.Label)).Class("profile-kinds__name"),
+                new Toggle(new ValueText(texts["profile.appliesTo"] + ": " + kind.Label), on.Contains(kind.Value), hidesLabel: true).Named("MediaKinds", kind.Value),
+                new Toggle(new ValueText(texts["profile.defaultFor"] + ": " + kind.Label), standard.Contains(kind.Value), hidesLabel: true).Named("DefaultFor", kind.Value))
+                .Class("profile-kinds__row")));
+            return new Div([.. rows]).Class("profile-kinds ui-field");
         }
 
         private sealed class Fieldset(params IUiComponent[] children) : HtmlElement("fieldset", children);

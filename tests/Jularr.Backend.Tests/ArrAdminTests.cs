@@ -144,8 +144,8 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(dialog, "id=\"profile-new\"");
             StringAssert.Contains(dialog, Home + "/New?kind=Anime");
             var editor = await (await host.SendAsync(HttpMethod.Get, Home + "/New?kind=Anime")).Content.ReadAsStringAsync();
-            StringAssert.Contains(editor, "name=\"MediaKinds\" value=\"Anime\" checked=\"checked\"");
-            StringAssert.Contains(editor, "name=\"MediaKinds\" value=\"Movie\"");
+            StringAssert.Contains(editor, "role=\"switch\" value=\"Anime\" checked=\"checked\" name=\"MediaKinds\"");
+            StringAssert.Contains(editor, "role=\"switch\" value=\"Movie\" name=\"MediaKinds\"");
             Assert.IsFalse(editor.Contains("value=\"Book\"", StringComparison.Ordinal));
             Assert.AreEqual(HttpStatusCode.NotFound, (await host.SendAsync(HttpMethod.Get, Home + "/New?kind=Banana")).StatusCode);
 
@@ -155,8 +155,8 @@ namespace Jularr.Backend.Tests
             editor = await (await host.SendAsync(HttpMethod.Get, Home + "/" + seriesId)).Content.ReadAsStringAsync();
             foreach (var kind in new[] { "Series", "Anime" })
             {
-                StringAssert.Contains(editor, "name=\"MediaKinds\" value=\"" + kind + "\" checked=\"checked\"");
-                StringAssert.Contains(editor, "name=\"DefaultFor\" value=\"" + kind + "\" checked=\"checked\"");
+                StringAssert.Contains(editor, "value=\"" + kind + "\" checked=\"checked\" name=\"MediaKinds\"");
+                StringAssert.Contains(editor, "value=\"" + kind + "\" checked=\"checked\" name=\"DefaultFor\"");
             }
         }
 

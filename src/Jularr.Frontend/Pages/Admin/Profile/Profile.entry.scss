@@ -1,7 +1,10 @@
 // The profile on one screen: General and Prefer on the left, the qualities as a list on the right, the expert part last across the width.
 .ui-form:has(.profile-qualities) {
     @media (min-width: 1100px) {
-        > .ui-form__section { grid-column: 1; }
+        grid-template-rows: auto 1fr;
+        align-items: stretch;
+
+        > .ui-form__section { grid-column: 1; align-content: start; }
         > .ui-form__section:has([name=Name]) { grid-row: 1; }
         > .ui-form__section:has([name=GroupPreference]) { grid-row: 2; }
         > .ui-form__section:has(.profile-qualities) { grid-column: 2; grid-row: 1 / span 2; }
@@ -10,6 +13,31 @@
     }
 
     > .ui-form__section { gap: 12px 20px; padding: 14px 18px 16px; }
+}
+
+// The media types: one line each with its two switches under their column names.
+.profile-kinds {
+    display: grid;
+    grid-column: 1 / -1;
+
+    &__head, &__row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 96px 96px;
+        align-items: center;
+        justify-items: center;
+        gap: 8px;
+    }
+
+    &__head {
+        padding-bottom: 4px;
+        color: var(--muted);
+        font-size: var(--text-small, .8125rem);
+        font-weight: 600;
+    }
+
+    &__row { padding: 3px 0; border-top: 1px solid var(--border); }
+    .toggle { min-height: 32px; gap: 0; }
+    &__name, &__head > :first-child { justify-self: start; }
 }
 
 // A quality's two small round arrows and its cross; up is the down arrow turned over.
@@ -63,20 +91,84 @@
     .button { justify-self: start; }
 }
 
-// Everything for experts, closed until asked for.
+// Everything for experts: one card, closed until asked for, its parts flat inside it and separated by thin lines; the scores of the formats as a compact list.
 .profile-advanced {
     grid-column: 1 / -1;
-    margin: 8px 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-panel);
+    background: var(--surface);
+    box-shadow: var(--shadow);
 
     > summary {
-        padding: 10px 0;
-        color: var(--muted);
-        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 14px 18px;
+        list-style: none;
         cursor: pointer;
+
+        &::-webkit-details-marker { display: none; }
     }
+
+    &__icon {
+        display: grid;
+        place-items: center;
+        width: 34px;
+        height: 34px;
+        border-radius: 10px;
+        background: var(--accent-soft);
+        color: var(--accent-text);
+    }
+
+    &__title { display: block; color: var(--text); font-size: var(--text-heading); font-weight: var(--weight-heading); }
+    &__info { display: block; color: var(--muted); font-size: var(--text-small, .875rem); }
+    &__chevron { margin-left: auto; color: var(--muted); transition: transform .15s ease; }
+    &[open] &__chevron { transform: rotate(180deg); }
 
     &__body {
         display: grid;
-        gap: 16px;
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, 440px), 1fr));
+        align-items: start;
+        gap: 0 32px;
+        padding: 0 18px 16px;
+
+        > .ui-form__section {
+            grid-column: auto;
+            grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr));
+            align-content: start;
+            gap: 10px 16px;
+            padding: 14px 0 4px;
+            border: 0;
+            border-top: 1px solid var(--border);
+            border-radius: 0;
+            background: none;
+            box-shadow: none;
+
+            > legend { font-size: var(--text-base, 1rem); }
+            > button, > .ui-form__actions { justify-self: start; }
+        }
+
+        // The quality groups' buttons sit side by side under their rows.
+        > .ui-form__section:has(> [name=addGroup]) > button { grid-column: auto / span 1; width: max-content; }
+
+        // The score of every format: a name and a narrow number per line, in columns across the card.
+        > .ui-form__section:has([name$='.Score']) {
+            grid-column: 1 / -1;
+            grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr));
+            gap: 4px 28px;
+
+            > .ui-form__row {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 12px;
+                padding: 4px 0;
+                border-bottom: 1px solid var(--border);
+
+                > p { margin: 0; }
+                .ui-field { max-width: 130px; }
+                .ui-field__top { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+            }
+        }
     }
 }

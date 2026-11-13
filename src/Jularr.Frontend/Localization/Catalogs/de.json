@@ -2540,7 +2540,7 @@
   "profile.minimumScore.info": ["Releases with a lower score are not grabbed.", "Releases mit niedrigerem Score werden nicht geladen."],
   "profile.cutoffScore.info": ["Upgrades stop once the stop quality and this score are reached.", "Upgrades enden, sobald die Endqualität und dieser Score erreicht sind."],
   "profile.upgradeScore.info": ["An upgrade must beat the present file by at least this score.", "Ein Upgrade muss die vorhandene Datei um mindestens diesen Score übertreffen."],
-  "profile.advanced": ["For experts: custom formats, points and limits, as in Sonarr", "Für Experten: eigene Formate, Punkte und Grenzen, wie in Sonarr"],
+  "profile.advanced": ["For experts", "Für Experten"],
   "profile.minimumSize": [
    "Minimum size",
    "Mindestgröße"
@@ -11522,6 +11522,7 @@
   "arr.test.group": ["Group {0}", "Gruppe {0}"],
   "arr.test.taken": ["Would be taken · {0}", "Würde genommen · {0}"],
   "arr.test.noProfiles": ["No profile for films, series or anime yet.", "Noch kein Profil für Filme, Serien oder Anime."],
+  "profile.advanced.info": ["Custom formats, points and limits, as in Sonarr", "Eigene Formate, Punkte und Grenzen, wie in Sonarr"],
   "profile.deleteConfirm": ["Delete this profile?", "Dieses Profil löschen?"],
   "acquisition.reason.FormatEvaluationFailed": [
    "Custom format could not be evaluated",

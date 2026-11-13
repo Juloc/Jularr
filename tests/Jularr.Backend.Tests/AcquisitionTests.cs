@@ -2293,7 +2293,8 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(html, "name=\"GoodGroupScore\" type=\"number\" autocomplete=\"off\" value=\"80\"");
             StringAssert.Contains(html, "name=\"BadGroupScore\" type=\"number\" autocomplete=\"off\" value=\"-30\"");
             StringAssert.Contains(html, "Rate groups (0, 0 blocked)");
-            StringAssert.Contains(html, "<details class=\"profile-advanced\"><summary>For experts: custom formats, points and limits, as in Sonarr</summary>");
+            StringAssert.Contains(html, "<details class=\"profile-advanced\"><summary>");
+            StringAssert.Contains(html, ">For experts</span>");
             Assert.AreEqual(1, html.Split("name=\"MinimumFormatScore\"").Length - 1);
             Assert.IsTrue(html.IndexOf("name=\"MinimumUpgradeFormatScore\"", StringComparison.Ordinal) > html.IndexOf("profile-advanced", StringComparison.Ordinal));
             StringAssert.Contains(html, "name=\"GroupPreference\" value=\"custom\" id=\"profile-groups-2\" checked=\"checked\"");
