@@ -80,7 +80,8 @@ namespace Jularr.E2E.Tests
             await page.GotoAsync("/?mode=hear");
             await Assertions.Expect(page.Locator(".discover-mode-note")).ToContainTextAsync("Audiobooks are coming soon");
             await page.GotoAsync("/?mode=watch");
-            await Assertions.Expect(page.Locator(".capsule-bar").GetByText("Books")).ToHaveCountAsync(0);
+            await Assertions.Expect(page.Locator(".navigation-tabs--types").GetByText("Books")).ToHaveCountAsync(0);
+            await Assertions.Expect(page.Locator(".navigation-tabs--types").GetByText("Movies")).ToBeVisibleAsync();
 
             // The search stays in the mode; the chip widens it to every mode.
             var field = page.Locator(".app-search .search-box__input");

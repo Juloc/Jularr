@@ -4237,6 +4237,8 @@
    "In Jularr",
    "In Jularr"
   ],
+  "discover.forYou": ["For you", "Für dich"],
+  "discover.filter.remove": ["Remove {0}", "{0} entfernen"],
   "discover.feed.Trending": [
    "Trending",
    "Im Trend"
@@ -4409,10 +4411,6 @@
    "Customize Discover",
    "Discover gestalten"
   ],
-  "discover.view.toggle": [
-   "Switch between rows and grid",
-   "Zwischen Reihen und Raster wechseln"
-  ],
   "discover.feeds": [
    "Lists",
    "Listen"
@@ -4512,18 +4510,6 @@
   "discover.filter.feed": [
    "Result list",
    "Ergebnisfeed"
-  ],
-  "discover.layout": [
-   "Show shelves as",
-   "Medien-Reihen anzeigen"
-  ],
-  "discover.layout.rows": [
-   "Rows",
-   "Reihen"
-  ],
-  "discover.layout.grid": [
-   "Grid",
-   "Raster"
   ],
   "media.state.NotRequested": [
    "Not requested",

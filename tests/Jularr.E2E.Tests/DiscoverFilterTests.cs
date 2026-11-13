@@ -81,7 +81,7 @@ namespace Jularr.E2E.Tests
             await page.SetViewportSizeAsync(1280, 900);
 
             // Clearing keeps the type and brings the shelves back.
-            await row.Locator(".discover-filter__clear").ClickAsync();
+            await page.Locator(".discover-chosen__clear").ClickAsync();
             await Assertions.Expect(page).ToHaveURLAsync(new Regex(@"/\?type=anime$"));
             await Assertions.Expect(page.Locator("#discover-recommendations .media-shelf").First).ToBeVisibleAsync();
         }

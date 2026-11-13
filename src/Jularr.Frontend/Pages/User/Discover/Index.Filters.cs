@@ -8,7 +8,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Jularr.Frontend.Pages.User.Discover
 {
-    // Discover's filter row, as AniList's search has it: genres, year, season and format at hand, the others under More (the filter drawer).
+    // Discover's filter row, as AniList's search has it: the type's first five filters at hand, the others under More (the filter drawer).
     // Any filter shows the chosen types' titles as one grid instead of the shelves; several types share only genre and year.
     public sealed partial class IndexModel
     {
@@ -177,7 +177,28 @@ namespace Jularr.Frontend.Pages.User.Discover
             _catalog = catalog;
         }
 
-        // Genres, year, season and format at hand, More opens the rest in the filter drawer; one GET form, the drawer's choices travel along hidden.
+        // The filters at hand, in this order, at most five; More opens the rest in the filter drawer.
+        private static readonly (DiscoverFilter Filter, string Name)[] RowOrder =
+        [
+            (DiscoverFilter.Genre, "genre"), (DiscoverFilter.Year, "year"), (DiscoverFilter.Season, "season"), (DiscoverFilter.Format, "format"), (DiscoverFilter.Status, "status"),
+            (DiscoverFilter.Country, "country"), (DiscoverFilter.Language, "lang"), (DiscoverFilter.Site, "site")
+        ];
+
+        private const int RowSize = 5;
+
+        private IReadOnlyList<(DiscoverFilter Filter, string Name)> AtHand => Offered is not { } offered ? [] : [.. RowOrder.Where(entry => Offers(entry.Filter) && entry.Filter switch
+        {
+            DiscoverFilter.Format => offered.CatalogFormatIds.Length > 1,
+            DiscoverFilter.Status => offered.ReleaseStatusIds.Length > 0,
+            DiscoverFilter.Country => offered.CountryCodes.Length > 0,
+            DiscoverFilter.Language => offered.LanguageCodes.Length > 0,
+            DiscoverFilter.Site => offered.Sites.Count > 0,
+            _ => true
+        }).Take(RowSize)];
+
+        private bool IsAtHand(DiscoverFilter filter) => AtHand.Any(entry => entry.Filter == filter);
+
+        // Each filter at hand is a field named above its value, as AniList's search has them; one GET form, the drawer's choices travel along hidden.
         private IUiComponent? FilterRow()
         {
             if (Offered is not { } offered || !string.IsNullOrWhiteSpace(Query))
@@ -186,46 +207,72 @@ namespace Jularr.Frontend.Pages.User.Discover
             }
 
             var parts = new List<IUiComponent>();
-            if (Offers(DiscoverFilter.Genre))
+            foreach (var (filter, _) in AtHand)
             {
-                // AniList's adult genre shows only with adult titles.
-                parts.Add(PopupFilter("genre", "discover.filter.genres", [.. offered.GenreIds.Where(genre => genre != Genre.Hentai || IncludesAdult).Select(genre => new ChoicePick(genre.ToString(), Genres.Contains(genre), "discover.genre." + genre))],
-                    Genres.Select(genre => texts["discover.genre." + genre])));
+                parts.Add(filter switch
+                {
+                    // AniList's adult genre shows only with adult titles; books name their subjects genres too.
+                    DiscoverFilter.Genre => PopupFilter("genre", "discover.filter.genres", [.. offered.GenreIds.Where(genre => genre != Genre.Hentai || IncludesAdult)
+                        .Select(genre => new ChoicePick(genre.ToString(), Genres.Contains(genre), "discover.genre." + genre))], Genres.Select(genre => texts["discover.genre." + genre])),
+                    DiscoverFilter.Year => SelectFilter("year", "discover.filter.year", [new("discover.filter.any", "", Year is null), .. Enumerable.Range(FirstYear, DateTime.UtcNow.Year + 2 - FirstYear).Reverse()
+                        .Select(year => new ChoiceOption("", year.ToString(CultureInfo.InvariantCulture), Year == year, year.ToString(CultureInfo.InvariantCulture)))]),
+                    DiscoverFilter.Season => SelectFilter("season", "discover.filter.season", [new("discover.filter.any", "", Season is null),
+                        .. Enumerable.Range(1, 4).Select(season => new ChoiceOption("discover.season." + season, season.ToString(CultureInfo.InvariantCulture), Season == season))]),
+                    DiscoverFilter.Format => PopupFilter("format", "discover.filter.format", [.. offered.CatalogFormatIds.Select(format => new ChoicePick(format.ToString(), Formats.Contains(format), "discover.format." + format))],
+                        Formats.Select(format => texts["discover.format." + format])),
+                    DiscoverFilter.Status => PopupFilter("status", "discover.filter.status", [.. offered.ReleaseStatusIds.Select(status => new ChoicePick(status.ToString(), Statuses.Contains(status), "discover.status." + status))],
+                        Statuses.Select(status => texts["discover.status." + status])),
+                    DiscoverFilter.Country => SelectFilter("country", "discover.filter.country", [new("discover.filter.any", "", Country is null),
+                        .. offered.CountryCodes.Select(code => new ChoiceOption("discover.country." + code, code, Country == code))]),
+                    DiscoverFilter.Language => SelectFilter("lang", "discover.filter.language", [new("discover.filter.any", "", Language is null),
+                        .. offered.LanguageCodes.Select(code => new ChoiceOption("discover.language." + code, code, Language == code))]),
+                    _ => PopupFilter("site", Chosen[0].MediaTypeId == MediaType.Book ? "discover.filter.readable" : "discover.filter.streaming",
+                        [.. offered.Sites.Select(site => new ChoicePick(site.Id.ToString(CultureInfo.InvariantCulture), Sites.Contains(site.Id), Label: site.Name))],
+                        offered.Sites.Where(site => Sites.Contains(site.Id)).Select(site => site.Name))
+                });
             }
 
-            if (Offers(DiscoverFilter.Year))
-            {
-                var years = Enumerable.Range(FirstYear, DateTime.UtcNow.Year + 2 - FirstYear).Reverse()
-                    .Select(year => new ChoiceOption("", year.ToString(CultureInfo.InvariantCulture), Year == year, year.ToString(CultureInfo.InvariantCulture)));
-                parts.Add(SelectFilter("year", "discover.filter.year", [new("discover.filter.year", "", Year is null), .. years]));
-            }
-
-            if (Offers(DiscoverFilter.Season))
-            {
-                parts.Add(SelectFilter("season", "discover.filter.season", [new("discover.filter.season", "", Season is null),
-                    .. Enumerable.Range(1, 4).Select(season => new ChoiceOption("discover.season." + season, season.ToString(CultureInfo.InvariantCulture), Season == season))]));
-            }
-
-            if (Offers(DiscoverFilter.Format) && offered.CatalogFormatIds.Length > 1)
-            {
-                parts.Add(PopupFilter("format", "discover.filter.format", [.. offered.CatalogFormatIds.Select(format => new ChoicePick(format.ToString(), Formats.Contains(format), "discover.format." + format))],
-                    Formats.Select(format => texts["discover.format." + format])));
-            }
-
-            // More counts what it holds (the availability too); clearing keeps only the types.
-            var more = (Availability is not null ? 1 : 0) + FilterCount - (Genres.Length > 0 ? 1 : 0) - (Year is not null || YearFrom is not null || YearTo is not null ? 1 : 0) - (Season is not null ? 1 : 0) - (Formats.Length > 0 ? 1 : 0);
-            var moreLabel = new List<IUiComponent> { new Span(new Text("discover.filter.more")) };
-            if (more > 0) moreLabel.Add(new Span(new ValueText(more.ToString(CultureInfo.CurrentCulture))).Class("capsule-bar__badge"));
+            // More counts what it holds (the availability too).
+            var more = (Availability is not null ? 1 : 0) + FilterCount - AtHand.Count(entry => FilterFields().Any(field => field.Name == entry.Name));
+            var moreLabel = new List<IUiComponent> { new Icon("filter", assets, 16), new Span(new Text("discover.filter.more")) };
+            if (more > 0) moreLabel.Add(new Span(new ValueText(more.ToString(CultureInfo.CurrentCulture))).Class("discover-bar__badge"));
             parts.Add(Drawer.Opener(new Button([.. moreLabel]).Class("button discover-filter__more"), "discover-panel", "filter"));
-            if (FilterCount > 0)
-            {
-                parts.Add(new A(new Icon("close", assets, 16), new Span(new Text("discover.filter.clear"))).Class("button discover-filter__clear")
-                    .Attribute("href", Address(Current with { Sort = null, Filters = false, Page = 1 })));
-            }
-
-            parts.AddRange(Hidden(except: ["genre", "year", "season", "format"]));
+            parts.AddRange(Hidden(except: [.. AtHand.Select(entry => entry.Name)]));
             return new FormElement([.. parts]).Class("discover-filters").Attribute("action", "/").Attribute("method", "get").Attribute("data-discover-filters", "")
                 .Attribute("aria-label", texts["discover.filters"]);
+        }
+
+        // The chosen filters as tags whose cross removes them, a reset, and the order of the grid.
+        private IUiComponent? ChosenFilters()
+        {
+            if (FilterCount == 0 || !string.IsNullOrWhiteSpace(Query))
+            {
+                return null;
+            }
+
+            var tags = new List<IUiComponent>();
+            void Tag(string name, string value, string label) => tags.Add(new A(new Span(new ValueText(label)), new Icon("close", assets, 14)).Class("discover-chosen__tag")
+                .Attribute("href", Address(Current with { Page = 1 }, (name, value))).Attribute("aria-label", string.Format(CultureInfo.CurrentCulture, texts["discover.filter.remove"], label)));
+            foreach (var genre in Genres) Tag("genre", genre.ToString(), texts["discover.genre." + genre]);
+            if (Year is { } year) Tag("year", year.ToString(CultureInfo.InvariantCulture), year.ToString(CultureInfo.CurrentCulture));
+            if (Season is { } season) Tag("season", season.ToString(CultureInfo.InvariantCulture), texts["discover.season." + season]);
+            foreach (var format in Formats) Tag("format", format.ToString(), texts["discover.format." + format]);
+            foreach (var status in Statuses) Tag("status", status.ToString(), texts["discover.status." + status]);
+            if (Country is { } country) Tag("country", country, texts["discover.country." + country]);
+            if (Language is { } language) Tag("lang", language, texts["discover.language." + language]);
+            foreach (var source in Sources) Tag("source", source.ToString(), texts["discover.source." + source]);
+            if (Offered is { } offered)
+            {
+                foreach (var site in offered.Sites.Where(site => Sites.Contains(site.Id))) Tag("site", site.Id.ToString(CultureInfo.InvariantCulture), site.Name);
+                foreach (var tag in offered.Tags.Where(tag => Tags.Contains(tag.Id))) Tag("tag", tag.Id.ToString(CultureInfo.InvariantCulture), tag.Name);
+            }
+
+            var parts = new List<IUiComponent>(tags)
+            {
+                new A(new Text("discover.filter.clear")).Class("discover-chosen__clear").Attribute("href", Address(Current with { Sort = null, Filters = false, Page = 1 }))
+            };
+            if (FilterHeading() is { } sort) parts.Add(sort);
+            return new Div([.. parts]).Class("discover-chosen");
         }
 
         // The drawer's part: the filters not at hand, then the row's own as hidden fields.
@@ -236,19 +283,19 @@ namespace Jularr.Frontend.Pages.User.Discover
                 yield break;
             }
 
-            if (Offers(DiscoverFilter.Status))
+            if (Offers(DiscoverFilter.Status) && !IsAtHand(DiscoverFilter.Status))
             {
                 yield return new ChoiceGroup(assets, "discover.filter.status", "status", [.. offered.ReleaseStatusIds.Select(status => new ChoicePick(status.ToString(), Statuses.Contains(status),
                     "discover.status." + status))], new ChoiceOptions(Multiple: true));
             }
 
-            if (Offers(DiscoverFilter.Country))
+            if (Offers(DiscoverFilter.Country) && !IsAtHand(DiscoverFilter.Country))
             {
                 yield return new ChoiceGroup(assets, "discover.filter.country", "country", [new("", Country is null, "discover.filter.any"),
                     .. offered.CountryCodes.Select(code => new ChoicePick(code, Country == code, "discover.country." + code))]);
             }
 
-            if (Offers(DiscoverFilter.Language))
+            if (Offers(DiscoverFilter.Language) && !IsAtHand(DiscoverFilter.Language))
             {
                 yield return new ChoiceGroup(assets, "discover.filter.language", "lang", [new("", Language is null, "discover.filter.any"),
                     .. offered.LanguageCodes.Select(code => new ChoicePick(code, Language == code, "discover.language." + code))]);
@@ -260,7 +307,7 @@ namespace Jularr.Frontend.Pages.User.Discover
                     "discover.source." + source))], new ChoiceOptions(Multiple: true));
             }
 
-            if (Offers(DiscoverFilter.Site) && offered.Sites.Count > 0)
+            if (Offers(DiscoverFilter.Site) && offered.Sites.Count > 0 && !IsAtHand(DiscoverFilter.Site))
             {
                 var reading = Chosen[0].MediaTypeId == MediaType.Book;
                 yield return new ChoiceGroup(assets, reading ? "discover.filter.readable" : "discover.filter.streaming", "site", [.. offered.Sites.Select(site => new ChoicePick(
@@ -298,8 +345,9 @@ namespace Jularr.Frontend.Pages.User.Discover
                 yield return toggle;
             }
 
-            foreach (var field in Hidden(except: ["type", "availability", "feed", "status", "country", "lang", "source", "site", "tag", "yearFrom", "yearTo", "episodesFrom", "episodesTo",
-                "chaptersFrom", "chaptersTo", "volumesFrom", "volumesTo", "durationFrom", "durationTo", "adult"]))
+            string[] drawer = ["type", "availability", "feed", "status", "country", "lang", "source", "site", "tag", "yearFrom", "yearTo", "episodesFrom", "episodesTo",
+                "chaptersFrom", "chaptersTo", "volumesFrom", "volumesTo", "durationFrom", "durationTo", "adult"];
+            foreach (var field in Hidden(except: [.. drawer.Except(AtHand.Select(entry => entry.Name))]))
             {
                 yield return field;
             }
@@ -319,14 +367,22 @@ namespace Jularr.Frontend.Pages.User.Discover
             KeepFilters(keep);
             var shown = FilterSort ?? DiscoverSort.Popularity;
             return new Div(new ChoiceSelect("/", "sort", "discover.sort", [.. SortSlugs.Where(sort => offered.Sorts.Contains(sort.Sort))
-                .Select(sort => new ChoiceOption("discover.sort." + sort.Sort, sort.Sort == DiscoverSort.Popularity ? "" : sort.Slug, sort.Sort == shown))], keep)).Class("discover-view-heading");
+                .Select(sort => new ChoiceOption("discover.sort." + sort.Sort, sort.Sort == DiscoverSort.Popularity ? "" : sort.Slug, sort.Sort == shown))], keep)).Class("discover-chosen__sort");
         }
 
         // The filters in the address, in one order, lists as comma lists.
-        private IEnumerable<string> FilterValues()
+        // One value can be left out: a tag's cross removes its own value of a list, or the whole field.
+        private IEnumerable<string> FilterValues((string Name, string Value)? without = null)
         {
-            foreach (var (name, value) in FilterFields())
+            foreach (var (name, field) in FilterFields())
             {
+                var value = field;
+                if (without is { } drop && drop.Name == name)
+                {
+                    value = string.Join(',', field.Split(',').Where(part => part != drop.Value));
+                    if (value.Length == 0) continue;
+                }
+
                 yield return name + "=" + Uri.EscapeDataString(value).Replace("%2C", ",");
             }
         }
@@ -382,10 +438,10 @@ namespace Jularr.Frontend.Pages.User.Discover
         {
             var id = "discover-filter-" + name;
             var summary = string.Join(", ", chosen);
-            // A pill named by its filter while nothing is chosen, by the choices once something is; the name stays for assistive technology.
+            // A field named above its value: Any while nothing is chosen, the choices once something is.
             return new Div(
-                new Span(new Text(labelKey)).Class("discover-filter__label visually-hidden").Attribute("id", id + "-label"),
-                new Button(new Span(summary.Length > 0 ? new ValueText(summary) : new Text(labelKey)).Class("discover-filter__value"), new Icon("chevron-down", assets, 14))
+                new Span(new Text(labelKey)).Class("discover-filter__label").Attribute("id", id + "-label"),
+                new Button(new Span(summary.Length > 0 ? new ValueText(summary) : new Text("discover.filter.any")).Class("discover-filter__value"), new Icon("chevron-down", assets, 14))
                     .Class("discover-filter__button").Attribute("popovertarget", id).Attribute("aria-haspopup", "dialog").Attribute("aria-expanded", "false")
                     .Attribute("aria-describedby", id + "-label"),
                 new Div(new ChoiceGroup(assets, labelKey, name, picks, new ChoiceOptions(Multiple: true, Layout: ChoiceLayout.Checks))).Class("discover-filter__popup")
@@ -395,7 +451,7 @@ namespace Jularr.Frontend.Pages.User.Discover
         private IUiComponent SelectFilter(string name, string labelKey, IReadOnlyList<ChoiceOption> options)
         {
             var id = "discover-filter-" + name;
-            return new Div(new Label(new Text(labelKey)).Class("discover-filter__label visually-hidden").Attribute("for", id),
+            return new Div(new Label(new Text(labelKey)).Class("discover-filter__label").Attribute("for", id),
                 new Select([.. options.Select(option =>
                 {
                     var item = new Option(option.LabelValue is { } value ? new ValueText(value) : new Text(option.LabelKey)).Attribute("value", option.Value);

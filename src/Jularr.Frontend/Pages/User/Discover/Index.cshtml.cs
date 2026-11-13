@@ -205,7 +205,6 @@ namespace Jularr.Frontend.Pages.User.Discover
                 if (Filtering && !searching && PageNumber == 1)
                 {
                     page.Content.Add(new HeroCarousel(assets, _hero, HeroPreferences, "discover.hero.empty"));
-                    if (FilterHeading() is { } heading) page.Content.Add(heading);
                 }
 
                 var cards = new List<IUiComponent>();
@@ -255,7 +254,6 @@ namespace Jularr.Frontend.Pages.User.Discover
             // The highlights are part of the initial response, never a late insertion above the shelves; they keep their place when nothing is highlighted.
             page.Content.Add(new HeroCarousel(assets, _hero, HeroPreferences, "discover.hero.empty"));
 
-            page.Content.Add(Toolbar());
             if (texts.Mode.Key == "hear" && Narrowed) page.Content.Add(new P(new Icon("info", assets, 16), new Span(new Text("mode.hear.audiobooks"))).Class("discover-mode-note"));
             if (texts.CanRequest()) page.Content.Add(MediaAvailability.RequestTemplates(assets));
 
@@ -286,33 +284,49 @@ namespace Jularr.Frontend.Pages.User.Discover
             }
         }
 
-        // The shared media-type bar; the tools open the filter and the highlight settings.
+        // Discover's bar: the mode's media types as text tabs, the lists (For you, Trending, …) beside them and the settings at the end;
+        // below, the filters the chosen type has, each with its name above, and the chosen ones as removable tags with the order.
         private IUiComponent TypeBar()
         {
-            var narrowed = (Availability is not null ? 1 : 0) + FilterCount;
-            var filter = new List<IUiComponent> { new Icon("filter", assets, 16) };
-            if (narrowed > 0) filter.Add(new Span(new ValueText(narrowed.ToString(CultureInfo.CurrentCulture))).Class("capsule-bar__badge"));
-            // The filter row's More opens the filter when the row is there.
-            var tools = new List<IUiComponent>();
-            if (FilterRow() is { } filters) tools.Add(filters);
-            tools.Add(Drawer.Opener(new Button(new Icon("sliders", assets, 16)).IconOnly(texts["discover.view.open"]).Class("button button--icon capsule-bar__tool"), "discover-panel", "view"));
-            if (Offered is null || !string.IsNullOrWhiteSpace(Query))
+            var searching = !string.IsNullOrWhiteSpace(Query);
+            var top = new List<IUiComponent> { TypeTabs() };
+            if (!searching && View is null)
             {
-                tools.Add(Drawer.Opener(new Button([.. filter]).IconOnly(texts["discover.filter.open"]).Class("button button--icon capsule-bar__tool"), "discover-panel", "filter"));
+                var feeds = FeedOptions(Chosen).Select(option => new NavigationTab(option.Slug is null ? "discover.forYou" : option.LabelKey,
+                    Address(Current with { Feed = option.Slug, Sort = null, Filters = false, Page = 1 }), !Filtering && Feed == option.Slug)).ToList();
+                if (feeds.Count > 1) top.Add(new NavigationTabs(feeds, "discover.feeds", "chips"));
             }
 
-            tools.Add(new Drawer(assets, "discover-panel", [FilterPane(), ViewPane()]));
-            return new MediaTypeBar(assets, [.. Listed.Select(scope => scope.Slug)], [.. Chosen.Select(scope => scope.Slug)], "discover.type.", types => Address(Current with { Types = types, View = null, Sort = null, Filters = false, Page = 1 }), tools);
+            var tools = new List<IUiComponent>();
+            if (Offered is null || searching)
+            {
+                var narrowed = (Availability is not null ? 1 : 0) + FilterCount;
+                var filter = new List<IUiComponent> { new Icon("filter", assets, 16) };
+                if (narrowed > 0) filter.Add(new Span(new ValueText(narrowed.ToString(CultureInfo.CurrentCulture))).Class("discover-bar__badge"));
+                tools.Add(Drawer.Opener(new Button([.. filter]).IconOnly(texts["discover.filter.open"]).Class("button button--icon discover-bar__tool"), "discover-panel", "filter"));
+            }
+
+            tools.Add(Drawer.Opener(new Button(new Icon("settings", assets, 16)).IconOnly(texts["discover.view.open"]).Class("button button--icon discover-bar__tool"), "discover-panel", "view"));
+            top.Add(new Div([.. tools]).Class("discover-bar__tools"));
+
+            var parts = new List<IUiComponent> { new Div([.. top]).Class("discover-bar__top") };
+            if (FilterRow() is { } filters) parts.Add(filters);
+            if (ChosenFilters() is { } chosen) parts.Add(chosen);
+            parts.Add(new Drawer(assets, "discover-panel", [FilterPane(), ViewPane()]));
+            return new Div([.. parts]).Class("discover-bar");
         }
 
-        // Feed lists and whether the shelves wrap into a grid; each shelf keeps its list's order.
-        private IUiComponent Toolbar()
+        // All of the mode's types, then each one alone; a mode of one type names it.
+        private IUiComponent TypeTabs()
         {
-            var feedTabs = FeedOptions(Chosen).Select(option => new NavigationTab(option.LabelKey, Address(Current with { Feed = option.Slug, Page = 1 }), Feed == option.Slug)).ToList();
-            return new Div(new NavigationTabs(feedTabs, "discover.feeds", "chips"),
-                new Div(new Button(new Icon("grid", assets, 18), new Icon("list", assets, 18)).IconOnly(texts["discover.view.toggle"]).Class("button button--icon discover-toolbar__layout")
-                    .Attribute("data-discover-layout", "")).Class("discover-toolbar__settings")).Class("discover-toolbar");
+            var listed = Listed.ToList();
+            var tabs = new List<NavigationTab>();
+            if (listed.Count > 1) tabs.Add(new NavigationTab("discover.all", TypeAddress([]), IsAll));
+            tabs.AddRange(listed.Select(scope => new NavigationTab("discover.type." + scope.Slug, TypeAddress([scope.Slug]), listed.Count == 1 || !IsAll && Chosen.Count == 1 && Chosen[0].Slug == scope.Slug)));
+            return new NavigationTabs(tabs, "discover.mediaTypes", "types");
         }
+
+        private string TypeAddress(IReadOnlyList<string> types) => Address(Current with { Types = types, Feed = null, View = null, Sort = null, Filters = false, Page = 1 });
 
         // The orders a ranking's scope offers; its own order is the empty choice, so its address stays short. Every other choice stays as a hidden field.
         private ChoiceSelect SortSelect(DiscoverScopeV1 scope, DiscoverFeedType view)
@@ -392,15 +406,13 @@ namespace Jularr.Frontend.Pages.User.Discover
             ], "/");
         }
 
-        // How many highlights show, whether they turn, and the layout of the shelves are the device's own choice.
+        // How many highlights show and whether they turn are the device's own choice.
         private DrawerPane ViewPane() => new("view", "discover.tab.view", "discover.view.title", "sliders",
         [
             new Div(
                 new ChoiceGroup(assets, "discover.hero.perType", "hero-perType", [.. Enumerable.Range(1, HeroPerType).Select(count => new ChoicePick(count.ToString(CultureInfo.InvariantCulture), count == 3))],
                     new ChoiceOptions(Attributes: new Dictionary<string, string> { ["data-hero-pref"] = "perType" })),
-                new Div(HeroToggle("discover.hero.continue", "withContinue"), HeroToggle("discover.hero.auto", "auto")).Class("discover-switches")).Class("drawer__section"),
-            new ChoiceGroup(assets, "discover.layout", "discover-layout", [new("rows", true, "discover.layout.rows"), new("grid", false, "discover.layout.grid")],
-                new ChoiceOptions(Attributes: new Dictionary<string, string> { ["data-discover-layout-choice"] = "" }))
+                new Div(HeroToggle("discover.hero.continue", "withContinue"), HeroToggle("discover.hero.auto", "auto")).Class("discover-switches")).Class("drawer__section")
         ],
         [
             new Button(new Text("discover.reset")).Attribute("data-hero-reset", ""),
@@ -1072,7 +1084,7 @@ namespace Jularr.Frontend.Pages.User.Discover
         // Types are left out for all of them.
         private string? TypeParameter(IReadOnlyList<string> types) => types.Count == 0 || Listed.All(scope => types.Contains(scope.Slug)) ? null : string.Join(',', types);
 
-        private string Address(State state)
+        private string Address(State state, (string Name, string Value)? without = null)
         {
             var values = new List<string>();
             if (TypeParameter(state.Types) is { } types) values.Add("type=" + Uri.EscapeDataString(types).Replace("%2C", ","));
@@ -1081,7 +1093,7 @@ namespace Jularr.Frontend.Pages.User.Discover
             if (state.View is not null && !searching) values.Add("view=" + state.View);
             if (state.Sort is not null && (state.View is not null || state.Filters && Filtering) && !searching) values.Add("sort=" + Uri.EscapeDataString(state.Sort));
             if (state.Availability is not null) values.Add("availability=" + Uri.EscapeDataString(state.Availability));
-            if (state.Filters) values.AddRange(FilterValues());
+            if (state.Filters) values.AddRange(FilterValues(without));
             if (searching) values.Add("q=" + Uri.EscapeDataString(state.Query!));
             if (searching && state.AllModes) values.Add("scope=all");
             if (state.Page > 1) values.Add("p=" + state.Page.ToString(CultureInfo.InvariantCulture));

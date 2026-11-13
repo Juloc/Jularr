@@ -1,89 +1,112 @@
-// Discover's filters as pills in the row of the media types: each names its filter until something is chosen, then shows the choice tinted. They sit at the end of the row and
-// slide sideways where the row is short; their choices open over the page.
+// Discover's filters as AniList's search has them: each a field with its name above, the chosen value tinted; More at the end opens the rest.
+// A wide screen shows them as equal columns, a narrow one lets the row slide sideways.
 .discover-filters {
     display: flex;
-    flex-wrap: wrap;
-    justify-content: flex-end;
-    align-items: center;
-    gap: 6px;
-    margin: 0;
+    align-items: flex-end;
+    gap: 14px;
+    margin: 10px 0 0;
     min-width: 0;
 
-    // A phone keeps the pills on one line; the row around them slides.
-    @media (max-width: 640px) {
-        flex-wrap: nowrap;
-        justify-content: flex-start;
+    // A narrow screen lets the row slide sideways.
+    @media (max-width: 900px) {
+        overflow-x: auto;
+        scrollbar-width: none;
+        padding-bottom: 2px;
+        &::-webkit-scrollbar { display: none; }
     }
 }
 
-// The pills follow the media types on the same line and move to a second one inside the bar when the line is short; an auto margin (not an end alignment)
-// pushes them right, so nothing ever slides out of reach on the left. A phone keeps one line that scrolls.
-.discover-results .capsule-bar.capsule-bar .capsule-bar__row { flex-wrap: wrap; }
-.discover-results .capsule-bar.capsule-bar .capsule-bar__areas { flex: 0 1 auto; }
-.discover-results .capsule-bar.capsule-bar .capsule-bar__tools { flex: 1 1 auto; min-width: 0; }
-.discover-results .capsule-bar.capsule-bar .capsule-bar__tools > .discover-filters { margin-left: auto; }
-// A phone slides the whole row sideways: the media types and the pills one after another.
-@media (max-width: 640px) {
-    .discover-results .capsule-bar.capsule-bar .capsule-bar__row { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
-    .discover-results .capsule-bar.capsule-bar .capsule-bar__row::-webkit-scrollbar { display: none; }
-    .discover-results .capsule-bar.capsule-bar .capsule-bar__areas, .discover-results .capsule-bar.capsule-bar .capsule-bar__tools { flex: none; width: max-content; overflow: visible; }
-    .discover-results .capsule-bar.capsule-bar .capsule-bar__tools > .discover-filters { margin-left: 0; }
-}
-
 .discover-filter {
-    display: flex;
-    flex: 0 0 auto;
-    min-width: 0;
+    display: grid;
+    flex: 1 1 0;
+    gap: 6px;
+    min-width: 140px;
+    max-width: 230px;
 }
 
-.discover-filter__button,
-.discover-filter--select .ui-dropdown__button,
-.discover-filter__select,
-.discover-filter__more,
-.discover-filter__clear {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    min-width: 0;
-    min-height: 36px;
-    padding: 0 13px;
-    border: 1px solid var(--border);
+// More sits at the end of the row, a pill with its count.
+.discover-filter__more.button {
+    position: relative;
+    flex: none;
+    gap: 7px;
+    min-height: 42px;
+    margin-left: auto;
+    padding: 0 16px 0 14px;
+    border-color: var(--border);
     border-radius: 999px;
     background: var(--field);
     color: var(--text);
-    font-size: var(--text-control);
     font-weight: 650;
+
+    .ui-icon { width: 16px; height: 16px; color: var(--muted); }
+    &:hover:not(:disabled) { border-color: var(--accent-outline); }
+}
+
+.discover-filter__label {
+    padding-left: 2px;
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 680;
+}
+
+.discover-filter__button,
+.discover-filter__select {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    width: 100%;
+    min-width: 0;
+    min-height: 42px;
+    padding: 0 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-field, 12px);
+    background: var(--field);
+    color: var(--muted);
+    font-size: var(--text-control);
+    font-weight: 600;
+    text-align: left;
     white-space: nowrap;
     cursor: pointer;
 
     &:hover, &[aria-expanded="true"] { border-color: var(--accent-outline); }
-    .ui-icon { color: var(--muted); }
+    .ui-icon { flex: none; color: var(--muted); }
 }
 
 .discover-filter__value {
-    max-width: 200px;
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
 }
 
 .discover-filter--set .discover-filter__button,
-.discover-filter--set .ui-dropdown__button,
-.discover-filter--set .discover-filter__select {
+.discover-filter--set .discover-filter__select,
+.discover-filter--set .ui-dropdown__button {
     border-color: var(--accent-outline);
-    background: var(--accent-soft);
     color: var(--accent-text);
+    font-weight: 680;
 
     .ui-icon { color: var(--accent-text); }
 }
+
+.discover-filter--select .ui-dropdown { width: 100%; }
+.discover-filter--select .ui-dropdown__button {
+    width: 100%;
+    min-height: 42px;
+    border-radius: var(--radius-field, 12px);
+    background: var(--field);
+}
+.discover-filter--select .ui-dropdown__value { color: inherit; }
 
 .discover-filter__popup {
     position: fixed;
     inset: auto;
     width: max-content;
+    min-width: 220px;
     max-width: min(420px, calc(100vw - 20px));
     max-height: 60vh;
     margin: 0;
-    padding: 12px;
+    padding: 10px;
     overflow-y: auto;
     overscroll-behavior: contain;
     border: 1px solid var(--border);
@@ -104,8 +127,43 @@
     }
 }
 
-.discover-filter__more { position: relative; }
-.discover-filter__clear { border-style: dashed; color: var(--muted); }
+// The chosen filters: tags whose cross removes them, a reset, and the order at the end.
+.discover-chosen {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin-top: 12px;
+
+    .discover-chosen__sort { margin-left: auto; }
+}
+
+.discover-chosen__tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 30px;
+    padding: 0 8px 0 12px;
+    border-radius: 999px;
+    background: var(--accent);
+    color: var(--accent-contrast);
+    font-size: 12px;
+    font-weight: 680;
+    text-decoration: none;
+
+    .ui-icon { opacity: .75; }
+    &:hover .ui-icon { opacity: 1; }
+}
+
+.discover-chosen__clear {
+    margin-left: 4px;
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 650;
+    text-decoration: none;
+
+    &:hover { color: var(--text); }
+}
 
 // More's tags by category, and its ranges as two number fields.
 .discover-tags {
@@ -152,4 +210,3 @@
     display: grid;
     gap: 14px;
 }
-.discover-filter--select .ui-dropdown__value { color: inherit; }
