@@ -2203,6 +2203,22 @@
    "Custom format",
    "Eigenes Format"
   ],
+  "takeover.kind.Tag": ["Tag", "Tag"],
+  "takeover.kind.ReleaseProfile": ["Release profile", "Release-Profil"],
+  "takeover.kind.QualitySize": ["Quality size", "Qualitäts-Größe"],
+  "takeover.kind.ReleaseGroup": ["Release group", "Release-Gruppe"],
+  "setup.takeover.kind.Tag": ["Tags", "Tags"],
+  "setup.takeover.kind.ReleaseProfile": ["Release profiles", "Release-Profile"],
+  "setup.takeover.kind.QualitySize": ["Quality sizes", "Qualitäts-Größen"],
+  "setup.takeover.kind.ReleaseGroup": ["Release groups", "Release-Gruppen"],
+  "takeover.outcome.takeover_size_same": ["Same as in Jularr", "Gleich wie in Jularr"],
+  "takeover.outcome.takeover_size_differs": ["Differs from Jularr; tick it to take it over", "Anders als in Jularr; zum Übernehmen anhaken"],
+  "takeover.outcome.takeover_release_skipped": ["Not taken over: a term is not valid here", "Nicht übernommen: ein Begriff ist hier ungültig"],
+  "takeover.outcome.takeover_group_good": ["Rated good", "Als gut bewertet"],
+  "takeover.outcome.takeover_group_bad": ["Rated bad", "Als schlecht bewertet"],
+  "takeover.outcome.takeover_group_blocked": ["Blocked", "Gesperrt"],
+  "takeover.sizes": ["Quality sizes", "Qualitäts-Größen"],
+  "takeover.sizes.choose": ["Take over these sizes", "Diese Größen übernehmen"],
   "takeover.kind.RootFolder": [
    "Root folder",
    "Stammordner"

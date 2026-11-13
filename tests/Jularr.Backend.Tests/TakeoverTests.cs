@@ -168,9 +168,29 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(2, formats.Single(item => item.Name == "Mixed").Conditions.Count);
             Assert.AreEqual(profile.Id, await host.ScalarAsync("SELECT wanted.\"AcquisitionProfileId\" FROM \"WantedItems\" AS wanted JOIN \"Works\" AS work ON work.\"Id\" = wanted.\"WorkId\" WHERE work.\"MediaTypeId\" = 2"));
 
-            // A second run finds the profile by its name.
+            // Its tags come over in Jularr's form and stay on the series; its release profiles bring their terms and tags; the groups its formats score are rated.
+            var animeTag = (long)(await host.ScalarAsync("""SELECT "Id" FROM "Tags" WHERE "Label" = 'anime'"""))!;
+            Assert.AreEqual("takeover_added", sonarr.Single(item => item is { TakeoverItemTypeId: TakeoverItemType.Tag, Name: "anime" }).OutcomeKey);
+            Assert.AreEqual(1, sonarr.Count(item => item.TakeoverItemTypeId == TakeoverItemType.Tag), "A label with nothing left over is not taken over.");
+            Assert.AreEqual(1L, await host.ScalarAsync($"""SELECT count(*) FROM "WorkTags" AS tagged JOIN "Works" AS work ON work."Id" = tagged."WorkId" WHERE work."MediaTypeId" = 2 AND tagged."TagId" = {animeTag}"""));
+            Assert.AreEqual($"2|{{HC,hardsub}}|{{{animeTag}}}", await host.ScalarAsync("""SELECT "MediaTypeId" || '|' || "Ignored"::text || '|' || "TagIds"::text FROM "ReleaseProfiles" WHERE "Name" = 'No hardsubs'"""));
+            Assert.AreEqual("{german,dual}", await host.ScalarAsync("""SELECT "Required"::text FROM "ReleaseProfiles" WHERE "Name" = 'Sonarr 2' AND NOT "IsEnabled" """));
+            Assert.AreEqual("GRP:1,TEAM:1", await host.ScalarAsync("""SELECT string_agg("Name" || ':' || "ReleaseGroupRatingId", ',' ORDER BY "Name") FROM "ReleaseGroups" WHERE "Name" IN ('GRP', 'TEAM')"""));
+
+            // A size alike Jularr's needs nothing; a different one is shown and only taken over once ticked.
+            Assert.AreEqual("takeover_size_same", sonarr.Single(item => item.Name.StartsWith("HDTV-1080p:", StringComparison.Ordinal)).OutcomeKey);
+            var webSize = sonarr.Single(item => item.Name.StartsWith("WEBDL-1080p:", StringComparison.Ordinal));
+            Assert.AreEqual(("takeover_size_differs", "WEBDL-1080p: 5 / 40 / 100 MB/min"), (webSize.OutcomeKey, webSize.Name));
+            Assert.AreEqual(0m, await host.ScalarAsync("""SELECT "MinimumMbPerMinute" FROM "QualityDefinitions" WHERE "MediaTypeId" = 2 AND "Quality" = 'WEBDL-1080p'"""));
+            var ticked = await RunAsync(host, true, TakeoverSourceType.Sonarr, "http://sonarr.example.test:8989", overwriteSizes: ["WEBDL-1080p"]);
+            Assert.AreEqual("takeover_added", ticked.Single(item => item.Name.StartsWith("WEBDL-1080p:", StringComparison.Ordinal)).OutcomeKey);
+            Assert.AreEqual("5.00|40.00|100.00", await host.ScalarAsync("""SELECT "MinimumMbPerMinute" || '|' || "PreferredMbPerMinute" || '|' || "MaximumMbPerMinute" FROM "QualityDefinitions" WHERE "MediaTypeId" = 2 AND "Quality" = 'WEBDL-1080p'"""));
+
+            // A second run finds the profile, the tag, the release profile and the rated groups as they are.
             var again = await RunAsync(host, false, TakeoverSourceType.Sonarr, "http://sonarr.example.test:8989");
             Assert.AreEqual("takeover_exists", again.Single(item => item.TakeoverItemTypeId == TakeoverItemType.Profile).OutcomeKey);
+            Assert.IsTrue(again.Where(item => item.TakeoverItemTypeId is TakeoverItemType.Tag or TakeoverItemType.ReleaseProfile or TakeoverItemType.ReleaseGroup).All(item => item.OutcomeKey == "takeover_exists"));
+            Assert.AreEqual("takeover_size_same", again.Single(item => item.Name.StartsWith("WEBDL-1080p:", StringComparison.Ordinal)).OutcomeKey);
 
             // Lidarr's root folders are offered every music library; the one named like the folder is suggested.
             var mountId = await host.ScalarAsync("""INSERT INTO "StorageMounts" ("Name", "StorageProtocolTypeId", "SharePath", "IsReadOnly") VALUES ('NAS', 3, '/srv/media', FALSE) RETURNING "Id" """);
@@ -217,9 +237,9 @@ namespace Jularr.Backend.Tests
         }
 
         private static async Task<IReadOnlyList<TakeoverItemV1>> RunAsync(Host host, bool apply, TakeoverSourceType source = TakeoverSourceType.Radarr, string address = "http://radarr.example.test:7878",
-            string[]? rootFolders = null)
+            string[]? rootFolders = null, string[]? overwriteSizes = null)
         {
-            using var response = await host.SendAsync(HttpMethod.Post, Takeover, new RunTakeoverDataV1(source, address, RadarrKey, apply, rootFolders));
+            using var response = await host.SendAsync(HttpMethod.Post, Takeover, new RunTakeoverDataV1(source, address, RadarrKey, apply, rootFolders, overwriteSizes: overwriteSizes));
             Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, await response.Content.ReadAsStringAsync());
             return (await response.Content.ReadFromJsonAsync<BaseDataList<TakeoverItemV1>>())!;
         }
@@ -441,7 +461,10 @@ namespace Jularr.Backend.Tests
                     ("sonarr.example.test", "/api/v3/indexer") => Json(Indexer.Replace("NAME", "Prowled", StringComparison.Ordinal).Replace("HOST", "prowled", StringComparison.Ordinal)),
                     ("sonarr.example.test", "/api/v3/downloadclient") => Json(Client("tvCategory")),
                     ("sonarr.example.test", "/api/v3/rootfolder") => Json("[]"),
-                    ("sonarr.example.test", "/api/v3/series") => Json("""[{"title":"Example Show","year":2020,"tvdbId":81189,"tmdbId":1399,"imdbId":"tt0081189","monitored":true,"qualityProfileId":4,"statistics":{"episodeFileCount":0,"episodeCount":1}}]"""),
+                    ("sonarr.example.test", "/api/v3/series") => Json("""[{"title":"Example Show","year":2020,"tvdbId":81189,"tmdbId":1399,"imdbId":"tt0081189","monitored":true,"qualityProfileId":4,"tags":[1],"statistics":{"episodeFileCount":0,"episodeCount":1}}]"""),
+                    ("sonarr.example.test", "/api/v3/tag") => Json("""[{"id":1,"label":"Anime!"},{"id":2,"label":"!!!"}]"""),
+                    ("sonarr.example.test", "/api/v3/releaseprofile") => Json("""[{"name":"No hardsubs","enabled":true,"required":[],"ignored":["HC","hardsub"],"tags":[1]},{"name":"","enabled":false,"required":"german, dual","ignored":"","tags":[]}]"""),
+                    ("sonarr.example.test", "/api/v3/qualitydefinition") => Json("""[{"quality":{"name":"WEBDL-1080p"},"minSize":5,"maxSize":100,"preferredSize":40},{"quality":{"name":"HDTV-1080p"},"minSize":0,"maxSize":null,"preferredSize":null},{"quality":{"name":"Nonsense"},"minSize":1}]"""),
                     ("sonarr.example.test", "/api/v3/qualityprofile") => Json("""
                         [{"id":4,"name":"HD-1080p","upgradeAllowed":true,"cutoff":1002,"minFormatScore":0,"items":[
                           {"quality":{"id":4,"name":"HDTV-720p","source":"television","resolution":720},"items":[],"allowed":false},

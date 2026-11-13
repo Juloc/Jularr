@@ -20,6 +20,10 @@ namespace Jularr.Backend.Data.Enums.Acquisition
         Book = 6,
         Profile = 7,
         Format = 8,
-        RootFolder = 9
+        RootFolder = 9,
+        Tag = 10,
+        ReleaseProfile = 11,
+        QualitySize = 12,
+        ReleaseGroup = 13
     }
 }

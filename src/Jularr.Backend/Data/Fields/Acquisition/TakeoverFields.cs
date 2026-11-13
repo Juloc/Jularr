@@ -12,5 +12,6 @@ namespace Jularr.Backend.Data.Fields.Acquisition
 
         // A root folder there and the library it goes to, as "libraryRootId:path".
         public static readonly StringArrayField RootFolders = new() { ItemMaximumLength = 600 };
+        public static readonly StringArrayField OverwriteSizes = new() { ItemMaximumLength = 64, MaximumLength = 100 };
     }
 }

@@ -171,6 +171,21 @@ namespace Jularr.Backend.Logic.Acquisition
             if (await ctx.ExecuteAsyncForAffectedRows(sql, ct) != 1) throw new DataValidationException(nameof(data.Id), "in_use");
         }
 
+        // A title taken over carries the tags it carried there, besides its own.
+        public static async Task TagTakenOverWorkAsync(this LogicContext ctx, TakeoverWorkTagsData data, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                INSERT INTO "WorkTags" ("WorkId", "TagId")
+                SELECT @WorkId, tag."Id" FROM "Tags" AS tag WHERE tag."Id" = ANY(@TagIds::bigint[])
+                ORDER BY tag."Id"
+                ON CONFLICT ("WorkId", "TagId") DO NOTHING;
+                """;
+            sql.Parameters.Add(data);
+            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+        }
+
         public static async Task RequireAcquisitionTagsAsync(this LogicContext ctx, AcquisitionTagSetData data, CancellationToken ct)
         {
             if (data.TagIds.Length == 0) return;

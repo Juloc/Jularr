@@ -59,6 +59,9 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
             IReadOnlyList<ServarrMetadataProfile> metadataProfiles = [];
             IReadOnlyList<ServarrRootFolder> rootFolders = [];
             ServarrFormatCatalog? formatCatalog = null;
+            IReadOnlyList<ServarrTag> sourceTags = [];
+            IReadOnlyList<ServarrReleaseProfile> releaseProfiles = [];
+            IReadOnlyList<ServarrQualitySize> qualitySizes = [];
             try
             {
                 if (Data.TakeoverSourceTypeId != TakeoverSourceType.Prowlarr)
@@ -68,6 +71,9 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                     {
                         formats = await _servarr.ReadCustomFormatsAsync(source, CancellationToken);
                         formatCatalog = await _servarr.ReadFormatCatalogAsync(source, CancellationToken);
+                        sourceTags = await _servarr.ReadTagsAsync(source, CancellationToken);
+                        releaseProfiles = await _servarr.ReadReleaseProfilesAsync(source, CancellationToken);
+                        qualitySizes = await _servarr.ReadQualitySizesAsync(source, CancellationToken);
                     }
                     rootFolders = await _servarr.ReadRootFoldersAsync(source, CancellationToken);
                 }
@@ -200,6 +206,12 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
             // The custom formats found, besides the ones listed above as not taken over; the quality profiles bring the others along.
             var notTaken = items.Where(item => item.TakeoverItemTypeId == TakeoverItemType.Format).Select(item => item.Name).ToHashSet(StringComparer.Ordinal);
             items.AddRange(formats.Where(format => !notTaken.Contains(Limit(format.Name, 500))).Select(format => new TakeoverItemV1(TakeoverItemType.Format, Limit(format.Name, 500), "takeover_found", null)));
+
+            // Sonarr's and Radarr's tags, release profiles, quality sizes and the release groups their custom formats rate.
+            var tagIds = await TakeTagsAsync(sourceTags, items);
+            await TakeReleaseProfilesAsync(releaseProfiles, mediaType, tagIds, items);
+            await TakeQualitySizesAsync(qualitySizes, mediaType, items);
+            await TakeReleaseGroupsAsync(formats, profiles, items);
 
             // Each root folder goes to a chosen library of its type. A library named like the folder, or the only one, is suggested.
             var chosen = (Data.RootFolders ?? []).Select(Choice).OfType<(long LibraryRootId, string Path)>().GroupBy(choice => Folder(choice.Path), StringComparer.Ordinal)
@@ -356,8 +368,10 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                 }
 
                 // A monitored title is wanted and searched, an unmonitored one is wanted paused; a target the title already has stays as it is.
+                var titleTags = title.TagIds.Where(tagIds.ContainsKey).Select(id => tagIds[id]).Distinct().ToArray();
                 await Context.ExecuteBatchAsync(async (ctx, ct) =>
                 {
+                    if (titleTags.Length > 0) await ctx.TagTakenOverWorkAsync(new TakeoverWorkTagsData(workId, titleTags), ct);
                     await ctx.EnsureWantedItemAsync(new WantedTakeoverData(workId, sourceProfileId is { } profileId && profileIds.TryGetValue((profileId, sourceMetadataId), out var id) ? id : null,
                         SourceRoot(title) is { } root && chosen.TryGetValue(Folder(root.Path), out var libraryRootId) ? libraryRootId : null, !title.IsMonitored), ct);
                     return true;
@@ -372,6 +386,214 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                 ? rootFolders.OrderByDescending(folder => Folder(folder.Path).Length).FirstOrDefault(folder => Contains(folder.Path, path)) : null;
             int? SourceProfile(ServarrTitle title) => title.QualityProfileId ?? SourceRoot(title)?.DefaultQualityProfileId;
             int SourceMetadata(ServarrTitle title) => title.MetadataProfileId ?? SourceRoot(title)?.DefaultMetadataProfileId ?? 0;
+        }
+
+        // A tag comes over under its label in Jularr's form (small letters, digits, spaces, dashes); one of that label already is the same tag.
+        private async Task<Dictionary<int, long>> TakeTagsAsync(IReadOnlyList<ServarrTag> tags, List<TakeoverItemV1> items)
+        {
+            var map = new Dictionary<int, long>();
+            if (tags.Count == 0) return map;
+            var known = await Context.ExecuteBatchAsync((ctx, ct) =>
+            {
+                var sql = new SqlStatement();
+                sql.Statement = """SELECT tag."Id", tag."Label", tag."Version" FROM "Tags" AS tag;""";
+                return ctx.ReadSql.ReadListAsync<AcquisitionTagRowData>(sql, ct);
+            }, CancellationToken);
+            var byLabel = known.GroupBy(tag => tag.Label, StringComparer.Ordinal).ToDictionary(group => group.Key, group => group.First().Id, StringComparer.Ordinal);
+            foreach (var tag in tags)
+            {
+                var label = TagLabel(tag.Label);
+                if (label is null) continue;
+                if (byLabel.TryGetValue(label, out var id))
+                {
+                    map[tag.Id] = id;
+                    items.Add(new TakeoverItemV1(TakeoverItemType.Tag, label, "takeover_exists", null));
+                    continue;
+                }
+
+                if (!Data.Apply)
+                {
+                    items.Add(new TakeoverItemV1(TakeoverItemType.Tag, label, "takeover_will_add", null));
+                    continue;
+                }
+
+                var key = await Context.ExecuteBatchAsync((ctx, ct) => ctx.SaveAcquisitionTagAsync(new AcquisitionTagWriteData(null, label, null), ct), CancellationToken);
+                byLabel[label] = map[tag.Id] = key.Id;
+                items.Add(new TakeoverItemV1(TakeoverItemType.Tag, label, "takeover_added", null));
+            }
+
+            return map;
+        }
+
+        // "Anime HD!" is "anime hd"; a label with nothing left over is not taken over.
+        private static string? TagLabel(string label)
+        {
+            var cleaned = new string([.. label.Trim().ToLowerInvariant().Select(character => char.IsAsciiLetterOrDigit(character) || character is ' ' or '_' or '-' ? character : '-')]).Trim(' ', '-', '_');
+            cleaned = cleaned.Length > 64 ? cleaned[..64].TrimEnd(' ', '-', '_') : cleaned;
+            return cleaned.Length > 0 && char.IsAsciiLetterOrDigit(cleaned[0]) ? cleaned : null;
+        }
+
+        // A release profile comes over for the media type of the source, with its terms and tags; one of that name already is kept as it is.
+        private async Task TakeReleaseProfilesAsync(IReadOnlyList<ServarrReleaseProfile> profiles, MediaType mediaType, Dictionary<int, long> tagIds, List<TakeoverItemV1> items)
+        {
+            if (profiles.Count == 0) return;
+            var known = (await Context.ExecuteBatchAsync((ctx, ct) =>
+            {
+                var sql = new SqlStatement();
+                sql.Statement = """SELECT release."Id", release."Name" FROM "ReleaseProfiles" AS release;""";
+                return ctx.ReadSql.ReadListAsync<AcquisitionProfileNameData>(sql, ct);
+            }, CancellationToken)).Select(release => release.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            for (var index = 0; index < profiles.Count; index++)
+            {
+                var profile = profiles[index];
+                var name = Limit(profile.Name.Length > 0 ? profile.Name : Data.TakeoverSourceTypeId + " " + (index + 1).ToString(CultureInfo.InvariantCulture), 128);
+                if (known.Contains(name))
+                {
+                    items.Add(new TakeoverItemV1(TakeoverItemType.ReleaseProfile, name, "takeover_exists", null));
+                    continue;
+                }
+
+                if (!Data.Apply)
+                {
+                    items.Add(new TakeoverItemV1(TakeoverItemType.ReleaseProfile, name, "takeover_will_add", null));
+                    continue;
+                }
+
+                var tags = profile.TagIds.Where(tagIds.ContainsKey).Select(id => tagIds[id]).Distinct().ToArray();
+                try
+                {
+                    await Context.ExecuteBatchAsync((ctx, ct) => ctx.SaveReleaseProfileAsync(new ReleaseProfileWriteData(null, mediaType, name, profile.IsEnabled, profile.Required, profile.Ignored,
+                        null, tags, null), ct), CancellationToken);
+                    known.Add(name);
+                    items.Add(new TakeoverItemV1(TakeoverItemType.ReleaseProfile, name, "takeover_added", null));
+                }
+                catch (DataValidationException)
+                {
+                    items.Add(new TakeoverItemV1(TakeoverItemType.ReleaseProfile, name, "takeover_release_skipped", null));
+                }
+            }
+        }
+
+        // A quality's sizes are compared with Jularr's: alike ones need nothing, different ones are taken over only where the person chose them in the preview.
+        private async Task TakeQualitySizesAsync(IReadOnlyList<ServarrQualitySize> sizes, MediaType mediaType, List<TakeoverItemV1> items)
+        {
+            if (sizes.Count == 0 || mediaType is not (MediaType.Movie or MediaType.Series)) return;
+            var current = await Context.ExecuteBatchAsync((ctx, ct) =>
+            {
+                var sql = new SqlStatement();
+                sql.Statement =
+                    """
+                    SELECT quality."Quality", quality."MinimumMbPerMinute", quality."PreferredMbPerMinute", quality."MaximumMbPerMinute", quality."Version"
+                    FROM "QualityDefinitions" AS quality
+                    WHERE quality."MediaTypeId" = @MediaTypeId
+                    ORDER BY quality."Quality";
+                    """;
+                sql.Parameters.Add(new QualityDefinitionsParametersV1(mediaType));
+                return ctx.ReadSql.ReadListAsync<QualityDefinitionV1>(sql, ct);
+            }, CancellationToken);
+            var chosen = (Data.OverwriteSizes ?? []).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var rows = current.ToDictionary(row => row.Quality, StringComparer.OrdinalIgnoreCase);
+            var changed = false;
+            foreach (var size in sizes)
+            {
+                if (!rows.TryGetValue(size.Quality, out var row)) continue;
+                var minimum = Math.Clamp(Math.Round(size.Minimum, 2), 0, 999999m);
+                var maximum = size.Maximum is { } top ? Math.Clamp(Math.Round(top, 2), minimum, 999999m) : (decimal?)null;
+                var preferred = size.Preferred is { } middle ? Math.Clamp(Math.Round(middle, 2), minimum, maximum ?? 999999m) : (decimal?)null;
+                var label = Limit(row.Quality + ": " + Sizes(minimum, preferred, maximum), 500);
+                if (row.MinimumMbPerMinute == minimum && row.PreferredMbPerMinute == preferred && row.MaximumMbPerMinute == maximum)
+                {
+                    items.Add(new TakeoverItemV1(TakeoverItemType.QualitySize, label, "takeover_size_same", null));
+                    continue;
+                }
+
+                if (!Data.Apply || !chosen.Contains(row.Quality))
+                {
+                    items.Add(new TakeoverItemV1(TakeoverItemType.QualitySize, label, "takeover_size_differs", null));
+                    continue;
+                }
+
+                rows[row.Quality] = new QualityDefinitionV1(row.Quality, minimum, preferred, maximum, row.Version);
+                changed = true;
+                items.Add(new TakeoverItemV1(TakeoverItemType.QualitySize, label, "takeover_added", null));
+            }
+
+            if (changed)
+            {
+                var json = JsonSerializer.Serialize(rows.Values.Select(row => new { row.Quality, row.MinimumMbPerMinute, row.PreferredMbPerMinute, row.MaximumMbPerMinute, row.Version }));
+                await Context.ExecuteBatchAsync(async (ctx, ct) =>
+                {
+                    await ctx.SaveQualityDefinitionsAsync(new QualityDefinitionsWriteData(mediaType, json), ct);
+                    return true;
+                }, CancellationToken);
+            }
+
+            static string Sizes(decimal minimum, decimal? preferred, decimal? maximum) =>
+                minimum.ToString("0.##", CultureInfo.InvariantCulture) + " / " + (preferred?.ToString("0.##", CultureInfo.InvariantCulture) ?? "–") + " / "
+                + (maximum?.ToString("0.##", CultureInfo.InvariantCulture) ?? "∞") + " MB/min";
+        }
+
+        // A custom format that names release groups rates them by its points in the profiles: plus is good, minus bad, -10000 or less blocked. A group Jularr has rated keeps its rating.
+        private async Task TakeReleaseGroupsAsync(IReadOnlyList<ServarrCustomFormat> formats, IReadOnlyList<ServarrQualityProfile> profiles, List<TakeoverItemV1> items)
+        {
+            var ratings = new Dictionary<string, ReleaseGroupRating>(StringComparer.OrdinalIgnoreCase);
+            foreach (var format in formats)
+            {
+                var conditions = format.Conditions.Where(condition => condition.Implementation == "ReleaseGroupSpecification" && !condition.Negate).ToArray();
+                if (conditions.Length == 0) continue;
+                var scores = profiles.Select(profile => profile.FormatScores.TryGetValue(format.Id, out var score) ? score : 0).Where(score => score != 0).ToArray();
+                if (scores.Length == 0) continue;
+                var score = scores.MaxBy(Math.Abs);
+                var rating = score <= -10000 ? ReleaseGroupRating.Blocked : score < 0 ? ReleaseGroupRating.Bad : ReleaseGroupRating.Good;
+                foreach (var name in conditions.SelectMany(condition => GroupNames(condition.Fields.TryGetValue("value", out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null)))
+                {
+                    if (!ratings.TryGetValue(name, out var known) || rating > known) ratings[name] = rating;
+                }
+            }
+
+            if (ratings.Count == 0) return;
+            var rated = (await Context.ExecuteBatchAsync((ctx, ct) =>
+            {
+                var sql = new SqlStatement();
+                sql.Statement =
+                    """
+                    SELECT item."Id", item."Name", item."ReleaseGroupRatingId", item."SeenCount", item."LastSeenAt", '{}'::smallint[] AS "MediaKinds"
+                    FROM "ReleaseGroups" AS item
+                    WHERE item."ReleaseGroupRatingId" IS NOT NULL;
+                    """;
+                return ctx.ReadSql.ReadListAsync<ReleaseGroupDetailsV1>(sql, ct);
+            }, CancellationToken)).ToDictionary(group => group.Name, StringComparer.OrdinalIgnoreCase);
+            foreach (var (name, rating) in ratings.OrderBy(pair => pair.Key, StringComparer.OrdinalIgnoreCase).Take(500))
+            {
+                if (rated.ContainsKey(name))
+                {
+                    items.Add(new TakeoverItemV1(TakeoverItemType.ReleaseGroup, name, "takeover_exists", null));
+                    continue;
+                }
+
+                if (Data.Apply)
+                {
+                    await Context.ExecuteBatchAsync(async (ctx, ct) =>
+                    {
+                        var key = await ctx.AddReleaseGroupAsync(new ReleaseGroupAddData(name), ct);
+                        await ctx.RateReleaseGroupAsync(new ReleaseGroupRatingData(key.Id, rating), ct);
+                        return true;
+                    }, CancellationToken);
+                }
+
+                items.Add(new TakeoverItemV1(TakeoverItemType.ReleaseGroup, name, "takeover_group_" + rating.ToString().ToLowerInvariant(), null));
+            }
+        }
+
+        // "^(FLUX|NTb)$", "\b(FLUX)\b" or "(?i)^flux$" name groups; a pattern that needs more than names and bars names none.
+        private static IEnumerable<string> GroupNames(string? pattern)
+        {
+            if (pattern is null) return [];
+            var core = pattern.Replace("(?i)", "", StringComparison.Ordinal).Replace("\\b", "", StringComparison.Ordinal).Trim('^', '$', ' ');
+            if (core.StartsWith('(') && core.EndsWith(')')) core = core[1..^1];
+            var names = core.Split('|', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+            return names.All(name => name.Length <= 64 && name.All(character => char.IsAsciiLetterOrDigit(character) || character is '-' or '_' or '.'))
+                ? names.Select(name => name.Replace("\\.", ".", StringComparison.Ordinal)) : [];
         }
 
         private async Task<TakeoverItemV1> TakeConnectionAsync(TakeoverItemType type, string name, string baseUrl, bool needsKey, HashSet<string> existing, SaveAcquisitionConnectionDataV1 data)
