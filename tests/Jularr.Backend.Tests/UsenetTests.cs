@@ -238,7 +238,7 @@ namespace Jularr.Backend.Tests
             news.Publish("quota.mkv", bytes, 3);
             var files = NzbReader.Read(new MemoryStream(Encoding.UTF8.GetBytes(news.Nzb("quota.mkv")))).Files;
             var server = new UsenetServer("127.0.0.1", news.Port, false, "reader", "news-secret", 3);
-            var downloader = new UsenetDownloader();
+            await using var downloader = new UsenetDownloader();
 
             await Assert.ThrowsAsync<UsenetStorageBudgetException>(async () =>
                 await downloader.DownloadAsync(server, files, staging.Path, new HashSet<string>(), DateTimeOffset.UtcNow.AddSeconds(15), 2_500, CancellationToken.None));
