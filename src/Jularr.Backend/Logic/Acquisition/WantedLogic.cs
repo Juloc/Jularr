@@ -163,9 +163,11 @@ namespace Jularr.Backend.Logic.Acquisition
                 ), removed AS (
                     DELETE FROM "WorkTags" AS tagged USING target
                     WHERE tagged."WorkId" = target."Id" AND NOT (tagged."TagId" = ANY(@TagIds))
+                        AND EXISTS (SELECT 1 FROM "Tags" AS named WHERE named."Id" = tagged."TagId" AND named."AutoKey" IS NULL)
                 )
                 INSERT INTO "WorkTags" ("WorkId", "TagId")
                 SELECT target."Id", tag FROM target CROSS JOIN unnest(@TagIds::bigint[]) AS tag
+                WHERE EXISTS (SELECT 1 FROM "Tags" AS named WHERE named."Id" = tag AND named."AutoKey" IS NULL)
                 ON CONFLICT ("WorkId", "TagId") DO NOTHING;
                 """;
             sql.Parameters.Add(data);

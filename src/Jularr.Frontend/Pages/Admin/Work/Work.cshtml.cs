@@ -52,6 +52,12 @@ namespace Jularr.Frontend.Pages.Admin.Work
         private IReadOnlyList<AcquisitionProfileDetailsV1> _profiles = [];
         private IReadOnlyList<WantedLibraryV1> _libraries = [];
         private SelectOption[] _tagChoices = [];
+        private string[] _autoTags = [];
+
+        // The tags Jularr keeps itself on a title, beside the ones a person chooses: grey chips under their heading, nothing to change.
+        internal static IUiComponent AutoTagChips(IEnumerable<string> labels) =>
+            new Div(new P(new Text("arr.tags.auto")).Class("ui-field__label"), new Div([.. labels.Select(label => (IUiComponent)new Tag(new ValueText(label)))]).Class("auto-tags__chips"))
+                .Class("ui-field ui-field--wide auto-tags");
         private UpdateWantedDataV1? _choice;
         private long? _choiceWantedId;
         private readonly Dictionary<long, WantedDetailsV1> _platformTargets = [];
@@ -335,7 +341,7 @@ namespace Jularr.Frontend.Pages.Admin.Work
             var releasesTask = ReadWhenAsync(wantedItemId is not null && Tab == WorkTab.History, () => readReleases.ExecuteAsync<BaseDataList<WantedReleaseV1>>(new WantedItemParametersV1(wantedItemId!.Value), ct));
             var profilesTask = ReadWhenAsync(choices, () => profiles.ExecuteAsync<BaseDataList<AcquisitionProfileDetailsV1>>(new ReadAcquisitionProfilesParametersV1(wantedItemId!.Value), ct));
             var librariesTask = ReadWhenAsync(choices, () => libraries.ExecuteAsync<BaseDataList<WantedLibraryV1>>(new WantedItemParametersV1(wantedItemId!.Value), ct));
-            var tagsTask = ReadWhenAsync(choices, () => tags.ExecuteAsync<PageResult<AcquisitionTagDetailsV1>>(new ReadAcquisitionTagsParametersV1(1), ct));
+            var tagsTask = ReadWhenAsync(choices, () => tags.ExecuteAsync<PageResult<AcquisitionTagDetailsV1>>(new ReadAcquisitionTagsParametersV1(1, automatic: false), ct));
             var renamesTask = ReadWhenAsync(Tab == WorkTab.Files && texts.CanManageStorage(), () => readRenames.ExecuteAsync<LibraryRenamePlanV1>(new ReadLibraryRenamesParametersV1(1, 100, Id), ct));
             var eventsTask = ReadWhenAsync(Tab == WorkTab.History, () => readEvents.ExecuteAsync<PageResult<ActivityEventV1>>(new ReadActivityEventsParametersV1(Id, Math.Max(1, HistoryPage)), ct));
             await Task.WhenAll(targetsTask, groupsTask, languagesTask, releasesTask, profilesTask, librariesTask, tagsTask, renamesTask, eventsTask);
@@ -360,7 +366,8 @@ namespace Jularr.Frontend.Pages.Admin.Work
                     listed.AddRange(missing.Where(found.ContainsKey).Select(id => found[id]));
                 }
 
-                _tagChoices = listed.Select(item => new SelectOption(item.Id.ToString(CultureInfo.InvariantCulture), item.Label)).ToArray();
+                _tagChoices = listed.Where(item => item.AutoKey is null).Select(item => new SelectOption(item.Id.ToString(CultureInfo.InvariantCulture), item.Label)).ToArray();
+                _autoTags = [.. listed.Where(item => item.AutoKey is not null).Select(item => Profiles.TagLabels.Label(item, texts))];
             }
         }
 

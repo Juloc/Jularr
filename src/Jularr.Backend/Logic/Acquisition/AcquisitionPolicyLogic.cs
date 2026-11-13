@@ -125,6 +125,7 @@ namespace Jularr.Backend.Logic.Acquisition
                     WHERE
                         item."Id" = @Id
                         AND item."Version" = @Version
+                        AND item."AutoKey" IS NULL
                     RETURNING
                         item."Id",
                         item."Version";
@@ -162,6 +163,7 @@ namespace Jularr.Backend.Logic.Acquisition
                 WHERE
                     item."Id" = @Id
                     AND item."Version" = @Version
+                    AND item."AutoKey" IS NULL
                     AND NOT EXISTS (SELECT 1 FROM "WorkTags" AS link WHERE link."TagId" = item."Id")
                     AND NOT EXISTS (SELECT 1 FROM "ReleaseProfiles" AS profile WHERE item."Id" = ANY(profile."TagIds"));
                 """;

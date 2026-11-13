@@ -81,5 +81,10 @@ namespace Jularr.Backend.Data.Fields.Acquisition
         public static readonly LongField Id = new() { Minimum = 1 };
         public static readonly StringField Label = new() { MaximumLength = 64, AllowBlank = false, Trim = true };
         public static readonly LongField Version = new() { Minimum = 1 };
+
+        // What a tag Jularr keeps itself stands for ("kind:anime"), and the name of the profile a requester tag stands for.
+        public static readonly StringField AutoKey = new() { MaximumLength = 58, Required = false };
+        public static readonly StringField AutoName = new() { MaximumLength = 256, Required = false };
+        public static readonly BoolField Automatic = new() { Required = false };
     }
 }

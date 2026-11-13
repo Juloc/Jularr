@@ -1,8 +1,10 @@
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Worker;
+using Jularr.Backend.Data.System.Acquisition.V1;
 using Jularr.Backend.Data.System.Media.V1;
 using Jularr.Backend.Data.System.Provider.V1;
 using Jularr.Backend.Service.Core;
+using Jularr.Backend.Service.System.Acquisition.V1;
 using Jularr.Backend.Service.System.Media.V1;
 using Jularr.Backend.Service.System.Provider.V1;
 using Microsoft.Extensions.DependencyInjection;
@@ -35,6 +37,10 @@ namespace Jularr.Workers
             // Titles with files and no target get a paused one, so every title page offers the same buttons.
             await Runner.RunWhileBusyAsync("wantedTargets", async (services, token) =>
                 (await services.GetRequiredService<EnsureWantedTargetsV1>().ExecuteAsync<UpdateResult>(new CoverParametersV1(), default, token)).Success, TimeSpan.FromSeconds(2), ct);
+
+            // The tags Jularr keeps itself follow the titles: media type, original language, genres, requesters.
+            await Runner.RunAsync("autoTags", (services, token) =>
+                services.GetRequiredService<RefreshAutoTagsV1>().ExecuteAsync<UpdateResult>(new AutoTagParametersV1(), default, token), ct);
 
             // Catalog titles nobody uses lose their details, then their rows; once a day.
             await Runner.RunAsync("catalogCleanup", (services, token) =>
