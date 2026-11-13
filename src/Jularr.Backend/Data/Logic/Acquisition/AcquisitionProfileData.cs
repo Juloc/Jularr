@@ -69,6 +69,10 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         public int GoodGroupScore { get; init; } = AcquisitionProfileDefinition.DefaultGoodGroupScore;
         public int BadGroupScore { get; init; } = AcquisitionProfileDefinition.DefaultBadGroupScore;
 
+        // The simple switches: bad sources (CAM, telesync, screener, 3D, upscales) are never taken; x265 is liked or avoided; the smaller or the larger file goes first.
+        public bool BlockBadSources { get; init; } = true;
+        public CodecPreference CodecPreference { get; init; }
+        public SizePreference SizePreference { get; init; }
     }
 
     internal sealed class AcquisitionProfileRowData : BaseData

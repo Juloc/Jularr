@@ -5,7 +5,7 @@ using Jularr.Backend.Data.Logic.Acquisition;
 namespace Jularr.Backend.Logic.Acquisition
 {
     // Scores a parsed release against a profile, for every media type.
-    internal static class ReleaseScorer
+    internal static partial class ReleaseScorer
     {
         private static readonly TimeSpan RegexTimeout = TimeSpan.FromMilliseconds(100);
 
@@ -113,6 +113,19 @@ namespace Jularr.Backend.Logic.Acquisition
                 formatPoints.Add(new ScorePoint("Group" + rating, group, points));
             }
 
+            // The simple switches of a video profile: a bad source is never taken, and x265 is liked or avoided.
+            if (profile.IsVideo && profile.BlockBadSources && BadSource(qualityKey, candidate.Release.RawTitle) is { } bad)
+            {
+                rejections.Add(new ReleaseReason("BadSource", bad));
+            }
+
+            if (profile.IsVideo && profile.CodecPreference != CodecPreference.Any && candidate.Release.VideoCodec == ReleaseVideoCodec.Hevc)
+            {
+                var liked = profile.CodecPreference == CodecPreference.PreferHevc;
+                formatScore += liked ? CodecPoints : -CodecPoints;
+                formatPoints.Add(new ScorePoint(liked ? "CodecLiked" : "CodecAvoided", "x265", liked ? CodecPoints : -CodecPoints));
+            }
+
             var score = formatScore;
             return new ReleaseScoreResult(candidate, rejections.Count == 0, score, qualityKey, qualityRank, rejections, scoreReasons)
             {
@@ -121,6 +134,19 @@ namespace Jularr.Backend.Logic.Acquisition
                 FormatPoints = formatPoints
             };
         }
+
+        // The points of a liked or avoided x265 release.
+        public const int CodecPoints = 20;
+
+        // The qualities and words of a source nobody wants: a recording in the cinema, an early screener, a 3D or an upscaled release.
+        private static readonly string[] BadQualities = ["CAM", "TELESYNC", "TELECINE", "WORKPRINT", "DVDSCR", "REGIONAL"];
+
+        public static string? BadSource(string? qualityKey, string rawTitle) =>
+            qualityKey is not null && BadQualities.Contains(qualityKey, StringComparer.OrdinalIgnoreCase) ? qualityKey
+            : BadWords().Match(rawTitle) is { Success: true } word ? word.Value : null;
+
+        [GeneratedRegex(@"(?<![a-z0-9])(?:3D|H[ ._-]?SBS|H[ ._-]?OU|UPSCALED?|AI[ ._-]?UPSCALE)(?![a-z0-9])", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+        private static partial Regex BadWords();
 
         // The rated groups of a release for the profile's media type; a release without a group or with unrated groups has none.
         public static IReadOnlyList<(string Group, ReleaseGroupRating Rating)> GroupRatings(QualityProfile profile, ReleaseInfo release) =>

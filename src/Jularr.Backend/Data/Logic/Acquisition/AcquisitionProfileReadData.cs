@@ -48,4 +48,35 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         public int OpenRequestCount { get; }
     }
 
+    // A video profile with every custom format and rating a search of its first media type would read.
+    internal sealed class ReleaseTestProfileData : BaseData
+    {
+        public ReleaseTestProfileData(long id, string name, AcquisitionMediaKind mediaKind, string definition, string formats, string releaseGroupRatings)
+        {
+            Id = id;
+            Name = name;
+            MediaKind = mediaKind;
+            Definition = definition;
+            Formats = formats;
+            ReleaseGroupRatings = releaseGroupRatings;
+        }
+
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.Id))]
+        public long Id { get; }
+
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.Name))]
+        public string Name { get; }
+
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.MediaKind))]
+        public AcquisitionMediaKind MediaKind { get; }
+
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.Definition))]
+        public string Definition { get; }
+
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.Definition))]
+        public string Formats { get; }
+
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.Definition))]
+        public string ReleaseGroupRatings { get; }
+    }
 }

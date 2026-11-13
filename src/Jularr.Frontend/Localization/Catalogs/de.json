@@ -360,7 +360,6 @@
   "work.languages.wanted": ["Wanted in", "Gewünscht in"],
   "work.languages.missing": ["Still missing", "Noch fehlend"],
   "work.languages.save": ["Save languages", "Sprachen speichern"],
-  "profile.languages.moved": ["A quality profile holds qualities only. The languages are chosen by each person in their profile settings; for titles nobody requested they follow the setting under Languages for monitored titles on the profiles page.", "Ein Qualitätsprofil enthält nur Qualitäten. Die Sprachen wählt jede Person in ihren Profil-Einstellungen; für Titel ohne Anfrage gilt die Einstellung „Sprachen für überwachte Titel“ auf der Profilseite."],
   "arr.monitoredLanguages.title": ["Languages for monitored titles", "Sprachen für überwachte Titel"],
   "arr.monitoredLanguages.info": ["Titles nobody requested (monitored or imported by an administrator) are wanted in these languages. A book is fetched once per language, each on its own.", "Titel, die niemand angefragt hat (überwacht oder von einem Admin importiert), werden in diesen Sprachen gewünscht. Ein Buch wird je Sprache einmal geholt, jede Sprache für sich."],
   "arr.monitoredLanguages.profiles": ["First language of every profile", "Erste Sprache aller Profile"],
@@ -2516,10 +2515,6 @@
    "Delete profile",
    "Profil löschen"
   ],
-  "profile.upgradeAllowed": [
-   "Upgrade to better releases",
-   "Auf bessere Releases upgraden"
-  ],
   "profile.cutoff": [
    "Stop upgrading at",
    "Upgrades beenden bei"
@@ -2545,11 +2540,7 @@
   "profile.minimumScore.info": ["Releases with a lower score are not grabbed.", "Releases mit niedrigerem Score werden nicht geladen."],
   "profile.cutoffScore.info": ["Upgrades stop once the stop quality and this score are reached.", "Upgrades enden, sobald die Endqualität und dieser Score erreicht sind."],
   "profile.upgradeScore.info": ["An upgrade must beat the present file by at least this score.", "Ein Upgrade muss die vorhandene Datei um mindestens diesen Score übertreffen."],
-  "profile.advanced": ["Advanced: quality groups and format scores", "Erweitert: Qualitätsgruppen und Format-Scores"],
-  "profile.allowed": [
-   "Allowed",
-   "Erlaubt"
-  ],
+  "profile.advanced": ["For experts", "Für Experten"],
   "profile.minimumSize": [
    "Minimum size",
    "Mindestgröße"
@@ -11499,6 +11490,44 @@
    "Size",
    "Größe"
   ],
+  "profile.qualities.info": ["Best first. The search takes the highest it finds; upgrades replace a file until the quality to stop at.", "Beste zuerst. Die Suche nimmt die höchste, die sie findet; Upgrades ersetzen eine Datei bis zur Qualität, bei der sie aufhören."],
+  "profile.addQuality": ["Add quality", "Qualität hinzufügen"],
+  "profile.cutoffTag": ["Goal", "Ziel"],
+  "profile.section.prefer": ["Prefer", "Bevorzugen"],
+  "profile.prefer.info": ["What counts besides the quality. Languages come from the profile languages.", "Was neben der Qualität zählt. Sprachen kommen aus den Profilsprachen."],
+  "profile.prefer.badSources": ["Bad sources", "Schlechte Quellen"],
+  "profile.prefer.badSources.info": ["Cinema recordings, telesyncs, screeners, 3D and upscaled releases.", "Kinoaufnahmen, Telesyncs, Screener, 3D und hochgerechnete Releases."],
+  "profile.prefer.allow": ["Allow", "Erlauben"],
+  "profile.prefer.never": ["Never take", "Nie nehmen"],
+  "profile.prefer.groups": ["Release groups", "Release-Gruppen"],
+  "profile.prefer.groups.info": ["Good groups first, bad ones only if nothing else fits; blocked groups never. Rate them in the Release groups tab.", "Gute Gruppen zuerst, schlechte nur wenn nichts anderes passt, gesperrte nie. Bewerten im Reiter Release-Gruppen."],
+  "profile.prefer.respect": ["Respect", "Beachten"],
+  "profile.prefer.custom": ["Custom", "Angepasst"],
+  "profile.prefer.codec": ["x265", "x265"],
+  "profile.prefer.codec.info": ["Smaller files; some older devices cannot play them.", "Kleinere Dateien; manche älteren Geräte spielen sie nicht ab."],
+  "profile.prefer.avoid": ["Avoid", "Meiden"],
+  "profile.prefer.any": ["Alike", "Egal"],
+  "profile.prefer.like": ["Prefer", "Lieber"],
+  "profile.prefer.size": ["File size", "Dateigröße"],
+  "profile.prefer.size.info": ["Between two releases of the same quality.", "Zwischen zwei Releases gleicher Qualität."],
+  "profile.prefer.smaller": ["Smaller", "Kleiner"],
+  "profile.prefer.larger": ["Larger", "Größer"],
+  "acquisition.reason.BadSource": ["Bad source", "Schlechte Quelle"],
+  "acquisition.points.CodecLiked": ["{0} preferred", "{0} bevorzugt"],
+  "acquisition.points.CodecAvoided": ["{0} avoided", "{0} gemieden"],
+  "arr.test.title": ["Test a release", "Release testen"],
+  "arr.test.info": ["Paste a release name to see what every video profile makes of it.", "Füge einen Release-Namen ein und sieh, was jedes Video-Profil daraus macht."],
+  "arr.test.field": ["Release name", "Release-Name"],
+  "arr.test.placeholder": ["Show.S01E01.German.1080p.WEB.x265-GROUP", "Show.S01E01.German.1080p.WEB.x265-GRUPPE"],
+  "arr.test.group": ["Group {0}", "Gruppe {0}"],
+  "arr.test.taken": ["Would be taken · {0}", "Würde genommen · {0}"],
+  "arr.test.noProfiles": ["No profile for films, series or anime yet.", "Noch kein Profil für Filme, Serien oder Anime."],
+  "profile.advanced.info": ["Custom formats, points and limits, as in Sonarr", "Eigene Formate, Punkte und Grenzen, wie in Sonarr"],
+  "profile.expert.size": ["Releases outside these limits are never taken.", "Releases außerhalb dieser Grenzen werden nie genommen."],
+  "profile.expert.groups": ["Points a good or a bad group adds; the switch under Prefer sets them for you.", "Punkte, die eine gute oder schlechte Gruppe bringt; der Schalter unter Bevorzugen setzt sie für dich."],
+  "profile.expert.upgrades": ["Custom format points a release needs at least, and when upgrades stop.", "Punkte aus eigenen Formaten, die ein Release mindestens braucht, und wann Upgrades aufhören."],
+  "profile.expert.scores": ["Points of every custom format for this profile; 0 leaves it out.", "Punkte jedes eigenen Formats für dieses Profil; 0 lässt es aus."],
+  "profile.expert.qualityGroups": ["Qualities that count as one, as in Sonarr.", "Qualitäten, die als eine zählen, wie in Sonarr."],
   "profile.deleteConfirm": ["Delete this profile?", "Dieses Profil löschen?"],
   "acquisition.reason.FormatEvaluationFailed": [
    "Custom format could not be evaluated",

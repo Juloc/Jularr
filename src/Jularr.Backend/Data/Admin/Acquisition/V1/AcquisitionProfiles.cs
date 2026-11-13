@@ -92,8 +92,12 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
             BaseDataList<QualityGroupV1>? qualityGroups = null, BaseDataList<CustomFormatScoreV1>? formatScores = null,
             int minimumFormatScore = 0, int cutoffFormatScore = 0, int minimumUpgradeFormatScore = 1, string[]? languageOrder = null,
             LanguageFallbackType languageFallback = LanguageFallbackType.Any, int goodGroupScore = AcquisitionProfileDefinition.DefaultGoodGroupScore,
-            int badGroupScore = AcquisitionProfileDefinition.DefaultBadGroupScore)
+            int badGroupScore = AcquisitionProfileDefinition.DefaultBadGroupScore, bool blockBadSources = true, CodecPreference codecPreference = CodecPreference.Any,
+            SizePreference sizePreference = SizePreference.Any)
         {
+            BlockBadSources = blockBadSources;
+            CodecPreference = codecPreference;
+            SizePreference = sizePreference;
             Name = name;
             MediaKinds = mediaKinds;
             DefaultFor = defaultFor;
@@ -174,6 +178,16 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
         [DataField(typeof(ReleaseGroupFields), nameof(ReleaseGroupFields.BadScore))]
         public int BadGroupScore { get; }
 
+        // The simple switches: bad sources never taken, x265 liked or avoided, the smaller or the larger file first.
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.BlockBadSources), false)]
+        public bool BlockBadSources { get; }
+
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.CodecPreference), false)]
+        public CodecPreference CodecPreference { get; }
+
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.SizePreference), false)]
+        public SizePreference SizePreference { get; }
+
         public override void Validate()
         {
             base.Validate();
@@ -191,8 +205,12 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
             BaseDataList<CustomFormatScoreV1>? formatScores, int minimumFormatScore, int cutoffFormatScore, int minimumUpgradeFormatScore,
             int wantedCount, long version, string[] monitoredTypes, string[] monitoredLanguages, int? minimumPages,
             string[]? languageOrder = null, LanguageFallbackType languageFallback = LanguageFallbackType.Any, int goodGroupScore = AcquisitionProfileDefinition.DefaultGoodGroupScore,
-            int badGroupScore = AcquisitionProfileDefinition.DefaultBadGroupScore, int ruleCount = 0, int openRequestCount = 0)
+            int badGroupScore = AcquisitionProfileDefinition.DefaultBadGroupScore, int ruleCount = 0, int openRequestCount = 0, bool blockBadSources = true,
+            CodecPreference codecPreference = CodecPreference.Any, SizePreference sizePreference = SizePreference.Any)
         {
+            BlockBadSources = blockBadSources;
+            CodecPreference = codecPreference;
+            SizePreference = sizePreference;
             RuleCount = ruleCount;
             OpenRequestCount = openRequestCount;
             Id = id;
@@ -301,6 +319,16 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
 
         [DataField(typeof(ReleaseGroupFields), nameof(ReleaseGroupFields.BadScore))]
         public int BadGroupScore { get; }
+
+        // The simple switches: bad sources never taken, x265 liked or avoided, the smaller or the larger file first.
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.BlockBadSources), false)]
+        public bool BlockBadSources { get; }
+
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.CodecPreference), false)]
+        public CodecPreference CodecPreference { get; }
+
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.SizePreference), false)]
+        public SizePreference SizePreference { get; }
 
         // The request rules that offer the profile (deleting it takes it out of them) and the open requests that chose it (they keep it from being deleted).
         [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.WantedCount))]

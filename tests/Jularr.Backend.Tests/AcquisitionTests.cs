@@ -2118,7 +2118,7 @@ namespace Jularr.Backend.Tests
             using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Profiles/" + uhdId);
             var html = await page.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
-            StringAssert.Contains(html, "value=\"Bluray-2160p\" checked=\"checked\"");
+            StringAssert.Contains(html, "type=\"hidden\" name=\"AllowedQualities\" value=\"Bluray-2160p\"");
             Assert.IsFalse(html.Contains("FallbackQualities", StringComparison.Ordinal));
             using var saved = await host.SendAsync(HttpMethod.Post, "/Admin/Acquisition/Profiles/" + uhdId, new FormUrlEncodedContent(
             [
@@ -2286,16 +2286,21 @@ namespace Jularr.Backend.Tests
                 Assert.AreEqual(HttpStatusCode.BadRequest, invalid.StatusCode, good + " / " + bad);
             }
 
-            // The editor shows them in their own section, the upgrade scores once, the advanced parts closed, and round arrows that stop at the ends.
+            // The editor shows the expert's points in the closed expert part, the groups switch as custom, the upgrade scores once, and round arrows that stop at the ends.
             using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Profiles/" + movies.Id);
             var html = await page.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
             StringAssert.Contains(html, "name=\"GoodGroupScore\" type=\"number\" autocomplete=\"off\" value=\"80\"");
             StringAssert.Contains(html, "name=\"BadGroupScore\" type=\"number\" autocomplete=\"off\" value=\"-30\"");
             StringAssert.Contains(html, "Rate groups (0, 0 blocked)");
-            StringAssert.Contains(html, "<details class=\"profile-advanced\"><summary>Advanced: quality groups and format scores</summary>");
+            StringAssert.Contains(html, "<details class=\"profile-advanced\"><summary>");
+            StringAssert.Contains(html, ">For experts</span>");
             Assert.AreEqual(1, html.Split("name=\"MinimumFormatScore\"").Length - 1);
-            Assert.IsTrue(html.IndexOf("name=\"MinimumUpgradeFormatScore\"", StringComparison.Ordinal) < html.IndexOf("profile-advanced", StringComparison.Ordinal));
+            Assert.IsTrue(html.IndexOf("name=\"MinimumUpgradeFormatScore\"", StringComparison.Ordinal) > html.IndexOf("profile-advanced", StringComparison.Ordinal));
+            StringAssert.Contains(html, "name=\"GroupPreference\" value=\"custom\" id=\"profile-groups-2\" checked=\"checked\"");
+            StringAssert.Contains(html, "name=\"GroupPreferenceWas\" value=\"custom\"");
+            StringAssert.Contains(html, "name=\"BlockBadSources\" value=\"True\" checked=\"checked\"");
+            StringAssert.Contains(html, "name=\"CodecPreference\" value=\"0\" checked=\"checked\"");
             Assert.AreEqual(1, html.Split("aria-label=\"Move up\" disabled=\"disabled\"").Length - 1);
             Assert.AreEqual(1, html.Split("aria-label=\"Move down\" disabled=\"disabled\"").Length - 1);
 
@@ -2308,13 +2313,39 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.Redirect, posted.StatusCode, await posted.Content.ReadAsStringAsync());
             movies = (await ReadProfilesAsync(host)).Single(profile => profile.Id == movies.Id);
             Assert.AreEqual((120, -70), (movies.GoodGroupScore, movies.BadGroupScore));
+
+            // A changed groups switch sets the points; an unchanged one keeps the expert's. The other switches save as they are.
+            using (var switched = await host.SendAsync(HttpMethod.Post, "/Admin/Acquisition/Profiles/" + movies.Id, new FormUrlEncodedContent(
+            [
+                new("__RequestVerificationToken", LibraryTests.Token(html)), new("Version", movies.Version.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                .. KindFields(movies), new("Name", movies.Name), new("AllowedQualities", "WEBDL-1080p"), new("GoodGroupScore", "120"), new("BadGroupScore", "-70"),
+                new("GroupPreference", "ignore"), new("GroupPreferenceWas", "custom"), new("BlockBadSources", "false"), new("CodecPreference", "AvoidHevc"), new("SizePreference", "Smaller")
+            ])))
+                Assert.AreEqual(HttpStatusCode.Redirect, switched.StatusCode, await switched.Content.ReadAsStringAsync());
+            movies = (await ReadProfilesAsync(host)).Single(profile => profile.Id == movies.Id);
+            Assert.AreEqual((0, 0, false, CodecPreference.AvoidHevc, SizePreference.Smaller),
+                (movies.GoodGroupScore, movies.BadGroupScore, movies.BlockBadSources, movies.CodecPreference, movies.SizePreference));
+
+            // A switch changed before an arrow is clicked stays changed in the draft that the arrow shows.
+            using (var draft = await host.SendAsync(HttpMethod.Post, "/Admin/Acquisition/Profiles/" + movies.Id + "?handler=Draft", new FormUrlEncodedContent(
+            [
+                new("__RequestVerificationToken", LibraryTests.Token(html)), new("Version", movies.Version.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                .. KindFields(movies), new("Name", movies.Name), new("AllowedQualities", "WEBDL-1080p"), new("AllowedQualities", "WEBDL-720p"), new("GoodGroupScore", "0"),
+                new("BadGroupScore", "0"), new("GroupPreference", "respect"), new("GroupPreferenceWas", "ignore"), new("moveDown", "WEBDL-1080p")
+            ])))
+            {
+                var shown = await draft.Content.ReadAsStringAsync();
+                Assert.AreEqual(HttpStatusCode.OK, draft.StatusCode, shown);
+                StringAssert.Contains(shown, "name=\"GroupPreference\" value=\"respect\" id=\"profile-groups-1\" checked=\"checked\"");
+                Assert.IsTrue(shown.IndexOf("value=\"WEBDL-720p\"", StringComparison.Ordinal) < shown.IndexOf("value=\"WEBDL-1080p\"", StringComparison.Ordinal), "The arrow moved it.");
+            }
             using var refused = await host.SendAsync(HttpMethod.Post, "/Admin/Acquisition/Profiles/" + movies.Id, new FormUrlEncodedContent(
             [
                 new("__RequestVerificationToken", LibraryTests.Token(html)), new("Version", movies.Version.ToString(System.Globalization.CultureInfo.InvariantCulture)),
                 .. KindFields(movies), new("Name", movies.Name), new("AllowedQualities", "WEBDL-1080p"), new("GoodGroupScore", "-5")
             ]));
             Assert.AreNotEqual(HttpStatusCode.Redirect, refused.StatusCode);
-            Assert.AreEqual(120, (await ReadProfilesAsync(host)).Single(profile => profile.Id == movies.Id).GoodGroupScore);
+            Assert.AreEqual(0, (await ReadProfilesAsync(host)).Single(profile => profile.Id == movies.Id).GoodGroupScore);
         }
 
         [TestMethod]

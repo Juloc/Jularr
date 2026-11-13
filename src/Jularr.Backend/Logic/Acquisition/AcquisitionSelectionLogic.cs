@@ -60,7 +60,10 @@ namespace Jularr.Backend.Logic.Acquisition
                 GroupRatings = new Dictionary<string, ReleaseGroupRating>(JsonSerializer.Deserialize<Dictionary<string, ReleaseGroupRating>>(target.ReleaseGroupRatings) ?? new Dictionary<string, ReleaseGroupRating>(),
                     StringComparer.OrdinalIgnoreCase),
                 GoodGroupScore = definition.GoodGroupScore,
-                BadGroupScore = definition.BadGroupScore
+                BadGroupScore = definition.BadGroupScore,
+                BlockBadSources = definition.BlockBadSources,
+                CodecPreference = definition.CodecPreference,
+                SizePreference = definition.SizePreference
             };
             if (ReleaseScorer.ValidateProfile(profile) is { Count: > 0 } errors)
             {

@@ -89,6 +89,11 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         public int GoodGroupScore { get; init; } = AcquisitionProfileDefinition.DefaultGoodGroupScore;
         public int BadGroupScore { get; init; } = AcquisitionProfileDefinition.DefaultBadGroupScore;
 
+        // The simple switches: bad sources (CAM, telesync, screener, 3D, upscales) are never taken; x265 is liked or avoided; the smaller or the larger file goes first.
+        public bool BlockBadSources { get; init; } = true;
+        public CodecPreference CodecPreference { get; init; }
+        public SizePreference SizePreference { get; init; }
+
         public string? Item(string? quality) => quality is null ? null
             : QualityGroups.FirstOrDefault(group => group.Qualities.Contains(quality, StringComparer.OrdinalIgnoreCase))?.Key ?? quality;
 
@@ -210,6 +215,11 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         public const int DefaultBadGroupScore = -50;
         public int GoodGroupScore { get; init; } = DefaultGoodGroupScore;
         public int BadGroupScore { get; init; } = DefaultBadGroupScore;
+
+        // The simple switches: bad sources (CAM, telesync, screener, 3D, upscales) are never taken; x265 is liked or avoided; the smaller or the larger file goes first.
+        public bool BlockBadSources { get; init; } = true;
+        public CodecPreference CodecPreference { get; init; }
+        public SizePreference SizePreference { get; init; }
     }
 
     // An artist's release types and statuses, an author's languages and least pages; empty lists allow everything.

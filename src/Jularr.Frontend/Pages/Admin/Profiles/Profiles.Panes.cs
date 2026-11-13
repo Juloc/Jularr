@@ -1,6 +1,7 @@
 using System.Globalization;
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Acquisition.V1;
+using Jularr.Backend.Data.Admin.Wanted.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Enums.Media;
@@ -19,8 +20,9 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
 
         private async Task LoadFormatsAsync(CancellationToken cancellation)
         {
-            // The formats; every profile names how it scores them.
+            // The formats; every profile names how it scores them. A release name in the test field is tried against every video profile.
             _formats = await formats.ExecuteAsync<PageResult<CustomFormatDetailsV1>>(new ReadCustomFormatsParametersV1(PageOf(PagedList.DefaultKey)), cancellation);
+            if (Search?.Trim() is { Length: > 0 and <= 500 } title) _test = await testRelease.ExecuteAsync<ReleaseTestV1>(new TestReleaseParametersV1(title), cancellation);
             _profiles = await profiles.ExecuteAsync<BaseDataList<AcquisitionProfileDetailsV1>>(new ReadAcquisitionProfilesParametersV1(), cancellation);
             if (_format is null && Item == FormatItem && Edit is { } formatId)
             {
@@ -54,6 +56,7 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
         private void DefineFormats(Page page)
         {
             if (_formats is not { } result) return;
+            page.Content.Add(ReleaseTest());
 
             // Which profiles give a format a score decides whether it is used.
             var empty = new Div(new IconTile(Glyph("filter", 22), UiTone.Neutral), new P(new Text("arr.formats.none")).Attribute("role", "status"));
@@ -97,6 +100,41 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
 
             page.Content.Add(new ActionDock(assets, "arr.actions", [AddAction("arr.release.add", ReleaseItem), AddAction("arr.tag.add", TagItem)]));
         }
+
+        // A release name typed into the field shows, shortly after typing, what it says and what every video profile makes of it: its points and whether it would take it.
+        private IUiComponent ReleaseTest()
+        {
+            var content = new List<IUiComponent>
+            {
+                new P(new Text("arr.test.info")),
+                new SearchBox(Home(Request), "arr.test.field", Search, new Dictionary<string, string> { ["tab"] = DownloadPages.Formats }, null, Glyph("search", 15), live: true,
+                    placeholderKey: "arr.test.placeholder")
+            };
+            if (_test is { } test)
+            {
+                var facts = new List<IUiComponent> { new Tag(new ValueText(test.Quality)) };
+                if (test.ReleaseGroup is { Length: > 0 } group) facts.Add(new Tag(new ValueText(string.Format(CultureInfo.CurrentCulture, texts["arr.test.group"], group))));
+                content.Add(new Div([.. facts]).Class("release-test__facts"));
+                var rows = test.Profiles.Select(profile =>
+                {
+                    var points = profile.Points.Select(point => (IUiComponent)(point.Points >= 0 ? new Tag(new ValueText(PointLabel(point))).Accent() : new Tag(new ValueText(PointLabel(point)))))
+                        .ToList();
+                    var verdict = profile.Accepted
+                        ? new StateChip(new ValueText(string.Format(CultureInfo.CurrentCulture, texts["arr.test.taken"], Signed(profile.Score))), UiTone.Success, Glyph("check", 14))
+                        : new StateChip(new ValueText(texts["acquisition.reason." + (profile.Rejection ?? "QualityNotAllowed")]), UiTone.Danger, Glyph("minus", 14));
+                    return (IUiComponent)new Div(new Span(new ValueText(profile.Name)).Class("release-test__name"), new Div([.. points]).Class("release-test__points"), verdict)
+                        .Class("release-test__row");
+                }).ToList();
+                content.Add(rows.Count == 0 ? new P(new Text("arr.test.noProfiles")) : new Div([.. rows]).Class("release-test__rows"));
+            }
+
+            return PaneSection("release-test", "arr.test.title", [.. content]);
+        }
+
+        private string PointLabel(ReleaseScorePointV1 point) =>
+            (point.Code == "CustomFormat" ? point.Value ?? "" : string.Format(CultureInfo.CurrentCulture, texts["acquisition.points." + point.Code], point.Value)) + " " + Signed(point.Points);
+
+        private static string Signed(int value) => (value > 0 ? "+" : "") + value.ToString("N0", CultureInfo.CurrentCulture);
 
         // A section of the tab under its own heading, reached by the address's anchor.
         private static IUiComponent PaneSection(string id, string headingKey, params IUiComponent[] content) =>
