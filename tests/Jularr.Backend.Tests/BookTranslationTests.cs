@@ -544,6 +544,48 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Reader_TranslatingEveryTextBlock_FinishesTheLastSectionWithAPicture_AndTheEpubIsOffered()
+        {
+            using var storage = new TemporaryDirectory();
+            var ollama = new FakeOllama();
+            await using var host = await CreateHostAsync(storage.Path, ollama);
+            var (first, _) = await ReadingTests.CreateBooksAsync(host, storage.Path, "First Book", "Second Book");
+            var document = await ReadingTests.OpenAsync(host, first);
+            await PrepareGermanReadersAsync(host);
+
+            // The last section holds a picture and an oversized table between its paragraphs: blocks the Reader never asks a model for.
+            var id = document.DocumentId.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            await host.Fixture.RunSqlAsync("UPDATE \"ReadingResources\" SET \"Bytes\" = convert_to('<h2 data-b=\"0\">Part Two</h2><p data-b=\"1\">The second part begins.</p><figure data-b=\"2\"><img src=\"a.png\"/></figure><p data-b=\"3\">' || repeat('x ', 10001) || '</p><p data-b=\"4\">And it ends.</p>', 'UTF8') WHERE \"ReadingDocumentId\" = " + id + " AND \"Path\" = ':section/00001'");
+            await host.Fixture.RunSqlAsync("UPDATE \"ReadingDocuments\" SET \"Structure\" = jsonb_set(\"Structure\", '{Sections,1,Blocks}', '5') WHERE \"Id\" = " + id);
+
+            // Someone reads the whole book translated: the Reader translates every block with text, the job never runs.
+            for (var section = 0; section < 2; section++)
+            {
+                using var read = await host.SendAsync(HttpMethod.Get, "/api/v1/reading/documents/" + id + "/sections/" + section);
+                var blocks = (await read.Content.ReadFromJsonAsync<ReadingSectionV1>(JsonSerializerOptions.Web))!.Blocks;
+                for (var block = 0; block < blocks; block++)
+                {
+                    using var response = await host.SendAsync(HttpMethod.Post, "/api/v1/reading/documents/" + id + "/sections/" + section + "/local-translations/de/ollama:translategemma:4b/blocks/" + block,
+                        new LocalReadingBlockDataV1("en"));
+                    Assert.AreEqual(section == 1 && block == 3 ? HttpStatusCode.BadRequest : HttpStatusCode.OK, response.StatusCode, await response.Content.ReadAsStringAsync());
+                }
+            }
+
+            // Both sections are done, the last one too, and the translated EPUB is offered at once.
+            Assert.AreEqual(2, await host.ScalarAsync("SELECT \"DoneSections\" FROM \"BookTranslationProgress\" WHERE \"ReadingDocumentId\" = " + id + " AND \"Language\" = 'de' AND \"ModelKey\" = ''"));
+            Assert.IsTrue((await ReadSectionAsync(host, document.DocumentId, 1)).Models.All(model => model is not null));
+            using var epub = await DownloadEpubAsync(host, document.DocumentId);
+            StringAssert.Contains(ReadingTests.Entry(epub, "OEBPS/s00001.xhtml"), "DE And it ends.");
+
+            // The list of translated works names it, without the text for an empty list.
+            using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Instance/Translation?tab=books");
+            var html = await page.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
+            StringAssert.Contains(html, "First Book");
+            Assert.IsFalse(html.Contains("list-empty", StringComparison.Ordinal), "The empty text stands under a list with works.");
+        }
+
+        [TestMethod]
         public async Task Progress_CountsFinishedSectionsPerLanguageAndBook_AndNamesTheSectionInWork()
         {
             using var storage = new TemporaryDirectory();

@@ -66,6 +66,10 @@ namespace Jularr.Backend.Service.User.Translation.V1
             catch (JsonException) { return null; }
         }
 
+        // A block without text of its own, or one too long for a model: it keeps its original ("" in the cache).
+        public static bool Untranslated(AngleSharp.Dom.IElement block) =>
+            block.QuerySelector("[data-b]") is not null || ReadingHtml.TranslationText(block) is { Length: 0 or > 20_000 };
+
         private static bool Bounded(string?[]? texts, int count) => texts is { Length: var length } && length == count && texts.All(text => text is null || text.Length <= 20_000);
 
         // What a reader sees of one block: this version's text, else the earlier version's, marked stale.
@@ -99,6 +103,16 @@ namespace Jularr.Backend.Service.User.Translation.V1
                 if (!replace && !string.IsNullOrWhiteSpace(texts[index])) continue;
                 texts[index] = value;
                 changed = true;
+            }
+            if (changed && texts.Any(text => text is null))
+            {
+                // Blocks no model translates (a picture, a block holding others, an oversized one) keep their original with every write, so a section
+                // the Reader or Codex translated block by block is done with its last text, not only once the job comes by.
+                var nodes = new HtmlParser().ParseDocument(html).QuerySelectorAll("[data-b]");
+                for (var index = 0; index < count && nodes.Length == count; index++)
+                {
+                    if (texts[index] is null && Untranslated(nodes[index])) texts[index] = "";
+                }
             }
             if (changed)
             {
