@@ -1887,6 +1887,7 @@ namespace Jularr.Frontend.Localization
             new("discover.feed.anime.Popular", "Popular"),
             new("discover.feed.manga.New", "New"),
             new("discover.feed.manga.Popular", "Popular"),
+            new("discover.feed.manga.Manhwa", "Manhwa"),
             new("discover.feed.lightnovels.New", "New"),
             new("discover.feed.lightnovels.Popular", "Popular"),
             new("discover.feed.books.New", "Newly published"),

@@ -1157,7 +1157,7 @@ namespace Jularr.Backend.Tests
             var request = handler.Requests.Single();
             Assert.AreEqual(path, request.AbsolutePath);
             var query = QueryHelpers.ParseQuery(request.Query);
-            Assert.AreEqual(region, query["region"].ToString());
+            Assert.AreEqual(region, query.TryGetValue("region", out var asked) ? asked.ToString() : "");
             Assert.AreEqual("2", query["page"].ToString());
 
             await tmdb.SearchAsync(new TmdbConnection(Token, "en-US"), kind, "Matrix", null, CancellationToken.None, page: 3);
