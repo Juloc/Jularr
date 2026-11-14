@@ -103,6 +103,26 @@ namespace Jularr.Integrations.Data.Usenet
         public bool IsIntact { get; }
     }
 
+    // An article body as the server sent it, in a pooled buffer that goes back once it is decoded.
+    internal sealed class ArticleBody : IDisposable
+    {
+        private byte[]? _buffer;
+
+        public ArticleBody(byte[] buffer, int length)
+        {
+            _buffer = buffer;
+            Length = length;
+        }
+
+        public int Length { get; }
+        public ReadOnlySpan<byte> Span => _buffer.AsSpan(0, Length);
+
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref _buffer, null) is { } buffer) System.Buffers.ArrayPool<byte>.Shared.Return(buffer);
+        }
+    }
+
     // What a download pass achieved; damaged and missing articles need repair.
     internal sealed class UsenetProgress
     {

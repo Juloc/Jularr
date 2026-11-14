@@ -287,9 +287,9 @@ namespace Jularr.Backend.Tests
             using var page = await host.SendAsync(HttpMethod.Get, "/Setup/Downloads?type=Usenet");
             var html = await page.Content.ReadAsStringAsync();
             StringAssert.Contains(html, "name=\"MaxConnections\"");
-            Assert.IsTrue(Regex.IsMatch(html, "<input[^>]*name=\"MaxConnections\"[^>]*min=\"1\"[^>]*max=\"50\""), html);
+            Assert.IsTrue(Regex.IsMatch(html, "<input[^>]*name=\"MaxConnections\"[^>]*min=\"1\"[^>]*max=\"100\""), html);
             using var invalid = await host.SendAsync(HttpMethod.Post, "/Setup/Downloads?type=Usenet", Token(html,
-                ("AcquisitionConnectionTypeId", "6"), ("Name", "News"), ("Host", "news.example.test"), ("IsEnabled", "true"), ("Priority", "1"), ("MaxConnections", "100")));
+                ("AcquisitionConnectionTypeId", "6"), ("Name", "News"), ("Host", "news.example.test"), ("IsEnabled", "true"), ("Priority", "1"), ("MaxConnections", "101")));
             Assert.AreEqual(HttpStatusCode.BadRequest, invalid.StatusCode);
             var failed = await invalid.Content.ReadAsStringAsync();
             StringAssert.Contains(failed, "aria-invalid=\"true\"");

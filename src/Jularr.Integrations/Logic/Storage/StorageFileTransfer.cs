@@ -28,14 +28,17 @@ namespace Jularr.Integrations.Logic.Storage
                     await using (var source = await sourceFiles.OpenReadAsync(sourcePath, ct))
                     await using (var copy = await target.CreateAsync(partial, ct) ?? throw new IOException("The library already contains a file at the destination."))
                     {
+                        // Space is reserved in large blocks; a check per megabyte costs a NAS round trip each.
                         var buffer = new byte[1024 * 1024];
+                        using var reservation = new BlockReservation(reserveWrite, original.Length);
                         int read;
                         while ((read = await source.ReadAsync(buffer, ct)) > 0)
                         {
-                            using var reservation = reserveWrite?.Invoke(read);
+                            await reservation.BeforeWriteAsync(read, copy.FlushAsync, ct);
                             await copy.WriteAsync(buffer.AsMemory(0, read), ct);
-                            if (reserveWrite is not null) await copy.FlushAsync(ct);
                         }
+
+                        await reservation.ReleaseAsync(copy.FlushAsync, ct);
                     }
 
                     var current = await sourceFiles.GetAsync(sourcePath, ct);
