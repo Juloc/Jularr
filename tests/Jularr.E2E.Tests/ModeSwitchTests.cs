@@ -43,8 +43,8 @@ namespace Jularr.E2E.Tests
             // Schauen is the first mode: films and series only, in the library and the favorites.
             await page.SetViewportSizeAsync(1440, 900);
             await page.GotoAsync("/Library");
-            var switchButton = page.Locator(".mode-switch__button");
-            await Assertions.Expect(switchButton).ToContainTextAsync("Watch");
+            var activeTab = page.Locator(".mode-tabs__tab.is-active");
+            await Assertions.Expect(activeTab).ToContainTextAsync("Watch");
             var titles = page.Locator(".media-card__title");
 
             await Assertions.Expect(titles.Filter(new() { HasText = "Dune Film" })).ToHaveCountAsync(1);
@@ -56,14 +56,13 @@ namespace Jularr.E2E.Tests
             await Assertions.Expect(titles.Filter(new() { HasText = "Dune Album" })).ToHaveCountAsync(0);
             await Assertions.Expect(titles.Filter(new() { HasText = "Dune Game" })).ToHaveCountAsync(0);
 
-            // The switch opens the list of the five modes; a choice leads home in that mode.
+            // The header names the five modes as tabs; a tab leads home in that mode.
             await page.GotoAsync("/Library");
-            await switchButton.ClickAsync();
-            await Assertions.Expect(page.Locator(".mode-switch__item")).ToHaveTextAsync(new[] { "Watch", "Anime and manga", "Read", "Listen", "Play" });
+            await Assertions.Expect(page.Locator(".app-header .mode-tabs__tab")).ToHaveTextAsync(new[] { "Watch", "Anime and manga", "Read", "Listen", "Play" });
             await Evidence.SaveAsync(page, "mode-switch-desktop");
-            await page.Locator(".mode-switch__item", new() { HasText = "Read" }).ClickAsync();
+            await page.Locator(".mode-tabs__tab", new() { HasText = "Read" }).ClickAsync();
             await Assertions.Expect(page).ToHaveURLAsync(new System.Text.RegularExpressions.Regex("/$"));
-            await Assertions.Expect(page.Locator(".mode-switch__button")).ToContainTextAsync("Read");
+            await Assertions.Expect(page.Locator(".mode-tabs__tab.is-active")).ToContainTextAsync("Read");
 
             // The mode stays on every page and after a reload; Anime and manga holds the manga, not the book.
             await page.GotoAsync("/Library");
@@ -81,7 +80,8 @@ namespace Jularr.E2E.Tests
             await page.GotoAsync("/?mode=hear");
             await Assertions.Expect(page.Locator(".discover-mode-note")).ToContainTextAsync("Audiobooks are coming soon");
             await page.GotoAsync("/?mode=watch");
-            await Assertions.Expect(page.Locator(".capsule-bar").GetByText("Books")).ToHaveCountAsync(0);
+            await Assertions.Expect(page.Locator(".navigation-tabs--types").GetByText("Books")).ToHaveCountAsync(0);
+            await Assertions.Expect(page.Locator(".navigation-tabs--types").GetByText("Movies")).ToBeVisibleAsync();
 
             // The search stays in the mode; the chip widens it to every mode.
             var field = page.Locator(".app-search .search-box__input");
@@ -97,15 +97,14 @@ namespace Jularr.E2E.Tests
             await field.PressAsync("Enter");
             await Assertions.Expect(page).ToHaveURLAsync(new System.Text.RegularExpressions.Regex("scope=all"));
 
-            // The same switch on a tablet (icons) and a phone (the drawer); nothing scrolls sideways.
+            // The same tabs on a tablet and a phone (icons, the active one tinted); nothing scrolls sideways.
             foreach (var (width, height, name) in new[] { (768, 1024, "tablet"), (375, 812, "phone") })
             {
                 await page.GotoAsync("/?mode=read");
                 await page.SetViewportSizeAsync(width, height);
                 await page.WaitForTimeoutAsync(400);
-                if (name == "phone") await page.Locator("[data-sidebar-toggle]").ClickAsync();
-                await page.Locator(".mode-switch__button").ClickAsync();
-                await Assertions.Expect(page.Locator(".mode-switch__item").Last).ToBeVisibleAsync();
+                await Assertions.Expect(page.Locator(".app-header .mode-tabs__tab").Last).ToBeVisibleAsync();
+                await Assertions.Expect(page.Locator(".mode-tabs__tab.is-active")).ToHaveAttributeAsync("href", "/?mode=read");
                 Assert.IsFalse(await page.Locator("body").EvaluateAsync<bool>("body => body.scrollWidth > innerWidth + 1"), name + " scrolls sideways.");
                 await page.ScreenshotAsync(new PageScreenshotOptions { Path = Path.Combine(JularrInstance.Repository, "TestResults", "e2e", "mode-switch-" + name + ".png") });
             }

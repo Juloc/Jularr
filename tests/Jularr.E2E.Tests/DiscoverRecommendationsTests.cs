@@ -95,7 +95,6 @@ namespace Jularr.E2E.Tests
                             failing = false;
                             await retry.ClickAsync();
                             await Assertions.Expect(page.Locator(".discover-feedback")).ToHaveTextAsync("");
-                            await Assertions.Expect(page.Locator("html")).Not.ToHaveAttributeAsync("data-discover-layout", "grid");
                         }
 
                         await page.Mouse.WheelAsync(0, 1200);

@@ -1,31 +1,8 @@
 import { shownFeeds, showsFeedGroup } from './Feeds';
 import { heroDefaults, readHeroPreferences, writeHeroPreferences, type HeroPreferences } from '../../../Framework/Components/HeroCarousel';
-import { rememberDevicePreference, shareDevicePreference } from '../../../Modules/Appearance/DevicePreference';
 
 // Device-local choices of Discover. Everything is delegated from the document, so it also reaches HTML a page script inserts later.
 const heroKey = 'discover-hero';
-const layoutKey = 'discover-layout';
-
-function applyLayout(layout: string | null): void {
-    if (layout === 'grid') document.documentElement.dataset.discoverLayout = 'grid';
-    else delete document.documentElement.dataset.discoverLayout;
-    document.querySelectorAll<HTMLInputElement>('[data-discover-layout-choice]').forEach(input => { input.checked = input.value === (layout === 'grid' ? 'grid' : 'rows'); });
-}
-
-function storeLayout(grid: boolean): void {
-    applyLayout(grid ? 'grid' : null);
-    rememberDevicePreference(layoutKey, grid ? 'grid' : 'rows');
-}
-
-try {
-    const stored = localStorage.getItem(layoutKey);
-    if (stored) {
-        applyLayout(stored);
-        shareDevicePreference(layoutKey, stored);
-    }
-} catch {
-    // Without storage the layout the page arrived in stays.
-}
 
 // The panel shows what the carousel and the shelves use now.
 function showPreferences(): void {
@@ -35,7 +12,6 @@ function showPreferences(): void {
         if (input.type === 'checkbox') input.checked = input.dataset.heroPref === 'auto' ? preferences.auto && !preferences.paused : preferences.withContinue;
         else input.checked = input.value === String(value);
     });
-    applyLayout(document.documentElement.dataset.discoverLayout ?? null);
 }
 
 // The count and the button of an area follow its checkboxes; so does the one for all types.
@@ -78,12 +54,8 @@ document.addEventListener('click', event => {
 
     if (event.target.closest('[data-hero-reset]')) {
         writeHeroPreferences(heroKey, { ...heroDefaults });
-        storeLayout(false);
         showPreferences();
     }
-
-    // The page's root carries the layout too, so only the button counts.
-    if (event.target.closest('button[data-discover-layout]')) storeLayout(document.documentElement.dataset.discoverLayout !== 'grid');
 
     // Selects every type of an area, or none when all are chosen.
     const pick = event.target.closest<HTMLElement>('[data-discover-pick]');
@@ -114,7 +86,6 @@ document.addEventListener('change', event => {
         syncFeeds(input.form);
     }
 
-    if (input.dataset.discoverLayoutChoice !== undefined) storeLayout(input.value === 'grid');
     if (!input.dataset.heroPref) return;
 
     const preferences = readHeroPreferences(heroKey);

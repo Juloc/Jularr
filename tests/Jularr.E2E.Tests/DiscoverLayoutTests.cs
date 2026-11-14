@@ -40,13 +40,13 @@ namespace Jularr.E2E.Tests
                 await Assertions.Expect(page.Locator(".hero-carousel__counter")).ToContainTextAsync("2 /");
 
                 // A type of the bar narrows the page to it; the choice is in the address.
-                await page.Locator(".capsule-group__item", new() { HasText = "Series" }).ClickAsync();
+                await page.Locator(".navigation-tabs--types a", new() { HasText = "Series" }).ClickAsync();
                 await Assertions.Expect(page).ToHaveURLAsync(new Regex("type=series"));
                 await Assertions.Expect(page.Locator(".media-shelf").GetByText("Breaking Bad").First).ToBeVisibleAsync();
                 await Assertions.Expect(page.GetByText("The Matrix Reloaded")).ToHaveCountAsync(0);
 
-                // Another type is added; the filter drawer shows the choice and applies its availability.
-                await page.Locator(".capsule-group__item", new() { HasText = "Movies" }).ClickAsync();
+                // All of the mode's types again; the filter drawer shows the choice and applies its availability.
+                await page.Locator(".navigation-tabs--types a", new() { HasText = "All" }).ClickAsync();
                 // Both types of the mode are every type there is, so the address needs no type.
                 await Assertions.Expect(page).Not.ToHaveURLAsync(new Regex("type="));
                 await page.Locator("button[data-drawer-pane=filter]").ClickAsync();
@@ -58,12 +58,10 @@ namespace Jularr.E2E.Tests
                 await Evidence.SaveAsync(page, "discover-filter");
                 await drawer.GetByRole(AriaRole.Button, new() { Name = "Apply & close" }).ClickAsync();
                 await Assertions.Expect(page).ToHaveURLAsync(new Regex("availability=request"));
-                await Assertions.Expect(page.Locator("button[data-drawer-pane=filter] .capsule-bar__badge")).ToHaveTextAsync("1");
+                await Assertions.Expect(page.Locator("button[data-drawer-pane=filter] .discover-bar__badge")).ToHaveTextAsync("1");
 
-                // Shelves keep their lists' order, only a ranking's grid sorts; the layout toggle wraps the shelves and is remembered on the device.
+                // Shelves keep their lists' order, only a ranking's grid sorts.
                 await Assertions.Expect(page.Locator("select[name=sort]")).ToHaveCountAsync(0);
-                await page.Locator("button[data-discover-layout]").ClickAsync();
-                await Assertions.Expect(page.Locator("html")).ToHaveAttributeAsync("data-discover-layout", "grid");
 
                 // One highlight per type leaves one slide for each of the two types: the films read whole, the series from Discover's series list.
                 await page.Locator("button[data-drawer-pane=view]").ClickAsync();

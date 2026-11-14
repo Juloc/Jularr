@@ -345,50 +345,46 @@ html[data-mode="dark"] .theme-toggle { & > .theme-toggle__moon { display: none; 
     white-space: nowrap;
 }
 // The mode switch under the brand: the active mode with an arrow; the list of the modes opens in the sidebar's flow.
-.mode-switch {
+// The five modes as tabs in the header: one pill with the active mode tinted. Where the header gets tight the names go and the icons stay.
+.mode-tabs {
+    display: flex;
     flex: none;
-    padding: 13px 13px 0;
+    gap: 2px;
+    padding: 3px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--surface);
 
-    &__button {
-        display: flex;
+    &__tab {
+        display: inline-flex;
         align-items: center;
-        gap: 10px;
-        min-height: 43px;
-        padding: 0 12px;
-        border: 1px solid var(--line);
-        border-radius: var(--radius-control);
-        background: var(--surface);
-        color: var(--text);
-        cursor: pointer;
-        font-size: var(--text-body);
-        font-weight: 740;
-        list-style: none;
-
-        &::-webkit-details-marker { display: none; }
-        &:hover { background: var(--surface-hover); }
-        &:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-    }
-    &__icon { display: inline-grid; flex: none; place-items: center; color: var(--accent-text); }
-    &__label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    &__chevron { display: inline-grid; flex: none; color: var(--muted); transition: transform var(--transition); }
-    &[open] &__chevron { transform: rotate(180deg); }
-    &__list { display: grid; gap: 3px; padding: 6px 0 2px; }
-    &__item {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        min-height: 40px;
-        padding: 0 12px;
-        border-radius: var(--radius-control);
-        color: var(--text);
-        font-size: var(--text-body);
-        font-weight: 640;
+        gap: 7px;
+        min-height: 34px;
+        padding: 0 13px;
+        border-radius: 999px;
+        color: var(--muted);
+        font-size: var(--text-control);
+        font-weight: 680;
         text-decoration: none;
+        white-space: nowrap;
 
-        &:hover { background: var(--surface-hover); }
+        &:hover { background: var(--surface-hover); color: var(--text); }
         &.is-active { background: var(--accent-soft); color: var(--accent-text); }
         &:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
     }
+    &__icon { display: inline-grid; place-items: center; }
+
+    @media (max-width: 1280px) {
+        &__tab:not(.is-active) .mode-tabs__label { display: none; }
+        &__tab:not(.is-active) { padding: 0 10px; }
+    }
+}
+.app-header-spacer { flex: 1 1 0; }
+
+// A tablet keeps one header row: the search gives up width and its scope chip before anything spills over the edge.
+@media (max-width: 1100px) {
+    .app-search { min-width: 0; flex: 1 1 auto; }
+    .app-header .app-search__scope { display: none; }
 }
 .sidebar-navigation { display: grid; gap: 5px; padding: 21px 13px; }
 .sidebar-secondary { margin-top: auto; }
@@ -563,10 +559,6 @@ html[data-skin="original"] .sidebar-secondary {
     .sidebar-navigation { padding: 20px 8px; }
     .nav-eyebrow + .sidebar-navigation { padding-top: 20px; }
     // The mode switch keeps its icons only; the active mode's button opens the list of icons.
-    .mode-switch { padding: 12px 8px 0; }
-    .mode-switch__button { justify-content: center; padding: 0; }
-    .mode-switch__label, .mode-switch__chevron { display: none; }
-    .mode-switch__item { justify-content: center; padding: 0; }
     .nav-link { justify-content: center; padding: 0; }
     .nav-link > .ui-icon { width: 21px; height: 21px; }
 
@@ -607,6 +599,13 @@ html[data-skin="original"] .sidebar-secondary {
         padding: env(safe-area-inset-top) max(14px, env(safe-area-inset-right)) 0 max(14px, env(safe-area-inset-left));
     }
     .app-header .app-menu-toggle { display: inline-grid; }
+    // The phone's mode tabs are icons only, the active one tinted; the theme switch waits in the settings.
+    .mode-tabs { flex: 1 1 auto; justify-content: space-between; min-width: 0; padding: 2px; }
+    .mode-tabs__tab { justify-content: center; min-height: 32px; padding: 0 9px; @include HitArea.hit-area(2px, 26px, $border: 0px); }
+    .mode-tabs__tab .mode-tabs__label { display: none; }
+    .app-header .theme-toggle { display: none; }
+    .mode-tabs ~ .app-header-location { display: none; }
+    .app-header-spacer { display: none; }
     .app-header__tools { flex: none; gap: 8px; }
     .app-header .button--icon, .app-notifications { width: 34px; height: 34px; min-height: 34px; }
     .app-avatar { width: 31px; height: 31px; }

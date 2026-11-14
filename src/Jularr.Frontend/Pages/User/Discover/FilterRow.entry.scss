@@ -1,67 +1,150 @@
-// Discover's filter row: labelled fields side by side, swiped sideways on a phone; popups of choices over the page.
+// Discover's filters as AniList's search has them: each a field with its name above, the chosen value tinted; More at the end opens the rest.
+// A wide screen shows them as equal columns, a narrow one lets the row slide sideways.
 .discover-filters {
     display: flex;
     align-items: flex-end;
-    gap: 10px;
-    margin: 4px 0 8px;
-    overflow-x: auto;
-    scrollbar-width: none;
+    gap: 14px;
+    margin: 14px 0 0;
+    min-width: 0;
 
-    &::-webkit-scrollbar { display: none; }
-}
+    // A tablet wraps the fields into rows of three, so none hides past the edge.
+    @media (min-width: 641px) and (max-width: 900px) {
+        flex-wrap: wrap;
+        .discover-filter { flex: 1 1 calc(33.333% - 14px); max-width: none; }
+    }
 
-.discover-filter {
-    display: grid;
-    flex: 0 0 auto;
-    gap: 4px;
-    min-width: 150px;
-
-    &--select .ui-dropdown__button,
-    &__button {
-        min-width: 150px;
-        min-height: var(--control-height);
+    // A phone lets the row slide sideways.
+    @media (max-width: 640px) {
+        overflow-x: auto;
+        scrollbar-width: none;
+        padding-bottom: 2px;
+        &::-webkit-scrollbar { display: none; }
     }
 }
 
-.discover-filter__label {
-    color: var(--muted);
-    font-size: 13px;
-    font-weight: 650;
+.discover-filter {
+    position: relative;
+    display: grid;
+    flex: 1 1 0;
+    gap: 6px;
+    min-width: 140px;
+    max-width: 230px;
 }
 
-// The popup's button shows its label above and the chosen values inside, like the selects beside it.
-.discover-filter__button {
-    display: grid;
-    align-content: center;
-    padding: 0 14px;
-    border: 1px solid var(--border-strong);
-    border-radius: var(--radius-field);
-    background: var(--field);
+// More sits at the end of the row, a pill with its count.
+.discover-filter__more.button {
+    position: relative;
+    flex: none;
+    gap: 7px;
+    min-height: 40px;
+    margin-left: auto;
+    padding: 0 16px 0 14px;
+    border-color: var(--border);
+    border-radius: 12px;
+    background: var(--surface);
     color: var(--text);
+    font-size: 14px;
+    font-weight: 650;
+
+    .ui-icon { width: 16px; height: 16px; color: var(--muted); }
+    &:hover:not(:disabled) { border-color: var(--accent-outline); }
+}
+
+.discover-filter__label {
+    padding-left: 2px;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: .2px;
+}
+
+.discover-filter__button,
+.discover-filter__select {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    width: 100%;
+    min-width: 0;
+    min-height: 40px;
+    padding: 0 12px 0 14px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--surface);
+    color: var(--muted);
+    font-size: 14px;
+    font-weight: 550;
+    box-shadow: 0 1px 2px rgb(30 20 70 / 4%);
     text-align: left;
+    white-space: nowrap;
     cursor: pointer;
 
     &:hover, &[aria-expanded="true"] { border-color: var(--accent-outline); }
+    .ui-icon { flex: none; color: var(--muted); }
 }
+
+// A chosen field's cross sits where its arrow was and clears the field.
+.discover-filter__clear {
+    position: absolute;
+    right: 6px;
+    bottom: 6px;
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--surface);
+    color: var(--muted);
+
+    &:hover { background: var(--accent-soft); }
+}
+
+.discover-filter--set .discover-filter__button,
+.discover-filter--set .discover-filter__select,
+.discover-filter--set .ui-dropdown__button { padding-right: 38px; }
+.discover-filter--set .ui-dropdown__button::after { display: none; }
 
 .discover-filter__value {
-    max-width: 220px;
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
-    white-space: nowrap;
 }
 
-.discover-filter--set .discover-filter__value,
-.discover-filter--set .ui-dropdown__value { color: var(--accent-text); }
+.discover-filter--set .discover-filter__button,
+.discover-filter--set .discover-filter__select,
+.discover-filter--set .ui-dropdown__button {
+    border-color: var(--accent-outline);
+    color: var(--text);
+    font-weight: 650;
+
+    .ui-icon { color: var(--accent-text); }
+}
+
+.discover-filter--select .ui-dropdown { width: 100%; }
+.discover-filter--select .ui-dropdown__button {
+    width: 100%;
+    min-height: 40px;
+    padding: 0 12px 0 14px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--surface);
+    font-size: 14px;
+    font-weight: 550;
+    box-shadow: 0 1px 2px rgb(30 20 70 / 4%);
+}
+.discover-filter--set .ui-dropdown__button { font-weight: 650; }
+.discover-filter--select .ui-dropdown__value { color: inherit; font-size: 14px; }
+.discover-filter--select .ui-dropdown__value--empty { color: var(--muted); }
 
 .discover-filter__popup {
     position: fixed;
     inset: auto;
     width: max-content;
+    min-width: 220px;
     max-width: min(420px, calc(100vw - 20px));
     max-height: 60vh;
     margin: 0;
-    padding: 12px;
+    padding: 10px;
     overflow-y: auto;
     overscroll-behavior: contain;
     border: 1px solid var(--border);
@@ -71,6 +154,38 @@
     box-shadow: var(--shadow-overlay);
 
     .choice-group__heading { display: none; }
+
+    // One choice per line, as a list box with round checks.
+    .choice-group--checks .choice-group__items { grid-template-columns: 1fr; gap: 0; }
+
+    .choice-group__check {
+        min-height: 36px;
+        padding: 0 10px;
+        border-radius: 10px;
+        font-weight: 600;
+
+        &:hover { background: var(--tint); }
+        &:has(input:checked) { color: var(--accent-text); }
+
+        input {
+            flex: none;
+            width: 18px;
+            height: 18px;
+            margin: 0;
+            border: 1.5px solid var(--border-strong);
+            border-radius: 50%;
+            background: var(--field);
+            appearance: none;
+            cursor: pointer;
+
+            &:checked {
+                border-color: var(--accent);
+                background: var(--accent) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E") center / 12px no-repeat;
+            }
+
+            &:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+        }
+    }
 
     // A phone shows the choices as a sheet from the bottom.
     @media (max-width: 640px) {
@@ -82,15 +197,54 @@
     }
 }
 
-.discover-filter__more,
-.discover-filter__clear {
-    flex: 0 0 auto;
+// The chosen filters: tags whose cross removes them, a reset, and the order at the end. One line of a fixed height that slides sideways when full,
+// so the page under it never moves, with or without filters.
+.discover-chosen {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
     gap: 6px;
-    min-height: var(--control-height);
+    height: 34px;
+    margin-top: 10px;
+    overflow-x: auto;
+    scrollbar-width: none;
+
+    &::-webkit-scrollbar { display: none; }
+    > * { flex: none; }
+
+    .discover-chosen__sort { margin-left: auto; }
+    .discover-chosen__sort .ui-dropdown__button { min-height: 32px; }
+
+    // A phone has no highlights to keep in place, so an empty line takes no room there.
+    &--empty { @media (max-width: 640px) { display: none; } }
 }
 
-.discover-filter__more { position: relative; }
-.discover-filter__clear { color: var(--muted); }
+.discover-chosen__tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 30px;
+    padding: 0 8px 0 12px;
+    border-radius: 999px;
+    background: var(--accent);
+    color: var(--accent-contrast);
+    font-size: 12px;
+    font-weight: 680;
+    text-decoration: none;
+
+    .ui-icon { opacity: .75; }
+    &:hover .ui-icon { opacity: 1; }
+}
+
+.discover-chosen__clear {
+    margin-left: 4px;
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 650;
+    text-decoration: none;
+
+    &:hover { color: var(--text); }
+}
 
 // More's tags by category, and its ranges as two number fields.
 .discover-tags {

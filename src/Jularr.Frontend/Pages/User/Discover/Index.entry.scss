@@ -1,6 +1,5 @@
 @use "../../../Framework/Components/MediaShelf";
 @use "../../../Framework/Components/MediaCard";
-@use "../../../Framework/Components/CapsuleBar";
 @use "../../../Framework/Components/ActionMenu";
 @use "../../../Framework/Components/HeroCarousel";
 @use "../../../Framework/Components/ChoiceGroup";
@@ -48,20 +47,100 @@
     .media-shelf__items > & { flex: 0 0 auto; align-self: center; padding-inline: 16px; white-space: nowrap; }
 }
 
-.capsule-bar__tool.button {
+// The bar: the mode's types as text tabs, the lists as one soft capsule beside them, the settings at the end. Every control of the bar is 40px high
+// and speaks in 14px, so the row reads as one piece.
+.discover-bar { margin: 0 0 12px; }
+
+.discover-bar__top {
+    display: flex;
+    align-items: center;
+    gap: 28px;
+    min-height: 48px;
+}
+
+.navigation-tabs--types {
+    display: flex;
+    flex: none;
+    gap: 22px;
+    border: 0;
+
+    .navigation-tabs__link {
+        position: relative;
+        padding: 10px 0;
+        border: 0;
+        background: none;
+        color: var(--muted);
+        font-size: 18px;
+        font-weight: 760;
+        letter-spacing: -.3px;
+        white-space: nowrap;
+
+        &:hover { color: var(--text); }
+    }
+
+    .navigation-tabs__link--active {
+        color: var(--text);
+
+        &::after { content: ""; position: absolute; inset: auto 0 2px; height: 3px; border-radius: 3px; background: var(--accent); }
+    }
+}
+
+.discover-bar__top > .navigation-tabs--chips {
+    flex: 0 1 auto;
+    min-width: 0;
+    gap: 2px;
+    padding: 4px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--accent) 5%, var(--surface));
+
+    &::-webkit-scrollbar { display: none; }
+
+    .navigation-tabs__link {
+        flex: none;
+        min-height: 32px;
+        padding: 0 14px;
+        border: 0;
+        border-radius: 999px;
+        background: none;
+        color: var(--muted);
+        font-size: 14px;
+        font-weight: 650;
+        white-space: nowrap;
+
+        &:hover { color: var(--text); }
+    }
+
+    .navigation-tabs__link--active {
+        background: var(--surface);
+        color: var(--accent-text);
+        box-shadow: 0 1px 2px rgb(30 20 70 / 8%), 0 2px 8px rgb(30 20 70 / 6%);
+    }
+}
+
+.discover-bar__tools {
+    display: flex;
+    flex: none;
+    gap: 8px;
+    margin-left: auto;
+}
+
+.discover-bar__tool.button {
     position: relative;
     flex: none;
-    width: 39px;
-    min-height: 39px;
+    width: 40px;
+    min-height: 40px;
     border-color: var(--border);
-    background: var(--capsule-fill);
+    background: var(--surface);
     color: var(--muted);
 
-    .ui-icon { width: 16px; height: 16px; }
+    .ui-icon { width: 17px; height: 17px; }
     &:hover:not(:disabled) { background: var(--accent-soft); color: var(--accent-text); }
 }
 
-.capsule-bar__badge {
+.discover-bar__badge {
     position: absolute;
     top: -4px;
     right: -2px;
@@ -77,25 +156,19 @@
     line-height: 1;
 }
 
-@container capsule-bar (max-width: 929px) {
-    .capsule-bar__tool.button { width: 32px; min-height: 32px; }
+// Where the lists no longer fit beside the types (a narrow desktop, a tablet, a phone) they take their own line under them, the whole width, sliding sideways.
+@media (max-width: 1280px) {
+    .discover-bar__top { flex-wrap: wrap; gap: 0 16px; }
+    .navigation-tabs--types { order: 1; }
+    .discover-bar__tools { order: 2; }
+    // A full-width break, so the capsule starts its own line but keeps only the width it needs.
+    .discover-bar__top::after { content: ""; order: 3; flex-basis: 100%; height: 0; }
+    .discover-bar__top > .navigation-tabs--chips { order: 4; flex: 0 1 auto; max-width: 100%; margin-top: 6px; }
 }
 
-// Lists of one feed, their order and the layout of the shelves; always one row, the lists scroll sideways.
-.discover-toolbar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-    margin: 9px 0 24px;
-    padding: 0 4px;
-
-    .navigation-tabs { flex: 1 1 auto; min-width: 0; }
-
-    &__settings { display: flex; flex: none; align-items: center; gap: 7px; }
-
-    // Rows scroll sideways; the grid wraps every shelf. The icon shows the layout a click leads to.
-    &__layout.button { width: 38px; min-height: 38px; .ui-icon:last-child { display: none; } }
+@media (max-width: 640px) {
+    .navigation-tabs--types { gap: 16px; .navigation-tabs__link { font-size: 16px; } }
+    .discover-bar__tool.button { width: 38px; min-height: 38px; }
 }
 
 // Shelves: the rhythm of the mockup.
@@ -122,20 +195,6 @@
 @media (max-width: 640px) {
     .discover-results .media-shelf__heading { margin: 16px 0 8px; h2 { font-size: 17px; } }
     .discover-results .media-shelf__items { gap: 8px; padding: 2px 1px 8px; }
-}
-
-@media (scripting: none) { [data-discover-layout] { display: none; } }
-
-html[data-discover-layout="grid"] {
-    .discover-toolbar__layout .ui-icon { &:first-child { display: none; } &:last-child { display: block; } }
-
-    .discover-results .media-shelf__items {
-        flex-wrap: wrap;
-        overflow: visible;
-        scroll-snap-type: none;
-    }
-
-    .discover-results .media-shelf__controls { display: none; }
 }
 
 @media (scripting: none) { .discover-pick, .discover-all { display: none; } }
@@ -182,4 +241,18 @@ html[data-discover-layout="grid"] {
     margin: 0 0 16px;
     color: var(--muted);
     font-size: var(--text-body);
+}
+
+// The hero is a short stage on a wide screen and gives its room to the shelves on a phone.
+.discover-results .hero-carousel { height: clamp(220px, 17vw, 260px); }
+@media (max-width: 640px) {
+    .discover-results .hero-carousel { display: none; }
+}
+
+// The recommendations keep the margins of what they hold inside, so the part arriving never moves their top edge.
+#discover-recommendations { display: flow-root; }
+
+// Without the hero the shelves start high on a phone: the next part that loads keeps a shelf's height free, so the one arriving pushes nothing.
+@media (max-width: 640px) {
+    .discover-paging[data-automatic]:has([data-discover-recommendations]) { min-height: 364px; }
 }
