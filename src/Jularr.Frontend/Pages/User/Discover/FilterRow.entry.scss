@@ -7,8 +7,14 @@
     margin: 14px 0 0;
     min-width: 0;
 
-    // A narrow screen lets the row slide sideways.
-    @media (max-width: 900px) {
+    // A tablet wraps the fields into rows of three, so none hides past the edge.
+    @media (min-width: 641px) and (max-width: 900px) {
+        flex-wrap: wrap;
+        .discover-filter { flex: 1 1 calc(33.333% - 14px); max-width: none; }
+    }
+
+    // A phone lets the row slide sideways.
+    @media (max-width: 640px) {
         overflow-x: auto;
         scrollbar-width: none;
         padding-bottom: 2px;
