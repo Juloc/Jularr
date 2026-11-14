@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Globalization;
 using System.Net.Security;
 using System.Net.Sockets;
@@ -14,7 +15,7 @@ namespace Jularr.Integrations.Logic.Usenet
         private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(60);
         private readonly TcpClient _client;
         private readonly Stream _stream;
-        private readonly byte[] _buffer = new byte[64 * 1024];
+        private readonly byte[] _buffer = new byte[256 * 1024];
         private int _start;
         private int _end;
 
@@ -104,12 +105,42 @@ namespace Jularr.Integrations.Logic.Usenet
             }
         }
 
-        public async Task<byte[]> ReadBodyAsync(string messageId, CancellationToken ct)
+        // Sends the BODY requests for several articles at once; their answers are read in the same order with ReadBodyAsync.
+        public async Task RequestBodiesAsync(IReadOnlyList<string> messageIds, CancellationToken ct)
         {
+            var command = new StringBuilder();
+            foreach (var messageId in messageIds)
+            {
+                if (messageId.AsSpan().IndexOfAny('\r', '\n') >= 0)
+                {
+                    IsBroken = true;
+                    throw new UsenetException(UsenetFailure.InvalidResponse, "The message id contains a line break.");
+                }
+
+                command.Append("BODY <").Append(messageId).Append(">\r\n");
+            }
+
             using var timeout = Bound(ct);
             try
             {
-                var status = await CommandAsync("BODY <" + messageId + ">", timeout.Token);
+                await _stream.WriteAsync(Encoding.ASCII.GetBytes(command.ToString()), timeout.Token);
+                await _stream.FlushAsync(timeout.Token);
+            }
+            catch (Exception exception) when (exception is IOException or ObjectDisposedException || exception is OperationCanceledException && !ct.IsCancellationRequested)
+            {
+                IsBroken = true;
+                throw new UsenetException(UsenetFailure.Unavailable, "The news server stopped answering.", exception);
+            }
+        }
+
+        // Reads the answer to the oldest open request; the body comes in a pooled buffer the caller returns.
+        public async Task<ArticleBody> ReadBodyAsync(CancellationToken ct)
+        {
+            using var timeout = Bound(ct);
+            byte[]? body = null;
+            try
+            {
+                var status = await ReadStatusAsync(timeout.Token);
                 switch (status.Code)
                 {
                     case 222:
@@ -117,38 +148,105 @@ namespace Jularr.Integrations.Logic.Usenet
                     case 423 or 430:
                         throw new UsenetException(UsenetFailure.ArticleMissing, "The article is not available.");
                     case 502:
+                        IsBroken = true;
                         throw new UsenetException(UsenetFailure.ConnectionLimit, "The news server allows no more connections.");
                     case 480 or 481:
+                        IsBroken = true;
                         throw new UsenetException(UsenetFailure.Unauthorized, "The news server refused the article.");
                     default:
+                        IsBroken = true;
                         throw new UsenetException(UsenetFailure.Unavailable, "The news server answered " + status.Code.ToString(CultureInfo.InvariantCulture) + ".");
                 }
 
-                // Lines until the lone dot; a leading doubled dot is unstuffed.
-                var body = new MemoryStream();
+                // Lines until the lone dot; a leading doubled dot is unstuffed. Whole lines are copied from the read buffer.
+                body = ArrayPool<byte>.Shared.Rent(1024 * 1024);
+                var length = 0;
+                var lineStart = true;
                 while (true)
                 {
-                    var line = await ReadLineAsync(timeout.Token);
-                    if (line.Length == 1 && line[0] == (byte)'.')
+                    if (lineStart)
                     {
-                        return body.ToArray();
+                        await EnsureAsync(1, timeout.Token);
+                        if (_buffer[_start] == (byte)'.')
+                        {
+                            await EnsureAsync(2, timeout.Token);
+                            var next = _buffer[_start + 1];
+                            if (next == (byte)'\n')
+                            {
+                                _start += 2;
+                                break;
+                            }
+
+                            if (next == (byte)'\r')
+                            {
+                                await EnsureAsync(3, timeout.Token);
+                                if (_buffer[_start + 2] == (byte)'\n')
+                                {
+                                    _start += 3;
+                                    break;
+                                }
+                            }
+
+                            if (next == (byte)'.')
+                            {
+                                _start++;
+                            }
+                        }
+                    }
+                    else if (_start == _end)
+                    {
+                        await EnsureAsync(1, timeout.Token);
                     }
 
-                    var start = line.Length >= 2 && line[0] == (byte)'.' && line[1] == (byte)'.' ? 1 : 0;
-                    body.Write(line, start, line.Length - start);
-                    body.Write("\r\n"u8);
-                    if (body.Length > MaximumArticleBytes)
+                    var available = _buffer.AsSpan(_start, _end - _start);
+                    var newline = available.IndexOf((byte)'\n');
+                    var count = newline < 0 ? available.Length : newline + 1;
+                    if (length + count > MaximumArticleBytes)
                     {
                         IsBroken = true;
                         throw new UsenetException(UsenetFailure.InvalidResponse, "The article is too large.");
                     }
+
+                    if (length + count > body.Length)
+                    {
+                        var larger = ArrayPool<byte>.Shared.Rent(Math.Max(body.Length * 2, length + count));
+                        body.AsSpan(0, length).CopyTo(larger);
+                        ArrayPool<byte>.Shared.Return(body);
+                        body = larger;
+                    }
+
+                    available[..count].CopyTo(body.AsSpan(length));
+                    length += count;
+                    _start += count;
+                    lineStart = newline >= 0;
                 }
+
+                var result = new ArticleBody(body, length);
+                body = null;
+                return result;
             }
-            catch (Exception exception) when (exception is IOException || exception is OperationCanceledException && !ct.IsCancellationRequested)
+            catch (Exception exception) when (exception is IOException or ObjectDisposedException || exception is OperationCanceledException && !ct.IsCancellationRequested)
             {
                 IsBroken = true;
                 throw new UsenetException(UsenetFailure.Unavailable, "The news server stopped answering.", exception);
             }
+            catch (Exception exception)
+            {
+                // Only a missing article leaves the session in step with its requests.
+                if (exception is not UsenetException { Failure: UsenetFailure.ArticleMissing }) IsBroken = true;
+                throw;
+            }
+            finally
+            {
+                if (body is not null) ArrayPool<byte>.Shared.Return(body);
+            }
+        }
+
+        // One request and its answer, for a single article.
+        public async Task<ArticleBody> ReadBodyAsync(string messageId, CancellationToken ct)
+        {
+            await RequestBodiesAsync([messageId], ct);
+            return await ReadBodyAsync(ct);
         }
 
         public async ValueTask DisposeAsync()
@@ -164,6 +262,28 @@ namespace Jularr.Integrations.Logic.Usenet
 
             await _stream.DisposeAsync();
             _client.Dispose();
+        }
+
+        // At least count unread bytes wait in the buffer.
+        private async Task EnsureAsync(int count, CancellationToken ct)
+        {
+            while (_end - _start < count)
+            {
+                if (_start > 0)
+                {
+                    _buffer.AsSpan(_start, _end - _start).CopyTo(_buffer);
+                    _end -= _start;
+                    _start = 0;
+                }
+
+                var read = await _stream.ReadAsync(_buffer.AsMemory(_end), ct);
+                if (read == 0)
+                {
+                    throw new IOException("The news server closed the connection.");
+                }
+
+                _end += read;
+            }
         }
 
         private async Task<(int Code, string Text)> CommandAsync(string command, CancellationToken ct)

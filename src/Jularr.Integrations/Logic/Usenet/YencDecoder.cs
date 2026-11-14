@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Numerics;
 using System.Text;
 using Jularr.Integrations.Data.Usenet;
 
@@ -11,30 +12,55 @@ namespace Jularr.Integrations.Logic.Usenet
 
         public static YencPart Decode(byte[] body)
         {
-            long offset = 0;
+            var output = new byte[body.Length];
+            if (!TryDecode(body, output, out var offset, out var length, out var intact))
+            {
+                throw new UsenetException(UsenetFailure.InvalidResponse, "The article is not yEnc encoded.");
+            }
+
+            return new YencPart(offset, output[..length], intact);
+        }
+
+        // Decodes into output, which holds at least as many bytes as the body; false when the body is not yEnc.
+        public static bool TryDecode(ReadOnlySpan<byte> body, Span<byte> output, out long offset, out int length, out bool intact)
+        {
+            offset = 0;
+            length = 0;
+            intact = false;
             var multipart = false;
             uint? expected = null;
-            var data = new MemoryStream(body.Length);
             var started = false;
-            foreach (var line in Lines(body))
+            while (!body.IsEmpty)
             {
-                if (line.StartsWith("=ybegin "u8))
+                var newline = body.IndexOf((byte)'\n');
+                var line = newline < 0 ? body : body[..newline];
+                body = newline < 0 ? [] : body[(newline + 1)..];
+                if (!line.IsEmpty && line[^1] == (byte)'\r')
                 {
-                    started = true;
-                    continue;
+                    line = line[..^1];
                 }
 
-                if (line.StartsWith("=ypart "u8))
+                if (line.Length >= 2 && line[0] == (byte)'=' && line[1] == (byte)'y')
                 {
-                    multipart = true;
-                    offset = long.TryParse(Field(line, "begin"), NumberStyles.None, CultureInfo.InvariantCulture, out var begin) && begin > 0 ? begin - 1 : 0;
-                    continue;
-                }
+                    if (line.StartsWith("=ybegin "u8))
+                    {
+                        started = true;
+                        continue;
+                    }
 
-                if (line.StartsWith("=yend"u8))
-                {
-                    expected = uint.TryParse(Field(line, "pcrc32") ?? (multipart ? null : Field(line, "crc32")), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var crc) ? crc : null;
-                    break;
+                    if (line.StartsWith("=ypart "u8))
+                    {
+                        multipart = true;
+                        offset = long.TryParse(Field(line, "begin"), NumberStyles.None, CultureInfo.InvariantCulture, out var begin) && begin > 0 ? begin - 1 : 0;
+                        continue;
+                    }
+
+                    if (line.StartsWith("=yend"u8))
+                    {
+                        expected = uint.TryParse(Field(line, "pcrc32") ?? (multipart ? null : Field(line, "crc32")), NumberStyles.HexNumber, CultureInfo.InvariantCulture,
+                            out var crc) ? crc : null;
+                        break;
+                    }
                 }
 
                 if (!started)
@@ -42,59 +68,82 @@ namespace Jularr.Integrations.Logic.Usenet
                     continue;
                 }
 
-                // An escaped byte is shifted by a further 64.
-                for (var index = 0; index < line.Length; index++)
+                // An escaped byte is shifted by a further 64; runs without escapes are shifted in one go.
+                while (!line.IsEmpty)
                 {
-                    var value = line[index];
-                    if (value == (byte)'=' && index + 1 < line.Length)
+                    var escape = line.IndexOf((byte)'=');
+                    var run = escape < 0 ? line.Length : escape;
+                    Shift(line[..run], output.Slice(length, run));
+                    length += run;
+                    if (escape < 0)
                     {
-                        value = (byte)(line[++index] - 64);
+                        break;
                     }
 
-                    data.WriteByte((byte)(value - 42));
+                    if (escape + 1 < line.Length)
+                    {
+                        output[length++] = (byte)(line[escape + 1] - 64 - 42);
+                        line = line[(escape + 2)..];
+                    }
+                    else
+                    {
+                        output[length++] = (byte)('=' - 42);
+                        line = [];
+                    }
                 }
             }
 
             if (!started)
             {
-                throw new UsenetException(UsenetFailure.InvalidResponse, "The article is not yEnc encoded.");
+                return false;
             }
 
-            var bytes = data.ToArray();
-            return new YencPart(offset, bytes, expected is { } crc32 && Checksum(bytes) == crc32);
+            intact = expected is { } crc32 && Checksum(output[..length]) == crc32;
+            return true;
         }
 
+        // Standard CRC-32, eight bytes per step.
         public static uint Checksum(ReadOnlySpan<byte> bytes)
         {
             var crc = 0xFFFFFFFFu;
+            var table = Table.AsSpan();
+            while (bytes.Length >= 8)
+            {
+                var low = crc ^ (uint)(bytes[0] | bytes[1] << 8 | bytes[2] << 16 | bytes[3] << 24);
+                var high = (uint)(bytes[4] | bytes[5] << 8 | bytes[6] << 16 | bytes[7] << 24);
+                crc = table[7 * 256 + (int)(low & 0xFF)] ^ table[6 * 256 + (int)(low >> 8 & 0xFF)] ^ table[5 * 256 + (int)(low >> 16 & 0xFF)] ^ table[4 * 256 + (int)(low >> 24)]
+                    ^ table[3 * 256 + (int)(high & 0xFF)] ^ table[2 * 256 + (int)(high >> 8 & 0xFF)] ^ table[256 + (int)(high >> 16 & 0xFF)] ^ table[(int)(high >> 24)];
+                bytes = bytes[8..];
+            }
+
             foreach (var value in bytes)
             {
-                crc = Table[(crc ^ value) & 0xFF] ^ (crc >> 8);
+                crc = table[(int)((crc ^ value) & 0xFF)] ^ (crc >> 8);
             }
 
             return ~crc;
         }
 
-        private static IEnumerable<byte[]> Lines(byte[] body)
+        private static void Shift(ReadOnlySpan<byte> source, Span<byte> target)
         {
-            var start = 0;
-            for (var index = 0; index <= body.Length; index++)
+            var index = 0;
+            if (Vector.IsHardwareAccelerated)
             {
-                if (index == body.Length || body[index] == (byte)'\n')
+                var shift = new Vector<byte>(42);
+                for (; index <= source.Length - Vector<byte>.Count; index += Vector<byte>.Count)
                 {
-                    var end = index > start && body[index - 1] == (byte)'\r' ? index - 1 : index;
-                    if (end > start || index < body.Length)
-                    {
-                        yield return body[start..end];
-                    }
-
-                    start = index + 1;
+                    (new Vector<byte>(source[index..]) - shift).CopyTo(target[index..]);
                 }
+            }
+
+            for (; index < source.Length; index++)
+            {
+                target[index] = (byte)(source[index] - 42);
             }
         }
 
         // Header values are "key=value".
-        private static string? Field(byte[] line, string key)
+        private static string? Field(ReadOnlySpan<byte> line, string key)
         {
             var text = Encoding.Latin1.GetString(line);
             var position = text.IndexOf(" " + key + "=", StringComparison.Ordinal);
@@ -109,7 +158,7 @@ namespace Jularr.Integrations.Logic.Usenet
 
         private static uint[] CreateTable()
         {
-            var table = new uint[256];
+            var table = new uint[8 * 256];
             for (var index = 0u; index < 256; index++)
             {
                 var value = index;
@@ -119,6 +168,15 @@ namespace Jularr.Integrations.Logic.Usenet
                 }
 
                 table[index] = value;
+            }
+
+            for (var index = 0; index < 256; index++)
+            {
+                for (var slice = 1; slice < 8; slice++)
+                {
+                    var previous = table[(slice - 1) * 256 + index];
+                    table[slice * 256 + index] = table[(int)(previous & 0xFF)] ^ (previous >> 8);
+                }
             }
 
             return table;
