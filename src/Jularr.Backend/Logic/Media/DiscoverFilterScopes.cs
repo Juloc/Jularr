@@ -52,6 +52,59 @@ namespace Jularr.Backend.Logic.Media
             [Genre.Politics] = 10768
         };
 
+        // IGDB's genres behind ours; one of ours may stand for several of IGDB's.
+        private static readonly IReadOnlyDictionary<Genre, int[]> GameGenres = new Dictionary<Genre, int[]>
+        {
+            [Genre.Adventure] = [31, 2],
+            [Genre.RolePlaying] = [12],
+            [Genre.Shooter] = [5],
+            [Genre.Strategy] = [15, 11, 16, 24],
+            [Genre.Platformer] = [8],
+            [Genre.Puzzle] = [9, 26],
+            [Genre.Racing] = [10],
+            [Genre.Fighting] = [4, 25],
+            [Genre.Simulation] = [13],
+            [Genre.Sports] = [14],
+            [Genre.Indie] = [32],
+            [Genre.Arcade] = [33, 30],
+            [Genre.Music] = [7],
+            [Genre.VisualNovel] = [34],
+            [Genre.CardGame] = [35]
+        };
+
+        // IGDB's platforms the filter offers, newest families first.
+        private static readonly (int Id, string Name)[] GamePlatforms =
+        [
+            (6, "PC"), (167, "PlayStation 5"), (169, "Xbox Series X|S"), (130, "Nintendo Switch"), (48, "PlayStation 4"), (49, "Xbox One"), (41, "Wii U"), (37, "Nintendo 3DS"),
+            (46, "PlayStation Vita"), (9, "PlayStation 3"), (12, "Xbox 360"), (5, "Wii"), (20, "Nintendo DS"), (38, "PSP"), (8, "PlayStation 2"), (11, "Xbox"), (21, "GameCube"),
+            (24, "Game Boy Advance"), (23, "Dreamcast"), (7, "PlayStation"), (4, "Nintendo 64"), (22, "Game Boy Color"), (33, "Game Boy"), (29, "Mega Drive"), (19, "Super Nintendo"),
+            (18, "NES"), (14, "Mac"), (3, "Linux"), (34, "Android"), (39, "iOS")
+        ];
+
+        // MusicBrainz's tags for music's genres.
+        private static readonly IReadOnlyDictionary<Genre, string> MusicTags = new Dictionary<Genre, string>
+        {
+            [Genre.Rock] = "rock",
+            [Genre.Pop] = "pop",
+            [Genre.HipHop] = "hip hop",
+            [Genre.Electronic] = "electronic",
+            [Genre.Jazz] = "jazz",
+            [Genre.Classical] = "classical",
+            [Genre.Metal] = "metal",
+            [Genre.Punk] = "punk",
+            [Genre.Indie] = "indie",
+            [Genre.Folk] = "folk",
+            [Genre.CountryMusic] = "country",
+            [Genre.RhythmAndBlues] = "rnb",
+            [Genre.Soul] = "soul",
+            [Genre.Blues] = "blues",
+            [Genre.Reggae] = "reggae",
+            [Genre.Soundtrack] = "soundtrack"
+        };
+
+        private static readonly DiscoverSort[] GameSorts = [DiscoverSort.Popularity, DiscoverSort.Score, DiscoverSort.Released];
+        private static readonly DiscoverSort[] MusicSorts = [DiscoverSort.Popularity];
+
         private static readonly ReleaseStatus[] AniListStatuses = Enum.GetValues<ReleaseStatus>();
         private static readonly ReleaseStatus[] SeriesStatuses = [ReleaseStatus.Finished, ReleaseStatus.Releasing, ReleaseStatus.NotYetReleased, ReleaseStatus.Cancelled];
         private static readonly string[] AniListCountries = ["JP", "KR", "CN", "TW"];
@@ -60,7 +113,7 @@ namespace Jularr.Backend.Logic.Media
         private static readonly DiscoverSort[] TmdbSorts = [DiscoverSort.Popularity, DiscoverSort.Score, DiscoverSort.Released, DiscoverSort.Title];
         private static readonly DiscoverSort[] BookSorts = [DiscoverSort.Popularity, DiscoverSort.Released];
 
-        // A scope Discover's filter cannot narrow (music, games) offers nothing.
+        // Games narrow by IGDB's genres, years and platforms (the platforms as the scope's sites), music by MusicBrainz's tags and years.
         public static DiscoverFilterOptionsV1? Options(DiscoverScopeV1 scope, BaseDataList<DiscoverOptionV1> tags, BaseDataList<DiscoverOptionV1> sites) => (scope.MediaTypeId, scope.MediaSubtypeId) switch
         {
             (_, MediaSubtype.Anime) => new(
@@ -82,6 +135,9 @@ namespace Jularr.Backend.Logic.Media
                 SeriesGenres, [], SeriesStatuses, [], TmdbCountries, [], TmdbSorts, new([]), sites),
             (MediaType.Book, null) => new([DiscoverFilter.Genre, DiscoverFilter.Year, DiscoverFilter.Language],
                 [.. BookSubjects.Keys.Order()], [], [], [], [], BookLanguages, BookSorts, new([]), new([])),
+            (MediaType.Game, null) => new([DiscoverFilter.Genre, DiscoverFilter.Year, DiscoverFilter.Site], [.. GameGenres.Keys.Order()], [], [], [], [], [], GameSorts, new([]),
+                new([.. GamePlatforms.Select(platform => new DiscoverOptionV1(platform.Id, platform.Name, null, false))])),
+            (MediaType.Music, null) => new([DiscoverFilter.Genre, DiscoverFilter.Year], [.. MusicTags.Keys.Order()], [], [], [], [], [], MusicSorts, new([]), new([])),
             _ => null
         };
 
@@ -165,6 +221,19 @@ namespace Jularr.Backend.Logic.Media
                 _ => []
             })]
         };
+
+        // IGDB's query of the choice: each genre wants one of its IGDB genres, any chosen platform counts.
+        public static Integrations.Data.Igdb.IgdbDiscoverQuery IgdbQuery(ReadDiscoverFilteredDataV1 data, DiscoverSort sort) => new(
+            [.. data.GenreIds.Select(genre => (IReadOnlyList<int>)(GameGenres.TryGetValue(genre, out var ids) ? ids : []))],
+            [.. data.SiteIds.Where(id => GamePlatforms.Any(platform => platform.Id == id))], data.YearFrom, data.YearTo,
+            sort switch
+            {
+                DiscoverSort.Score => Integrations.Data.Igdb.IgdbDiscoverSort.Rating,
+                DiscoverSort.Released => Integrations.Data.Igdb.IgdbDiscoverSort.Released,
+                _ => Integrations.Data.Igdb.IgdbDiscoverSort.Popularity
+            });
+
+        public static IReadOnlyList<string> MusicTagsOf(IEnumerable<Genre> genres) => [.. genres.Select(genre => MusicTags.TryGetValue(genre, out var tag) ? tag : null).OfType<string>()];
 
         public static IReadOnlyList<string> BookSubjectsOf(IEnumerable<Genre> genres) => [.. genres.Select(genre => BookSubjects.TryGetValue(genre, out var subject) ? subject : null).OfType<string>()];
 

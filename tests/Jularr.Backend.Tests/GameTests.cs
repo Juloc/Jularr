@@ -38,6 +38,39 @@ namespace Jularr.Backend.Tests
         private const string ClientSecret = "twitch-client-secret";
 
         [TestMethod]
+        public async Task Game_DiscoverFilter_AsksIgdbForTheGenresPlatformsAndYears()
+        {
+            const string discoverClient = "twitch-discover-client";
+            const string discoverSecret = "twitch-discover-secret";
+            var igdb = new FakeIgdb(discoverClient, discoverSecret);
+            await using var host = await Host.CreateAsync(razor: true, library: true, services: services => services.AddHttpClient<IgdbClient>().ConfigurePrimaryHttpMessageHandler(() => igdb));
+            using var state = await host.SendAsync(HttpMethod.Get, "/api/v1/auth");
+            using var login = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/login", new LoginDataV1("a@example.test", "test-password-123"));
+            var provider = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Providers\" WHERE \"Key\" = 'igdb'"))!;
+            using var saved = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/providers/" + provider + "/secret", new SaveProviderSecretDataV1(discoverSecret, discoverClient));
+            Assert.AreEqual(HttpStatusCode.OK, saved.StatusCode, await saved.Content.ReadAsStringAsync());
+
+            // Games offer genres, years and IGDB's platforms; the platforms need no extra call.
+            using var options = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/filter-options", new ReadDiscoverFilterOptionsDataV1("games", false));
+            Assert.AreEqual(HttpStatusCode.OK, options.StatusCode, await options.Content.ReadAsStringAsync());
+            var offered = (await options.Content.ReadFromJsonAsync<DiscoverFilterOptionsV1>())!;
+            CollectionAssert.AreEquivalent(new[] { DiscoverFilter.Genre, DiscoverFilter.Year, DiscoverFilter.Site }, offered.Filters);
+            CollectionAssert.Contains(offered.GenreIds, Genre.RolePlaying);
+            Assert.AreEqual("PC", offered.Sites.Single(site => site.Id == 6).Name);
+
+            // A role-playing game for PC from 2017, by rating: each genre is one condition, a genre of several IGDB genres any of them.
+            using var found = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/filtered", new ReadDiscoverFilteredDataV1("games", 2, DiscoverSort.Score,
+                genreIds: [Genre.RolePlaying, Genre.Strategy], siteIds: [6, 999], yearFrom: 2017, yearTo: 2017));
+            Assert.AreEqual(HttpStatusCode.OK, found.StatusCode, await found.Content.ReadAsStringAsync());
+            Assert.AreEqual("1022", (await found.Content.ReadFromJsonAsync<DiscoverFilteredV1>())!.CatalogItems.Single().ExternalId);
+            var body = igdb.Bodies.Last();
+            StringAssert.Contains(body, "genres = (12) & genres = (15,11,16,24)");
+            StringAssert.Contains(body, "platforms = (6)");
+            StringAssert.Contains(body, "first_release_date >= 1483228800 & first_release_date < 1514764800");
+            StringAssert.Contains(body, "sort total_rating desc; limit 20; offset 20;");
+        }
+
+        [TestMethod]
         public async Task Game_IgdbApplicationSearchAndImport_KeepsPlatformsAsIdentities()
         {
             var igdb = new FakeIgdb();
@@ -497,7 +530,8 @@ namespace Jularr.Backend.Tests
             }
         }
 
-        private sealed class FakeIgdb : HttpMessageHandler
+        // The Twitch application it accepts; IGDB's tokens are cached per application, so a test with its own application asks for its own token.
+        private sealed class FakeIgdb(string clientId = ClientId, string clientSecret = ClientSecret) : HttpMessageHandler
         {
             private const string Game = """
                 {"id":1022,"name":"Example Quest","first_release_date":1488499200,"summary":"A test adventure.","cover":{"image_id":"co1abc"},
@@ -508,6 +542,7 @@ namespace Jularr.Backend.Tests
 
             public int TokenRequests { get; private set; }
             public List<string> ApiClientIds { get; } = [];
+            public List<string> Bodies { get; } = [];
             public List<string> Grabbed { get; } = [];
             public string History { get; set; } = """{"history":{"slots":[]}}""";
 
@@ -518,7 +553,7 @@ namespace Jularr.Backend.Tests
                 {
                     var form = await request.Content!.ReadAsStringAsync(cancellationToken);
                     TokenRequests++;
-                    return form.Contains("client_secret=" + ClientSecret, StringComparison.Ordinal) && form.Contains("client_id=" + ClientId, StringComparison.Ordinal)
+                    return form.Contains("client_secret=" + clientSecret, StringComparison.Ordinal) && form.Contains("client_id=" + clientId, StringComparison.Ordinal)
                         ? Json("""{"access_token":"igdb-access-token","expires_in":5000000,"token_type":"bearer"}""")
                         : new HttpResponseMessage(HttpStatusCode.BadRequest);
                 }
@@ -563,6 +598,7 @@ namespace Jularr.Backend.Tests
                 }
 
                 ApiClientIds.Add(request.Headers.GetValues("Client-ID").Single());
+                Bodies.Add(await request.Content!.ReadAsStringAsync(cancellationToken));
                 return Json("[" + Game + "]");
             }
 

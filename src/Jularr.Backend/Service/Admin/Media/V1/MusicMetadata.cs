@@ -30,6 +30,18 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             }
         }
 
+        public async Task<IReadOnlyList<MusicBrainzAlbum>> DiscoverAsync(IReadOnlyList<string> tags, int? yearFrom, int? yearTo, int page, CancellationToken ct)
+        {
+            try
+            {
+                return await musicBrainz.DiscoverAsync(tags, yearFrom, yearTo, page, ct);
+            }
+            catch (MusicBrainzException exception)
+            {
+                throw Translate(exception);
+            }
+        }
+
         public async Task<MusicBrainzAlbumDetails> ReadAsync(string id, CancellationToken ct)
         {
             try

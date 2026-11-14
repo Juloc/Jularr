@@ -75,4 +75,14 @@ namespace Jularr.Integrations.Data.Igdb
         // The credited people with their ids at this provider.
         public IReadOnlyList<ProviderPerson> People { get; init; } = [];
     }
+
+    internal enum IgdbDiscoverSort : byte
+    {
+        Popularity,
+        Rating,
+        Released
+    }
+
+    // Discover's narrowing of IGDB's games: each genre a set of IGDB's genre ids.
+    internal sealed record IgdbDiscoverQuery(IReadOnlyList<IReadOnlyList<int>> Genres, IReadOnlyList<int> Platforms, int? YearFrom, int? YearTo, IgdbDiscoverSort Sort);
 }

@@ -31,6 +31,28 @@ namespace Jularr.Integrations.Logic.MusicBrainz
                 : [];
         }
 
+        // A page of albums carrying every one of the tags, first released within the years; MusicBrainz orders them by how well they match.
+        public async Task<IReadOnlyList<MusicBrainzAlbum>> DiscoverAsync(IReadOnlyList<string> tags, int? yearFrom, int? yearTo, int page, CancellationToken ct)
+        {
+            var terms = new List<string> { "primarytype:album" };
+            terms.AddRange(tags.Select(tag => "tag:\"" + LuceneSpecial().Replace(tag, @"\$0") + "\""));
+            if (yearFrom is not null || yearTo is not null)
+            {
+                var from = yearFrom is { } low ? Math.Clamp(low, 1800, 2200).ToString(CultureInfo.InvariantCulture) : "*";
+                var to = yearTo is { } high ? Math.Clamp(high, 1800, 2200).ToString(CultureInfo.InvariantCulture) + "-12-31" : "*";
+                terms.Add("firstreleasedate:[" + from + " TO " + to + "]");
+            }
+
+            var offset = (Math.Max(1, page) - 1) * PageSize;
+            using var document = await GetAsync("release-group?fmt=json&limit=" + PageSize.ToString(CultureInfo.InvariantCulture) + "&offset=" + offset.ToString(CultureInfo.InvariantCulture)
+                + "&query=" + Uri.EscapeDataString(string.Join(" AND ", terms)), ct);
+            return document.RootElement.TryGetProperty("release-groups", out var groups) && groups.ValueKind == JsonValueKind.Array
+                ? [.. groups.EnumerateArray().Select(ReadAlbum).OfType<MusicBrainzAlbum>()]
+                : [];
+        }
+
+        public const int PageSize = 20;
+
         public async Task<MusicBrainzAlbumDetails> ReadAsync(string releaseGroupId, CancellationToken ct)
         {
             if (!Mbid().IsMatch(releaseGroupId))

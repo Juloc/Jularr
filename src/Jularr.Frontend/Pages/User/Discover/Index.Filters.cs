@@ -196,6 +196,14 @@ namespace Jularr.Frontend.Pages.User.Discover
             _ => true
         }).Take(RowSize)];
 
+        // A scope's sites: where films and anime stream, where books are read, the platforms of games.
+        private string SiteLabel => Chosen[0].MediaTypeId switch
+        {
+            MediaType.Book => "discover.filter.readable",
+            MediaType.Game => "discover.filter.platform",
+            _ => "discover.filter.streaming"
+        };
+
         private bool IsAtHand(DiscoverFilter filter) => AtHand.Any(entry => entry.Filter == filter);
 
         // Each filter at hand is a field named above its value, as AniList's search has them; one GET form, the drawer's choices travel along hidden.
@@ -226,7 +234,7 @@ namespace Jularr.Frontend.Pages.User.Discover
                         .. offered.CountryCodes.Select(code => new ChoiceOption("discover.country." + code, code, Country == code))]),
                     DiscoverFilter.Language => SelectFilter("lang", "discover.filter.language", [new("discover.filter.any", "", Language is null),
                         .. offered.LanguageCodes.Select(code => new ChoiceOption("discover.language." + code, code, Language == code))]),
-                    _ => PopupFilter("site", Chosen[0].MediaTypeId == MediaType.Book ? "discover.filter.readable" : "discover.filter.streaming",
+                    _ => PopupFilter("site", SiteLabel,
                         [.. offered.Sites.Select(site => new ChoicePick(site.Id.ToString(CultureInfo.InvariantCulture), Sites.Contains(site.Id), Label: site.Name))],
                         offered.Sites.Where(site => Sites.Contains(site.Id)).Select(site => site.Name))
                 });
@@ -315,8 +323,7 @@ namespace Jularr.Frontend.Pages.User.Discover
 
             if (Offers(DiscoverFilter.Site) && offered.Sites.Count > 0 && !IsAtHand(DiscoverFilter.Site))
             {
-                var reading = Chosen[0].MediaTypeId == MediaType.Book;
-                yield return new ChoiceGroup(assets, reading ? "discover.filter.readable" : "discover.filter.streaming", "site", [.. offered.Sites.Select(site => new ChoicePick(
+                yield return new ChoiceGroup(assets, SiteLabel, "site", [.. offered.Sites.Select(site => new ChoicePick(
                     site.Id.ToString(CultureInfo.InvariantCulture), Sites.Contains(site.Id), Label: site.Name))], new ChoiceOptions(Multiple: true, Layout: ChoiceLayout.Checks));
             }
 

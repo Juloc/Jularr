@@ -32,6 +32,34 @@ namespace Jularr.Integrations.Logic.Igdb
             return [.. document.RootElement.EnumerateArray().Select(Read).OfType<IgdbGame>()];
         }
 
+        // A page of games narrowed by genres (each a set of IGDB's ids, all of them wanted), platforms (any of them) and release years, in the given order;
+        // only main games with a cover count.
+        public async Task<IReadOnlyList<IgdbGame>> DiscoverAsync(IgdbConnection connection, IgdbDiscoverQuery query, int page, CancellationToken ct)
+        {
+            var where = new List<string> { "cover != null", "version_parent = null" };
+            where.AddRange(query.Genres.Where(ids => ids.Count > 0).Select(ids => "genres = (" + Ids(ids) + ")"));
+            if (query.Platforms.Count > 0) where.Add("platforms = (" + Ids(query.Platforms) + ")");
+            if (query.YearFrom is { } from) where.Add("first_release_date >= " + Seconds(from));
+            if (query.YearTo is { } to) where.Add("first_release_date < " + Seconds(to + 1));
+            var sort = query.Sort switch
+            {
+                IgdbDiscoverSort.Released => "first_release_date desc",
+                IgdbDiscoverSort.Rating => "total_rating desc",
+                _ => "total_rating_count desc"
+            };
+            if (query.Sort == IgdbDiscoverSort.Released) where.Add("first_release_date <= " + DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture));
+            if (query.Sort == IgdbDiscoverSort.Rating) where.Add("total_rating_count >= 20");
+            var offset = (Math.Max(1, page) - 1) * PageSize;
+            using var document = await QueryAsync(connection, "games", Fields + " where " + string.Join(" & ", where) + "; sort " + sort + "; limit " + PageSize.ToString(CultureInfo.InvariantCulture)
+                + "; offset " + offset.ToString(CultureInfo.InvariantCulture) + ";", ct);
+            return [.. document.RootElement.EnumerateArray().Select(Read).OfType<IgdbGame>()];
+
+            static string Ids(IEnumerable<int> ids) => string.Join(',', ids.Distinct().Select(id => id.ToString(CultureInfo.InvariantCulture)));
+            static string Seconds(int year) => new DateTimeOffset(Math.Clamp(year, 1950, 2200), 1, 1, 0, 0, 0, TimeSpan.Zero).ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture);
+        }
+
+        public const int PageSize = 20;
+
         public async Task<IgdbGame> ReadAsync(IgdbConnection connection, int id, CancellationToken ct)
         {
             using var document = await QueryAsync(connection, "games", Fields + " where id = " + id.ToString(CultureInfo.InvariantCulture) + ";", ct);
