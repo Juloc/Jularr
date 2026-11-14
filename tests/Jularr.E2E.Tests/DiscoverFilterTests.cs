@@ -35,7 +35,8 @@ namespace Jularr.E2E.Tests
             await Assertions.Expect(page.Locator("#discover-recommendations .media-shelf").First).ToBeVisibleAsync();
             await Evidence.SaveAsync(page, "discover-filter-row");
 
-            // Choosing a genre in its popup applies it when the popup closes: one grid, popularity first, under the highlights.
+            // Choosing a genre in its popup applies it when the popup closes: one grid, popularity first, under the highlights. Only the results load, not the page.
+            await page.EvaluateAsync("window.discoverStays = true");
             await row.Locator(".discover-filter__button").First.ClickAsync();
             var popup = page.Locator("#discover-filter-genre");
             await Assertions.Expect(popup).ToBeVisibleAsync();
@@ -50,6 +51,7 @@ namespace Jularr.E2E.Tests
             await Assertions.Expect(page.Locator(".media-grid").GetByText("Quiet Days")).ToHaveCountAsync(0);
             await Assertions.Expect(page.Locator(".hero-carousel")).ToBeVisibleAsync();
             await Assertions.Expect(page.Locator("#discover-recommendations")).ToHaveCountAsync(0);
+            Assert.IsTrue(await page.EvaluateAsync<bool>("window.discoverStays === true"));
             await Evidence.SaveAsync(page, "discover-filter-grid");
 
             // The grid loads on while scrolling and says where it ends.
@@ -62,6 +64,7 @@ namespace Jularr.E2E.Tests
 
             // More holds the other filters; the format sits in the row.
             await page.GotoAsync("/?type=anime&genre=Mecha");
+            await page.EvaluateAsync("window.discoverStays = true");
             await row.Locator(".discover-filter__more").ClickAsync();
             var drawer = page.Locator("#discover-panel");
             await drawer.GetByText("South Korea (Manhwa)").ClickAsync();
@@ -79,6 +82,11 @@ namespace Jularr.E2E.Tests
             await Evidence.SaveAsync(page, "discover-filter-phone");
             await page.Keyboard.PressAsync("Escape");
             await page.SetViewportSizeAsync(1280, 900);
+
+            // A chosen field's cross clears only that field.
+            await row.Locator(".discover-filter--set .discover-filter__clear").ClickAsync();
+            await Assertions.Expect(page).ToHaveURLAsync(new Regex(@"/\?type=anime&country=KR$"));
+            Assert.IsTrue(await page.EvaluateAsync<bool>("window.discoverStays === true"));
 
             // Clearing keeps the type and brings the shelves back.
             await page.Locator(".discover-chosen__clear").ClickAsync();

@@ -371,14 +371,15 @@ namespace Jularr.Frontend.Pages.User.Discover
         }
 
         // The filters in the address, in one order, lists as comma lists.
-        // One value can be left out: a tag's cross removes its own value of a list, or the whole field.
-        private IEnumerable<string> FilterValues((string Name, string Value)? without = null)
+        // One value can be left out: a tag's cross removes its own value of a list, a field's cross (no value) the whole field.
+        private IEnumerable<string> FilterValues((string Name, string? Value)? without = null)
         {
             foreach (var (name, field) in FilterFields())
             {
                 var value = field;
                 if (without is { } drop && drop.Name == name)
                 {
+                    if (drop.Value is null) continue;
                     value = string.Join(',', field.Split(',').Where(part => part != drop.Value));
                     if (value.Length == 0) continue;
                 }
@@ -438,26 +439,37 @@ namespace Jularr.Frontend.Pages.User.Discover
         {
             var id = "discover-filter-" + name;
             var summary = string.Join(", ", chosen);
-            // A field named above its value: Any while nothing is chosen, the choices once something is.
-            return new Div(
+            // A field named above its value: Any while nothing is chosen, the choices once something is; a chosen field's cross clears it.
+            var button = new List<IUiComponent> { new Span(summary.Length > 0 ? new ValueText(summary) : new Text("discover.filter.any")).Class("discover-filter__value") };
+            if (summary.Length == 0) button.Add(new Icon("chevron-down", assets, 14));
+            var parts = new List<IUiComponent>
+            {
                 new Span(new Text(labelKey)).Class("discover-filter__label").Attribute("id", id + "-label"),
-                new Button(new Span(summary.Length > 0 ? new ValueText(summary) : new Text("discover.filter.any")).Class("discover-filter__value"), new Icon("chevron-down", assets, 14))
-                    .Class("discover-filter__button").Attribute("popovertarget", id).Attribute("aria-haspopup", "dialog").Attribute("aria-expanded", "false")
+                new Button([.. button]).Class("discover-filter__button").Attribute("popovertarget", id).Attribute("aria-haspopup", "dialog").Attribute("aria-expanded", "false")
                     .Attribute("aria-describedby", id + "-label"),
                 new Div(new ChoiceGroup(assets, labelKey, name, picks, new ChoiceOptions(Multiple: true, Layout: ChoiceLayout.Checks))).Class("discover-filter__popup")
-                    .Attribute("id", id).Attribute("popover", "auto")).Class("discover-filter" + (summary.Length > 0 ? " discover-filter--set" : ""));
+                    .Attribute("id", id).Attribute("popover", "auto")
+            };
+            if (summary.Length > 0) parts.Add(ClearField(name, labelKey));
+            return new Div([.. parts]).Class("discover-filter" + (summary.Length > 0 ? " discover-filter--set" : ""));
         }
+
+        // The cross of a chosen field: the address without the field.
+        private IUiComponent ClearField(string name, string labelKey) => new A(new Icon("close", assets, 14)).Class("discover-filter__clear")
+            .Attribute("href", Address(Current with { Page = 1 }, (name, null))).Attribute("aria-label", string.Format(CultureInfo.CurrentCulture, texts["discover.filter.remove"], texts[labelKey]));
 
         private IUiComponent SelectFilter(string name, string labelKey, IReadOnlyList<ChoiceOption> options)
         {
             var id = "discover-filter-" + name;
+            var set = options.Any(option => option.Selected && option.Value.Length > 0);
             return new Div(new Label(new Text(labelKey)).Class("discover-filter__label").Attribute("for", id),
                 new Select([.. options.Select(option =>
                 {
                     var item = new Option(option.LabelValue is { } value ? new ValueText(value) : new Text(option.LabelKey)).Attribute("value", option.Value);
                     return (IUiComponent)(option.Selected ? item.Attribute("selected", "selected") : item);
-                })]).Attribute("id", id).Attribute("name", name).Class("discover-filter__select"))
-                .Class("discover-filter discover-filter--select" + (options.Any(option => option.Selected && option.Value.Length > 0) ? " discover-filter--set" : ""));
+                })]).Attribute("id", id).Attribute("name", name).Class("discover-filter__select"),
+                set ? ClearField(name, labelKey) : new ValueText(""))
+                .Class("discover-filter discover-filter--select" + (set ? " discover-filter--set" : ""));
         }
 
         private static IUiComponent RangeInputs(string labelKey, string name, int? from, int? to)

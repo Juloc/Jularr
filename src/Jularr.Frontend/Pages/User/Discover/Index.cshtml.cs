@@ -1084,7 +1084,7 @@ namespace Jularr.Frontend.Pages.User.Discover
         // Types are left out for all of them.
         private string? TypeParameter(IReadOnlyList<string> types) => types.Count == 0 || Listed.All(scope => types.Contains(scope.Slug)) ? null : string.Join(',', types);
 
-        private string Address(State state, (string Name, string Value)? without = null)
+        private string Address(State state, (string Name, string? Value)? without = null)
         {
             var values = new List<string>();
             if (TypeParameter(state.Types) is { } types) values.Add("type=" + Uri.EscapeDataString(types).Replace("%2C", ","));

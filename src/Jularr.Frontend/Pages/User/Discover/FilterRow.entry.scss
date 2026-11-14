@@ -17,6 +17,7 @@
 }
 
 .discover-filter {
+    position: relative;
     display: grid;
     flex: 1 1 0;
     gap: 6px;
@@ -73,6 +74,27 @@
     .ui-icon { flex: none; color: var(--muted); }
 }
 
+// A chosen field's cross sits where its arrow was and clears the field.
+.discover-filter__clear {
+    position: absolute;
+    right: 6px;
+    bottom: 7px;
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--field);
+    color: var(--accent-text);
+
+    &:hover { background: var(--accent-soft); }
+}
+
+.discover-filter--set .discover-filter__button,
+.discover-filter--set .discover-filter__select,
+.discover-filter--set .ui-dropdown__button { padding-right: 38px; }
+.discover-filter--set .ui-dropdown__button::after { display: none; }
+
 .discover-filter__value {
     min-width: 0;
     overflow: hidden;
@@ -116,6 +138,38 @@
     box-shadow: var(--shadow-overlay);
 
     .choice-group__heading { display: none; }
+
+    // One choice per line, as a list box with round checks.
+    .choice-group--checks .choice-group__items { grid-template-columns: 1fr; gap: 0; }
+
+    .choice-group__check {
+        min-height: 36px;
+        padding: 0 10px;
+        border-radius: 10px;
+        font-weight: 600;
+
+        &:hover { background: var(--tint); }
+        &:has(input:checked) { color: var(--accent-text); }
+
+        input {
+            flex: none;
+            width: 18px;
+            height: 18px;
+            margin: 0;
+            border: 1.5px solid var(--border-strong);
+            border-radius: 50%;
+            background: var(--field);
+            appearance: none;
+            cursor: pointer;
+
+            &:checked {
+                border-color: var(--accent);
+                background: var(--accent) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E") center / 12px no-repeat;
+            }
+
+            &:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+        }
+    }
 
     // A phone shows the choices as a sheet from the bottom.
     @media (max-width: 640px) {
