@@ -88,7 +88,7 @@ function discover(landing = false) {
             assert.equal(name, '../../../Framework/Components/MediaShelf');
             return { initializeShelves() {} };
         },
-        document: { querySelector: selector => selector.includes('search-box') ? form : active, addEventListener: (name, action) => { documentEvents[name] = action; },
+        document: { querySelector: selector => selector.includes('search-box') ? form : active, addEventListener: (name, action) => { (documentEvents[name] ??= []).push(action); },
             createElement: () => ({ className: '', children: [], setAttribute() {}, append(node) { this.children.push(node); }, remove() { this.removed = true; } }) },
         getComputedStyle: () => ({ gridTemplateColumns: '150px 150px 150px' }),
         window: { IntersectionObserver: Observer }, IntersectionObserver: Observer,
@@ -107,8 +107,8 @@ function discover(landing = false) {
         requests, region, fragment, Element,
         get active() { return active; }, get address() { return address; }, get observing() { return !!observed; },
         search(value) { input.value = value; formEvents.submit({ preventDefault() {} }); },
-        scroll(target) { documentEvents.scroll({ target }); },
-        click(link) { documentEvents.click({ target: { closest: selector => selector === '[data-discover-recommendations]' ? link : null }, button: 0, preventDefault() {} }); },
+        scroll(target) { documentEvents.scroll.forEach(action => action({ target })); },
+        click(link) { const event = { target: { closest: selector => selector === '[data-discover-recommendations]' ? link : null }, button: 0, preventDefault() {}, stopImmediatePropagation() {} }; documentEvents.click.forEach(action => action(event)); },
         intersect() { if (observed) observerAction([{ isIntersecting: true }]); },
         async answer(index, incoming) {
             const key = String(index);
