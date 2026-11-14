@@ -9,6 +9,9 @@ namespace Jularr.Backend.Data.Fields.Media
         public static readonly EnumField DiscoverSortId = new(typeof(DiscoverSort));
         public static readonly EnumArrayField DiscoverSortIds = new(typeof(DiscoverSort)) { MaximumLength = 7 };
         public static readonly StringField ScopeSlug = new() { MaximumLength = 32, AllowBlank = false };
+        public static readonly StringArrayField ScopeSlugs = new() { ItemMaximumLength = 32, MaximumLength = 10 };
+        // A profile's own row: none for "for you", else the genre it likes.
+        public static readonly EnumField TasteGenreId = new(typeof(Genre)) { Required = false };
         public static readonly BoolField IsCatalog = new();
         public static readonly EnumField MediaStateTypeId = new(typeof(MediaStateType));
         public static readonly EnumField LibrarySortTypeId = new(typeof(LibrarySortType));

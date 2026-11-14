@@ -414,6 +414,73 @@ namespace Jularr.Backend.Service.User.Discover.V1
         }
     }
 
+    // The profile's own rows from the catalogs Jularr holds whole: what fits the genres it likes most, then a row for each of its two favourite genres;
+    // only titles it has not watched, read or kept on its watchlist. One local read, so the rows never wait for a provider.
+    [ServiceEndpoint("POST", "/api/v1/discover/taste")]
+    public sealed class ReadDiscoverTasteV1 : UserService<DiscoverParametersV1, ReadDiscoverTasteDataV1>
+    {
+        private const int TasteGenres = 3;
+        private const int GenreRows = 2;
+        private readonly TimeProvider _time;
+
+        internal ReadDiscoverTasteV1(TimeProvider time)
+        {
+            _time = time;
+        }
+
+        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<BaseDataList<DiscoverTasteShelfV1>>()];
+        protected override ModuleRequirement GetInstanceModules(DiscoverParametersV1 parameters) => ModuleRequirement.All("Library");
+        protected override ServicePermission GetPermission(DiscoverParametersV1 parameters, Type resultType) => new("profile.media.read");
+
+        protected override async Task<IServiceOutput> OnExecute()
+        {
+            return await Context.ExecuteBatchAsync(async (ctx, ct) =>
+            {
+                var profileId = Auth.ProfileId!.Value;
+                var whole = await ctx.ReadWholeExternalWorkCatalogsAsync(ct);
+                var scopes = (await DiscoverQueries.ReadScopesAsync(ctx, profileId, ct)).Where(scope => Data.ScopeSlugs.Contains(scope.Slug)).ToList();
+                if (scopes.Count == 0) return new BaseDataList<DiscoverTasteShelfV1>([]);
+
+                // Anime's films and series are one kind.
+                var genres = await ctx.ReadTasteGenresAsync(new ExternalWorkTasteData(profileId, [.. scopes.Select(scope =>
+                    (scope.MediaSubtypeId == MediaSubtype.Anime ? 0 : (int)scope.MediaTypeId, (int)(scope.MediaSubtypeId ?? 0)))], TasteGenres), ct);
+                var held = scopes.Where(scope => whole.Contains(DiscoverScopes.Namespace(scope))).ToList();
+                if (genres.Count == 0 || held.Count == 0) return new BaseDataList<DiscoverTasteShelfV1>([]);
+
+                var rows = new List<(Genre? Genre, DiscoverScopeV1 Scope, ExternalWorkShelfData Shelf)>();
+                foreach (var scope in held)
+                {
+                    rows.Add((null, scope, new ExternalWorkShelfData(rows.Count, DiscoverScopes.Namespace(scope), scope.MediaTypeId, scope.MediaSubtypeId, sort: DiscoverSort.Popularity)
+                    {
+                        MediaTypeId = scope.MediaSubtypeId == MediaSubtype.Anime ? (short)0 : (short)scope.MediaTypeId,
+                        AnyGenres = [.. genres.Select(genre => (short)genre)],
+                        Unseen = true
+                    }));
+                }
+
+                foreach (var genre in genres.Take(GenreRows))
+                {
+                    foreach (var scope in held)
+                    {
+                        rows.Add((genre, scope, new ExternalWorkShelfData(rows.Count, DiscoverScopes.Namespace(scope), scope.MediaTypeId, scope.MediaSubtypeId, sort: DiscoverSort.Popularity)
+                        {
+                            MediaTypeId = scope.MediaSubtypeId == MediaSubtype.Anime ? (short)0 : (short)scope.MediaTypeId,
+                            Genres = [(short)genre],
+                            Unseen = true
+                        }));
+                    }
+                }
+
+                var found = (await ctx.ReadExternalWorkShelvesAsync(new ExternalWorkShelfQueryData([.. rows.Select(row => row.Shelf)], profileId,
+                    DateOnly.FromDateTime(_time.GetUtcNow().UtcDateTime)), ct)).ToLookup(row => row.Shelf);
+                return new BaseDataList<DiscoverTasteShelfV1>([.. rows.Select((row, index) => row.Scope.IsCatalog
+                    ? new DiscoverTasteShelfV1(row.Genre, row.Scope.Slug, [], [.. found[index].Select(DiscoverQueries.CatalogItem)])
+                    : new DiscoverTasteShelfV1(row.Genre, row.Scope.Slug, [.. found[index].Select(item => DiscoverQueries.ToItem(row.Scope.MediaTypeId, item))], []))]);
+            }, CancellationToken, mode: SqlAccessMode.ReadOnly);
+        }
+    }
+
     // Titles while typing, from what Discover keeps; without the Caching module there is nothing to suggest from.
     [ServiceEndpoint("POST", "/api/v1/discover/suggestions")]
     public sealed class SuggestDiscoverV1 : UserService<DiscoverParametersV1, SuggestDiscoverDataV1>

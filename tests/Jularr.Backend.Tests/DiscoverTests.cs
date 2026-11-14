@@ -1512,6 +1512,39 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Taste_ForYouAndGenreRows_FollowWhatTheProfileWatched_AndLeaveOutWhatItSaw()
+        {
+            var provider = new FakeAniList();
+            await using var host = await CreateHostAsync(anime: provider);
+            await host.Fixture.RunSqlAsync("""
+                UPDATE "InstanceModules" SET "IsEnabled" = TRUE WHERE "Key" = 'LocalDiscovery';
+                UPDATE "ExternalWorkSyncs" SET "CompletedAt" = now() WHERE "Namespace" = 'anilist';
+                INSERT INTO "Works" ("Id", "CatalogNamespace", "MediaTypeId", "MediaSubtypeId", "CanonicalTitle", "ReleaseYear", "ImageUrl", "Popularity", "IsAdult", "GenreIds") VALUES
+                    (9401, 'anilist', 2, 1, 'Seen Mecha', 2020, 'https://img.test/401.jpg', 900, FALSE, '{10,1}'),
+                    (9402, 'anilist', 2, 1, 'Mecha Action', 2021, 'https://img.test/402.jpg', 300, FALSE, '{10,1}'),
+                    (9403, 'anilist', 2, 1, 'Only Mecha', 2021, 'https://img.test/403.jpg', 800, FALSE, '{10}'),
+                    (9404, 'anilist', 2, 1, 'Kept Mecha', 2022, 'https://img.test/404.jpg', 700, FALSE, '{10}'),
+                    (9405, 'anilist', 2, 1, 'Quiet Life', 2022, 'https://img.test/405.jpg', 999, FALSE, '{16}');
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") SELECT "Id", 'anilist', "Id"::text FROM "Works" WHERE "Id" BETWEEN 9401 AND 9405;
+                INSERT INTO "MediaProgress" ("ProfileId", "WorkId", "ProgressPositionTypeId", "PositionMs", "IsCompleted", "CompletedAt")
+                    SELECT "Id", 9401, 1, 1000, TRUE, now() FROM "Profiles";
+                INSERT INTO "WatchlistEntries" ("ProfileId", "WorkId") SELECT "Id", 9404 FROM "Profiles";
+                """);
+
+            using var response = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/taste", new ReadDiscoverTasteDataV1(["anime"]));
+            Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, await response.Content.ReadAsStringAsync());
+            var shelves = (await response.Content.ReadFromJsonAsync<BaseDataList<DiscoverTasteShelfV1>>())!;
+
+            // For you: titles of the liked genres, those sharing the most of them first; nothing watched or kept, nothing of another genre.
+            var forYou = shelves.Single(shelf => shelf.GenreId is null);
+            CollectionAssert.AreEqual(new[] { "9402", "9403" }, forYou.CatalogItems.Select(item => item.ExternalId).ToArray());
+
+            // A row for each of the two favourite genres, the most liked first.
+            CollectionAssert.AreEqual(new Genre?[] { null, Genre.Mecha, Genre.Action }, shelves.Select(shelf => shelf.GenreId).ToArray());
+            CollectionAssert.AreEqual(new[] { "9403", "9402" }, shelves.Single(shelf => shelf.GenreId == Genre.Mecha).CatalogItems.Select(item => item.ExternalId).ToArray());
+        }
+
+        [TestMethod]
         public async Task Filter_WholeCatalog_NarrowsLocallyByEveryFacet()
         {
             var provider = new FakeAniList();

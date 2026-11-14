@@ -49,5 +49,9 @@ namespace Jularr.Backend.Data.Fields.Media
         // Whether something ties a Work to the library (WorkLibraryRelations).
         public static readonly BoolField IsInLibrary = new();
         public static readonly BoolField HoldsValue = new();
+        // The kinds of a profile's taste: a media type (0 for every type of its subtype) and its subtype (0 for none), in pairs.
+        public static readonly IntArrayField KindTypes = new() { Minimum = 0, MaximumLength = 20 };
+        public static readonly IntArrayField KindSubtypes = new() { Minimum = 0, MaximumLength = 20 };
+        public static readonly EnumField Genre = new(typeof(Genre));
     }
 }

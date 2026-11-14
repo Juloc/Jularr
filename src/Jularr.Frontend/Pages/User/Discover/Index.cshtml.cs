@@ -25,7 +25,7 @@ namespace Jularr.Frontend.Pages.User.Discover
 {
     public sealed partial class IndexModel(ReadDiscoverScopesV1 readScopes, ReadDiscoverShelvesV1 readShelves, SuggestDiscoverV1 suggest, ReadDiscoverFeedV1 feeds, SearchDiscoverV1 search,
         SearchDiscoverCatalogV1 catalogSearch, ReadDiscoverCatalogFeedV1 catalogFeeds, ReadContinueV1 continuation, ReadLibraryV1 library, ReadHomeLayoutV1 readLayout, UiText texts, FrontendAssets assets,
-        IAntiforgery antiforgery, ILogger<IndexModel> log, ReadWorkAvailabilityStatesV1 readAvailability, ReadDiscoverFilteredV1 filtered, ReadDiscoverFilterOptionsV1 filterOptions, ReadWatchlistV1 readWatchlist)
+        IAntiforgery antiforgery, ILogger<IndexModel> log, ReadWorkAvailabilityStatesV1 readAvailability, ReadDiscoverFilteredV1 filtered, ReadDiscoverFilterOptionsV1 filterOptions, ReadWatchlistV1 readWatchlist, ReadDiscoverTasteV1 readTaste)
         : JularrPage
     {
         // Shelves of providers are asked together, a few at a time, and none holds the page longer than this; slower ones are logged.
@@ -87,6 +87,7 @@ namespace Jularr.Frontend.Pages.User.Discover
 
         // The types whose first shelf is in the part read, so each type is named once, above its first shelf.
         private readonly List<(DiscoverScopeV1 Scope, DiscoverFeedType Feed)> _rowOrder = [];
+        private IReadOnlyList<DiscoverTasteShelfV1> _taste = [];
 
         // One or more scope slugs, as a comma list or repeated; none or every listed one means all.
         [BindProperty(SupportsGet = true, Name = "type")]
@@ -491,6 +492,18 @@ namespace Jularr.Frontend.Pages.User.Discover
                 // A shelf goes on with the next pages of its ranking.
                 var name = several ? texts[FeedLabel(scope, feed)] + " · " + texts["discover.type." + scope.Slug] : null;
                 page.Content.Add(new MediaShelf(assets, FeedLabel(scope, feed), Address(ranking), [.. cards], Address(ranking with { Page = 2 }), title: name));
+            }
+
+            // "For you", then a row for each genre the profile likes; each mixes its types one after the other.
+            foreach (var row in _taste.GroupBy(shelf => shelf.GenreId))
+            {
+                var columns = row.Select(shelf => Chosen.FirstOrDefault(scope => scope.Slug == shelf.ScopeSlug) is { } scope
+                    ? (scope.IsCatalog ? Filtered(shelf.CatalogItems.Select(item => (scope, item))).Select(entry => CatalogCard(scope, entry.Item)) : Filtered(shelf.Items).Select(Card)).ToList()
+                    : []).ToList();
+                var cards = Enumerable.Range(0, columns.Count == 0 ? 0 : columns.Max(column => column.Count))
+                    .SelectMany(index => columns.Where(column => index < column.Count).Select(column => column[index])).Take(20).ToList();
+                var title = row.Key is { } genre ? string.Format(CultureInfo.CurrentCulture, texts["discover.becauseGenre"], texts["discover.genre." + genre]) : texts["discover.forYou"];
+                page.Content.Add(new MediaShelf(assets, "discover.forYou", null, cards, title: title));
             }
 
             // The next part: the page's script loads it as the page nears it, without script it is a link.
@@ -1004,6 +1017,11 @@ namespace Jularr.Frontend.Pages.User.Discover
             _moreShelves = all.Count > first + ShelvesPerPart;
             _rowOrder.AddRange(part);
 
+            // The profile's own rows close the page of all lists, read locally beside the last part's shelves.
+            var taste = !_moreShelves && FeedType is null && Chosen.Count > 0
+                ? readTaste.ExecuteAsync<BaseDataList<DiscoverTasteShelfV1>>(new ReadDiscoverTasteDataV1([.. Chosen.Select(scope => scope.Slug)]), HttpContext.RequestAborted)
+                : Task.FromResult(new BaseDataList<DiscoverTasteShelfV1>([]));
+
             // Catalogs read whole answer the part's shelves of each type in one read; the others ask their providers shelf by shelf, together.
             var reads = part.GroupBy(shelf => shelf.Scope).Select(group => readShelves.ExecuteAsync<BaseDataList<DiscoverShelfV1>>(
                 new ReadDiscoverShelvesDataV1(group.Key.Slug, [.. group.Select(shelf => shelf.Feed)]), HttpContext.RequestAborted)).ToList();
@@ -1013,6 +1031,8 @@ namespace Jularr.Frontend.Pages.User.Discover
             var answers = part.Select(shelf => whole.FirstOrDefault(kept => kept.ScopeSlug == shelf.Scope.Slug && kept.DiscoverFeedTypeId == shelf.Feed) is { } kept
                 ? Task.FromResult(new ShelfAnswer(shelf.Scope, shelf.Feed, shelf.Scope.IsCatalog ? null : kept.Items, shelf.Scope.IsCatalog ? kept.CatalogItems : null, false))
                 : ReadProviderShelfAsync(shelf.Scope, shelf.Feed, gate)).ToList();
+
+            _taste = await taste;
 
             // In the order of the media-type bar.
             foreach (var answer in await Task.WhenAll(answers))

@@ -356,6 +356,51 @@ namespace Jularr.Backend.Logic.Media
         }
 
         // Every shelf in one statement, each in its own order; the Shelf number keeps them apart.
+        // The genres a profile likes in the given types: each Work it finished counts three, one it began two, one on its watchlist one; the most first.
+        public static async Task<IReadOnlyList<Genre>> ReadTasteGenresAsync(this LogicContext ctx, ExternalWorkTasteData data, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                WITH liked AS (
+                    SELECT
+                        progress."WorkId",
+                        max(CASE WHEN progress."IsCompleted" THEN 3 ELSE 2 END) AS "Weight"
+                    FROM
+                        "MediaProgress" AS progress
+                    WHERE
+                        progress."ProfileId" = @ProfileId
+                    GROUP BY
+                        progress."WorkId"
+                    UNION ALL
+                    SELECT
+                        kept."WorkId",
+                        1
+                    FROM
+                        "WatchlistEntries" AS kept
+                    WHERE
+                        kept."ProfileId" = @ProfileId
+                )
+                SELECT
+                    genre AS "Genre"
+                FROM
+                    liked
+                    JOIN "Works" AS work ON work."Id" = liked."WorkId"
+                    CROSS JOIN LATERAL unnest(work."GenreIds") AS genre
+                WHERE
+                    EXISTS (SELECT FROM unnest(@MediaTypeIds::smallint[], @MediaSubtypeIds::smallint[]) AS kind (type, subtype)
+                        WHERE (kind.type = 0 OR work."MediaTypeId" = kind.type) AND coalesce(work."MediaSubtypeId", 0) = kind.subtype)
+                GROUP BY
+                    genre
+                ORDER BY
+                    sum(liked."Weight") DESC,
+                    genre
+                LIMIT @Limit;
+                """;
+            sql.Parameters.Add(data);
+            return [.. (await ctx.ReadSql.ReadListAsync<ExternalWorkTasteGenreData>(sql, ct)).Select(row => row.Genre)];
+        }
+
         public static async Task<IReadOnlyList<ExternalWorkShelfItemData>> ReadExternalWorkShelvesAsync(this LogicContext ctx, ExternalWorkShelfQueryData data, CancellationToken ct)
         {
             // A shelf without a type (0) reads every type of its subtype, as anime's filter does with films and series.
@@ -384,7 +429,7 @@ namespace Jularr.Backend.Logic.Media
                     jsonb_to_recordset(@Shelves::jsonb) AS shelf ("Shelf" integer, "Namespace" text, "MediaTypeId" smallint, "MediaSubtypeId" smallint, "Feed" smallint, "Sort" smallint,
                         "Genres" smallint[], "Tags" integer[], "Formats" smallint[], "Statuses" smallint[], "Sources" smallint[], "Sites" integer[], "Country" text, "Season" smallint,
                         "YearFrom" integer, "YearTo" integer, "EpisodesFrom" integer, "EpisodesTo" integer, "ChaptersFrom" integer, "ChaptersTo" integer, "VolumesFrom" integer,
-                        "VolumesTo" integer, "DurationFrom" integer, "DurationTo" integer, "Adult" boolean)
+                        "VolumesTo" integer, "DurationFrom" integer, "DurationTo" integer, "Adult" boolean, "AnyGenres" smallint[], "Unseen" boolean)
                     CROSS JOIN LATERAL unnest(CASE
                         WHEN shelf."Sort" > 0 THEN ARRAY(
                             SELECT work."Id" FROM "Works" AS work
@@ -394,6 +439,10 @@ namespace Jularr.Backend.Logic.Media
                                 AND (shelf."Adult" IS TRUE OR NOT work."IsAdult") AND work."ImageUrl" IS NOT NULL
                                 -- Discover's filters: genres and tags all, the lists any one; a season counts its own year.
                                 AND (shelf."Genres" IS NULL OR work."GenreIds" @> shelf."Genres")
+                                -- A profile's own shelf: any of its genres, and nothing it has seen or kept.
+                                AND (shelf."AnyGenres" IS NULL OR work."GenreIds" && shelf."AnyGenres")
+                                AND (shelf."Unseen" IS NOT TRUE OR NOT EXISTS (SELECT FROM "MediaProgress" AS seen WHERE seen."ProfileId" = @ProfileId AND seen."WorkId" = work."Id")
+                                    AND NOT EXISTS (SELECT FROM "WatchlistEntries" AS kept WHERE kept."ProfileId" = @ProfileId AND kept."WorkId" = work."Id"))
                                 AND (shelf."Tags" IS NULL OR work."TagIds" @> shelf."Tags")
                                 AND (shelf."Sites" IS NULL OR work."SiteIds" && shelf."Sites")
                                 AND (shelf."Formats" IS NULL OR work."CatalogFormatId" = ANY(shelf."Formats"))
@@ -415,6 +464,7 @@ namespace Jularr.Backend.Logic.Media
                                 AND (shelf."Feed" <> 6 OR work."SeasonYear" = @NextSeasonYear AND work."Season" = @NextSeason)
                                 AND (shelf."Feed" <> 8 OR work."CountryOfOrigin" = 'KR')
                             ORDER BY
+                                CASE WHEN shelf."AnyGenres" IS NOT NULL THEN cardinality(ARRAY(SELECT unnest(work."GenreIds") INTERSECT SELECT unnest(shelf."AnyGenres"))) END DESC NULLS LAST,
                                 CASE WHEN shelf."Sort" = 1 THEN coalesce(work."TrendingRank", 2147483647) END,
                                 CASE WHEN shelf."Sort" IN (1, 2) THEN work."Popularity" END DESC NULLS LAST,
                                 CASE WHEN shelf."Sort" = 3 THEN work."Rating" END DESC NULLS LAST,
