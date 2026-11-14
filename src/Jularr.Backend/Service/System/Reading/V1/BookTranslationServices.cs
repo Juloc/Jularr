@@ -172,9 +172,8 @@ namespace Jularr.Backend.Service.System.Reading.V1
                 var node = nodes[index];
                 var source = ReadingHtml.TranslationText(node);
                 string value;
-                // A block holding others, or one without text, has nothing of its own to translate; an oversized one keeps its text.
-                if (node.QuerySelector("[data-b]") is not null || source.Length == 0) value = "";
-                else if (source.Length > 20_000) value = source;
+                // A block holding others, one without text or an oversized one keeps its original ("" in the cache, which takes no text over 20,000 characters).
+                if (LocalReadingPaths.Untranslated(node)) value = "";
                 else
                 {
                     using var lane = await _lanes.TryEnterAsync(machine.Provider.Key, GateWait, CancellationToken, background: true);
@@ -301,9 +300,8 @@ namespace Jularr.Backend.Service.System.Reading.V1
             {
                 if (!string.IsNullOrWhiteSpace(texts[index]) || only is not null && !only.Contains(index)) continue;
                 var source = ReadingHtml.TranslationText(nodes[index]);
-                // A block holding others, or one without text, has nothing of its own to translate; an oversized one keeps its text.
-                if (nodes[index].QuerySelector("[data-b]") is not null || source.Length == 0) { values[index] = ""; continue; }
-                if (source.Length > 20_000) { values[index] = source; continue; }
+                // A block holding others, one without text or an oversized one keeps its original ("" in the cache).
+                if (LocalReadingPaths.Untranslated(nodes[index])) { values[index] = ""; continue; }
                 if (sources.Count > 0 && characters + source.Length > batcher.BatchCharacters) break;
                 sources.Add((index, source));
                 characters += source.Length;

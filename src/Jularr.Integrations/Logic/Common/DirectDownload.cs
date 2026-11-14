@@ -3,6 +3,8 @@ using System.Net;
 using Jularr.Integrations.Data.Browser;
 using Jularr.Integrations.Data.Common;
 
+using Jularr.Integrations.Logic.Storage;
+
 namespace Jularr.Integrations.Logic.Common
 {
     // Bounded HTTPS downloads for direct sources: own-origin credentials, limited redirects, one renewal of expired links.
@@ -117,6 +119,7 @@ namespace Jularr.Integrations.Logic.Common
         {
             await using var target = new FileStream(destination, FileMode.CreateNew, FileAccess.Write, FileShare.None, 81920, useAsync: true);
             var buffer = new byte[81920];
+            using var reservation = new BlockReservation(reserveWrite, sizeBytes);
             long total = 0;
             var sampled = global::System.Diagnostics.Stopwatch.StartNew();
             int read;
@@ -127,10 +130,8 @@ namespace Jularr.Integrations.Logic.Common
                     throw new DirectDownloadException(DirectDownloadFailure.TooLarge, "The file is too large.");
                 }
 
-                using (reserveWrite?.Invoke(read))
-                {
-                    await target.WriteAsync(buffer.AsMemory(0, read), ct);
-                }
+                await reservation.BeforeWriteAsync(read, target.FlushAsync, ct);
+                await target.WriteAsync(buffer.AsMemory(0, read), ct);
                 total += read;
                 if (progress is not null && sampled.Elapsed >= TimeSpan.FromSeconds(1))
                 {
@@ -138,6 +139,7 @@ namespace Jularr.Integrations.Logic.Common
                     sampled.Restart();
                 }
             }
+            await reservation.ReleaseAsync(target.FlushAsync, ct);
             if (progress is not null) await progress(total, sizeBytes);
         }
 
