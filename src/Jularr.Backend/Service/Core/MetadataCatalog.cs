@@ -288,17 +288,37 @@ namespace Jularr.Backend.Service.Core
             var keeps = sort is null && await context.ExecuteBatchAsync((ctx, token) => ctx.KeepsDiscoverListsAsync(token), ct, mode: SqlAccessMode.ReadOnly);
             if (keeps)
             {
-                return await feeds.LoadAsync(context, descriptor, FetchExternalFeedAsync, ct);
+                return await feeds.LoadAsync(context, descriptor, (entry, token) => FetchExternalFeedAsync(context, entry, token), ct);
             }
 
-            return await KeepWorksAsync(context, new ExternalWorkListData(descriptor.Namespace, mediaType, subtype), await FetchAsync(descriptor, sort, ct), ct);
+            return await KeepWorksAsync(context, new ExternalWorkListData(descriptor.Namespace, mediaType, subtype), await FetchAsync(context, descriptor, sort, ct), ct);
         }
 
-        public Task<IReadOnlyList<ExternalWorkData>> FetchExternalFeedAsync(ExternalFeedData feed, CancellationToken ct) => FetchAsync(feed, null, ct);
+        public Task<IReadOnlyList<ExternalWorkData>> FetchExternalFeedAsync(LogicContext context, ExternalFeedData feed, CancellationToken ct) => FetchAsync(context, feed, null, ct);
 
-        private async Task<IReadOnlyList<ExternalWorkData>> FetchAsync(ExternalFeedData feed, DiscoverSort? sort, CancellationToken ct)
+        private async Task<IReadOnlyList<ExternalWorkData>> FetchAsync(LogicContext context, ExternalFeedData feed, DiscoverSort? sort, CancellationToken ct)
         {
-            var list = feed.Namespace == AniListMetadata.Namespace ? AniListList(feed.DiscoverFeedTypeId!.Value, sort) : null;
+            // Games and albums have their own providers and pacing.
+            var kind = feed.DiscoverFeedTypeId!.Value;
+            if (feed.Namespace == GameMetadata.Namespace)
+            {
+                var connection = await games.ConnectAsync(context, ct);
+                var query = new Integrations.Data.Igdb.IgdbDiscoverQuery([], [], null, kind == DiscoverFeedType.Retro ? 1999 : null, kind switch
+                {
+                    DiscoverFeedType.New => Integrations.Data.Igdb.IgdbDiscoverSort.Released,
+                    DiscoverFeedType.Top => Integrations.Data.Igdb.IgdbDiscoverSort.Rating,
+                    DiscoverFeedType.Upcoming => Integrations.Data.Igdb.IgdbDiscoverSort.Upcoming,
+                    _ => Integrations.Data.Igdb.IgdbDiscoverSort.Popularity
+                });
+                return [.. (await games.DiscoverAsync(connection, query, feed.Page, ct)).Select(game => ExternalWork(Game(game)))];
+            }
+
+            if (feed.Namespace == MusicMetadata.Namespace)
+            {
+                return [.. (await music.ReadFeedAsync(kind == DiscoverFeedType.New, DateOnly.FromDateTime(time.GetUtcNow().UtcDateTime), feed.Page, ct)).Select(album => ExternalWork(Album(album)))];
+            }
+
+            var list = feed.Namespace == AniListMetadata.Namespace ? AniListList(kind, sort) : null;
             var gate = list is null ? BooksGate : AniListGate;
             var failedKey = list is null ? "metadata.catalog.failed.books" : "metadata.catalog.failed.anilist";
             await gate.WaitAsync(ct);
@@ -311,7 +331,7 @@ namespace Jularr.Backend.Service.Core
                 try
                 {
                     // AniList names each title's format.
-                    IReadOnlyList<ExternalWorkData> results = list is null ? [.. (await books.ReadTrendingAsync(feed.Page, ct)).Select(book => ExternalWork(Book(book)))]
+                    IReadOnlyList<ExternalWorkData> results = list is null ? [.. (await ReadBookFeedAsync(kind, feed.Page, ct)).Select(book => ExternalWork(Book(book)))]
                         : feed.MediaTypeId == MediaType.Series ? [.. (await aniList.ReadAnimeRankingAsync(list, feed.Page, ct)).Select(media => ExternalWork(AniListAnime(media), media.Format))]
                         : [.. (await aniList.ReadBookRankingAsync(feed.MediaSubtypeId!.Value, list, feed.Page, ct)).Select(media => ExternalWork(AniListBook(media), media.Format))];
                     return results;
@@ -328,16 +348,26 @@ namespace Jularr.Backend.Service.Core
             }
         }
 
-        // Open Library trends books; AniList has the lists of anime, manga and light novels.
+        // Open Library's books: this week's trend, the newest of the last two years by readers, the year's most read, the classics by readers.
+        private async Task<IReadOnlyList<OpenLibraryResult>> ReadBookFeedAsync(DiscoverFeedType feed, int page, CancellationToken ct)
+        {
+            var year = time.GetUtcNow().Year;
+            return feed switch
+            {
+                DiscoverFeedType.New => await books.SearchFilteredAsync([], year - 1, year, null, false, page, ct),
+                DiscoverFeedType.Popular => await books.ReadTrendingAsync(page, ct, "yearly"),
+                DiscoverFeedType.Classics => await books.SearchFilteredAsync(["classics"], null, null, null, false, page, ct),
+                _ => await books.ReadTrendingAsync(page, ct)
+            };
+        }
+
+        // Each catalog list of a scope: Open Library's books, AniList's anime, manga and light novels, IGDB's games, MusicBrainz's and ListenBrainz's albums.
         private static ExternalFeedData Descriptor(MediaType mediaType, MediaSubtype? subtype, DiscoverFeedType feed, int page)
         {
-            if (mediaType == MediaType.Book && subtype is null && feed == DiscoverFeedType.Trending)
-            {
-                return new ExternalFeedData(BookMetadata.Namespace, mediaType, subtype, feed, page, null, null);
-            }
-
-            return DiscoverScopes.IsAniList(subtype) && DiscoverScopes.All.Any(scope => scope.MediaTypeId == mediaType && scope.MediaSubtypeId == subtype && scope.Feeds.Contains(feed))
-                ? new ExternalFeedData(AniListMetadata.Namespace, mediaType, subtype, feed, page, null, null)
+            var scope = DiscoverScopes.All.FirstOrDefault(scope => scope.MediaTypeId == mediaType && scope.MediaSubtypeId == subtype && scope.Feeds.Contains(feed));
+            var catalog = scope is null || mediaType is MediaType.Movie || mediaType == MediaType.Series && subtype is null ? null : DiscoverScopes.Namespace(scope);
+            return catalog is not null
+                ? new ExternalFeedData(catalog, mediaType, subtype, feed, page, null, null)
                 : throw new DataValidationException("DiscoverFeedTypeId", "unknown_catalog_value");
         }
 
@@ -360,6 +390,8 @@ namespace Jularr.Backend.Service.Core
                 DiscoverFeedType.Season or DiscoverFeedType.NextSeason when DiscoverScopes.Season(today, feed == DiscoverFeedType.Season ? 0 : 1) is var (season, year)
                     => new AniListListQuery(order, DiscoverScopes.SeasonName(season), year),
                 DiscoverFeedType.Manhwa => new AniListListQuery(order, country: "KR"),
+                // New means what began lately, not what is announced.
+                DiscoverFeedType.New => new AniListListQuery(order) { Statuses = ["RELEASING", "FINISHED"] },
                 _ => new AniListListQuery(order)
             };
         }

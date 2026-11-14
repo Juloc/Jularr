@@ -47,7 +47,8 @@ namespace Jularr.Frontend.Pages.User.Discover
         private static readonly (DiscoverFeedType Feed, string Slug)[] FeedSlugs =
         [
             (DiscoverFeedType.Trending, "trending"), (DiscoverFeedType.Season, "season"), (DiscoverFeedType.NextSeason, "next-season"), (DiscoverFeedType.Popular, "popular"),
-            (DiscoverFeedType.Manhwa, "manhwa"), (DiscoverFeedType.Top100, "top100"), (DiscoverFeedType.Top, "top"), (DiscoverFeedType.New, "new"), (DiscoverFeedType.Upcoming, "upcoming")
+            (DiscoverFeedType.Manhwa, "manhwa"), (DiscoverFeedType.Top100, "top100"), (DiscoverFeedType.Top, "top"), (DiscoverFeedType.New, "new"), (DiscoverFeedType.Upcoming, "upcoming"),
+            (DiscoverFeedType.Classics, "classics"), (DiscoverFeedType.Retro, "retro")
         ];
 
         // The orders of a ranking by their address.
@@ -178,7 +179,7 @@ namespace Jularr.Frontend.Pages.User.Discover
                 var heading = new List<IUiComponent>
                 {
                     new A(new Text("common.back")).Class("button").Attribute("href", Address(Current with { View = null, Sort = null, Page = 1 })),
-                    new H2(new Text("discover.feed." + view))
+                    new H2(new Text(FeedLabel(selected, view)))
                 };
                 if (selected.Sorts.Length > 0) heading.Add(SortSelect(selected, view));
                 page.Content.Add(new Div([.. heading]).Class("discover-view-heading"));
@@ -344,15 +345,24 @@ namespace Jularr.Frontend.Pages.User.Discover
         private List<(string? Slug, string LabelKey)> FeedOptions(IEnumerable<DiscoverScopeV1> scopes)
         {
             var options = new List<(string? Slug, string LabelKey)> { (null, "discover.all") };
-            var supported = scopes.SelectMany(scope => scope.Feeds).ToHashSet();
-            foreach (var (feed, slug) in FeedSlugs)
+            var chosen = scopes.ToList();
+            // One type keeps its own lists in its own order and names; several share the lists of all of them under the common names.
+            if (chosen.Count == 1)
             {
-                if (supported.Contains(feed)) options.Add((slug, "discover.feed." + feed));
+                options.AddRange(chosen[0].Feeds.Select(feed => ((string?)FeedSlug(feed), FeedLabel(chosen[0], feed))));
+            }
+            else
+            {
+                var supported = chosen.SelectMany(scope => scope.Feeds).ToHashSet();
+                options.AddRange(FeedSlugs.Where(entry => supported.Contains(entry.Feed)).Select(entry => ((string?)entry.Slug, "discover.feed." + entry.Feed)));
             }
 
             if (_continue.Count > 0) options.Add(("continue", "discover.feed.Continue"));
             return options;
         }
+
+        // A type's own name of a list where it has one (films' New is what plays in cinemas), else the common one.
+        private string FeedLabel(DiscoverScopeV1 scope, DiscoverFeedType feed) => texts.Has("discover.feed." + scope.Slug + "." + feed) ? "discover.feed." + scope.Slug + "." + feed : "discover.feed." + feed;
 
         // The types a ranking exists for, as the script of the filter needs them; none for all and Continue, which every type has.
         private string? FeedScopes(string? feedSlug) => feedSlug is null or "continue" ? null
@@ -465,7 +475,7 @@ namespace Jularr.Frontend.Pages.User.Discover
                 foreach (var (feed, cards) in shown)
                 {
                     var ranking = Current with { Types = [scope.Slug], Feed = null, View = feed, Page = 1 };
-                    page.Content.Add(new MediaShelf(assets, "discover.feed." + feed, Address(ranking), [.. cards], Address(ranking with { Page = 2 })));
+                    page.Content.Add(new MediaShelf(assets, FeedLabel(scope, feed), Address(ranking), [.. cards], Address(ranking with { Page = 2 })));
                 }
             }
 
@@ -895,14 +905,14 @@ namespace Jularr.Frontend.Pages.User.Discover
         {
             var href = CatalogHref(item);
             var requestable = item.MediaStateTypeId == MediaStateType.NotRequested && texts.CanRequest();
-            return new HeroSlide(item.Title, null, item.PosterUrl, Overline(scope, "discover.feed." + feed), item.Author, requestable ? "discover.action.request" : "media.details", href,
+            return new HeroSlide(item.Title, null, item.PosterUrl, Overline(scope, FeedLabel(scope, feed)), item.Author, requestable ? "discover.action.request" : "media.details", href,
                 requestable ? "plus" : null, requestable ? href : null, scope.Slug, 0);
         }
 
         private HeroSlide ItemSlide(DiscoverScopeV1 scope, DiscoverItemV1 item, DiscoverFeedType feed)
         {
             var (actionKey, actionHref) = Action(item);
-            return new HeroSlide(item.Title, item.BackdropUrl, item.PosterUrl, Overline(scope, "discover.feed." + feed), item.Overview, ShortKey(actionKey) ?? "media.details", actionHref ?? DetailsHref(item),
+            return new HeroSlide(item.Title, item.BackdropUrl, item.PosterUrl, Overline(scope, FeedLabel(scope, feed)), item.Overview, ShortKey(actionKey) ?? "media.details", actionHref ?? DetailsHref(item),
                 actionKey switch { "request.create" => "plus", "media.watch" => "play", _ => null }, actionKey is null ? null : DetailsHref(item), scope.Slug, 0);
         }
 

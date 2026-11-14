@@ -44,11 +44,13 @@ namespace Jularr.Integrations.Logic.Igdb
             var sort = query.Sort switch
             {
                 IgdbDiscoverSort.Released => "first_release_date desc",
+                IgdbDiscoverSort.Upcoming => "first_release_date asc",
                 IgdbDiscoverSort.Rating => "total_rating desc",
                 _ => "total_rating_count desc"
             };
             if (query.Sort == IgdbDiscoverSort.Released) where.Add("first_release_date <= " + DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture));
             if (query.Sort == IgdbDiscoverSort.Rating) where.Add("total_rating_count >= 20");
+            if (query.Sort == IgdbDiscoverSort.Upcoming) where.Add("first_release_date > " + DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture) + " & hypes > 0");
             var offset = (Math.Max(1, page) - 1) * PageSize;
             using var document = await QueryAsync(connection, "games", Fields + " where " + string.Join(" & ", where) + "; sort " + sort + "; limit " + PageSize.ToString(CultureInfo.InvariantCulture)
                 + "; offset " + offset.ToString(CultureInfo.InvariantCulture) + ";", ct);

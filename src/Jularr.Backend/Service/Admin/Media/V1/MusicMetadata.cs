@@ -42,6 +42,19 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             }
         }
 
+        // MusicBrainz's new albums of the last weeks, ListenBrainz's most played of the month.
+        public async Task<IReadOnlyList<MusicBrainzAlbum>> ReadFeedAsync(bool newest, DateOnly today, int page, CancellationToken ct)
+        {
+            try
+            {
+                return newest ? await musicBrainz.ReadNewAlbumsAsync(today.AddDays(-60), today, page, ct) : await musicBrainz.ReadPopularAlbumsAsync(page, ct);
+            }
+            catch (MusicBrainzException exception)
+            {
+                throw Translate(exception);
+            }
+        }
+
         public async Task<MusicBrainzAlbumDetails> ReadAsync(string id, CancellationToken ct)
         {
             try

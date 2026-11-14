@@ -80,7 +80,9 @@ namespace Jularr.Integrations.Data.Igdb
     {
         Popularity,
         Rating,
-        Released
+        Released,
+        // Not out yet, the soonest first.
+        Upcoming
     }
 
     // Discover's narrowing of IGDB's games: each genre a set of IGDB's genre ids.

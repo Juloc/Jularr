@@ -262,8 +262,9 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(603, trending.TmdbId);
             Assert.AreEqual(MediaStateType.NotRequested, trending.MediaStateTypeId);
             Assert.AreEqual("https://image.tmdb.org/t/p/w500/poster.jpg", trending.PosterUrl);
-            using var upcomingSeries = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/feed", new ReadDiscoverFeedDataV1(MediaType.Series, DiscoverFeedType.Upcoming));
-            Assert.AreEqual(HttpStatusCode.BadRequest, upcomingSeries.StatusCode);
+            // A list a type lacks is refused.
+            using var seriesSeason = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/feed", new ReadDiscoverFeedDataV1(MediaType.Series, DiscoverFeedType.Season));
+            Assert.AreEqual(HttpStatusCode.BadRequest, seriesSeason.StatusCode);
 
             // The title shown is a Work already; the normal request asks for it, and its import fills the same Work.
             using var requested = await host.SendAsync(HttpMethod.Post, $"/api/v1/works/{trending.WorkId}/requests", new CreateRequestDataV1(1));
@@ -1143,25 +1144,37 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
-        [DataRow(true, "primary_release_date")]
-        [DataRow(false, "first_air_date")]
-        public async Task Tmdb_NewFeed_OrdersFirstReleasesAndSearchForwardsItsPage(bool movie, string dateField)
+        [DataRow(true, "/3/movie/now_playing", "US")]
+        [DataRow(false, "/3/tv/on_the_air", "")]
+        public async Task Tmdb_NewFeed_IsWhatPlaysNow_AndSearchForwardsItsPage(bool movie, string path, string region)
         {
+            // A film's new list is what plays in cinemas of the region, a series' the series on the air.
             var kind = movie ? TmdbMediaKind.Movie : TmdbMediaKind.Series;
             using var handler = new FakeTmdb();
             using var client = new HttpClient(handler) { BaseAddress = new Uri("https://api.themoviedb.org/3/") };
             var tmdb = new TmdbClient(client);
             await tmdb.ReadFeedAsync(new TmdbConnection(Token, "en-US"), kind, TmdbFeed.New, "US", 2, CancellationToken.None);
             var request = handler.Requests.Single();
-            StringAssert.Contains(request.AbsolutePath, "/discover/");
+            Assert.AreEqual(path, request.AbsolutePath);
             var query = QueryHelpers.ParseQuery(request.Query);
-            Assert.AreEqual(dateField + ".desc", query["sort_by"].ToString());
-            Assert.AreEqual(DateTime.UtcNow.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture), query[dateField + ".lte"].ToString());
+            Assert.AreEqual(region, query["region"].ToString());
             Assert.AreEqual("2", query["page"].ToString());
-            Assert.AreEqual("false", query["include_adult"].ToString());
 
             await tmdb.SearchAsync(new TmdbConnection(Token, "en-US"), kind, "Matrix", null, CancellationToken.None, page: 3);
             Assert.AreEqual("3", QueryHelpers.ParseQuery(handler.Requests.Last().Query)["page"].ToString());
+        }
+
+        [TestMethod]
+        public async Task Tmdb_UpcomingSeries_BeginAfterToday_MostAwaitedFirst()
+        {
+            using var handler = new FakeTmdb();
+            using var client = new HttpClient(handler) { BaseAddress = new Uri("https://api.themoviedb.org/3/") };
+            await new TmdbClient(client).ReadFeedAsync(new TmdbConnection(Token, "en-US"), TmdbMediaKind.Series, TmdbFeed.Upcoming, "US", 1, CancellationToken.None);
+            var request = handler.Requests.Single();
+            Assert.AreEqual("/3/discover/tv", request.AbsolutePath);
+            var query = QueryHelpers.ParseQuery(request.Query);
+            Assert.AreEqual("popularity.desc", query["sort_by"].ToString());
+            Assert.AreEqual(DateTime.UtcNow.AddDays(1).ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture), query["first_air_date.gte"].ToString());
         }
 
         [TestMethod]
@@ -1728,8 +1741,8 @@ namespace Jularr.Backend.Tests
                 }
                 var body = request.RequestUri!.AbsolutePath switch
                 {
-                    "/3/trending/movie/week" or "/3/movie/top_rated" or "/3/discover/movie" or "/3/movie/upcoming" or "/3/search/movie" => "{\"results\":[" + Movie + "]}",
-                    "/3/trending/tv/week" or "/3/tv/top_rated" or "/3/discover/tv" or "/3/search/tv" => "{\"results\":[" + (WithUnlinkedShow ? Unlinked + "," : "") + Show + "]}",
+                    "/3/trending/movie/week" or "/3/movie/top_rated" or "/3/discover/movie" or "/3/movie/upcoming" or "/3/movie/now_playing" or "/3/search/movie" => "{\"results\":[" + Movie + "]}",
+                    "/3/trending/tv/week" or "/3/tv/top_rated" or "/3/discover/tv" or "/3/tv/on_the_air" or "/3/search/tv" => "{\"results\":[" + (WithUnlinkedShow ? Unlinked + "," : "") + Show + "]}",
                     "/3/tv/1400" => Unlinked[..^1] + ",\"external_ids\":{},\"seasons\":[]}",
                     "/3/movie/603" => Movie[..^1] + ",\"external_ids\":{\"imdb_id\":\"tt0133093\"},\"belongs_to_collection\":{\"id\":2344,\"name\":\"The Matrix Collection\"}," + MovieDetails
                         + ",\"original_language\":\"en\",\"translations\":{\"translations\":[{\"iso_639_1\":\"de\",\"iso_3166_1\":\"AT\",\"data\":{\"title\":\"Matrix (AT)\",\"overview\":\"\"}},"
