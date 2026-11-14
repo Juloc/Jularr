@@ -1878,6 +1878,8 @@ namespace Jularr.Frontend.Localization
             new("discover.type.games", "Games"),
             new("discover.known", "In Jularr"),
             new("discover.feed.Trending", "Trending"),
+            new("discover.watchlist", "Watchlist"),
+            new("discover.top10", "Top 10 {0}"),
             new("discover.feed.Classics", "Classics"),
             new("discover.feed.Retro", "Retro"),
             new("discover.feed.movies.New", "New in cinemas"),

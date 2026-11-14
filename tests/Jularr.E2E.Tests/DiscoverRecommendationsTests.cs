@@ -69,12 +69,14 @@ namespace Jularr.E2E.Tests
                     + $"{shelves.Length} bytes, {Regex.Count(shelves, "class=\"media-card\"")} cards in {fragmentTime} ms ({fragment.Headers.GetValueOrDefault("server-timing")})");
                 Assert.AreEqual(200, fragment.Status, shelves);
                 StringAssert.DoesNotMatch(shelves, new Regex("<!DOCTYPE|<html|<head", RegexOptions.IgnoreCase));
-                Assert.AreEqual(2, Regex.Count(shelves, "<section class=\"media-shelf\""), shelves);
+                Assert.AreEqual(2, Regex.Count(shelves, "<section class=\"media-shelf[ \"]"), shelves);
+                // The mode's page leads with its top 10, its ranks before the cards.
+                StringAssert.Contains(shelves, "media-shelf--ranked");
                 StringAssert.Contains(shelves, "/?p=2&amp;handler=Recommendations");
 
-                // On the desktop the third part fails once and its link becomes the retry.
+                // On the desktop the mode's second and last part fails once and its link becomes the retry.
                 var failing = true;
-                await page.RouteAsync(url => url.Contains("p=3&handler=Recommendations", StringComparison.Ordinal), route => failing ? route.AbortAsync() : route.ContinueAsync());
+                await page.RouteAsync(url => url.Contains("p=2&handler=Recommendations", StringComparison.Ordinal), route => failing ? route.AbortAsync() : route.ContinueAsync());
                 var retry = page.Locator("#discover-recommendations [data-discover-recommendations]", new() { HasText = "Try again" });
                 foreach (var (width, height, name) in new[] { (1440, 900, "desktop"), (390, 844, "phone") })
                 {
@@ -82,10 +84,10 @@ namespace Jularr.E2E.Tests
                     await page.GotoAsync("/?mode=animanga");
                     var shown = page.Locator("#discover-recommendations .media-shelf");
                     await Assertions.Expect(shown).ToHaveCountAsync(2);
-                    await Assertions.Expect(page.Locator("#discover-recommendations .discover-media-heading")).ToHaveTextAsync(["Anime"]);
+                    await Assertions.Expect(page.Locator("#discover-recommendations .media-shelf--ranked h2")).ToHaveTextAsync("Top 10 Anime");
                     await Evidence.SaveAsync(page, $"discover-recommendations-{name}-first");
 
-                    // Scrolling down brings the next shelves until the last type's last list; each type is named once, above its first shelf.
+                    // Scrolling down brings the mode's next rows until its last one; each row names its type.
                     for (var step = 0; step < 30 && await page.Locator("#discover-recommendations [data-discover-recommendations]").CountAsync() > 0; step++)
                     {
                         if (failing && await retry.IsVisibleAsync())
@@ -104,10 +106,8 @@ namespace Jularr.E2E.Tests
                     Assert.IsFalse(failing, "The failed part offered its retry.");
 
                     await Assertions.Expect(page.Locator("#discover-recommendations [data-discover-recommendations]")).ToHaveCountAsync(0);
-                    await Assertions.Expect(page.Locator("#discover-recommendations .discover-media-heading"))
-                        .ToHaveTextAsync(["Anime", "Light novels", "Manga"]);
                     await Assertions.Expect(page.Locator("#discover-recommendations > [role=status]")).ToHaveCountAsync(0);
-                    await Assertions.Expect(shown.Last.Locator("h2")).ToHaveTextAsync("Top 100");
+                    await Assertions.Expect(shown.Last.Locator("h2")).ToHaveTextAsync("Top 100 · Manga");
                     await Assertions.Expect(shown.Last).ToContainTextAsync("Manga 1");
 
                     var shift = await page.EvaluateAsync<JsonElement>(Shift);

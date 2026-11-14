@@ -4285,6 +4285,8 @@
   "discover.feed.music.Popular": ["Popular", "Beliebt"],
   "discover.feed.games.Popular": ["Popular", "Beliebt"],
   "discover.feed.games.New": ["New", "Neu"],
+  "discover.watchlist": ["Watchlist", "Merkliste"],
+  "discover.top10": ["Top 10 {0}", "Top 10 {0}"],
   "discover.feed.Trending": [
    "Trending",
    "Trending"
