@@ -50,6 +50,16 @@ namespace Jularr.Backend.Tests
             var query = Uri.UnescapeDataString(musicBrainz.Queries.Single());
             StringAssert.Contains(query, "offset=40");
             StringAssert.Contains(query, "query=primarytype:album AND tag:\"rock\" AND tag:\"hip hop\" AND firstreleasedate:[1990 TO 1999-12-31]");
+
+            // Music's own lists: new albums of the last weeks from MusicBrainz, the month's most played from ListenBrainz.
+            using var fresh = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/feed", new ReadDiscoverCatalogFeedDataV1(MediaType.Music, DiscoverFeedType.New));
+            Assert.AreEqual(HttpStatusCode.OK, fresh.StatusCode, await fresh.Content.ReadAsStringAsync());
+            StringAssert.Contains(Uri.UnescapeDataString(musicBrainz.Queries.Last()), "primarytype:album AND status:official AND firstreleasedate:[");
+            using var popular = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/feed", new ReadDiscoverCatalogFeedDataV1(MediaType.Music, DiscoverFeedType.Popular));
+            Assert.AreEqual(HttpStatusCode.OK, popular.StatusCode, await popular.Content.ReadAsStringAsync());
+            var played = (await popular.Content.ReadFromJsonAsync<BaseDataList<DiscoverCatalogItemV1>>())!.Single();
+            Assert.AreEqual("Most Played", played.Title);
+            StringAssert.StartsWith(musicBrainz.Queries.Last(), "/1/stats/sitewide/release-groups?range=month&count=20&offset=0");
         }
 
         private sealed class FakeMusicBrainzSearch : HttpMessageHandler
@@ -59,6 +69,15 @@ namespace Jularr.Backend.Tests
             protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
             {
                 Queries.Add(request.RequestUri!.PathAndQuery);
+                if (request.RequestUri.Host == "api.listenbrainz.org")
+                {
+                    return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                    {
+                        Content = new StringContent("""{"payload":{"release_groups":[{"release_group_mbid":"22222222-2222-3333-4444-555555555555","release_group_name":"Most Played","artist_name":"Loud Band","listen_count":900}]}}""",
+                            Encoding.UTF8, "application/json")
+                    });
+                }
+
                 return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
                 {
                     Content = new StringContent("""{"release-groups":[{"id":"11111111-2222-3333-4444-555555555555","title":"Example Album","primary-type":"Album","first-release-date":"1994-05-01","artist-credit":[{"name":"Example Band","artist":{"id":"aaaaaaaa-2222-3333-4444-555555555555","name":"Example Band"}}]}]}""",

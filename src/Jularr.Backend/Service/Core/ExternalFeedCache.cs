@@ -13,6 +13,8 @@ namespace Jularr.Backend.Service.Core
         private readonly SemaphoreSlim _tmdb = new(1, 1);
         private readonly SemaphoreSlim _aniList = new(1, 1);
         private readonly SemaphoreSlim _books = new(1, 1);
+        private readonly SemaphoreSlim _games = new(1, 1);
+        private readonly SemaphoreSlim _music = new(1, 1);
 
         // Runs inside the caller's read batch, alongside its permission checks and viewer-state projection.
         public static async Task<(ExternalFeedData Feed, IReadOnlyList<ExternalWorkData>? Items)> ReadAsync(LogicContext context, ExternalFeedData feed, CancellationToken ct)
@@ -58,6 +60,8 @@ namespace Jularr.Backend.Service.Core
                 "tmdb_movie" or "tmdb_tv" => _tmdb,
                 "anilist" => _aniList,
                 "openlibrary" => _books,
+                "igdb" => _games,
+                "musicbrainz" => _music,
                 _ => throw new InvalidOperationException("This provider has no Discover feeds.")
             };
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -130,6 +134,8 @@ namespace Jularr.Backend.Service.Core
         {
             _tmdb.Dispose();
             _aniList.Dispose();
+            _games.Dispose();
+            _music.Dispose();
             _books.Dispose();
         }
     }

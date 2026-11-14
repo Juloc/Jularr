@@ -44,3 +44,39 @@
     .media-shelf__heading { gap: 10px; margin-bottom: 8px; h2 { font-size: 17px; } }
     .media-shelf__items { gap: 8px; }
 }
+
+// A top 10: a big outlined number stands before each card and leans into it, as streaming services show their charts.
+.media-shelf--ranked .media-shelf__items { gap: 6px; }
+
+.media-shelf__rank {
+    position: relative;
+    display: flex;
+    flex: none;
+    align-items: flex-end;
+    padding-left: 54px;
+    // The shelf snaps to the number, not to the card, so the first rank shows.
+    scroll-snap-align: start;
+
+    > .media-card { position: relative; z-index: 1; scroll-snap-align: none; }
+}
+
+.media-shelf__rank-number {
+    position: absolute;
+    left: 0;
+    bottom: 34px;
+    color: color-mix(in srgb, var(--accent) 6%, var(--surface));
+    font-size: 132px;
+    font-weight: 900;
+    line-height: .8;
+    letter-spacing: -10px;
+    -webkit-text-stroke: 3px color-mix(in srgb, var(--accent) 45%, var(--muted));
+    paint-order: stroke fill;
+    user-select: none;
+
+    .media-shelf__rank:nth-child(n + 10) & { letter-spacing: -14px; }
+}
+
+@media (max-width: 640px) {
+    .media-shelf__rank { padding-left: 36px; }
+    .media-shelf__rank-number { bottom: 30px; font-size: 92px; letter-spacing: -6px; -webkit-text-stroke-width: 2px; }
+}

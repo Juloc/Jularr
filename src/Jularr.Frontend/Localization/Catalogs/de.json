@@ -4267,13 +4267,33 @@
   ],
   "discover.forYou": ["For you", "Für dich"],
   "discover.filter.remove": ["Remove {0}", "{0} entfernen"],
+  "discover.feed.Classics": ["Classics", "Klassiker"],
+  "discover.feed.Retro": ["Retro", "Retro"],
+  "discover.feed.movies.New": ["New in cinemas", "Neu im Kino"],
+  "discover.feed.series.New": ["New episodes", "Neue Folgen"],
+  "discover.feed.anime.Season": ["This season", "Diese Season"],
+  "discover.feed.anime.NextSeason": ["Next season", "Nächste Season"],
+  "discover.feed.anime.Popular": ["Popular", "Beliebt"],
+  "discover.feed.manga.New": ["New", "Neu"],
+  "discover.feed.manga.Popular": ["Popular", "Beliebt"],
+  "discover.feed.manga.Manhwa": ["Manhwa", "Manhwa"],
+  "discover.feed.lightnovels.New": ["New", "Neu"],
+  "discover.feed.lightnovels.Popular": ["Popular", "Beliebt"],
+  "discover.feed.books.New": ["Newly published", "Neu erschienen"],
+  "discover.feed.books.Popular": ["Most read", "Meistgelesen"],
+  "discover.feed.music.New": ["New albums", "Neue Alben"],
+  "discover.feed.music.Popular": ["Popular", "Beliebt"],
+  "discover.feed.games.Popular": ["Popular", "Beliebt"],
+  "discover.feed.games.New": ["New", "Neu"],
+  "discover.watchlist": ["Watchlist", "Merkliste"],
+  "discover.top10": ["Top 10 {0}", "Top 10 {0}"],
   "discover.feed.Trending": [
    "Trending",
-   "Im Trend"
+   "Trending"
   ],
   "discover.feed.Top": [
    "Top rated",
-   "Bestbewertet"
+   "Top bewertet"
   ],
   "discover.feed.New": [
    "New releases",

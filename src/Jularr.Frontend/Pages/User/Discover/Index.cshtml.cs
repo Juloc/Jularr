@@ -8,11 +8,13 @@ using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.User.Discover.V1;
 using Jularr.Backend.Data.User.Home.V1;
 using Jularr.Backend.Data.User.Library.V1;
+using Jularr.Backend.Data.User.Media.V1;
 using Jularr.Backend.Data.User.Profile.V1;
 using Jularr.Backend.Logic.Media;
 using Jularr.Backend.Service.User.Discover.V1;
 using Jularr.Backend.Service.User.Home.V1;
 using Jularr.Backend.Service.User.Library.V1;
+using Jularr.Backend.Service.User.Media.V1;
 using Jularr.Backend.Service.User.Profile.V1;
 using Jularr.Frontend.Framework;
 using Microsoft.AspNetCore.Antiforgery;
@@ -23,7 +25,7 @@ namespace Jularr.Frontend.Pages.User.Discover
 {
     public sealed partial class IndexModel(ReadDiscoverScopesV1 readScopes, ReadDiscoverShelvesV1 readShelves, SuggestDiscoverV1 suggest, ReadDiscoverFeedV1 feeds, SearchDiscoverV1 search,
         SearchDiscoverCatalogV1 catalogSearch, ReadDiscoverCatalogFeedV1 catalogFeeds, ReadContinueV1 continuation, ReadLibraryV1 library, ReadHomeLayoutV1 readLayout, UiText texts, FrontendAssets assets,
-        IAntiforgery antiforgery, ILogger<IndexModel> log, ReadWorkAvailabilityStatesV1 readAvailability, ReadDiscoverFilteredV1 filtered, ReadDiscoverFilterOptionsV1 filterOptions)
+        IAntiforgery antiforgery, ILogger<IndexModel> log, ReadWorkAvailabilityStatesV1 readAvailability, ReadDiscoverFilteredV1 filtered, ReadDiscoverFilterOptionsV1 filterOptions, ReadWatchlistV1 readWatchlist)
         : JularrPage
     {
         // Shelves of providers are asked together, a few at a time, and none holds the page longer than this; slower ones are logged.
@@ -47,7 +49,8 @@ namespace Jularr.Frontend.Pages.User.Discover
         private static readonly (DiscoverFeedType Feed, string Slug)[] FeedSlugs =
         [
             (DiscoverFeedType.Trending, "trending"), (DiscoverFeedType.Season, "season"), (DiscoverFeedType.NextSeason, "next-season"), (DiscoverFeedType.Popular, "popular"),
-            (DiscoverFeedType.Manhwa, "manhwa"), (DiscoverFeedType.Top100, "top100"), (DiscoverFeedType.Top, "top"), (DiscoverFeedType.New, "new"), (DiscoverFeedType.Upcoming, "upcoming")
+            (DiscoverFeedType.Manhwa, "manhwa"), (DiscoverFeedType.Top100, "top100"), (DiscoverFeedType.Top, "top"), (DiscoverFeedType.New, "new"), (DiscoverFeedType.Upcoming, "upcoming"),
+            (DiscoverFeedType.Classics, "classics"), (DiscoverFeedType.Retro, "retro")
         ];
 
         // The orders of a ranking by their address.
@@ -68,6 +71,7 @@ namespace Jularr.Frontend.Pages.User.Discover
         private string? _csrf;
         private IReadOnlyList<HeroSlide> _hero = [];
         private IReadOnlyList<LibraryItemV1> _recent = [];
+        private IReadOnlyList<LibraryItemV1> _watchlist = [];
         private readonly Dictionary<long, WorkAvailabilityStateV1> _availabilityByWork = [];
         private IReadOnlyList<HomeShelfV1> _layout = [.. Enum.GetValues<HomeShelfType>().Select(type => new HomeShelfV1(type, false))];
         private bool _providerUnavailable;
@@ -82,7 +86,7 @@ namespace Jularr.Frontend.Pages.User.Discover
         private bool _moreShelves;
 
         // The types whose first shelf is in the part read, so each type is named once, above its first shelf.
-        private readonly HashSet<DiscoverScopeV1> _beginningScopes = [];
+        private readonly List<(DiscoverScopeV1 Scope, DiscoverFeedType Feed)> _rowOrder = [];
 
         // One or more scope slugs, as a comma list or repeated; none or every listed one means all.
         [BindProperty(SupportsGet = true, Name = "type")]
@@ -178,7 +182,7 @@ namespace Jularr.Frontend.Pages.User.Discover
                 var heading = new List<IUiComponent>
                 {
                     new A(new Text("common.back")).Class("button").Attribute("href", Address(Current with { View = null, Sort = null, Page = 1 })),
-                    new H2(new Text("discover.feed." + view))
+                    new H2(new Text(FeedLabel(selected, view)))
                 };
                 if (selected.Sorts.Length > 0) heading.Add(SortSelect(selected, view));
                 page.Content.Add(new Div([.. heading]).Class("discover-view-heading"));
@@ -261,10 +265,20 @@ namespace Jularr.Frontend.Pages.User.Discover
             var continuing = _continue.Where(item => MediaTypeChosen(item.MediaTypeId, item.MediaSubtypeId)).ToList();
             var canPlay = texts.CanPlay();
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
+            // The watchlist follows the continue shelves, before the lists.
+            var watchlist = new MediaShelf(assets, "discover.watchlist", "/Favorites", [.. _watchlist.Where(item => MediaTypeChosen(item.MediaTypeId, item.MediaSubtypeId)).Select(item => MediaCard.For(assets, item)
+                .Bookmark(new MediaBookmark(assets, item.Id, true, Request.Path + Request.QueryString, csrf)))]);
+            var watchlistShown = Feed is not null;
             foreach (var shelf in _layout.Where(shelf => !shelf.IsHidden))
             {
                 // A feed shows only its own lists: Continue the continue shelves, the others the recommendations.
                 var isContinue = shelf.HomeShelfTypeId is HomeShelfType.ContinueWatching or HomeShelfType.ContinueListening or HomeShelfType.ContinueReading;
+                if (!isContinue && !watchlistShown)
+                {
+                    page.Content.Add(watchlist);
+                    watchlistShown = true;
+                }
+
                 var isRecommendations = shelf.HomeShelfTypeId is not (HomeShelfType.ContinueWatching or HomeShelfType.ContinueListening or HomeShelfType.ContinueReading or HomeShelfType.RecentlyAdded);
                 if (ContinueOnly ? !isContinue : Feed is not null && !isRecommendations)
                 {
@@ -282,6 +296,8 @@ namespace Jularr.Frontend.Pages.User.Discover
                     _ => Recommendations()
                 });
             }
+
+            if (!watchlistShown) page.Content.Add(watchlist);
         }
 
         // Discover's bar: the mode's media types as text tabs, the lists (For you, Trending, …) beside them and the settings at the end;
@@ -344,15 +360,24 @@ namespace Jularr.Frontend.Pages.User.Discover
         private List<(string? Slug, string LabelKey)> FeedOptions(IEnumerable<DiscoverScopeV1> scopes)
         {
             var options = new List<(string? Slug, string LabelKey)> { (null, "discover.all") };
-            var supported = scopes.SelectMany(scope => scope.Feeds).ToHashSet();
-            foreach (var (feed, slug) in FeedSlugs)
+            var chosen = scopes.ToList();
+            // One type keeps its own lists in its own order and names; several share the lists of all of them under the common names.
+            if (chosen.Count == 1)
             {
-                if (supported.Contains(feed)) options.Add((slug, "discover.feed." + feed));
+                options.AddRange(chosen[0].Feeds.Select(feed => ((string?)FeedSlug(feed), FeedLabel(chosen[0], feed))));
+            }
+            else
+            {
+                var supported = chosen.SelectMany(scope => scope.Feeds).ToHashSet();
+                options.AddRange(FeedSlugs.Where(entry => supported.Contains(entry.Feed)).Select(entry => ((string?)entry.Slug, "discover.feed." + entry.Feed)));
             }
 
             if (_continue.Count > 0) options.Add(("continue", "discover.feed.Continue"));
             return options;
         }
+
+        // A type's own name of a list where it has one (films' New is what plays in cinemas), else the common one.
+        private string FeedLabel(DiscoverScopeV1 scope, DiscoverFeedType feed) => texts.Has("discover.feed." + scope.Slug + "." + feed) ? "discover.feed." + scope.Slug + "." + feed : "discover.feed." + feed;
 
         // The types a ranking exists for, as the script of the filter needs them; none for all and Continue, which every type has.
         private string? FeedScopes(string? feedSlug) => feedSlug is null or "continue" ? null
@@ -446,27 +471,26 @@ namespace Jularr.Frontend.Pages.User.Discover
 
         private void DefineRecommendations(Page page)
         {
-            var selected = Selected;
             if (_providerUnavailable) page.Content.Add(new P(new Text("discover.providerUnavailable")).Attribute("role", "status"));
 
-            // Types in the order of the media-type bar.
-            foreach (var scope in Chosen)
+            // The rows in the page's order; several types name each row's type, a top 10 shows its ten with their ranks.
+            var several = Chosen.Count > 1;
+            foreach (var (scope, feed) in _rowOrder)
             {
-                var shelves = scope.IsCatalog
-                    ? _catalogShelves.Where(shelf => shelf.Scope == scope).Select(shelf => (shelf.Feed, Cards: Filtered(shelf.Items.Select(item => (scope, item))).Select(entry => CatalogCard(scope, entry.Item)).ToList()))
-                    : _shelves.Where(shelf => shelf.Type == scope.MediaTypeId).Select(shelf => (shelf.Feed, Cards: Filtered(shelf.Items).Select(Card).ToList()));
-                var shown = shelves.Where(shelf => FeedType is null || shelf.Feed == FeedType).ToList();
-                if (selected is null && _beginningScopes.Contains(scope) && shown.Any(shelf => shelf.Cards.Count > 0))
+                var cards = scope.IsCatalog
+                    ? _catalogShelves.Where(shelf => shelf.Scope == scope && shelf.Feed == feed).SelectMany(shelf => Filtered(shelf.Items.Select(item => (scope, item))).Select(entry => CatalogCard(scope, entry.Item))).ToList()
+                    : _shelves.Where(shelf => shelf.Type == scope.MediaTypeId && shelf.Feed == feed).SelectMany(shelf => Filtered(shelf.Items).Select(Card)).ToList();
+                var ranking = Current with { Types = [scope.Slug], Feed = null, View = feed, Page = 1 };
+                if (IsTop(scope, feed))
                 {
-                    page.Content.Add(new H2(new Text("discover.type." + scope.Slug)).Class("discover-media-heading"));
+                    var top = string.Format(CultureInfo.CurrentCulture, texts["discover.top10"], texts["discover.type." + scope.Slug]);
+                    page.Content.Add(new MediaShelf(assets, "discover.top10", Address(ranking), [.. cards.Take(10)], ranked: true, title: top));
+                    continue;
                 }
 
                 // A shelf goes on with the next pages of its ranking.
-                foreach (var (feed, cards) in shown)
-                {
-                    var ranking = Current with { Types = [scope.Slug], Feed = null, View = feed, Page = 1 };
-                    page.Content.Add(new MediaShelf(assets, "discover.feed." + feed, Address(ranking), [.. cards], Address(ranking with { Page = 2 })));
-                }
+                var name = several ? texts[FeedLabel(scope, feed)] + " · " + texts["discover.type." + scope.Slug] : null;
+                page.Content.Add(new MediaShelf(assets, FeedLabel(scope, feed), Address(ranking), [.. cards], Address(ranking with { Page = 2 }), title: name));
             }
 
             // The next part: the page's script loads it as the page nears it, without script it is a link.
@@ -648,10 +672,14 @@ namespace Jularr.Frontend.Pages.User.Discover
             var recentSubtypes = IsAll && !Narrowed ? null : Chosen.Where(scope => scope.MediaSubtypeId is not null).Select(scope => scope.MediaSubtypeId!.Value).ToArray();
             var recentTask = ReadWhenAsync(hero || shown.Contains(HomeShelfType.RecentlyAdded),
                 () => library.ExecuteAsync<PageResult<LibraryItemV1>>(new ReadLibraryParametersV1(recentTypes, pageSize: 20, mediaSubtypeIds: recentSubtypes), HttpContext.RequestAborted));
+            // The watchlist shelf of the chosen types, on the page of all lists.
+            var watchlistTask = ReadWhenAsync(Feed is null && View is null && !Filtering && string.IsNullOrWhiteSpace(Query),
+                () => readWatchlist.ExecuteAsync<PageResult<LibraryItemV1>>(new ReadWatchlistParametersV1(1, 20, recentTypes, recentSubtypes), HttpContext.RequestAborted));
             var heroFeed = Feed is null ? DiscoverFeedType.Trending : FeedType;
             var keptTask = ReadWhenAsync(hero && heroFeed is not null,
                 () => readShelves.ExecuteAsync<BaseDataList<DiscoverShelfV1>>(new ReadDiscoverShelvesDataV1(selected?.Slug, [heroFeed!.Value]), HttpContext.RequestAborted));
-            await Task.WhenAll(continueTask, recentTask, keptTask);
+            await Task.WhenAll(continueTask, recentTask, keptTask, watchlistTask);
+            _watchlist = (await watchlistTask)?.Items ?? _watchlist;
 
             _continue = (await continueTask) ?? _continue;
             _recent = (await recentTask)?.Items ?? _recent;
@@ -895,14 +923,14 @@ namespace Jularr.Frontend.Pages.User.Discover
         {
             var href = CatalogHref(item);
             var requestable = item.MediaStateTypeId == MediaStateType.NotRequested && texts.CanRequest();
-            return new HeroSlide(item.Title, null, item.PosterUrl, Overline(scope, "discover.feed." + feed), item.Author, requestable ? "discover.action.request" : "media.details", href,
+            return new HeroSlide(item.Title, null, item.PosterUrl, Overline(scope, FeedLabel(scope, feed)), item.Author, requestable ? "discover.action.request" : "media.details", href,
                 requestable ? "plus" : null, requestable ? href : null, scope.Slug, 0);
         }
 
         private HeroSlide ItemSlide(DiscoverScopeV1 scope, DiscoverItemV1 item, DiscoverFeedType feed)
         {
             var (actionKey, actionHref) = Action(item);
-            return new HeroSlide(item.Title, item.BackdropUrl, item.PosterUrl, Overline(scope, "discover.feed." + feed), item.Overview, ShortKey(actionKey) ?? "media.details", actionHref ?? DetailsHref(item),
+            return new HeroSlide(item.Title, item.BackdropUrl, item.PosterUrl, Overline(scope, FeedLabel(scope, feed)), item.Overview, ShortKey(actionKey) ?? "media.details", actionHref ?? DetailsHref(item),
                 actionKey switch { "request.create" => "plus", "media.watch" => "play", _ => null }, actionKey is null ? null : DetailsHref(item), scope.Slug, 0);
         }
 
@@ -923,17 +951,58 @@ namespace Jularr.Frontend.Pages.User.Discover
         // One shelf of a provider: what it answered, or that it did not answer in time.
         private sealed record ShelfAnswer(DiscoverScopeV1 Scope, DiscoverFeedType Feed, IReadOnlyList<DiscoverItemV1>? Items, IReadOnlyList<DiscoverCatalogItemV1>? Catalog, bool Failed);
 
-        // The part of the recommendation shelves the address names (p); every chosen type's lists in the order of the media-type bar.
+        // The rows of each mode with all its types: a top 10 first where the mode has one, then its lists in the order a viewer looks for them.
+        private static readonly IReadOnlyDictionary<string, (string Scope, DiscoverFeedType Feed)[]> ModeRows = new Dictionary<string, (string, DiscoverFeedType)[]>(StringComparer.Ordinal)
+        {
+            ["watch"] = [("movies", DiscoverFeedType.Trending), ("series", DiscoverFeedType.Trending), ("movies", DiscoverFeedType.New), ("series", DiscoverFeedType.New),
+                ("movies", DiscoverFeedType.Upcoming), ("series", DiscoverFeedType.Upcoming), ("movies", DiscoverFeedType.Top), ("series", DiscoverFeedType.Top)],
+            ["animanga"] = [("anime", DiscoverFeedType.Season), ("anime", DiscoverFeedType.Trending), ("manga", DiscoverFeedType.Trending), ("anime", DiscoverFeedType.NextSeason),
+                ("lightnovels", DiscoverFeedType.Trending), ("manga", DiscoverFeedType.New), ("anime", DiscoverFeedType.Top100), ("manga", DiscoverFeedType.Top100)],
+            ["read"] = [("books", DiscoverFeedType.Trending), ("books", DiscoverFeedType.Popular), ("books", DiscoverFeedType.New), ("books", DiscoverFeedType.Classics)],
+            ["hear"] = [("music", DiscoverFeedType.Popular), ("music", DiscoverFeedType.New)],
+            ["play"] = [("games", DiscoverFeedType.Popular), ("games", DiscoverFeedType.New), ("games", DiscoverFeedType.Upcoming), ("games", DiscoverFeedType.Top), ("games", DiscoverFeedType.Retro)]
+        };
+
+        // The top 10 of each mode: the list a viewer asks about first.
+        private static readonly IReadOnlyDictionary<string, (string Scope, DiscoverFeedType Feed)> ModeTop = new Dictionary<string, (string, DiscoverFeedType)>(StringComparer.Ordinal)
+        {
+            ["watch"] = ("movies", DiscoverFeedType.Trending),
+            ["animanga"] = ("anime", DiscoverFeedType.Trending),
+            ["read"] = ("books", DiscoverFeedType.Trending),
+            ["hear"] = ("music", DiscoverFeedType.Popular),
+            ["play"] = ("games", DiscoverFeedType.Popular)
+        };
+
+        // The rows of the page of all lists: the mode's own rows when all its types are chosen, else each chosen type's lists in its order;
+        // one list alone (a feed tab) shows that list of every chosen type.
+        private IReadOnlyList<(DiscoverScopeV1 Scope, DiscoverFeedType Feed)> Rows()
+        {
+            if (FeedType is { } only) return [.. Chosen.Where(scope => scope.Feeds.Contains(only)).Select(scope => (scope, only))];
+            if (IsAll && Narrowed && ModeRows.TryGetValue(texts.Mode.Key, out var rows))
+            {
+                var mode = rows.Select(row => (Scope: Chosen.FirstOrDefault(scope => scope.Slug == row.Scope), row.Feed))
+                    .Where(row => row.Scope is not null && row.Scope.Feeds.Contains(row.Feed)).Select(row => (row.Scope!, row.Feed)).ToList();
+                if (mode.Count > 0) return mode;
+            }
+
+            return [.. Chosen.SelectMany(scope => scope.Feeds.Select(feed => (scope, feed)))];
+        }
+
+        // Whether a row is its mode's top 10 on the page of all the mode's types; a type chosen alone shows its lists whole.
+        private bool IsTop(DiscoverScopeV1 scope, DiscoverFeedType feed) => FeedType is null && IsAll && Narrowed
+            && ModeTop.TryGetValue(texts.Mode.Key, out var top) && top == (scope.Slug, feed);
+
+        // The part of the recommendation shelves the address names (p): the page's rows in their order.
         private async Task LoadRecommendationsAsync()
         {
             await LoadListedAsync();
             var started = Stopwatch.GetTimestamp();
-            var all = Chosen.SelectMany(scope => scope.Feeds.Where(feed => FeedType is null || feed == FeedType).Select(feed => (Scope: scope, Feed: feed))).ToList();
+            var all = Rows().Select(row => (Scope: row.Scope, Feed: row.Feed)).ToList();
             var first = (Math.Clamp(PageNumber, 1, MaximumPart) - 1) * ShelvesPerPart;
             var part = all.Skip(first).Take(ShelvesPerPart).ToList();
             _recommendationsRead = true;
             _moreShelves = all.Count > first + ShelvesPerPart;
-            _beginningScopes.UnionWith(part.Where(shelf => all.First(entry => entry.Scope == shelf.Scope) == shelf).Select(shelf => shelf.Scope));
+            _rowOrder.AddRange(part);
 
             // Catalogs read whole answer the part's shelves of each type in one read; the others ask their providers shelf by shelf, together.
             var reads = part.GroupBy(shelf => shelf.Scope).Select(group => readShelves.ExecuteAsync<BaseDataList<DiscoverShelfV1>>(

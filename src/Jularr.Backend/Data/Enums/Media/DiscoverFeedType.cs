@@ -12,6 +12,9 @@ namespace Jularr.Backend.Data.Enums.Media
         NextSeason = 6,
         Popular = 7,
         Manhwa = 8,
-        Top100 = 9
+        Top100 = 9,
+        // Books read for generations, and games from before 2000.
+        Classics = 10,
+        Retro = 11
     }
 }

@@ -68,6 +68,17 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(body, "platforms = (6)");
             StringAssert.Contains(body, "first_release_date >= 1483228800 & first_release_date < 1514764800");
             StringAssert.Contains(body, "sort total_rating desc; limit 20; offset 20;");
+
+            // Games' own lists: the soonest awaited first, and the retro games from before 2000 by popularity.
+            using var upcoming = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/feed", new ReadDiscoverCatalogFeedDataV1(MediaType.Game, DiscoverFeedType.Upcoming));
+            Assert.AreEqual(HttpStatusCode.OK, upcoming.StatusCode, await upcoming.Content.ReadAsStringAsync());
+            Assert.AreEqual("1022", (await upcoming.Content.ReadFromJsonAsync<BaseDataList<DiscoverCatalogItemV1>>())!.Single().ExternalId);
+            StringAssert.Contains(igdb.Bodies.Last(), "hypes > 0");
+            StringAssert.Contains(igdb.Bodies.Last(), "sort first_release_date asc;");
+            using var retro = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/feed", new ReadDiscoverCatalogFeedDataV1(MediaType.Game, DiscoverFeedType.Retro));
+            Assert.AreEqual(HttpStatusCode.OK, retro.StatusCode, await retro.Content.ReadAsStringAsync());
+            StringAssert.Contains(igdb.Bodies.Last(), "first_release_date < 946684800");
+            StringAssert.Contains(igdb.Bodies.Last(), "sort total_rating_count desc;");
         }
 
         [TestMethod]

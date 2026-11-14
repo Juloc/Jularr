@@ -60,26 +60,27 @@ namespace Jularr.Integrations.Logic.Tmdb
             {
                 TmdbFeed.Trending => "trending/" + type + "/week",
                 TmdbFeed.Top => type + "/top_rated",
-                TmdbFeed.New => "discover/" + type,
+                // A series' new episodes are the series on the air now; a film's what plays in cinemas now.
+                TmdbFeed.New when kind == TmdbMediaKind.Series => "tv/on_the_air",
+                TmdbFeed.New => "movie/now_playing",
                 TmdbFeed.Upcoming when kind == TmdbMediaKind.Movie => "movie/upcoming",
+                TmdbFeed.Upcoming => "discover/tv",
                 _ => throw new ArgumentOutOfRangeException(nameof(feed))
             };
 
             // Regional lists only use a real region.
             var parameters = new List<KeyValuePair<string, string>> { new("page", Math.Clamp(page, 1, 500).ToString(CultureInfo.InvariantCulture)) };
-            if (region is { Length: 2 } && feed == TmdbFeed.Upcoming)
+            if (region is { Length: 2 } && (feed == TmdbFeed.Upcoming || feed == TmdbFeed.New && kind == TmdbMediaKind.Movie))
             {
                 parameters.Add(new("region", region));
             }
 
-            // New means first release.
-            if (feed == TmdbFeed.New)
+            // Upcoming series begin after today, the most awaited first.
+            if (feed == TmdbFeed.Upcoming && kind == TmdbMediaKind.Series)
             {
-                var dateField = kind == TmdbMediaKind.Movie ? "primary_release_date" : "first_air_date";
-                parameters.Add(new("sort_by", dateField + ".desc"));
-                parameters.Add(new(dateField + ".lte", DateOnly.FromDateTime(DateTime.UtcNow).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)));
+                parameters.Add(new("sort_by", "popularity.desc"));
+                parameters.Add(new("first_air_date.gte", DateOnly.FromDateTime(DateTime.UtcNow).AddDays(1).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)));
                 parameters.Add(new("include_adult", "false"));
-                if (kind == TmdbMediaKind.Series) parameters.Add(new("include_null_first_air_dates", "false"));
             }
 
             using var document = await ReadAsync(connection, path, parameters, ct);
