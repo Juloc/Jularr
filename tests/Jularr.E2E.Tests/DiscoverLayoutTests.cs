@@ -85,7 +85,7 @@ namespace Jularr.E2E.Tests
             var page = browser.Page;
             await Owner.SetUpAndSignInAsync(page);
 
-            // German has Discover's longest shelf titles, such as "Neuerscheinungen", and "Alle anzeigen".
+            // German has Discover's long shelf titles, such as "Neu im Kino", and "Alle anzeigen".
             await jularr.RunSqlAsync("""
                 UPDATE "Profiles" SET "UiLocaleId" = (SELECT "Id" FROM "UiLocales" WHERE "Locale" LIKE 'de%' ORDER BY "Locale" LIMIT 1);
                 UPDATE "InstanceModules" SET "IsEnabled" = TRUE WHERE "Key" = 'LocalDiscovery';
@@ -114,7 +114,7 @@ namespace Jularr.E2E.Tests
                     await page.SetViewportSizeAsync(width, 800);
                     await page.GotoAsync("/?type=movies");
                     var shelves = page.Locator("#discover-recommendations .media-shelf");
-                    await Assertions.Expect(shelves.GetByRole(AriaRole.Heading, new() { Name = "Neuerscheinungen" })).ToBeVisibleAsync();
+                    await Assertions.Expect(shelves.GetByRole(AriaRole.Heading, new() { Name = "Neu im Kino" })).ToBeVisibleAsync();
                     await Assertions.Expect(shelves.First.GetByRole(AriaRole.Link, new() { Name = "Alle anzeigen" })).ToBeVisibleAsync();
                     var before = await page.EvaluateAsync<JsonElement>(Headings);
                     Evidence.Log($"[test] {width}px: {before}");
@@ -164,10 +164,12 @@ namespace Jularr.E2E.Tests
                 Assert.IsTrue(types < availability && availability < year && year < await TopAsync(rankings), $"{types} {availability} {year}");
                 await Assertions.Expect(rankings.GetByText("Upcoming", new() { Exact = true })).ToBeVisibleAsync();
 
-                // A page for a type without rankings does not offer them at all.
+                // Music offers only its own lists: its new albums and the popular ones.
                 await page.GotoAsync("/?mode=hear&type=music");
                 await page.Locator("button[data-drawer-pane=filter]").ClickAsync();
-                await Assertions.Expect(page.Locator("#discover-panel input[name=feed]")).ToHaveCountAsync(0);
+                await Assertions.Expect(page.Locator("#discover-panel input[name=feed]")).ToHaveCountAsync(3);
+                await Assertions.Expect(page.Locator("#discover-panel input[name=feed][value=new]")).ToHaveCountAsync(1);
+                await Assertions.Expect(page.Locator("#discover-panel input[name=feed][value=popular]")).ToHaveCountAsync(1);
                 await Evidence.SaveAsync(page, "discover-filter-music");
             }
             catch
