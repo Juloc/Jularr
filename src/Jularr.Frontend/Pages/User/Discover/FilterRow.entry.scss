@@ -4,7 +4,7 @@
     display: flex;
     align-items: flex-end;
     gap: 14px;
-    margin: 10px 0 0;
+    margin: 14px 0 0;
     min-width: 0;
 
     // A narrow screen lets the row slide sideways.
@@ -198,8 +198,8 @@
     flex-wrap: nowrap;
     align-items: center;
     gap: 6px;
-    height: 38px;
-    margin-top: 12px;
+    height: 34px;
+    margin-top: 10px;
     overflow-x: auto;
     scrollbar-width: none;
 
@@ -207,6 +207,10 @@
     > * { flex: none; }
 
     .discover-chosen__sort { margin-left: auto; }
+    .discover-chosen__sort .ui-dropdown__button { min-height: 32px; }
+
+    // A phone has no highlights to keep in place, so an empty line takes no room there.
+    &--empty { @media (max-width: 640px) { display: none; } }
 }
 
 .discover-chosen__tag {
