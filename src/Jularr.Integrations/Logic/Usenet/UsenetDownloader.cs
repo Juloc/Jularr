@@ -165,16 +165,19 @@ namespace Jularr.Integrations.Logic.Usenet
 
                         if (reserveWrite is null)
                         {
-                            if (StorageFileSystem.AvailableFreeSpace(directory) is not { } available || block > available - minimumFreeBytes)
+                            if (StorageFileSystem.AvailableFreeSpace(directory) is not { } available || growth > available - minimumFreeBytes)
                             {
                                 throw new UsenetStorageBudgetException();
                             }
+
+                            block = Math.Min(block, available - minimumFreeBytes);
 
                             reservations.Add(null);
                         }
                         else
                         {
-                            reservations.Add(reserveWrite(block));
+                            (var reservation, block) = BlockReservation.Reserve(reserveWrite, block, growth);
+                            reservations.Add(reservation);
                         }
 
                         // Blocks before the last one are written and already count in the free space.

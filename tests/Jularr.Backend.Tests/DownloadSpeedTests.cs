@@ -28,6 +28,39 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(((long)payload.Length, (long?)null), samples.Last(), "A missing Content-Length must stay unknown.");
         }
 
+        // A storage check costs a NAS round trip: copies reserve their space in large blocks, and a block that no longer fits falls back to the write at hand.
+        [TestMethod]
+        public async Task Writes_ReserveSpaceInBlocks_AndFallBackToTheWriteWhenTheBlockDoesNotFit()
+        {
+            using var folder = new LibraryTests.TemporaryDirectory();
+            var source = Path.Combine(folder.Path, "source");
+            Directory.CreateDirectory(source);
+            var payload = new byte[20 * 1024 * 1024];
+            new Random(3).NextBytes(payload);
+            await File.WriteAllBytesAsync(Path.Combine(source, "feature.mkv"), payload);
+            var reserved = new List<long>();
+            IDisposable Reserve(long bytes)
+            {
+                reserved.Add(bytes);
+                return new MemoryStream();
+            }
+
+            await Jularr.Integrations.Logic.Storage.StorageFileTransfer.PlaceAsync(new Jularr.Integrations.Logic.Storage.LocalStorageFiles(source), "feature.mkv",
+                new Jularr.Integrations.Logic.Storage.LocalStorageFiles(folder.Path), "copy/feature.mkv", CancellationToken.None, Reserve);
+            CollectionAssert.AreEqual(payload, await File.ReadAllBytesAsync(Path.Combine(folder.Path, "copy", "feature.mkv")));
+            CollectionAssert.AreEqual(new long[] { payload.Length }, reserved, "One check for the whole file instead of one per megabyte.");
+
+            reserved.Clear();
+            await DirectDownload.CopyAsync(new MemoryStream(payload), Path.Combine(folder.Path, "direct.bin"), null, Reserve, CancellationToken.None, sizeBytes: payload.Length);
+            CollectionAssert.AreEqual(new long[] { payload.Length }, reserved);
+
+            reserved.Clear();
+            IDisposable Tight(long bytes) => bytes > 100_000 ? throw new InvalidOperationException("full") : Reserve(bytes);
+            await DirectDownload.CopyAsync(new MemoryStream(payload[..150_000]), Path.Combine(folder.Path, "tight.bin"), null, Tight, CancellationToken.None, sizeBytes: 150_000);
+            Assert.AreEqual(150_000, new FileInfo(Path.Combine(folder.Path, "tight.bin")).Length);
+            Assert.IsTrue(reserved.All(bytes => bytes <= 100_000));
+        }
+
         // Every block waits behind the ones before it at the limit's rate; an idle downloader saves nothing up, and no limit lets everything through.
         [TestMethod]
         public void RateLimiter_BlocksFollowEachOtherAtTheRate_AndNoLimitWaitsNothing()
