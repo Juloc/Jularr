@@ -592,6 +592,32 @@ namespace Jularr.Backend.Tests
             int Asked() => sources.Requests.Count(request => request.StartsWith("annas.example.test/slow_download/", StringComparison.Ordinal));
         }
 
+        // A source can drop its check while nobody opens the browser: waiting downloads are then retried once per interval by themselves.
+        [TestMethod]
+        public void AnnasArchive_WithoutTheBrowserWaitingDownloadsAreRetriedOncePerInterval()
+        {
+            var clock = new Clock();
+            var browser = new BrowserAssistanceTests.Interaction();
+            var gates = new Service.Core.SourceGateRelease(browser, clock);
+            Assert.IsFalse(gates.IsDue(), "A fresh check is not asked again at once.");
+            clock.Now += Service.Core.SourceGateRelease.Interval;
+            Assert.IsTrue(gates.IsDue());
+            gates.Released();
+            clock.Now += TimeSpan.FromMinutes(10);
+            Assert.IsFalse(gates.IsDue());
+            clock.Now += Service.Core.SourceGateRelease.Interval;
+            Assert.IsTrue(gates.IsDue());
+
+            // A browser through the check releases at once, as before.
+            Assert.IsTrue(new Service.Core.SourceGateRelease(new BrowserAssistanceTests.Interaction { LastOutcome = "read" }, new Clock()).IsDue());
+        }
+
+        private sealed class Clock : TimeProvider
+        {
+            public DateTimeOffset Now { get; set; } = new(2026, 11, 14, 12, 0, 0, TimeSpan.Zero);
+            public override DateTimeOffset GetUtcNow() => Now;
+        }
+
         [TestMethod]
         public async Task AnnasArchive_AStillClosedSourceIsAskedAgainOnlyOncePerInterval()
         {
