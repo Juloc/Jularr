@@ -140,6 +140,36 @@
     &:hover:not(:disabled) { background: var(--accent-soft); color: var(--accent-text); }
 }
 
+// The Filter button of tablets and phones: every filter at once, with how many are chosen.
+.discover-bar__filters.button {
+    display: none;
+    gap: 7px;
+    min-height: 40px;
+    padding: 0 14px 0 12px;
+    border-color: var(--border);
+    border-radius: 999px;
+    background: var(--surface);
+    color: var(--text);
+    font-size: 14px;
+    font-weight: 650;
+
+    .ui-icon { width: 16px; height: 16px; color: var(--muted); }
+    @media (max-width: 900px) { display: inline-flex; }
+}
+
+.discover-bar__count {
+    display: grid;
+    place-items: center;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+    border-radius: 999px;
+    background: var(--accent);
+    color: var(--accent-contrast);
+    font-size: 11px;
+    font-weight: 750;
+}
+
 .discover-bar__badge {
     position: absolute;
     top: -4px;
@@ -169,6 +199,7 @@
 @media (max-width: 640px) {
     .navigation-tabs--types { gap: 16px; .navigation-tabs__link { font-size: 16px; } }
     .discover-bar__tool.button { width: 38px; min-height: 38px; }
+    .discover-bar__filters.button { min-height: 38px; padding: 0 12px 0 10px; }
 }
 
 // Shelves: the rhythm of the mockup.

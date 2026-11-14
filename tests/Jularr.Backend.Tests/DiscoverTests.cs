@@ -998,11 +998,12 @@ namespace Jularr.Backend.Tests
             var browseHtml = await browse.Content.ReadAsStringAsync();
             StringAssert.Contains(browseHtml, "The Matrix Show");
 
-            // A ranking names itself and leads back to its type; the page keeps the one row of types and no lists beside them.
+            // A list of a type chosen alone is its grid under its name; the type's lists stay beside the types, this one marked, and For you leads back.
             StringAssert.Contains(browseHtml, "<h2>Top rated</h2>");
             StringAssert.Contains(browseHtml, "href=\"/?type=series\"");
             Assert.AreEqual(1, System.Text.RegularExpressions.Regex.Matches(browseHtml, "navigation-tabs--types").Count);
-            Assert.AreEqual(0, System.Text.RegularExpressions.Regex.Matches(browseHtml, "navigation-tabs--chips").Count);
+            Assert.AreEqual(1, System.Text.RegularExpressions.Regex.Matches(browseHtml, "navigation-tabs--chips").Count);
+            StringAssert.Contains(browseHtml, "href=\"/?type=series&amp;view=Top\" class=\"navigation-tabs__link navigation-tabs__link--active\"");
 
             // The title's page is the Work's; its first open brings the details from the catalog, and it requests the title as any Work.
             using var title = await host.SendAsync(HttpMethod.Get, "/Details/" + workId);

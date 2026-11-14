@@ -49,16 +49,16 @@ namespace Jularr.E2E.Tests
                 await page.Locator(".navigation-tabs--types a", new() { HasText = "All" }).ClickAsync();
                 // Both types of the mode are every type there is, so the address needs no type.
                 await Assertions.Expect(page).Not.ToHaveURLAsync(new Regex("type="));
-                await page.Locator("button[data-drawer-pane=filter]").ClickAsync();
+                await page.Locator(".discover-filter__more").ClickAsync();
                 var drawer = page.Locator("#discover-panel");
                 await Assertions.Expect(drawer).ToBeVisibleAsync();
-                await Assertions.Expect(drawer.Locator("input[name=type][value=movies]")).ToBeCheckedAsync();
-                await Assertions.Expect(drawer.Locator("input[name=type][value=anime]")).ToHaveCountAsync(0);
+                // The mode names its types in the bar; the drawer does not choose them again.
+                await Assertions.Expect(drawer.Locator("input[name=type][type=checkbox]")).ToHaveCountAsync(0);
                 await drawer.Locator(".choice-group__item", new() { HasText = "Can be requested" }).ClickAsync();
                 await Evidence.SaveAsync(page, "discover-filter");
                 await drawer.GetByRole(AriaRole.Button, new() { Name = "Apply & close" }).ClickAsync();
                 await Assertions.Expect(page).ToHaveURLAsync(new Regex("availability=request"));
-                await Assertions.Expect(page.Locator("button[data-drawer-pane=filter] .discover-bar__badge")).ToHaveTextAsync("1");
+                await Assertions.Expect(page.Locator(".discover-filter__more .discover-bar__badge")).ToHaveTextAsync("1");
 
                 // Shelves keep their lists' order, only a ranking's grid sorts.
                 await Assertions.Expect(page.Locator("select[name=sort]")).ToHaveCountAsync(0);
@@ -151,22 +151,21 @@ namespace Jularr.E2E.Tests
 
             try
             {
-                // The media types come first, then the local availability, then the type's filters (the year range) and the rankings the chosen types have.
+                // The local availability comes first, then the type's filters (the year range) and the rankings the chosen types have.
                 await page.GotoAsync("/?type=movies");
-                await page.Locator("button[data-drawer-pane=filter]").ClickAsync();
+                await page.Locator(".discover-filter__more").ClickAsync();
                 var drawer = page.Locator("#discover-panel");
                 await Assertions.Expect(drawer).ToBeVisibleAsync();
                 async Task<float> TopAsync(ILocator element) => (await element.BoundingBoxAsync())!.Y;
-                var types = await TopAsync(drawer.Locator(".drawer__section").First);
                 var availability = await TopAsync(drawer.Locator(".choice-group").Filter(new() { Has = page.Locator("input[name=availability]") }));
                 var year = await TopAsync(drawer.Locator(".discover-range").Filter(new() { Has = page.Locator("input[name=yearFrom]") }));
                 var rankings = drawer.Locator(".choice-group").Filter(new() { Has = page.Locator("input[name=feed]") });
-                Assert.IsTrue(types < availability && availability < year && year < await TopAsync(rankings), $"{types} {availability} {year}");
+                Assert.IsTrue(availability < year && year < await TopAsync(rankings), $"{availability} {year}");
                 await Assertions.Expect(rankings.GetByText("Upcoming", new() { Exact = true })).ToBeVisibleAsync();
 
                 // Music offers only its own lists: its new albums and the popular ones.
                 await page.GotoAsync("/?mode=hear&type=music");
-                await page.Locator("button[data-drawer-pane=filter]").ClickAsync();
+                await page.Locator(".discover-filter__more").ClickAsync();
                 await Assertions.Expect(page.Locator("#discover-panel input[name=feed]")).ToHaveCountAsync(3);
                 await Assertions.Expect(page.Locator("#discover-panel input[name=feed][value=new]")).ToHaveCountAsync(1);
                 await Assertions.Expect(page.Locator("#discover-panel input[name=feed][value=popular]")).ToHaveCountAsync(1);

@@ -7,19 +7,8 @@
     margin: 14px 0 0;
     min-width: 0;
 
-    // A tablet wraps the fields into rows of three, so none hides past the edge.
-    @media (min-width: 641px) and (max-width: 900px) {
-        flex-wrap: wrap;
-        .discover-filter { flex: 1 1 calc(33.333% - 14px); max-width: none; }
-    }
-
-    // A phone lets the row slide sideways.
-    @media (max-width: 640px) {
-        overflow-x: auto;
-        scrollbar-width: none;
-        padding-bottom: 2px;
-        &::-webkit-scrollbar { display: none; }
-    }
+    // Tablets and phones open every filter from the Filter button instead.
+    @media (max-width: 900px) { display: none; }
 }
 
 .discover-filter {
@@ -215,8 +204,6 @@
     .discover-chosen__sort { margin-left: auto; }
     .discover-chosen__sort .ui-dropdown__button { min-height: 32px; }
 
-    // A phone has no highlights to keep in place, so an empty line takes no room there.
-    &--empty { @media (max-width: 640px) { display: none; } }
 }
 
 .discover-chosen__tag {
@@ -290,4 +277,26 @@
 .discover-ranges {
     display: grid;
     gap: 14px;
+}
+
+// The drawer's copies of the filters at hand serve tablets and phones only.
+@media (min-width: 901px) { .discover-more__at-hand { display: none; } }
+
+// The drawer's lists of choices read as the row's: round checks, one choice a line.
+#discover-panel .choice-group--checks .choice-group__check input {
+    flex: none;
+    width: 20px;
+    height: 20px;
+    margin: 0;
+    border: 1.5px solid var(--border-strong);
+    border-radius: 50%;
+    background: var(--field);
+    appearance: none;
+
+    &:checked {
+        border-color: var(--accent);
+        background: var(--accent) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E") center / 12px no-repeat;
+    }
+
+    &:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 }

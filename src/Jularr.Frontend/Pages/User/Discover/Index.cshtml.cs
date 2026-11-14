@@ -178,13 +178,10 @@ namespace Jularr.Frontend.Pages.User.Discover
 
             // One row: the media types, then the filters as pills; a ranking opened from its shelf names itself and leads back.
             page.Content.Add(TypeBar());
+            // A list opened from its tab or its shelf is a grid under its name, with its order where it has more than one.
             if (selected is not null && View is { } view && !searching)
             {
-                var heading = new List<IUiComponent>
-                {
-                    new A(new Text("common.back")).Class("button").Attribute("href", Address(Current with { View = null, Sort = null, Page = 1 })),
-                    new H2(new Text(FeedLabel(selected, view)))
-                };
+                var heading = new List<IUiComponent> { new H2(new Text(FeedLabel(selected, view))) };
                 if (selected.Sorts.Length > 0) heading.Add(SortSelect(selected, view));
                 page.Content.Add(new Div([.. heading]).Class("discover-view-heading"));
             }
@@ -204,14 +201,9 @@ namespace Jularr.Frontend.Pages.User.Discover
                 return;
             }
 
-            // Every result is a Work and opens its page; filtered titles keep the highlights above them.
+            // Every result is a Work and opens its page; a filter's grid stands in place of the highlights and the rows.
             if (_catalog is not null || _results is not null)
             {
-                if (Filtering && !searching && PageNumber == 1)
-                {
-                    page.Content.Add(new HeroCarousel(assets, _hero, HeroPreferences, "discover.hero.empty"));
-                }
-
                 var cards = new List<IUiComponent>();
                 cards.AddRange(Filtered(_results ?? []).Select(Card));
                 cards.AddRange(Filtered(_catalog ?? []).Select(entry => CatalogCard(entry.Scope, entry.Item)));
@@ -307,14 +299,32 @@ namespace Jularr.Frontend.Pages.User.Discover
         {
             var searching = !string.IsNullOrWhiteSpace(Query);
             var top = new List<IUiComponent> { TypeTabs() };
-            if (!searching && View is null)
+            if (!searching && (View is null || Selected is not null))
             {
-                var feeds = FeedOptions(Chosen).Select(option => new NavigationTab(option.Slug is null ? "discover.forYou" : option.LabelKey,
-                    Address(Current with { Feed = option.Slug, Sort = null, Filters = false, Page = 1 }), !Filtering && Feed == option.Slug)).ToList();
+                // A type chosen alone opens a list as its whole grid; several types show the list's row of each.
+                var alone = Selected;
+                var feeds = FeedOptions(Chosen).Select(option =>
+                {
+                    var list = alone is not null && option.Slug is not null && option.Slug != "continue" ? alone.Feeds.FirstOrDefault(feed => FeedSlug(feed) == option.Slug) : (DiscoverFeedType?)null;
+                    var href = list is { } grid
+                        ? Address(Current with { Feed = null, View = grid, Sort = null, Filters = false, Page = 1 })
+                        : Address(Current with { Feed = option.Slug, View = null, Sort = null, Filters = false, Page = 1 });
+                    var active = !Filtering && (list is { } shown ? View == shown : View is null && Feed == option.Slug);
+                    return new NavigationTab(option.Slug is null ? "discover.forYou" : option.LabelKey, href, active);
+                }).ToList();
                 if (feeds.Count > 1) top.Add(new NavigationTabs(feeds, "discover.feeds", "chips"));
             }
 
             var tools = new List<IUiComponent>();
+            // Tablets and phones keep every filter behind one button that opens them all at once; wide screens show the fields under the bar.
+            if (Offered is not null && !searching)
+            {
+                var all = (Availability is not null ? 1 : 0) + FilterCount;
+                var label = new List<IUiComponent> { new Icon("filter", assets, 16), new Span(new Text("discover.filter.title")) };
+                if (all > 0) label.Add(new Span(new ValueText(all.ToString(CultureInfo.CurrentCulture))).Class("discover-bar__count"));
+                tools.Add(Drawer.Opener(new Button([.. label]).Class("button discover-bar__filters"), "discover-panel", "filter"));
+            }
+
             if (Offered is null || searching)
             {
                 var narrowed = (Availability is not null ? 1 : 0) + FilterCount;
@@ -409,12 +419,12 @@ namespace Jularr.Frontend.Pages.User.Discover
 
             // The media types come first, then the local availability and the filters the chosen types have data for (the row's own travel along hidden),
             // then the rankings of the types (those a chosen type lacks leave the list as the types change).
-            var body = new List<IUiComponent>
-            {
-                new Div([.. chooser]).Class("drawer__section"),
-                new ChoiceGroup(assets, "discover.filter.availability", "availability", [new("", Availability is null, "discover.all"), new("local", Availability == "local", "discover.known"),
-                    new("request", Availability == "request", "discover.availability.request")])
-            };
+            // A mode names its types in the bar already; only a search across every mode chooses them here.
+            var body = new List<IUiComponent>();
+            if (!Narrowed) body.Add(new Div([.. chooser]).Class("drawer__section"));
+            else if (TypeParameter(Current.Types) is { } types) body.Add(new Input().Attribute("type", "hidden").Attribute("name", "type").Attribute("value", types));
+            body.Add(new ChoiceGroup(assets, "discover.filter.availability", "availability", [new("", Availability is null, "discover.all"), new("local", Availability == "local", "discover.known"),
+                new("request", Availability == "request", "discover.availability.request")]));
             body.AddRange(MoreFilters());
             var feedOptions = FeedOptions(Chosen);
             if (feedOptions.Count > 1)
@@ -675,7 +685,7 @@ namespace Jularr.Frontend.Pages.User.Discover
             }
 
             // The highlights continue and fill up from the same reads as the shelves, also while those shelves are hidden.
-            var hero = (View is null || Filtering) && string.IsNullOrWhiteSpace(Query);
+            var hero = View is null && !Filtering && string.IsNullOrWhiteSpace(Query);
             var shown = _layout.Where(shelf => !shelf.IsHidden).Select(shelf => shelf.HomeShelfTypeId).ToHashSet();
             var continueTask = ReadWhenAsync((texts.CanPlay() || texts.CanRead()) && (hero || shown.Overlaps([HomeShelfType.ContinueWatching, HomeShelfType.ContinueListening, HomeShelfType.ContinueReading])),
                 () => continuation.ExecuteAsync<BaseDataList<ContinueItemV1>>(new ReadContinueParametersV1(), HttpContext.RequestAborted));

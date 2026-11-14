@@ -37,7 +37,6 @@ namespace Jularr.E2E.Tests
 
             // Choosing a genre in its popup applies it when the popup closes: one grid, popularity first, under the highlights. Only the results load, not the page.
             await page.EvaluateAsync("window.discoverStays = true");
-            var heroTop = (await page.Locator(".hero-carousel").BoundingBoxAsync())!.Y;
             await row.Locator(".discover-filter__button").First.ClickAsync();
             var popup = page.Locator("#discover-filter-genre");
             await Assertions.Expect(popup).ToBeVisibleAsync();
@@ -50,11 +49,10 @@ namespace Jularr.E2E.Tests
             await Assertions.Expect(cards.First).ToContainTextAsync("Robot 1");
             await Assertions.Expect(cards.First).ToContainTextAsync("TV");
             await Assertions.Expect(page.Locator(".media-grid").GetByText("Quiet Days")).ToHaveCountAsync(0);
-            await Assertions.Expect(page.Locator(".hero-carousel")).ToBeVisibleAsync();
+            // A filter shows its grid in place of the highlights and the rows.
+            await Assertions.Expect(page.Locator(".hero-carousel")).ToHaveCountAsync(0);
             await Assertions.Expect(page.Locator("#discover-recommendations")).ToHaveCountAsync(0);
             Assert.IsTrue(await page.EvaluateAsync<bool>("window.discoverStays === true"));
-            // The line of chosen filters was there before, empty: the highlights stay where they were.
-            Assert.AreEqual(heroTop, (await page.Locator(".hero-carousel").BoundingBoxAsync())!.Y, 0.5);
             await Evidence.SaveAsync(page, "discover-filter-grid");
 
             // The grid loads on while scrolling and says where it ends.
@@ -77,11 +75,14 @@ namespace Jularr.E2E.Tests
             await Assertions.Expect(cards).ToHaveCountAsync(1);
             await Assertions.Expect(cards.First).ToContainTextAsync("Robot 7");
 
-            // On a phone the row swipes sideways and a popup is a sheet from the bottom.
+            // A phone has no row of fields: one Filter button with the count opens every filter, the chosen genre ticked.
             await page.SetViewportSizeAsync(390, 844);
-            await row.Locator(".discover-filter__button").First.ClickAsync();
-            var sheet = await popup.BoundingBoxAsync();
-            Assert.IsTrue(sheet is not null && sheet.X == 0 && Math.Abs(sheet.Y + sheet.Height - 844) < 2, $"{sheet?.X} {sheet?.Y} {sheet?.Height}");
+            await Assertions.Expect(row).ToBeHiddenAsync();
+            var filters = page.Locator(".discover-bar__filters");
+            await Assertions.Expect(filters.Locator(".discover-bar__count")).ToHaveTextAsync("2");
+            await filters.ClickAsync();
+            await Assertions.Expect(drawer).ToBeVisibleAsync();
+            await Assertions.Expect(drawer.Locator("input[name=genre][value=Mecha]")).ToBeCheckedAsync();
             await Evidence.SaveAsync(page, "discover-filter-phone");
             await page.Keyboard.PressAsync("Escape");
             await page.SetViewportSizeAsync(1280, 900);

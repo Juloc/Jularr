@@ -250,8 +250,7 @@ namespace Jularr.Frontend.Pages.User.Discover
                 .Attribute("aria-label", texts["discover.filters"]);
         }
 
-        // The chosen filters as tags whose cross removes them, a reset, and the order of the grid. Under a filter row the line is always there, empty without a filter,
-        // so choosing one never pushes the page down.
+        // The chosen filters as tags whose cross removes them, a reset, and the order of the grid; a filter shows the grid in place of the highlights and the rows.
         private IUiComponent? ChosenFilters()
         {
             if (!string.IsNullOrWhiteSpace(Query) || Offered is null && FilterCount == 0)
@@ -261,7 +260,7 @@ namespace Jularr.Frontend.Pages.User.Discover
 
             if (FilterCount == 0)
             {
-                return new Div().Class("discover-chosen discover-chosen--empty").Attribute("aria-hidden", "true");
+                return null;
             }
 
             var tags = new List<IUiComponent>();
@@ -297,22 +296,42 @@ namespace Jularr.Frontend.Pages.User.Discover
                 yield break;
             }
 
-            if (Offers(DiscoverFilter.Status) && !IsAtHand(DiscoverFilter.Status))
+            // The filters at hand stand in the drawer too, for tablets and phones that show the drawer instead of the row; wide screens hide them there.
+            IUiComponent Part(DiscoverFilter filter, IUiComponent group) => IsAtHand(filter) ? new Div(group).Class("discover-more__at-hand") : group;
+            if (Offers(DiscoverFilter.Genre))
             {
-                yield return new ChoiceGroup(assets, "discover.filter.status", "status", [.. offered.ReleaseStatusIds.Select(status => new ChoicePick(status.ToString(), Statuses.Contains(status),
-                    "discover.status." + status))], new ChoiceOptions(Multiple: true));
+                yield return Part(DiscoverFilter.Genre, new ChoiceGroup(assets, "discover.filter.genres", "genre", [.. offered.GenreIds.Where(genre => genre != Genre.Hentai || IncludesAdult)
+                    .Select(genre => new ChoicePick(genre.ToString(), Genres.Contains(genre), "discover.genre." + genre))], new ChoiceOptions(Multiple: true, Layout: ChoiceLayout.Checks)));
             }
 
-            if (Offers(DiscoverFilter.Country) && !IsAtHand(DiscoverFilter.Country))
+            if (Offers(DiscoverFilter.Season))
             {
-                yield return new ChoiceGroup(assets, "discover.filter.country", "country", [new("", Country is null, "discover.filter.any"),
-                    .. offered.CountryCodes.Select(code => new ChoicePick(code, Country == code, "discover.country." + code))]);
+                yield return Part(DiscoverFilter.Season, new ChoiceGroup(assets, "discover.filter.season", "season", [new("", Season is null, "discover.filter.any"),
+                    .. Enumerable.Range(1, 4).Select(season => new ChoicePick(season.ToString(CultureInfo.InvariantCulture), Season == season, "discover.season." + season))]));
             }
 
-            if (Offers(DiscoverFilter.Language) && !IsAtHand(DiscoverFilter.Language))
+            if (Offers(DiscoverFilter.Format) && offered.CatalogFormatIds.Length > 1)
             {
-                yield return new ChoiceGroup(assets, "discover.filter.language", "lang", [new("", Language is null, "discover.filter.any"),
-                    .. offered.LanguageCodes.Select(code => new ChoicePick(code, Language == code, "discover.language." + code))]);
+                yield return Part(DiscoverFilter.Format, new ChoiceGroup(assets, "discover.filter.format", "format", [.. offered.CatalogFormatIds.Select(format => new ChoicePick(format.ToString(),
+                    Formats.Contains(format), "discover.format." + format))], new ChoiceOptions(Multiple: true)));
+            }
+
+            if (Offers(DiscoverFilter.Status))
+            {
+                yield return Part(DiscoverFilter.Status, new ChoiceGroup(assets, "discover.filter.status", "status", [.. offered.ReleaseStatusIds.Select(status => new ChoicePick(status.ToString(),
+                    Statuses.Contains(status), "discover.status." + status))], new ChoiceOptions(Multiple: true)));
+            }
+
+            if (Offers(DiscoverFilter.Country))
+            {
+                yield return Part(DiscoverFilter.Country, new ChoiceGroup(assets, "discover.filter.country", "country", [new("", Country is null, "discover.filter.any"),
+                    .. offered.CountryCodes.Select(code => new ChoicePick(code, Country == code, "discover.country." + code))]));
+            }
+
+            if (Offers(DiscoverFilter.Language))
+            {
+                yield return Part(DiscoverFilter.Language, new ChoiceGroup(assets, "discover.filter.language", "lang", [new("", Language is null, "discover.filter.any"),
+                    .. offered.LanguageCodes.Select(code => new ChoicePick(code, Language == code, "discover.language." + code))]));
             }
 
             if (Offers(DiscoverFilter.Source))
@@ -321,10 +340,10 @@ namespace Jularr.Frontend.Pages.User.Discover
                     "discover.source." + source))], new ChoiceOptions(Multiple: true));
             }
 
-            if (Offers(DiscoverFilter.Site) && offered.Sites.Count > 0 && !IsAtHand(DiscoverFilter.Site))
+            if (Offers(DiscoverFilter.Site) && offered.Sites.Count > 0)
             {
-                yield return new ChoiceGroup(assets, SiteLabel, "site", [.. offered.Sites.Select(site => new ChoicePick(
-                    site.Id.ToString(CultureInfo.InvariantCulture), Sites.Contains(site.Id), Label: site.Name))], new ChoiceOptions(Multiple: true, Layout: ChoiceLayout.Checks));
+                yield return Part(DiscoverFilter.Site, new ChoiceGroup(assets, SiteLabel, "site", [.. offered.Sites.Select(site => new ChoicePick(
+                    site.Id.ToString(CultureInfo.InvariantCulture), Sites.Contains(site.Id), Label: site.Name))], new ChoiceOptions(Multiple: true, Layout: ChoiceLayout.Checks)));
             }
 
             // Tags by category, adult ones only with adult titles; a chosen tag opens its category.
@@ -358,9 +377,10 @@ namespace Jularr.Frontend.Pages.User.Discover
                 yield return toggle;
             }
 
-            string[] drawer = ["type", "availability", "feed", "status", "country", "lang", "source", "site", "tag", "yearFrom", "yearTo", "episodesFrom", "episodesTo",
-                "chaptersFrom", "chaptersTo", "volumesFrom", "volumesTo", "durationFrom", "durationTo", "adult"];
-            foreach (var field in Hidden(except: [.. drawer.Except(AtHand.Select(entry => entry.Name))]))
+            // The drawer holds every filter but the single year of the row, which travels along hidden.
+            string[] drawer = ["type", "availability", "feed", "genre", "season", "format", "status", "country", "lang", "source", "site", "tag", "yearFrom", "yearTo", "episodesFrom",
+                "episodesTo", "chaptersFrom", "chaptersTo", "volumesFrom", "volumesTo", "durationFrom", "durationTo", "adult"];
+            foreach (var field in Hidden(except: drawer))
             {
                 yield return field;
             }
