@@ -130,7 +130,9 @@ namespace Jularr.Frontend.Framework
             }
 
             var parts = new List<IUiComponent> { head, new Div([.. body]).Class("list-body").Attribute("role", "rowgroup") };
-            if (empty is not null) parts.Add(rows.Count == 0 ? new Div(empty).Class("list-empty") : new Div(empty).Class("list-empty").Attribute("hidden", "hidden"));
+            // The empty state stands only under an empty list; a list with a page filter keeps it hidden for when the filter leaves no row (ListFilter.ts).
+            if (empty is not null && rows.Count == 0) parts.Add(new Div(empty).Class("list-empty"));
+            else if (empty is not null && rows.Any(row => row.FilterText is not null)) parts.Add(new Div(empty).Class("list-empty").Attribute("hidden", "hidden"));
             var panel = new Div([.. parts]).Class("list-panel" + _modifier).Attribute("role", "table").Attribute("aria-label", texts[ariaLabelKey]);
             new Div(_pickerKind is null ? panel : panel.Attribute("data-work-table", _pickerKind)).Class("list").WriteTo(writer, encoder, texts);
             _paged?.WriteInline(writer, encoder, texts);
