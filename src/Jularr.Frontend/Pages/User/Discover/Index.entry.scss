@@ -156,12 +156,18 @@
     line-height: 1;
 }
 
-// A phone: the types on their own line, the lists below, one line each that slides.
-@media (max-width: 640px) {
-    .discover-bar__top { flex-wrap: wrap; gap: 6px 14px; }
-    .navigation-tabs--types { order: 1; gap: 16px; .navigation-tabs__link { font-size: 16px; } }
+// Where the lists no longer fit beside the types (a narrow desktop, a tablet, a phone) they take their own line under them, the whole width, sliding sideways.
+@media (max-width: 1280px) {
+    .discover-bar__top { flex-wrap: wrap; gap: 0 16px; }
+    .navigation-tabs--types { order: 1; }
     .discover-bar__tools { order: 2; }
-    .discover-bar__top > .navigation-tabs--chips { order: 3; flex: 1 1 100%; }
+    // A full-width break, so the capsule starts its own line but keeps only the width it needs.
+    .discover-bar__top::after { content: ""; order: 3; flex-basis: 100%; height: 0; }
+    .discover-bar__top > .navigation-tabs--chips { order: 4; flex: 0 1 auto; max-width: 100%; margin-top: 6px; }
+}
+
+@media (max-width: 640px) {
+    .navigation-tabs--types { gap: 16px; .navigation-tabs__link { font-size: 16px; } }
     .discover-bar__tool.button { width: 38px; min-height: 38px; }
 }
 
