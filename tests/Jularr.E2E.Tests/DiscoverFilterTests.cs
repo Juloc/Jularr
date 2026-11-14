@@ -37,6 +37,7 @@ namespace Jularr.E2E.Tests
 
             // Choosing a genre in its popup applies it when the popup closes: one grid, popularity first, under the highlights. Only the results load, not the page.
             await page.EvaluateAsync("window.discoverStays = true");
+            var heroTop = (await page.Locator(".hero-carousel").BoundingBoxAsync())!.Y;
             await row.Locator(".discover-filter__button").First.ClickAsync();
             var popup = page.Locator("#discover-filter-genre");
             await Assertions.Expect(popup).ToBeVisibleAsync();
@@ -52,6 +53,8 @@ namespace Jularr.E2E.Tests
             await Assertions.Expect(page.Locator(".hero-carousel")).ToBeVisibleAsync();
             await Assertions.Expect(page.Locator("#discover-recommendations")).ToHaveCountAsync(0);
             Assert.IsTrue(await page.EvaluateAsync<bool>("window.discoverStays === true"));
+            // The line of chosen filters was there before, empty: the highlights stay where they were.
+            Assert.AreEqual(heroTop, (await page.Locator(".hero-carousel").BoundingBoxAsync())!.Y, 0.5);
             await Evidence.SaveAsync(page, "discover-filter-grid");
 
             // The grid loads on while scrolling and says where it ends.

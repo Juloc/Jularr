@@ -47,20 +47,21 @@
     .media-shelf__items > & { flex: 0 0 auto; align-self: center; padding-inline: 16px; white-space: nowrap; }
 }
 
-// The bar: the mode's types as text tabs, the lists as a soft segmented row beside them, the settings at the end.
+// The bar: the mode's types as text tabs, the lists as one soft capsule beside them, the settings at the end. Every control of the bar is 40px high
+// and speaks in 14px, so the row reads as one piece.
 .discover-bar { margin: 0 0 16px; }
 
 .discover-bar__top {
     display: flex;
     align-items: center;
-    gap: 22px;
+    gap: 28px;
     min-height: 48px;
 }
 
 .navigation-tabs--types {
     display: flex;
     flex: none;
-    gap: 20px;
+    gap: 22px;
     border: 0;
 
     .navigation-tabs__link {
@@ -69,9 +70,9 @@
         border: 0;
         background: none;
         color: var(--muted);
-        font-size: 17px;
-        font-weight: 720;
-        letter-spacing: -.2px;
+        font-size: 18px;
+        font-weight: 760;
+        letter-spacing: -.3px;
         white-space: nowrap;
 
         &:hover { color: var(--text); }
@@ -80,37 +81,43 @@
     .navigation-tabs__link--active {
         color: var(--text);
 
-        &::after { content: ""; position: absolute; inset: auto 0 3px; height: 3px; border-radius: 3px; background: var(--accent); }
+        &::after { content: ""; position: absolute; inset: auto 0 2px; height: 3px; border-radius: 3px; background: var(--accent); }
     }
 }
 
 .discover-bar__top > .navigation-tabs--chips {
     flex: 0 1 auto;
     min-width: 0;
-    gap: 3px;
+    gap: 2px;
     padding: 4px;
     overflow-x: auto;
     scrollbar-width: none;
+    border: 1px solid var(--border);
     border-radius: 999px;
-    background: var(--tint);
+    background: color-mix(in srgb, var(--accent) 5%, var(--surface));
 
     &::-webkit-scrollbar { display: none; }
 
     .navigation-tabs__link {
         flex: none;
-        min-height: 34px;
-        padding: 0 15px;
+        min-height: 32px;
+        padding: 0 14px;
         border: 0;
         border-radius: 999px;
         background: none;
         color: var(--muted);
+        font-size: 14px;
         font-weight: 650;
         white-space: nowrap;
 
         &:hover { color: var(--text); }
     }
 
-    .navigation-tabs__link--active { background: var(--surface); color: var(--text); box-shadow: var(--shadow-card, 0 1px 3px rgb(0 0 0 / 8%)); }
+    .navigation-tabs__link--active {
+        background: var(--surface);
+        color: var(--accent-text);
+        box-shadow: 0 1px 2px rgb(30 20 70 / 8%), 0 2px 8px rgb(30 20 70 / 6%);
+    }
 }
 
 .discover-bar__tools {
@@ -123,10 +130,10 @@
 .discover-bar__tool.button {
     position: relative;
     flex: none;
-    width: 42px;
-    min-height: 42px;
+    width: 40px;
+    min-height: 40px;
     border-color: var(--border);
-    background: var(--field);
+    background: var(--surface);
     color: var(--muted);
 
     .ui-icon { width: 17px; height: 17px; }

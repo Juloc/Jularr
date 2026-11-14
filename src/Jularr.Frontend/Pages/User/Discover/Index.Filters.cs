@@ -242,12 +242,18 @@ namespace Jularr.Frontend.Pages.User.Discover
                 .Attribute("aria-label", texts["discover.filters"]);
         }
 
-        // The chosen filters as tags whose cross removes them, a reset, and the order of the grid.
+        // The chosen filters as tags whose cross removes them, a reset, and the order of the grid. Under a filter row the line is always there, empty without a filter,
+        // so choosing one never pushes the page down.
         private IUiComponent? ChosenFilters()
         {
-            if (FilterCount == 0 || !string.IsNullOrWhiteSpace(Query))
+            if (!string.IsNullOrWhiteSpace(Query) || Offered is null && FilterCount == 0)
             {
                 return null;
+            }
+
+            if (FilterCount == 0)
+            {
+                return new Div().Class("discover-chosen discover-chosen--empty").Attribute("aria-hidden", "true");
             }
 
             var tags = new List<IUiComponent>();
