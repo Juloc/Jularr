@@ -30,13 +30,14 @@
     position: relative;
     flex: none;
     gap: 7px;
-    min-height: 42px;
+    min-height: 40px;
     margin-left: auto;
     padding: 0 16px 0 14px;
     border-color: var(--border);
-    border-radius: 999px;
-    background: var(--field);
+    border-radius: 12px;
+    background: var(--surface);
     color: var(--text);
+    font-size: 14px;
     font-weight: 650;
 
     .ui-icon { width: 16px; height: 16px; color: var(--muted); }
@@ -45,9 +46,10 @@
 
 .discover-filter__label {
     padding-left: 2px;
-    color: var(--text);
-    font-size: 13px;
-    font-weight: 680;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: .2px;
 }
 
 .discover-filter__button,
@@ -58,14 +60,15 @@
     gap: 6px;
     width: 100%;
     min-width: 0;
-    min-height: 42px;
-    padding: 0 12px;
+    min-height: 40px;
+    padding: 0 12px 0 14px;
     border: 1px solid var(--border);
-    border-radius: var(--radius-field, 12px);
-    background: var(--field);
+    border-radius: 12px;
+    background: var(--surface);
     color: var(--muted);
-    font-size: var(--text-control);
-    font-weight: 600;
+    font-size: 14px;
+    font-weight: 550;
+    box-shadow: 0 1px 2px rgb(30 20 70 / 4%);
     text-align: left;
     white-space: nowrap;
     cursor: pointer;
@@ -78,14 +81,14 @@
 .discover-filter__clear {
     position: absolute;
     right: 6px;
-    bottom: 7px;
+    bottom: 6px;
     display: grid;
     place-items: center;
     width: 28px;
     height: 28px;
     border-radius: 50%;
-    background: var(--field);
-    color: var(--accent-text);
+    background: var(--surface);
+    color: var(--muted);
 
     &:hover { background: var(--accent-soft); }
 }
@@ -105,8 +108,8 @@
 .discover-filter--set .discover-filter__select,
 .discover-filter--set .ui-dropdown__button {
     border-color: var(--accent-outline);
-    color: var(--accent-text);
-    font-weight: 680;
+    color: var(--text);
+    font-weight: 650;
 
     .ui-icon { color: var(--accent-text); }
 }
@@ -114,11 +117,18 @@
 .discover-filter--select .ui-dropdown { width: 100%; }
 .discover-filter--select .ui-dropdown__button {
     width: 100%;
-    min-height: 42px;
-    border-radius: var(--radius-field, 12px);
-    background: var(--field);
+    min-height: 40px;
+    padding: 0 12px 0 14px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--surface);
+    font-size: 14px;
+    font-weight: 550;
+    box-shadow: 0 1px 2px rgb(30 20 70 / 4%);
 }
-.discover-filter--select .ui-dropdown__value { color: inherit; }
+.discover-filter--set .ui-dropdown__button { font-weight: 650; }
+.discover-filter--select .ui-dropdown__value { color: inherit; font-size: 14px; }
+.discover-filter--select .ui-dropdown__value--empty { color: var(--muted); }
 
 .discover-filter__popup {
     position: fixed;
@@ -181,13 +191,20 @@
     }
 }
 
-// The chosen filters: tags whose cross removes them, a reset, and the order at the end.
+// The chosen filters: tags whose cross removes them, a reset, and the order at the end. One line of a fixed height that slides sideways when full,
+// so the page under it never moves, with or without filters.
 .discover-chosen {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     align-items: center;
     gap: 6px;
+    height: 38px;
     margin-top: 12px;
+    overflow-x: auto;
+    scrollbar-width: none;
+
+    &::-webkit-scrollbar { display: none; }
+    > * { flex: none; }
 
     .discover-chosen__sort { margin-left: auto; }
 }
