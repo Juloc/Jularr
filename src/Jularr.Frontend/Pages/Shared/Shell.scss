@@ -380,6 +380,12 @@ html[data-mode="dark"] .theme-toggle { & > .theme-toggle__moon { display: none; 
     }
 }
 .app-header-spacer { flex: 1 1 0; }
+
+// A tablet keeps one header row: the search gives up width and its scope chip before anything spills over the edge.
+@media (max-width: 1100px) {
+    .app-search { min-width: 0; flex: 1 1 auto; }
+    .app-header .app-search__scope { display: none; }
+}
 .sidebar-navigation { display: grid; gap: 5px; padding: 21px 13px; }
 .sidebar-secondary { margin-top: auto; }
 
