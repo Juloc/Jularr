@@ -1028,11 +1028,15 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.BadRequest, invalid.StatusCode);
             StringAssert.Contains(await invalid.Content.ReadAsStringAsync(), "class=\"ui-page-error\"");
             Assert.AreEqual(1, System.Text.RegularExpressions.Regex.Matches(await invalid.Content.ReadAsStringAsync(), "role=\"alert\"").Count);
-            // A search of several types shows a row per type, the type with the best match first, each with See all for that type alone.
+            // A search of several types shows a row per type, each with See all for that type alone; a type's provider fills its own row from its own request.
             using var search = await host.SendAsync(HttpMethod.Get, "/?q=Matrix");
             html = await search.Content.ReadAsStringAsync();
-            StringAssert.Contains(html, "The Matrix Show");
             StringAssert.Contains(html, "href=\"/?type=series&amp;q=Matrix\"");
+            StringAssert.Contains(html, "data-search-group=\"series\"");
+            using var group = await host.SendAsync(HttpMethod.Get, "/?q=Matrix&handler=SearchGroup&group=series");
+            var answer = await group.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, group.StatusCode, answer);
+            StringAssert.Contains(answer, "The Matrix Show");
             Assert.IsFalse(html.Contains("data-discover-next", StringComparison.Ordinal));
             StringAssert.Contains(html, "id=\"search-search-global\" value=\"Matrix\"");
 
