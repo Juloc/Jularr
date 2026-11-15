@@ -34,7 +34,7 @@ namespace Jularr.Frontend.Pages.User.Details
             if (work.ProgressStateId == ProgressStateType.Finished && FinishedKey(kind) is { } finished) chips.Add(Chip(new Text(finished), UiTone.Success, "check"));
 
             var hero = new MediaHero(work.CanonicalTitle, work.BackdropUrl, facts.Length == 0 ? null : facts, work.Overview)
-                .Poster(work.PosterUrl, new Icon(TypeIcon(kind, work), assets, 48))
+                .Poster(work.PosterUrl, new Icon(TypeIcon(kind, work), assets, 48)).Square(kind == WorkKind.Music)
                 .Chips([.. chips])
                 .Actions([.. Actions(work, kind, variants, selected, playable, plex, page)]);
             if (work.Rating is { } rating)

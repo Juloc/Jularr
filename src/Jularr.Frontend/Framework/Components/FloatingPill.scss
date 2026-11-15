@@ -42,10 +42,10 @@
 // Over the bar of the book being read (82px high, 84px above the edge on a phone), which follows the page with at least 98px of its own.
 body:has(.continue-bar) .floating-pill { --floating-bottom: 176px; --floating-after: 98px; }
 
-// Over the minimized player (88px high, 12px above the edge, 84px on a phone); the bar of the book being read gives way to it.
+// Over the minimized player (76px high, 16px above the edge, 68px on a phone); the bar of the book being read gives way to it.
 body.player-mini .floating-pill {
-    --floating-bottom: 116px;
+    --floating-bottom: 124px;
     --floating-after: 0px;
 
-    @media (max-width: 780px) { --floating-bottom: 188px; }
+    @media (max-width: 780px) { --floating-bottom: 112px; }
 }

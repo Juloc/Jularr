@@ -42,7 +42,7 @@ function begin(source: Element | undefined, address: string, skeleton: boolean):
     timer = window.setTimeout(() => {
         timer = undefined;
         document.body.dataset.pageWait = "true";
-        const main = document.getElementById("main-content");
+        const main = document.querySelector<HTMLElement>("#app-content #main-content");
         if (!skeleton || !main) return;
         main.setAttribute("aria-busy", "true");
         main.dataset.waitingFor = kindOf(address);
@@ -57,7 +57,7 @@ function end(): void {
     pendingLink?.classList.remove("is-pending");
     pendingLink = undefined;
     // After a failure the old page stays: its skeleton goes away again.
-    const main = document.getElementById("main-content");
+    const main = document.querySelector<HTMLElement>("#app-content #main-content");
     if (!main?.dataset.waitingFor) return;
     main.querySelector(":scope > .page-skeleton")?.remove();
     main.removeAttribute("aria-busy");

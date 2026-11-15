@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text.RegularExpressions;
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Admin.Library.V1;
@@ -287,6 +288,44 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(html, "data-start-url=\"/api/v1/playback/assets/" + assetId + "/sessions\"");
             StringAssert.Contains(html, ">Film</h1>");
             Assert.IsFalse(html.Contains("Film.mp4", StringComparison.Ordinal));
+        }
+
+        // A song has no picture: the album's cover and the song's title stand in the player, the way out is a Close button, and an album with many tracks lists them all.
+        [TestMethod]
+        public async Task Razor_PlayerForASong_ShowsTheAlbumCover_AndCloseInsteadOfBack()
+        {
+            using var storage = new LibraryTests.TemporaryDirectory();
+            await using var host = await LibraryTests.CreateHostAsync(storage.Path, razor: true);
+            var rootId = await LibraryTests.CreateRootAsync(host, await LibraryTests.CreateMountAsync(host), "Music", MediaType.Music);
+            await host.Fixture.RunSqlAsync($$"""
+                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle", "ReleaseYear") VALUES (9301, 6, 'Example Album', 2019);
+                INSERT INTO "WorkMetadataFacts" ("WorkId", "FactKey", "Value", "IsManual") VALUES (9301, 'Poster', 'https://coverartarchive.org/release-group/cover.jpg', TRUE);
+                INSERT INTO "WorkUnits" ("WorkId", "WorkUnitTypeId", "Number", "Title", "DiscNumber") SELECT 9301, 5, number, 'Song ' || number, 1 + number / 31 FROM generate_series(1, 60) AS number;
+                INSERT INTO "WorkEditions" ("WorkId") VALUES (9301);
+                INSERT INTO "WorkVersions" ("WorkId", "WorkEditionId") SELECT "WorkId", "Id" FROM "WorkEditions";
+                INSERT INTO "MediaAssets" ("WorkId", "WorkVersionId", "WorkUnitId", "MediaAssetTypeId") SELECT unit."WorkId", version."Id", unit."Id", 2 FROM "WorkUnits" AS unit JOIN "WorkVersions" AS version ON version."WorkId" = unit."WorkId";
+                INSERT INTO "StoredFiles" ("LibraryRootId", "RelativePath", "SizeBytes", "ModifiedAt", "LastSeenAt", "MediaAssetId") SELECT {{rootId}}, asset."Id" || '.flac', 100, now(), now(), asset."Id" FROM "MediaAssets" AS asset;
+                """);
+            var second = (long)(await host.ScalarAsync("SELECT asset.\"Id\" FROM \"MediaAssets\" AS asset JOIN \"WorkUnits\" AS unit ON unit.\"Id\" = asset.\"WorkUnitId\" WHERE unit.\"Number\" = 2"))!;
+
+            using var player = await host.SendAsync(HttpMethod.Get, "/Player/" + second);
+            var html = await player.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, player.StatusCode, html);
+            StringAssert.Contains(html, "class=\"player player--audio\"");
+            StringAssert.Contains(html, "data-address=\"/Player/" + second + "\"");
+            StringAssert.Contains(html, "class=\"player__cover\"");
+            // The cover is the album's, through Jularr's own cover address, and a stand-in with a music note replaces it where it cannot be loaded.
+            StringAssert.Contains(html, "src=\"/api/v1/covers/external?u=https%3A%2F%2Fcoverartarchive.org%2Frelease-group%2Fcover.jpg");
+            StringAssert.Contains(html, "data-no-cover=\"music\"");
+            StringAssert.Contains(html, ">Song 2</h1>");
+            StringAssert.Contains(html, "data-action=\"close\" aria-label=\"Close\"");
+            Assert.IsFalse(html.Contains("aria-label=\"Back\"", StringComparison.Ordinal), "Closing the player is an X, not a back arrow.");
+
+            // Every one of the 60 tracks is listed, in one page, and each plays on from its own file.
+            using var details = await host.SendAsync(HttpMethod.Get, "/Details/9301?tab=tracks");
+            var list = await details.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, details.StatusCode, list);
+            Assert.AreEqual(60, Regex.Matches(list, "<a [^>]*href=\"/Player/\\d+\"[^>]*aria-label=\"Play\"").Count, "The tracks of a long album are not cut after the first page.");
         }
 
         [TestMethod]

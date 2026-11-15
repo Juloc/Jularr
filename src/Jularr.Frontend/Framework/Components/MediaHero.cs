@@ -11,6 +11,7 @@ namespace Jularr.Frontend.Framework
     {
         private string? _posterUrl;
         private bool _hasPoster;
+        private bool _square;
         private IUiComponent? _placeholder;
         private IUiComponent[] _chips = [];
         private IUiComponent[] _actions = [];
@@ -25,6 +26,13 @@ namespace Jularr.Frontend.Framework
             _hasPoster = true;
             _posterUrl = posterUrl;
             _placeholder = placeholder;
+            return this;
+        }
+
+        // A record's cover is square, not a tall poster.
+        public MediaHero Square(bool square = true)
+        {
+            _square = square;
             return this;
         }
 
@@ -116,7 +124,7 @@ namespace Jularr.Frontend.Framework
             parts.Add(backdropUrl is not null ? new Div(new MediaImage(backdropUrl, "", 1280, 720, priority: true)).Class("media-hero__backdrop")
                 : new Div().Class("media-hero__backdrop"));
             if (_corner is not null) parts.Add(new Div(_corner).Class("media-hero__corner"));
-            var poster = _posterUrl is null ? new Div(_placeholder ?? new Span()).Class("media-hero__placeholder") : (IUiComponent)new MediaImage(_posterUrl, "", 342, 513);
+            var poster = _posterUrl is null ? new Div(_placeholder ?? new Span()).Class("media-hero__placeholder") : (IUiComponent)new MediaImage(_posterUrl, "", 342, _square ? 342 : 513, kind: _square ? NoCoverKind.Music : NoCoverKind.Poster);
             var footer = new List<IUiComponent>();
             if (actions.Count > 0) footer.Add(new Div([.. actions]).Class("media-hero__actions"));
             var standing = new List<IUiComponent>();
@@ -142,7 +150,7 @@ namespace Jularr.Frontend.Framework
             }
 
             parts.Add(new Div([.. layout]).Class("media-hero__layout"));
-            new Section([.. parts]).Class("media-hero media-hero--poster").WriteTo(writer, encoder, texts);
+            new Section([.. parts]).Class(_square ? "media-hero media-hero--poster media-hero--square" : "media-hero media-hero--poster").WriteTo(writer, encoder, texts);
         }
     }
 }

@@ -24,7 +24,9 @@
 }
 
 .player-page { background: var(--background); color: var(--text); }
-.player-main { width: 100%; min-height: 100dvh; &:fullscreen { background: #000; } }
+// The whole screen lies over the page below it, which keeps its place; the bar sits in a corner beside it.
+.player-main { position: fixed; inset: 0; z-index: var(--z-drawer); overflow: auto; overscroll-behavior: contain; background: var(--background); &:fullscreen { background: #000; } }
+html.player-open { overflow: hidden; }
 .player {
     display: grid;
     align-content: start;
@@ -297,28 +299,86 @@
     65% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
     100% { opacity: 0; transform: translate(-50%, -50%) scale(1.06); }
 }
-.player-active:not(.player-mini) .app-layout { display: none; }
-.player-mini {
-    .player-main { position: fixed; inset: auto 12px calc(12px + env(safe-area-inset-bottom)) auto; z-index: var(--z-shell); width: min(720px, calc(100% - 24px)); min-height: 0; }
-    .app-main { --main-end: 110px; }
-    @media (max-width: 780px) { .player-main { bottom: calc(84px + env(safe-area-inset-bottom)); } }
+// The bar: over the page, in the corner the viewer chose (bottom right at first), on a phone as wide as the screen at the bottom. It stays below menus and dialogs, and the pill
+// that saves a form and the end of the page both make room for it.
+.player-main[data-mini] {
+    // The sidebar's width as the shell sets it: the corners on the left start beside it, never over its menu.
+    --side: 252px;
+    @media (max-width: 1420px) { --side: 230px; }
+    @media (min-width: 641px) and (max-width: 1120px) { --side: 67px; }
+    inset: auto; z-index: var(--z-shell); width: min(440px, calc(100vw - 32px)); min-height: 0; overflow: visible; background: transparent;
+    border-radius: var(--radius-panel); box-shadow: var(--shadow-overlay); animation: player-bar-in 160ms ease-out;
+    &[data-corner=br] { right: max(16px, env(safe-area-inset-right)); bottom: max(16px, env(safe-area-inset-bottom)); }
+    &[data-corner=bl] { left: calc(var(--side) + 16px); bottom: max(16px, env(safe-area-inset-bottom)); }
+    &[data-corner=tr] { right: max(16px, env(safe-area-inset-right)); top: calc(80px + env(safe-area-inset-top) + 12px); }
+    &[data-corner=tl] { left: calc(var(--side) + 16px); top: calc(80px + env(safe-area-inset-top) + 12px); }
+    &.player-main--dragging { z-index: var(--z-menu); cursor: grabbing; user-select: none; animation: none; box-shadow: var(--shadow-drawer); * { pointer-events: none; } }
+    @media (max-width: 780px) {
+        &[data-corner] { inset: auto 0 0 0; width: auto; border-radius: 0; }
+    }
 }
+@keyframes player-bar-in { from { opacity: 0; translate: 0 8px; } }
+.player-mini .app-main { --main-end: 110px; }
+@media (max-width: 780px) { .player-mini .app-main { --main-end: 100px; } }
 .player--mini {
-    display: block; min-height: 0; padding: 0; box-shadow: var(--shadow);
-    .player__stage { display: flex; align-items: center; aspect-ratio: auto; height: 88px; }
-    .player__video { flex: none; width: 110px; height: 88px; }
-    .player__chrome { position: static; align-self: stretch; flex: 1; min-width: 0; display: flex; align-items: center; gap: 4px; padding: 8px; background: #121214; opacity: 1; }
-    .player__top { flex: 1; min-width: 0; padding: 0; background: none; }
-    .player__title { font-size: .8rem; }
-    .player__context, .player__sidebar, .player__audio, .player__options,
-    [data-action=close], [data-action=minimize], [data-action=episodes], [data-action=back], [data-action=forward], [data-action=previous], [data-action=next] { display: none; }
-    .player__bottom { padding: 0; background: none; align-self: center; }
-    .player__progress { position: absolute; inset: 0 0 auto; display: block; > span { display: none; } }
-    .player__timeline { display: block; height: 4px; margin: 0; }
-    .player__actions { display: block; }
-    .player__transport { position: static; transform: none; }
+    --bar: var(--player-bar, 76px);
+    display: block; min-height: 0; margin: 0; padding: 0; max-width: none; overflow: hidden; border-radius: inherit; background: #121214; color: #fff;
+    @media (max-width: 780px) { --bar: 68px; padding-bottom: env(safe-area-inset-bottom); }
+    .player__stage { display: flex; align-items: stretch; aspect-ratio: auto; height: var(--bar); border-radius: 0; cursor: pointer; }
+    .player__video { flex: none; width: calc(var(--bar) * 16 / 9); height: 100%; }
+    .player__cover { flex: none; width: var(--bar); height: var(--bar); border-radius: 0; box-shadow: none; }
+    .player__chrome { position: static; align-self: stretch; flex: 1; min-width: 0; display: flex; align-items: center; gap: 0; padding: 0 4px 0 12px; background: none; opacity: 1; cursor: default; }
+    // The two halves of the controls become one row: the title, the transport, then Open and Close.
+    .player__top, .player__bottom, .player__actions { display: contents; }
+    .player__heading { order: 1; flex: 1; min-width: 0; cursor: pointer; }
+    .player__title, .player__context { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; overflow-wrap: normal; }
+    .player__title { font-size: .85rem; }
+    .player__context { display: block; margin-top: 1px; font-size: .72rem; opacity: .75; }
+    .player__transport { order: 2; position: static; transform: none; gap: 0; }
+    [data-action=expand] { order: 3; }
+    .player__close { order: 4; }
+    .player__sidebar, .player__audio, .player__options, [data-action=minimize], [data-action=episodes], [data-action=back], [data-action=forward] { display: none; }
+    &:not(.player--audio) [data-action=previous], &:not(.player--audio) [data-action=next] { display: none; }
+    // The position runs along the top edge of the bar, a little higher to touch than to see.
+    .player__progress { position: absolute; inset: 0 0 auto; z-index: 3; display: block; height: 16px; > span { display: none; } }
+    .player__track { display: block; }
+    .player__timeline { display: block; height: 4px; margin: 0; padding: 6px 0; box-sizing: content-box; background-clip: content-box;
+        &::-webkit-slider-thumb { width: 0; height: 4px; } &::-moz-range-thumb { width: 0; height: 4px; } }
+    .player__transport .player__button--primary .ui-icon { width: 28px; height: 28px; }
     .player__mini-only { display: inline-grid; }
+    @media (max-width: 780px) { .player__button { width: 38px; } .player__close { width: 44px; } }
 }
+
+// A song: the cover stands where the picture would be. In the bar it is the square at the left; on the whole screen it is big in the middle, over the same cover blurred.
+.player__cover { position: relative; overflow: hidden; background: var(--artwork-shade); .media-image, .no-cover { display: block; width: 100%; height: 100%; object-fit: cover; } }
+.player.player--audio {
+    .player__video { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+    &.player--idle { cursor: auto; }
+    &.player--idle .player__chrome { opacity: 1; }
+    &:not(.player--mini) {
+        grid-template-columns: minmax(0, 1fr);
+        .player__stage { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; aspect-ratio: auto; min-height: calc(100dvh - 32px); border-radius: var(--radius-panel); background: linear-gradient(170deg, #1b1430, var(--artwork-shade)); }
+        .player__chrome { display: contents; }
+        .player__top { grid-row: 1; background: none; }
+        .player__bottom { grid-row: 3; width: min(720px, 100%); justify-self: center; box-sizing: border-box; background: none; padding-bottom: max(20px, env(safe-area-inset-bottom)); }
+        .player__cover { grid-row: 2; align-self: center; justify-self: center; width: min(84vw, 62dvh, 520px); aspect-ratio: 1; border-radius: var(--radius-panel); box-shadow: var(--shadow-overlay); }
+        .player__heading { text-align: center; }
+        .player__title { font-size: 1.2rem; }
+        .player__context { font-size: .9rem; opacity: .8; }
+        // Where a picture would need them: nothing of these for a song.
+        [data-action=fullscreen], [data-action=pip], [data-action=theater], [data-action=subtitle-toggle], [data-action=forward], [data-action=back], [data-action=episodes] { display: none; }
+        .player__top { padding: 12px 12px 0; }
+        .player__transport { position: static; transform: none; gap: 12px; }
+        .player__context { display: block; }
+        .player__actions { grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); }
+        .player__transport .player__button--primary .ui-icon { width: 44px; height: 44px; }
+        // A phone's screen is the whole stage.
+        @media (max-width: 600px) { .player__stage { min-height: 100dvh; border-radius: 0; } }
+    }
+}
+.player__close { width: 44px; min-height: 44px; }
+.player__top > .player__close { margin-left: auto; }
+
 @media (max-width: 1100px) {
     .player:has(.player__sidebar:not([popover])) { grid-template-columns: 1fr; }
     .player__sidebar:not([popover]) { display: none; }
@@ -333,7 +393,6 @@
     .player__transport { position: absolute; inset: 50% auto auto 50%; transform: translate(-50%, -50%); }
     .player:not(.player--mini) .player__transport [data-action=back], .player:not(.player--mini) .player__transport [data-action=forward] { display: inline-grid; }
     .player__volume, [data-action=theater] { display: none; }
-    .player--mini .player__heading { display: none; }
     // The picture is low here and the transport floats over its middle: the chapter is named by the preview while dragging and in the chapter list.
     .player__chapter-now { display: none; }
 }

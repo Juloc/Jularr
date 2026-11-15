@@ -58,13 +58,15 @@
     {
         @Assets.Scripts("Framework/Components/ContinueReadingBar.entry.ts")
     }
-    @if (!isReader && !isPlayer)
+    @if (!isReader)
     {
         @Assets.Scripts("Framework/Components/Form.entry.ts")
         @Assets.Scripts("Framework/Components/Dropdown.entry.ts")
     }
-    @if (showShell && !isReader)
+    @* The player stays while the app is browsed around it, in the page of the app or in the player's own page after it was minimized: both carry the app's scripts. *@
+    @if ((showShell || isPlayer) && !isReader)
     {
+        @Assets.Scripts("Modules/Player/launcher.entry.ts")
         @Assets.Scripts("Framework/Components/SavePill.entry.ts")
         @Assets.Scripts("Framework/Components/ActionToast.entry.ts")
         @Assets.Scripts("Framework/Components/Modal.entry.ts")

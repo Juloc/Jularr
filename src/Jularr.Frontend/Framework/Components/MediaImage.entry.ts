@@ -4,7 +4,7 @@ const selector = "img.media-image, img[data-no-cover]";
 
 function replace(image: HTMLImageElement): void {
     const template = document.querySelector<HTMLTemplateElement>("template[data-no-cover]");
-    const kind = image.dataset.noCover === "person" ? "person" : "poster";
+    const kind = image.dataset.noCover === "person" || image.dataset.noCover === "music" ? image.dataset.noCover : "poster";
     const standIn = template?.content.querySelector<HTMLElement>(`[data-kind="${kind}"]`)?.cloneNode(true) as HTMLElement | undefined;
     if (!standIn || !image.isConnected) return;
     standIn.classList.add(...Array.from(image.classList));

@@ -1,7 +1,8 @@
 import "./player.scss";
 import { updateRangeValue } from "../../Framework/Components/Range";
 import { progressReporter } from "../Tracking/Progress";
-import { inserted, keepAddress, pushAddress, releaseAddress, visit } from "../Navigation/PageSwap";
+import { inserted, keepAddress, pushAddress, releaseAddress, shownPath, visit } from "../Navigation/PageSwap";
+import { enableMiniDrag, savedCorner } from "./MiniDrag";
 import type { CastSender, CastState } from "./Cast";
 import { CastQueue, type QueueApi, type QueueChoice, type QueueEntry, type QueueItem } from "./CastQueue";
 import { awake, focus } from "../Playback/MediaFocus";
@@ -30,8 +31,15 @@ const IdleDelay = 3_000;
 const MaxRecoveries = 5;
 const WakeRetries = 6;
 
-const element = document.querySelector<HTMLElement>('.player[data-start-url]:not([data-start-url=""])');
-if (element) {
+// The view the player is in is shared by every item it plays one after the other: the bar or the whole screen, and whether the whole screen holds a history entry of its own
+// (a Back then shrinks it instead of leaving the page).
+const view = { mini: false, pushed: false };
+
+// Starts the player that is in the page and not started yet; the launcher asks for it again when it brings a player into a page that has none.
+function mount(): void {
+    const element = document.querySelector<HTMLElement>('.player[data-start-url]:not([data-start-url=""]):not([data-mounted])');
+    if (!element) return;
+    element.dataset.mounted = "";
     void start(element).catch(() => {
         const status = element.querySelector<HTMLElement>('[data-role=status]');
         if (status) {
@@ -42,8 +50,11 @@ if (element) {
         if (loading) loading.hidden = true;
     });
 }
+window.addEventListener("jularr:player-mount", mount);
+mount();
+document.documentElement.dataset.playerReady = "";
 
-async function start(player: HTMLElement): Promise<void> {
+async function start(player: HTMLElement, keepView = false): Promise<void> {
     const video = player.querySelector<HTMLVideoElement>(".player__video")!;
     const status = player.querySelector<HTMLElement>("[data-role=status]")!;
     const timeline = player.querySelector<HTMLInputElement>("[data-role=timeline]")!;
@@ -55,6 +66,23 @@ async function start(player: HTMLElement): Promise<void> {
     const gesture = player.querySelector<HTMLElement>("[data-role=gesture]")!;
     // Fullscreen belongs to the page's main element, which stays when the next episode replaces the player inside it.
     const host = player.closest<HTMLElement>(".player-main") ?? player;
+    const playerAddress = player.dataset.address || location.pathname + location.search;
+    const isAudio = player.classList.contains("player--audio");
+    // The launcher says where the player starts (a song in the bar, a film on the whole screen); the next item of a playback keeps the view; the player's own page is the whole screen.
+    const startView = host.dataset.start;
+    delete host.dataset.start;
+    if (!keepView) {
+        view.mini = startView === "mini";
+        view.pushed = false;
+    }
+    applyView();
+    if (!keepView && startView === "full") {
+        pushAddress(playerAddress);
+        view.pushed = true;
+    }
+    keepAddress(playerAddress, () => expand(false), () => { view.pushed = false; shrink(); });
+    // A film or an episode wants the whole screen, a song stays in the bar.
+    if (keepView && !isAudio && view.mini) expand(true);
     // Everything that listens beyond the player's own elements ends with it.
     const lifetime = new AbortController();
     const { signal } = lifetime;
@@ -205,8 +233,7 @@ async function start(player: HTMLElement): Promise<void> {
     document.body.classList.add("player-active");
     const minimizeButton = player.querySelector<HTMLButtonElement>("[data-action=minimize]");
     if (minimizeButton) minimizeButton.hidden = false;
-    const playerAddress = location.pathname + location.search;
-    const backHref = player.querySelector<HTMLAnchorElement>("[data-action=close]")?.href ?? "/";
+    const backHref = player.dataset.back || "/";
 
     // Save acknowledged progress only; each plan has its own session.
     const report = (ended: boolean, completed = ended) => {
@@ -227,9 +254,9 @@ async function start(player: HTMLElement): Promise<void> {
     video.addEventListener("ended", () => {
         report(true);
         // An album continues with the next track at once; a season's next episode follows after a countdown, and not at all when the profile turned autoplay off.
-        // The mini player stops where it is.
+        // The mini player of an episode stops where it is; a song's bar goes on.
         const href = player.querySelector<HTMLElement>("[data-action=next][data-href]")?.dataset.href;
-        if (!href || player.classList.contains("player--mini")) return;
+        if (!href || view.mini && countdownSeconds !== 0) return;
         if (countdownSeconds === 0) void openEpisode(href);
         else if (autoplay) startCountdown(href);
     });
@@ -266,9 +293,8 @@ async function start(player: HTMLElement): Promise<void> {
         void openEpisode(href);
     }
 
-    // The next episode replaces the player inside the page's main element; in fullscreen this keeps fullscreen, otherwise the page changes as always.
+    // The next item replaces the player inside its main element, which stays: the view, fullscreen and the page below are as they were.
     async function openEpisode(href: string): Promise<void> {
-        if (document.fullscreenElement !== host || host === player || player.classList.contains("player--mini")) { location.assign(href); return; }
         try {
             const response = await fetch(href, { credentials: "same-origin", headers: { Accept: "text/html" } });
             const address = new URL(response.url);
@@ -278,11 +304,15 @@ async function start(player: HTMLElement): Promise<void> {
             if (!main?.querySelector('.player[data-start-url]:not([data-start-url=""])')) throw new Error("episode");
             dispose();
             host.replaceChildren(...Array.from(main.childNodes));
-            document.title = page.title;
-            pushAddress(address.pathname + address.search);
+            // The address follows only where the player owns it.
+            if (location.pathname.startsWith("/Player/")) {
+                history.replaceState(history.state, "", address.pathname + address.search);
+                document.title = page.title;
+            }
             inserted(host);
             const replacement = host.querySelector<HTMLElement>('.player[data-start-url]:not([data-start-url=""])')!;
-            void start(replacement).catch(() => undefined);
+            replacement.dataset.mounted = "";
+            void start(replacement, true).catch(() => undefined);
         } catch {
             location.assign(href);
         }
@@ -878,16 +908,16 @@ async function start(player: HTMLElement): Promise<void> {
             if (casting) castQueue?.setSubtitle(choice.key || null);
             else showSubtitle(choice.key, choice.language);
         },
-        close: () => void minimize(),
+        close: () => void closePlayer(),
+        details: () => void showDetails(),
         'next-now': () => { const href = next.dataset.href; stopCountdown(); if (href) void openEpisode(href); },
         'next-cancel': stopCountdown,
         skip: () => { if (offered) skipMarker(offered, false); },
         'skip-undo': undoSkip,
         previous: () => go("previous"),
         next: () => go("next"),
-        minimize: () => void minimize(),
-        expand: () => expand(true),
-        stop
+        minimize,
+        expand: () => expand(true)
     };
     player.addEventListener("click", event => {
         const target = event.target as Element;
@@ -903,7 +933,9 @@ async function start(player: HTMLElement): Promise<void> {
         if (point) { setSpeed(Number(point.dataset.speed), true); return; }
 
         const action = target.closest<HTMLElement>("[data-action]")?.dataset.action;
-        if (action && actions[action]) { if (action === 'close') event.preventDefault(); actions[action](); }
+        if (action && actions[action]) { if (action === 'details') event.preventDefault(); actions[action](); }
+        // The bar opens the whole player where its cover or its title is tapped (a drag of the bar is no tap).
+        else if (view.mini && target.closest(".player__cover, .player__heading, .player__video") && !host.hasAttribute("data-dragged")) expand(true);
         else if (target === video && lastPointerType === "mouse") actions.toggle();
     });
     // A double click of the mouse toggles fullscreen; a double tap of a finger seeks (below).
@@ -1026,27 +1058,74 @@ async function start(player: HTMLElement): Promise<void> {
     });
     player.addEventListener("focusin", wake);
     wake();
+    // A link to a player while this one is here: another item replaces the playing one, the same item comes to the front.
+    window.addEventListener("jularr:player-open", event => {
+        const href = (event as CustomEvent<{ href: string }>).detail.href;
+        if (href === playerAddress) { if (view.mini) expand(true); } else void openEpisode(href);
+    }, { signal });
+    enableMiniDrag(host, view, signal);
 
-    // Minimize keeps the same session in a bar while the app is browsed around it.
-    async function minimize(): Promise<void> {
+    // The view: the whole screen over the page, or the bar in a corner. The page below is out of reach (and keeps its place) while the whole screen is open.
+    function applyView(): void {
+        player.classList.toggle("player--mini", view.mini);
+        document.body.classList.add("player-active");
+        document.body.classList.toggle("player-mini", view.mini);
+        document.documentElement.classList.toggle("player-open", !view.mini);
+        document.getElementById("app-content")?.toggleAttribute("inert", !view.mini);
+        host.toggleAttribute("data-mini", view.mini);
+        if (view.mini) host.dataset.corner = savedCorner();
+    }
+
+    // Minimize keeps the same session in a bar while the app is browsed around it: over the page the player came from, or, in the player's own page, over the page it came from.
+    function minimize(): void {
         shrink();
-        keepAddress(playerAddress, () => expand(false), shrink);
-        await visit(backHref);
+        if (view.pushed) {
+            view.pushed = false;
+            history.back();
+        } else if (document.getElementById("app-content")?.dataset.shell === "player") {
+            void visit(backHref);
+        }
     }
 
     function shrink(): void {
         player.querySelectorAll<HTMLElement>('.player__settings, .player__chapters').forEach(panel => panel.hidePopover());
         sidebar?.hasAttribute('popover') && sidebar.hidePopover();
-        player.classList.add("player--mini");
-        document.body.classList.add("player-mini");
+        if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
+        view.mini = true;
+        host.removeAttribute("id");
         document.body.classList.remove("player-page");
+        applyView();
     }
 
     function expand(push: boolean): void {
-        player.classList.remove("player--mini");
-        document.body.classList.remove("player-mini");
+        view.mini = false;
         document.body.classList.add("player-page");
-        if (push) pushAddress(playerAddress);
+        applyView();
+        if (push && location.pathname + location.search !== playerAddress) pushAddress(playerAddress);
+        view.pushed = true;
+    }
+
+    // The details of the title open in the app while the player shrinks into the bar.
+    async function showDetails(): Promise<void> {
+        shrink();
+        view.pushed = false;
+        if (shownPath() !== backHref) await visit(backHref);
+    }
+
+    // Close: the playback ends. From the whole screen the viewer is taken back to where they came from; the bar just goes away.
+    function closePlayer(): void {
+        const wasMini = view.mini;
+        const owned = view.pushed;
+        stop();
+        if (wasMini) return;
+        if (owned) {
+            view.pushed = false;
+            history.back();
+        } else if (document.getElementById("app-content")?.dataset.shell === "player") {
+            // The player's own page: back to the page before it, else to the title.
+            if (history.length > 1 && document.referrer && new URL(document.referrer).origin === location.origin) history.back();
+            else location.assign(backHref);
+        }
     }
 
     // Stop ends the session and leaves the app as it is; progress stays.
@@ -1060,7 +1139,12 @@ async function start(player: HTMLElement): Promise<void> {
         video.load();
         if (navigator.mediaSession) { navigator.mediaSession.metadata = null; navigator.mediaSession.playbackState = "none"; }
         releaseAddress();
-        document.body.classList.remove("player-active", "player-mini");
+        dispose();
+        document.body.classList.remove("player-active", "player-mini", "player-page");
+        document.documentElement.classList.remove("player-open");
+        document.getElementById("app-content")?.removeAttribute("inert");
+        if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
+        view.mini = false;
         player.closest(".player-main")?.remove();
     }
 
@@ -1421,7 +1505,8 @@ async function start(player: HTMLElement): Promise<void> {
         const session = navigator.mediaSession;
         if (!session) return;
         const text = (selector: string) => player.querySelector(selector)?.textContent?.trim() ?? "";
-        const poster = video.getAttribute("poster");
+        // A song's artwork is the album's cover, the picture of a video its poster.
+        const poster = player.querySelector<HTMLImageElement>(".player__cover img")?.getAttribute("src") ?? video.getAttribute("poster");
         session.metadata = new MediaMetadata({
             title: text(".player__title"),
             artist: text(".player__context"),
@@ -1616,7 +1701,7 @@ async function start(player: HTMLElement): Promise<void> {
         if (kind !== "phone") return;
         const top = player.querySelector<HTMLElement>(".player__top");
         const pip = player.querySelector<HTMLElement>("[data-action=pip]");
-        if (top && pip) top.insertBefore(pip, top.querySelector("[data-action=stop]"));
+        if (top && pip) top.insertBefore(pip, top.querySelector("[data-action=close]"));
         const left = player.querySelector<HTMLElement>(".player__audio");
         if (left) for (const name of ["episodes", "chapters"]) { const button = player.querySelector<HTMLElement>(`[data-action=${name}]`); if (button) left.append(button); }
     }

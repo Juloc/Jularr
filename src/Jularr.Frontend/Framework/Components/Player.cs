@@ -9,7 +9,11 @@ namespace Jularr.Frontend.Framework
     // Server-rendered player chrome; Modules/Player owns the client behavior.
     public sealed record PlayerSource(string Title, string? Context, string BackHref, string StartUrl, string SessionUrl, string AntiforgeryToken, string? PosterUrl = null,
         IReadOnlyList<PlayerTrack>? AudioTracks = null, IReadOnlyList<PlayerTrack>? Subtitles = null, string? SubtitleUrl = null, string? PreviousHref = null, string? NextHref = null,
-        string? TrickplayUrl = null, PlayerPreferences? Preferences = null, IReadOnlyList<PlayerMarker>? Markers = null, IReadOnlyList<PlayerChapter>? Chapters = null);
+        string? TrickplayUrl = null, PlayerPreferences? Preferences = null, IReadOnlyList<PlayerMarker>? Markers = null, IReadOnlyList<PlayerChapter>? Chapters = null,
+        string? Address = null, PlayerAudio? Audio = null);
+
+    // A song: the cover (or its stand-in) takes the place of the picture, the artist and album stand under the title.
+    public sealed record PlayerAudio(string? CoverUrl, string? Subtitle);
 
     // What the profile and the device chose before playing: the speed, whether the next episode follows (after a countdown of that many seconds, none for music), and the quality in use.
     public sealed record PlayerPreferences(decimal Speed, bool AutoplayNext, int CountdownSeconds, string QualityKey, string SpeedUrl, string IntroSkip = "Button", string OutroSkip = "Button", string? SecondSubtitleLanguage = null, string? TranslateUrl = null, string? ProfileLanguage = null);
@@ -48,6 +52,8 @@ namespace Jularr.Frontend.Framework
 
             var stage = new Div(
                 video,
+                // A song has no picture: its cover stands where the picture would be.
+                source.Audio is { } audio ? new Div(MediaImage.Or(assets, audio.CoverUrl, source.Title, 640, 640, NoCoverKind.Music)).Class("player__cover") : new Span(),
                 // Playback feedback stays above the picture, never over the controls.
                 new Div(new Span().Class("player__loading-ring")).Class("player__loading")
                     .Attribute("data-role", "loading").Attribute("aria-hidden", "true").Attribute("hidden", "hidden"),
@@ -66,7 +72,6 @@ namespace Jularr.Frontend.Framework
                     .Attribute("aria-hidden", "true").Attribute("hidden", "hidden"),
                 new Div(
                     new Div(
-                        new A(Icon("close")).Class("button button--icon player__button").Attribute("href", source.BackHref).Attribute("aria-label", texts["common.back"]).Attribute("data-action", "close"),
                         new Button(new Icon("chevron-down", assets)).Class("button button--icon player__button").Attribute("data-action", "minimize").Attribute("aria-label", texts["player.minimize"])
                             .Attribute("hidden", "hidden"),
                         new Div([.. title]).Class("player__heading"),
@@ -74,7 +79,9 @@ namespace Jularr.Frontend.Framework
                             .Attribute("aria-label", texts["player.expand"]),
                         Action("airplay", "player.airplay", "airplay").Attribute("hidden", "hidden"),
                         Action("cast", "player.cast", "cast").Attribute("hidden", "hidden"),
-                        new Button(Icon("close")).Class("button button--icon player__button player__mini-only").Attribute("data-action", "stop").Attribute("aria-label", texts["player.stop"])
+                        // The one way out: in the big player it ends the playback and returns to where the viewer came from, in the mini player it ends the playback.
+                        new Button(Icon("close")).Class("button button--icon player__button player__close").Attribute("data-action", "close").Attribute("aria-label", texts["common.close"])
+                            .Attribute("title", texts["common.close"])
                     ).Class("player__top"),
                     new Div(
                         new Div(
@@ -155,7 +162,8 @@ namespace Jularr.Frontend.Framework
                         .Attribute("popovertarget", "player-sidebar").Attribute("popovertargetaction", "hide"),
                     _sidebar).Class("player__sidebar").Attribute("id", "player-sidebar").Attribute("aria-label", texts["details.episodes"]));
             }
-            new Div([.. content]).Class("player").Attribute("hx-ignore", "")
+            new Div([.. content]).Class(source.Audio is null ? "player" : "player player--audio").Attribute("hx-ignore", "")
+                .Attribute("data-address", source.Address ?? "").Attribute("data-back", source.BackHref)
                 .Attribute("data-start-url", source.StartUrl)
                 .Attribute("data-session-url", source.SessionUrl)
                 .Attribute("data-antiforgery", source.AntiforgeryToken)

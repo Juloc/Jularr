@@ -313,6 +313,12 @@ namespace Jularr.Frontend.Pages.User.Details
 
                 await Task.WhenAll(reads);
                 _availability = await availabilityTask;
+                // An album lists all its tracks on one page: a long one (a double album, a compilation) does not stop after the first 48.
+                if (_work.MediaTypeId == MediaType.Music && _availability.Items.Count >= 48 && PageNumber == 1)
+                {
+                    _availability = await readAvailability.ExecuteAsync<PageResult<WorkAvailabilityV1>>(new ReadWorkAvailabilityParametersV1(Id, page: 1, pageSize: PageRequest.MaximumPageSize), token);
+                }
+
                 _editions = await editionsTask;
                 _credits = await creditsTask;
                 _relations = await relationsTask ?? _relations;

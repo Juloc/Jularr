@@ -65,17 +65,25 @@ test('player planning network failure displays the localized status', async () =
         dataset: { startUrl: '/start', antiforgery: 'test' },
         classList: { toggle() {}, contains: () => false },
         closest: () => null,
+        toggleAttribute() {},
+        removeAttribute() {},
         querySelectorAll: () => [],
         querySelector: selector => selector === '[data-role=status]' ? status : selector === '[data-status=failed]' ? { textContent: 'Localized failure' }
             : selector === '#player-sidebar' ? null : { dataset: {}, addEventListener() {}, setAttribute() {} }
     };
     runInNewContext(code, {
-        exports: {}, require: name => name === './Skip' ? skip : name.endsWith('/Range') ? { updateRangeValue() {} } : {},
-        document: { querySelector: () => player, createElement: () => ({ canPlayType: () => '' }), addEventListener() {} },
+        exports: {}, require: name => name === './Skip' ? skip : name.endsWith('/Range') ? { updateRangeValue() {} }
+            : name.endsWith('/PageSwap') ? { inserted() {}, keepAddress() {}, pushAddress() {}, releaseAddress() {}, shownPath() {}, visit() {} }
+            : name === './MiniDrag' ? { enableMiniDrag() {}, savedCorner: () => 'br' } : {},
+        location: { pathname: '/Player/1', search: '' },
+        document: {
+            querySelector: () => player, getElementById: () => null, createElement: () => ({ canPlayType: () => '' }), addEventListener() {},
+            documentElement: { dataset: {}, classList: { toggle() {}, remove() {} } }, body: { classList: { add() {}, toggle() {}, remove() {} } }
+        },
         matchMedia: () => ({ matches: false, addEventListener() {} }),
         // The player starts a deferred loading indicator before requesting its plan.
         // Provide the browser timer APIs so this fixture reaches the actual fetch.
-        window: { setTimeout: () => 1 },
+        window: { setTimeout: () => 1, addEventListener() {} },
         clearTimeout() {},
         AbortController,
         fetch: () => { requests++; return Promise.reject(new Error('Offline')); }

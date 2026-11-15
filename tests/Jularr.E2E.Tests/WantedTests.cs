@@ -105,7 +105,7 @@ namespace Jularr.E2E.Tests
                         () => {
                             document.querySelector('.continue-bar').remove();
                             document.body.classList.add('player-mini');
-                            document.body.insertAdjacentHTML('beforeend', '<div data-test-player style="position: fixed; right: 12px; bottom: {{(phone ? 84 : 12)}}px; width: min(720px, calc(100% - 24px)); height: 88px; background: #333"></div>');
+                            document.body.insertAdjacentHTML('beforeend', '<div data-test-player style="position: fixed; {{(phone ? "left: 0; right: 0; bottom: 0; height: 68px" : "right: 16px; bottom: 16px; width: 440px; height: 76px")}}; background: #333"></div>');
                         }
                         """);
                     CollectionAssert.AreEqual(new[] { true, true, true }, await page.EvaluateAsync<bool[]>(EndOfPage), "Over the minimized player: " + name);

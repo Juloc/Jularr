@@ -61,9 +61,14 @@ document.addEventListener("htmx:before:swap", event => {
     location.assign(ctx.response?.raw.url || ctx.request.action);
 });
 
+// The page of the app that is in the document (the player's own page has none until it shrinks): going Back to it from the player needs no new request.
+let appPath = document.getElementById(Content)?.dataset.shell === "app" ? location.pathname + location.search : undefined;
+
 document.addEventListener("htmx:after:swap", event => {
     const content = document.getElementById(Content);
     if (!isPageSwap(contextOf(event)) || !content) return;
+    const shown = new URL(contextOf(event).response?.raw.url || contextOf(event).request.action, location.href);
+    appPath = shown.pathname + shown.search;
     document.body.classList.add("app-page");
     hideUntilStyled(content);
     if (staying) {
@@ -78,6 +83,9 @@ document.addEventListener("htmx:after:swap", event => {
 
 // An action that shows the same page again keeps the reader where they were.
 let staying: { x: number; y: number } | undefined;
+
+// The address of the page of the app that is showing, where the document has one.
+export const shownPath = () => appPath;
 
 export function stayHere(): void {
     staying = { x: window.scrollX, y: window.scrollY };
@@ -200,11 +208,16 @@ document.addEventListener("htmx:config:request", event => {
 });
 
 document.addEventListener("htmx:before:history:restore", event => {
-    if (!own) return;
-    if (isOwn((event as CustomEvent<{ path: string }>).detail.path)) {
-        event.preventDefault();
-        own.enter();
-    } else {
+    const path = (event as CustomEvent<{ path: string }>).detail.path;
+    if (own) {
+        if (isOwn(path)) {
+            event.preventDefault();
+            own.enter();
+            return;
+        }
         own.leave();
     }
+    // The player lay over this very page and it is still there as it was: no new request.
+    if (path === appPath && document.getElementById(Content)?.dataset.shell === "app") event.preventDefault();
+    else appPath = path;
 });
