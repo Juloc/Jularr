@@ -4266,6 +4266,8 @@
    "In Jularr"
   ],
   "discover.forYou": ["For you", "Für dich"],
+  "discover.explore.title": ["Explore", "Entdecken"],
+  "discover.explore.empty": ["Nothing to explore yet.", "Noch nichts zum Entdecken."],
   "discover.becauseGenre": ["Because you like {0}", "Weil du {0} magst"],
   "discover.filter.remove": ["Remove {0}", "{0} entfernen"],
   "discover.feed.Classics": ["Classics", "Klassiker"],

@@ -1899,6 +1899,8 @@ namespace Jularr.Frontend.Localization
             new("discover.feed.games.Popular", "Popular"),
             new("discover.feed.games.New", "New"),
             new("discover.forYou", "For you"),
+            new("discover.explore.title", "Explore"),
+            new("discover.explore.empty", "Nothing to explore yet."),
             new("discover.becauseGenre", "Because you like {0}"),
             new("discover.filter.remove", "Remove {0}"),
             new("discover.feed.Top", "Top rated"),
