@@ -188,6 +188,9 @@ namespace Jularr.Backend.Tests
                 Assert.AreEqual("10min", await request.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "SELECT current_setting('idle_in_transaction_session_timeout')" }));
                 Assert.AreEqual("15s", await request.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "SELECT current_setting('statement_timeout')" }));
 
+                // Pages never wait for the server to compile a short read.
+                Assert.AreEqual("off", await request.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "SELECT current_setting('jit')" }));
+
                 // The web pool is full: background work still gets its connection, a second request fails as a busy database.
                 await using (var background = new SqlContext(worker))
                 {
@@ -195,6 +198,7 @@ namespace Jularr.Backend.Tests
                     Assert.AreEqual("jularr-worker", await background.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "SELECT current_setting('application_name')" }));
                     Assert.AreEqual("30min", await background.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "SELECT current_setting('idle_in_transaction_session_timeout')" }));
                     Assert.AreEqual("1min", await background.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "SELECT current_setting('statement_timeout')" }));
+                    Assert.AreEqual("on", await background.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "SELECT current_setting('jit')" }));
                 }
 
                 await using var waiting = new SqlContext(web);

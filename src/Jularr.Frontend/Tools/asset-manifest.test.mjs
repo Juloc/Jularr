@@ -163,7 +163,7 @@ test("shared cards are small, softly rounded covers with single-line text below 
     assert.match(css, /\.media-card\{--card-width:\s*144px;--card-radius:\s*12px;/);
     assert.match(css, /\.media-card__surface\{(?=[^}]*overflow:hidden)(?=[^}]*border-radius:var\(--card-radius\))/);
     assert.match(css, /\.media-card__progress\{[^}]*height:3px/);
-    assert.match(css, /\.media-card__progress-shell\{(?=[^}]*inset:auto 8px 6px)(?=[^}]*border-radius:999px)/);
+    assert.match(css, /\.media-card__foot\{(?=[^}]*position:absolute)(?=[^}]*inset:auto 0 0)/);
     assert.match(css, /\.media-card__actions\{(?=[^}]*position:absolute)(?=[^}]*inset:0)(?=[^}]*z-index:2)(?=[^}]*display:flex)(?=[^}]*align-items:center)(?=[^}]*justify-content:center)/);
     assert.match(css, /\.media-card__title\{(?=[^}]*overflow:hidden)(?=[^}]*text-overflow:ellipsis)(?=[^}]*white-space:nowrap)/);
     assert.match(css, /\.media-card__info\{(?=[^}]*overflow:hidden)(?=[^}]*white-space:nowrap)/);

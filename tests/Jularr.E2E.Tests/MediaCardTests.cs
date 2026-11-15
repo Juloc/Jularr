@@ -43,10 +43,10 @@ namespace Jularr.E2E.Tests
                 Assert.AreEqual(before.Width, image.Width, .5f);
                 Assert.AreEqual(before.Height, image.Height, .5f);
 
-                // A small cover, its progress a thin capsule inside the cover's foot, the text below it in single lines.
+                // A small cover, its progress a thin bar on the cover's bottom edge, the text below it in single lines.
                 // Every cover has the one size; a phone's is smaller.
                 Assert.IsTrue(width > 640 ? before.Width is >= 133 and <= 150 : before.Width is >= 104 and <= 116, "cover width " + before.Width);
-                Assert.IsTrue(progress.Y + progress.Height <= before.Y + before.Height - 4 && progress.Y >= before.Y + before.Height - 14);
+                Assert.IsTrue(progress.Height <= 4 && Math.Abs(progress.Y + progress.Height - (before.Y + before.Height)) <= .5f, "the bar is a thin line on the bottom edge");
                 Assert.IsTrue(textBox.Y >= before.Y + before.Height - .5f);
                 Assert.IsTrue(textBox.Height <= 48, "details height " + textBox.Height);
                 await Assertions.Expect(title).ToHaveCSSAsync("white-space", "nowrap");

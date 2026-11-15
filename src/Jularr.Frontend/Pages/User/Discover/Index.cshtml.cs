@@ -31,6 +31,8 @@ namespace Jularr.Frontend.Pages.User.Discover
         // Shelves of providers are asked together, a few at a time, and none holds the page longer than this; slower ones are logged.
         private const int ShelfConcurrency = 6;
         private static readonly TimeSpan ShelfLimit = TimeSpan.FromSeconds(8);
+        // A search never waits longer than this for one provider: kept titles are on the page at once, each type's answer joins them or is given up with a quiet note.
+        private static readonly TimeSpan SearchLimit = TimeSpan.FromSeconds(5);
         private static readonly TimeSpan HeroLimit = TimeSpan.FromSeconds(2.5);
         private static readonly TimeSpan SlowShelf = TimeSpan.FromMilliseconds(700);
         private const int SearchRowSize = 20;
@@ -75,7 +77,7 @@ namespace Jularr.Frontend.Pages.User.Discover
         private readonly Dictionary<long, WorkAvailabilityStateV1> _availabilityByWork = [];
         private IReadOnlyList<HomeShelfV1> _layout = [.. Enum.GetValues<HomeShelfType>().Select(type => new HomeShelfV1(type, false))];
         private bool _providerUnavailable;
-        private bool _searchIncomplete;
+        private IReadOnlyList<DiscoverScopeV1> _pending = [];
         private IReadOnlyList<DiscoverSuggestionV1> _known = [];
         private string _providerNotice = "discover.providerUnavailable";
         private IReadOnlyList<DiscoverScopeV1>? _scopes;
@@ -172,7 +174,8 @@ namespace Jularr.Frontend.Pages.User.Discover
             DefineContent(body);
             body.Content.Add(new P().Class("discover-feedback").Attribute("role", "status"));
             page.Content.Add(new Div([.. body.Content]).Attribute("id", "discover-results").Class("discover-results")
-                .Attribute("data-load-error", texts["discover.loadFailed"]).Attribute("data-touch-previews", "off").Attribute("data-provider-unavailable", _providerUnavailable ? "true" : "false"));
+                .Attribute("data-load-error", texts["discover.loadFailed"]).Attribute("data-search-slow", texts["discover.search.slow"]).Attribute("data-touch-previews", "off")
+                .Attribute("data-provider-unavailable", _providerUnavailable ? "true" : "false"));
         }
 
         private void DefineContent(Page page)
@@ -198,10 +201,11 @@ namespace Jularr.Frontend.Pages.User.Discover
             // A search of several types shows each type as its own row.
             if (searching && selected is null)
             {
-                if (_searchIncomplete) page.Content.Add(new P(new Text("discover.providerUnavailable")).Attribute("role", "status"));
                 var rows = SearchRows();
                 if (rows.Count == 0) page.Content.Add(new P(new Text("discover.noResults")).Attribute("role", "status"));
                 page.Content.AddRange(rows);
+                // Said only when every place that waited has answered with nothing.
+                if (_pending.Count > 0) page.Content.Add(new P(new Text("discover.noResults")).Class("discover-search-none").Attribute("role", "status").Attribute("hidden", "hidden"));
                 return;
             }
 
@@ -487,8 +491,9 @@ namespace Jularr.Frontend.Pages.User.Discover
         private MediaShelf ContinueShelf(string titleKey, IEnumerable<ContinueItemV1> items) => new(assets, titleKey, null, [.. items.Select(item =>
         {
             var readable = ReadableMedia.IsReadable(item.MediaAssetTypeId);
+            var (unit, left) = ContinueDetail.Parts(key => texts[key], item);
             var card = new MediaCard(assets, item.Title, "/Details/" + item.WorkId.ToString(CultureInfo.InvariantCulture), item.PosterUrl)
-                .Facts(item.ReleaseYear, MediaTypeLabel.Key(item.MediaTypeId, item.MediaSubtypeId), null).Resume(ContinueDetail.Format(key => texts[key], item))
+                .Facts(item.ReleaseYear, MediaTypeLabel.Key(item.MediaTypeId, item.MediaSubtypeId), null).Resume(left ?? unit, left is null ? null : unit)
                 .Action("media.continue", (readable ? "/Read/" : "/Player/") + item.MediaAssetId.ToString(CultureInfo.InvariantCulture))
                 .Bookmark(new MediaBookmark(assets, item.WorkId)).HoverPreview(MediaPreviewAddress.Work(item.WorkId))
                 .Menu(new ContinueMenu(assets, item.WorkId, item.WorkUnitId, item.IsWatchlisted, item.MediaAssetTypeId, Csrf, Request.Path + Request.QueryString));
@@ -760,52 +765,90 @@ namespace Jularr.Frontend.Pages.User.Discover
             }
         }
 
-        // One scope searches its own catalog or TMDB and pages; several ask each chosen catalog and TMDB for films and series together, once,
-        // and a provider that fails leaves the other rows.
+        // One type searches its own catalog or TMDB and pages as a grid; several show what Jularr keeps at once and every type with a provider as a place of its own
+        // that SearchGroup fills when that provider answers, so no provider holds the page or another provider.
         private async Task SearchAsync(DiscoverScopeV1? selected)
         {
-            if (selected is { IsCatalog: true })
-            {
-                _catalog = [.. (await catalogSearch.ExecuteAsync<BaseDataList<DiscoverCatalogItemV1>>(new SearchDiscoverCatalogDataV1(selected.MediaTypeId, Query!, selected.MediaSubtypeId),
-                    HttpContext.RequestAborted)).Select(item => (selected, item))];
-                return;
-            }
-
+            // One type asked alone needs its answer for its grid, within the same short limit; a slow answer says so like any unavailable provider.
             if (selected is not null)
             {
-                _results = await search.ExecuteAsync<BaseDataList<DiscoverItemV1>>(new SearchDiscoverDataV1(Query!, selected.MediaTypeId, PageNumber), HttpContext.RequestAborted);
+                using var single = new SemaphoreSlim(1);
+                if (selected.IsCatalog)
+                {
+                    var catalog = await SearchLimitedAsync(single, SearchLimit, async token =>
+                        (await catalogSearch.ExecuteAsync<BaseDataList<DiscoverCatalogItemV1>>(new SearchDiscoverCatalogDataV1(selected.MediaTypeId, Query!, selected.MediaSubtypeId), token))
+                            .Select(item => (selected, item)).ToList());
+                    _catalog = catalog ?? throw new ServiceUnavailableException("discover_search_slow");
+                    return;
+                }
+
+                _results = await SearchLimitedAsync(single, SearchLimit, token => search.ExecuteAsync<BaseDataList<DiscoverItemV1>>(new SearchDiscoverDataV1(Query!, selected.MediaTypeId, PageNumber), token))
+                    ?? throw new ServiceUnavailableException("discover_search_slow");
                 return;
             }
 
-            // The titles Jularr keeps answer too, so what the suggestions showed is never missing when a provider does not answer.
-            var known = suggest.ExecuteAsync<BaseDataList<DiscoverSuggestionV1>>(new SuggestDiscoverDataV1(Query!), HttpContext.RequestAborted);
-            using var gate = new SemaphoreSlim(ShelfConcurrency);
-            var catalogs = Chosen.Where(scope => scope.IsCatalog).Select(scope => SearchLimitedAsync(gate, async token =>
-                (await catalogSearch.ExecuteAsync<BaseDataList<DiscoverCatalogItemV1>>(new SearchDiscoverCatalogDataV1(scope.MediaTypeId, Query!, scope.MediaSubtypeId), token))
-                    .Select(item => (scope, item)).ToList())).ToList();
-            var provider = Chosen.Any(scope => !scope.IsCatalog)
-                ? SearchLimitedAsync(gate, token => search.ExecuteAsync<BaseDataList<DiscoverItemV1>>(new SearchDiscoverDataV1(Query!), token))
-                : Task.FromResult<BaseDataList<DiscoverItemV1>?>(new BaseDataList<DiscoverItemV1>([]));
-            await Task.WhenAll(catalogs.Cast<Task>().Append(provider).Append(known));
-
-            _catalog = [.. catalogs.SelectMany(task => task.Result ?? [])];
-            _results = provider.Result is { } found ? [.. found] : [];
-            _searchIncomplete = provider.Result is null || catalogs.Any(task => task.Result is null);
-            _known = await known;
+            _known = await suggest.ExecuteAsync<BaseDataList<DiscoverSuggestionV1>>(new SuggestDiscoverDataV1(Query!), HttpContext.RequestAborted);
+            _pending = [.. Chosen.Where(HasSearchProvider)];
         }
 
-        // One provider's search within the shared limits; null when it failed or answered too late.
-        private async Task<TResult?> SearchLimitedAsync<TResult>(SemaphoreSlim gate, Func<CancellationToken, Task<TResult>> read) where TResult : class
+        private static bool HasSearchProvider(DiscoverScopeV1 scope) => scope.IsCatalog || scope.MediaTypeId is MediaType.Movie or MediaType.Series;
+
+        // One type's provider answers for its place in the search rows: its cards, none, or "failed" when it did not answer within the limit.
+        public async Task<IActionResult> OnGetSearchGroupAsync(string? group)
+        {
+            if (!texts.CanReadMedia()) return Forbid();
+            if (string.IsNullOrWhiteSpace(Query)) return new NoContentResult();
+
+            await LoadListedAsync();
+            if (Chosen.FirstOrDefault(scope => scope.Slug == group && HasSearchProvider(scope)) is not { } scope) return NotFound();
+
+            using var gate = new SemaphoreSlim(1);
+            IReadOnlyList<IUiComponent>? cards = null;
+            if (scope.IsCatalog)
+            {
+                var found = await SearchLimitedAsync(gate, SearchLimit, async token => (await catalogSearch.ExecuteAsync<BaseDataList<DiscoverCatalogItemV1>>(
+                    new SearchDiscoverCatalogDataV1(scope.MediaTypeId, Query!, scope.MediaSubtypeId), token)).Select(item => (scope, item)).ToList());
+                if (found is not null)
+                {
+                    _catalog = found;
+                    await LoadAvailabilityAsync();
+                    cards = [.. Filtered(found).OrderBy(entry => Relevance(entry.Item.Title)).Take(SearchRowSize).Select(entry => CatalogCard(scope, entry.Item))];
+                }
+            }
+            else
+            {
+                var found = await SearchLimitedAsync(gate, SearchLimit, token => search.ExecuteAsync<BaseDataList<DiscoverItemV1>>(new SearchDiscoverDataV1(Query!, scope.MediaTypeId), token));
+                if (found is not null)
+                {
+                    _results = [.. found.Where(item => item.MediaTypeId == scope.MediaTypeId)];
+                    await LoadAvailabilityAsync();
+                    cards = [.. Filtered(_results).OrderBy(item => Relevance(item.Title)).Take(SearchRowSize).Select(Card)];
+                }
+            }
+
+            var state = cards is null ? "failed" : cards.Count == 0 ? "empty" : "cards";
+            return Partial("_UiComponent", new Div([.. cards ?? []]).Class("discover-search-answer").Attribute("data-state", state));
+        }
+
+        // The best match first: the exact title, then the titles that begin with the words.
+        private int Relevance(string title)
+        {
+            var text = Query!.Trim();
+            return title.Equals(text, StringComparison.CurrentCultureIgnoreCase) ? 0 : title.StartsWith(text, StringComparison.CurrentCultureIgnoreCase) ? 1 : 2;
+        }
+
+        // One provider's search within a limit; null when it failed or answered too late.
+        private async Task<TResult?> SearchLimitedAsync<TResult>(SemaphoreSlim gate, TimeSpan within, Func<CancellationToken, Task<TResult>> read) where TResult : class
         {
             var requestAborted = HttpContext.RequestAborted;
             await gate.WaitAsync(requestAborted);
             try
             {
                 using var limit = CancellationTokenSource.CreateLinkedTokenSource(requestAborted);
-                limit.CancelAfter(ShelfLimit);
-                return await read(limit.Token);
+                limit.CancelAfter(within);
+                return await read(limit.Token).WaitAsync(within + TimeSpan.FromMilliseconds(500), requestAborted);
             }
-            catch (Exception exception) when (exception is ServiceUnavailableException || exception is OperationCanceledException && !requestAborted.IsCancellationRequested)
+            catch (Exception exception) when (exception is ServiceUnavailableException || exception is TimeoutException || exception is OperationCanceledException && !requestAborted.IsCancellationRequested)
             {
                 log.LogWarning("Discover search answered nothing: {Reason}", exception.Message);
                 return null;
@@ -816,34 +859,40 @@ namespace Jularr.Frontend.Pages.User.Discover
             }
         }
 
-        // Each chosen type's results as one row: the kept titles, then the providers' others; the best match first and local titles before others that match
-        // as well (a chosen sort replaces this). The type with the best match leads, then the order of the media-type bar. See all searches that type alone.
-        private List<MediaShelf> SearchRows()
+        // Each chosen type's kept titles as one row, the best match first and titles Jularr holds before others that match as well (a chosen sort replaces this); a type
+        // with a provider that has no kept title yet is a row of grey cards. The rows keep their places while the providers answer: those with kept titles lead by their
+        // best match, then the order of the media-type bar, then the others. See all searches that type alone.
+        private List<IUiComponent> SearchRows()
         {
-            var text = Query!.Trim();
-            int Relevance(string title) => title.Equals(text, StringComparison.CurrentCultureIgnoreCase) ? 0 : title.StartsWith(text, StringComparison.CurrentCultureIgnoreCase) ? 1 : 2;
-
             var rows = Chosen.Select((scope, order) =>
             {
-                var kept = _known.Where(item => item.ScopeSlug == scope.Slug
+                var hits = _known.Where(item => item.ScopeSlug == scope.Slug
                         && Fits(item.MediaStateTypeId == MediaStateType.Available, item.MediaStateTypeId is null or MediaStateType.NotRequested, item.ReleaseYear))
-                    .Select(item => (item.WorkId, item.Title, item.ReleaseYear, Local: item.MediaStateTypeId == MediaStateType.Available, Card: KnownCard(scope, item)));
-                var found = scope.IsCatalog
-                    ? Filtered((_catalog ?? []).Where(entry => entry.Scope == scope))
-                        .Select(entry => (entry.Item.WorkId, entry.Item.Title, entry.Item.ReleaseYear, Local: entry.Item.MediaStateTypeId == MediaStateType.Available, Card: CatalogCard(scope, entry.Item)))
-                    : Filtered((_results ?? []).Where(item => item.MediaTypeId == scope.MediaTypeId))
-                        .Select(item => (item.WorkId, item.Title, item.ReleaseYear, Local: item.MediaStateTypeId == MediaStateType.Available, Card: Card(item)));
-                var hits = kept.Concat(found).DistinctBy(hit => hit.WorkId);
+                    .Select(item => (item.WorkId, item.Title, item.ReleaseYear, Local: item.MediaStateTypeId == MediaStateType.Available, Card: KnownCard(scope, item)))
+                    .DistinctBy(hit => hit.WorkId);
                 var ordered = (Sort switch
                 {
                     "newest" => hits.OrderByDescending(hit => hit.ReleaseYear),
                     "az" => hits.OrderBy(hit => hit.Title, StringComparer.CurrentCultureIgnoreCase),
                     _ => hits.OrderBy(hit => Relevance(hit.Title)).ThenBy(hit => !hit.Local)
                 }).Take(SearchRowSize).ToList();
-                return (Scope: scope, Order: order, Hits: ordered);
-            }).Where(row => row.Hits.Count > 0).OrderBy(row => row.Hits.Min(hit => Relevance(hit.Title))).ThenBy(row => row.Order);
+                return (Scope: scope, Order: order, Hits: ordered, Waiting: _pending.Contains(scope));
+            }).Where(row => row.Hits.Count > 0 || row.Waiting)
+                .OrderBy(row => row.Hits.Count == 0 ? 1 : 0).ThenBy(row => row.Hits.Count == 0 ? 0 : row.Hits.Min(hit => Relevance(hit.Title))).ThenBy(row => row.Order);
 
-            return [.. rows.Select(row => new MediaShelf(assets, "discover.type." + row.Scope.Slug, Address(Current with { Types = [row.Scope.Slug], Page = 1 }), [.. row.Hits.Select(hit => hit.Card)]))];
+            return [.. rows.Select(row =>
+            {
+                var cards = row.Hits.Select(hit => hit.Card).ToList();
+                if (row.Waiting)
+                {
+                    var wait = new List<IUiComponent>();
+                    for (var index = 0; index < 6; index++) wait.Add(new Div().Class("media-skeleton"));
+                    cards.Add(new Div([.. wait]).Class("discover-skeletons discover-skeletons--shelf").Attribute("aria-hidden", "true")
+                        .Attribute("data-search-group", row.Scope.Slug).Attribute("data-search-src", Address(Current with { Page = 1 }) + "&handler=SearchGroup&group=" + Uri.EscapeDataString(row.Scope.Slug)));
+                }
+
+                return (IUiComponent)new MediaShelf(assets, "discover.type." + row.Scope.Slug, Address(Current with { Types = [row.Scope.Slug], Page = 1 }), cards);
+            })];
         }
 
         // The active mode narrows what the profile lists, except while a search asks for every mode.

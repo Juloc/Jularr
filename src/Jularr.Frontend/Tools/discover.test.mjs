@@ -36,7 +36,7 @@ function discover(landing = false) {
             querySelector: selector => selector === '.media-grid' ? grid : selector === '.discover-paging' ? paging
                 : selector === '.discover-feedback' ? feedback : selector === '[data-discover-next]' ? (paging.next?.end ? null : paging.next) : selector === '.discover-end' ? end
                 : selector === '#discover-recommendations' ? shelves : selector === '#discover-recommendations .discover-paging' ? shelves?.paging ?? null : null,
-            querySelectorAll: () => cards,
+            querySelectorAll: selector => selector === '[data-search-group]' ? [] : cards,
             setAttribute(name, value) { this.attributes[name] = value; },
             removeAttribute(name) { delete this.attributes[name]; },
             replaceWith(incoming) { active = incoming; }
@@ -92,7 +92,7 @@ function discover(landing = false) {
             createElement: () => ({ className: '', children: [], setAttribute() {}, append(node) { this.children.push(node); }, remove() { this.removed = true; } }) },
         getComputedStyle: () => ({ gridTemplateColumns: '150px 150px 150px' }),
         window: { IntersectionObserver: Observer }, IntersectionObserver: Observer,
-        AbortController, URL, Set, Error, Element, location: { href: 'https://jularr.test/' },
+        AbortController, AbortSignal, URL, Set, Error, Element, location: { href: 'https://jularr.test/' },
         FormData: class { forEach(action) { action(input.value, 'q'); action('movies', 'type'); } },
         DOMParser: class { parseFromString(key) { return { querySelector: selector => {
             const value = pages.get(key);

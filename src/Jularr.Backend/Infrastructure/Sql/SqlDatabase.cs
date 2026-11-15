@@ -26,7 +26,10 @@ namespace Jularr.Backend.Infrastructure.Sql
             options.ApplicationName = Name(lane);
             options.MaxPoolSize = poolSize;
             options.CommandTimeout = CommandTimeout(statementTimeout);
-            options.Options = (options.Options + " -c idle_in_transaction_session_timeout=" + Milliseconds(idleInTransaction) + " -c statement_timeout=" + Milliseconds(statementTimeout)).Trim();
+            // Pages read short statements on small tables whose estimates are never refreshed, so the server often priced them above its JIT threshold and spent
+            // 250 ms compiling a 20 ms read. Only the web lane turns it off; background work keeps the server's setting.
+            options.Options = (options.Options + " -c idle_in_transaction_session_timeout=" + Milliseconds(idleInTransaction) + " -c statement_timeout=" + Milliseconds(statementTimeout)
+                + (lane == SqlLane.Web ? " -c jit=off" : "")).Trim();
             return new SqlDatabase(builder.Build(), lane);
         }
 

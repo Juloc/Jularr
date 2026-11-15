@@ -5,6 +5,8 @@ import { isRefreshing, isStaying } from "./PageSwap";
 // of the page kind, so nobody looks at a page that seems frozen. A search typed into the page or a refresh only shows the bar.
 
 const ReloadBudget = 100;
+// A page that has not arrived by then gives the old page back: the skeleton never stays for a request that does not answer.
+const GiveUp = 20000;
 const Content = "app-content";
 
 interface Context {
@@ -15,6 +17,7 @@ interface Context {
 const contextOf = (event: Event) => (event as CustomEvent<{ ctx: Context }>).detail.ctx;
 
 let timer: number | undefined;
+let giveUp: number | undefined;
 let pendingLink: HTMLAnchorElement | undefined;
 
 document.addEventListener("htmx:config:request", event => {
@@ -48,11 +51,14 @@ function begin(source: Element | undefined, address: string, skeleton: boolean):
         main.dataset.waitingFor = kindOf(address);
         main.append(pageSkeleton(main.dataset.waitingFor));
     }, ReloadBudget);
+    giveUp = window.setTimeout(end, GiveUp);
 }
 
 function end(): void {
     if (timer !== undefined) window.clearTimeout(timer);
+    if (giveUp !== undefined) window.clearTimeout(giveUp);
     timer = undefined;
+    giveUp = undefined;
     delete document.body.dataset.pageWait;
     pendingLink?.classList.remove("is-pending");
     pendingLink = undefined;

@@ -40,6 +40,13 @@
     &--shelf { display: contents; }
 }
 
+// A search's places of the providers' answers: grey cards while the provider answers (only where script fills them in), a quiet line when it did not.
+@media (scripting: none) {
+    .discover-skeletons[data-search-group] { display: none; }
+}
+.discover-search-note { flex: 0 0 auto; align-self: center; margin: 0; color: var(--muted); font-size: var(--text-control); }
+.discover-search-none[hidden] { display: none; }
+
 // Where a ranking ends: under its grid, or after the last card of its shelf.
 .discover-end {
     margin: 0;
