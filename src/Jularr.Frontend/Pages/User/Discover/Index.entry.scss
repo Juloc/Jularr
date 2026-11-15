@@ -340,3 +340,21 @@
 
     @media (max-width: 640px) { min-height: 38px; padding: 0 12px 0 10px; }
 }
+
+// A phone keeps the types and the bar's buttons on one line: Filter and Explore become round icons, the filter count stays on its icon.
+@media (max-width: 640px) {
+    .discover-bar__filters.button,
+    .discover-bar__explore.button {
+        position: relative;
+        justify-content: center;
+        width: 38px;
+        min-height: 38px;
+        padding: 0;
+
+        > span:not(.discover-bar__count) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+    }
+
+    .discover-bar__filters .discover-bar__count { position: absolute; top: -4px; right: -4px; min-width: 18px; height: 18px; border: 2px solid var(--surface); font-size: 10px; }
+    .discover-bar__tools { gap: 6px; }
+    .discover-bar__top { gap: 0 10px; }
+}
