@@ -12,4 +12,7 @@
 
     &__icon { width: min(64%, 120px); height: auto; aspect-ratio: 1; }
     &--person &__icon { width: min(58%, 96px); }
+    // A record without a cover: a music note on the accent tint, never a black square.
+    &--music { background: linear-gradient(150deg, var(--accent-soft), color-mix(in srgb, var(--accent) 22%, var(--surface))); }
+    &--music &__icon { width: min(46%, 140px); fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 }

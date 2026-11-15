@@ -13,7 +13,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace Jularr.Frontend.Pages.User.Player
 {
     public sealed class PlayerModel(ReadPlaybackItemV1 read, ReadPlaybackTracksV1 readTracks, ReadPlaybackPreferencesV1 readPreferences, ReadPlaybackMarkersV1 readMarkers, ReadPlaybackChaptersV1 readChapters,
-        ReadWorkV1 readWork, ReadWorkEpisodesV1 readEpisodes, IAntiforgery antiforgery, FrontendAssets assets, UiText texts) : JularrPage
+        ReadWorkV1 readWork, ReadWorkEpisodesV1 readEpisodes, ReadWorkCreditsV1 readCredits, IAntiforgery antiforgery, FrontendAssets assets, UiText texts) : JularrPage
     {
         // The next episode starts after this many seconds unless the viewer stops it; an album's next track follows at once.
         private const int EpisodeCountdownSeconds = 10;
@@ -25,6 +25,7 @@ namespace Jularr.Frontend.Pages.User.Player
         private IReadOnlyList<PlaybackChapterV1> _chapters = [];
         private WorkDetailsV1? _work;
         private IReadOnlyList<WorkEpisodeV1> _episodes = [];
+        private IReadOnlyList<WorkCreditV1> _credits = [];
 
         [BindProperty(SupportsGet = true)]
         public long Id { get; set; }
@@ -41,7 +42,11 @@ namespace Jularr.Frontend.Pages.User.Player
             {
                 var asset = item.MediaAssetId.ToString(CultureInfo.InvariantCulture);
                 var context = MediaUnitLabel.Format(texts, item.WorkUnitTypeId, item.UnitNumber, item.ParentUnitNumber, item.UnitTitle);
-                var source = new PlayerSource(item.CanonicalTitle, context, "/Details/" + item.WorkId.ToString(CultureInfo.InvariantCulture), "/api/v1/playback/assets/" + asset + "/sessions",
+
+                // A song shows its own title with the artist and album beneath, and the album's cover where a picture would be.
+                var audio = item.MediaAssetTypeId == MediaAssetType.Audio ? new PlayerAudio(_work?.PosterUrl, string.Join(" · ", new[] { Artists(), item.CanonicalTitle }.Where(part => !string.IsNullOrWhiteSpace(part)))) : null;
+                var title = audio is not null && !string.IsNullOrWhiteSpace(item.UnitTitle) ? item.UnitTitle : item.CanonicalTitle;
+                var source = new PlayerSource(title, audio is null ? context : audio.Subtitle, "/Details/" + item.WorkId.ToString(CultureInfo.InvariantCulture), "/api/v1/playback/assets/" + asset + "/sessions",
                     "/api/v1/playback/sessions/", antiforgery.GetAndStoreTokens(HttpContext).RequestToken ?? "", null,
                     [.. _tracks.Where(track => track.MediaTrackTypeId == MediaTrackType.Audio).Select(Track)],
                     [.. _tracks.Where(track => track.MediaTrackTypeId == MediaTrackType.Subtitle).Select(Track)],
@@ -54,9 +59,10 @@ namespace Jularr.Frontend.Pages.User.Player
                         preferences.IntroSkipModeTypeId.ToString(), preferences.OutroSkipModeTypeId.ToString(), preferences.SecondSubtitleLanguage,
                         texts.CanTranslateSubtitles() ? "/api/v1/playback/assets/" + asset + "/subtitle-translations" : null, preferences.ProfileLanguage) : null,
                     [.. _markers.Select(marker => new PlayerMarker(marker.MediaMarkerKindTypeId.ToString(), marker.StartMs / 1000d, marker.EndMs / 1000d))],
-                    [.. _chapters.Select(chapter => new PlayerChapter(chapter.Title, chapter.StartMs / 1000d))]);
+                    [.. _chapters.Select(chapter => new PlayerChapter(chapter.Title, chapter.StartMs / 1000d))],
+                    "/Player/" + asset, audio);
                 var player = new UiPlayer(source, assets);
-                if (_work is { } work)
+                if (_work is { } work && audio is null)
                 {
                     var panes = new List<IUiComponent>();
                     var tabs = new List<NavigationTab>();
@@ -72,7 +78,7 @@ namespace Jularr.Frontend.Pages.User.Player
                     }
                     tabs.Add(new("media.details", "#player-details", _episodes.Count == 0));
                     var details = new Div(new H2(new ValueText(work.CanonicalTitle)), new P(new ValueText(work.Overview ?? "")),
-                        new A(new Text("media.details")).Class("button").Attribute("href", source.BackHref).Attribute("data-action", "close")).Attribute("id", "player-details");
+                        new A(new Text("media.details")).Class("button").Attribute("href", source.BackHref).Attribute("data-action", "details")).Attribute("id", "player-details");
                     if (_episodes.Count > 0) details.Attribute("hidden", "hidden");
                     panes.Add(details);
                     player.Sidebar(new Div(new Div(new NavigationTabs(tabs, "nav.tabs")).Attribute("data-player-tabs", ""), new Div([.. panes])));
@@ -127,12 +133,19 @@ namespace Jularr.Frontend.Pages.User.Player
             if (_item is { } item && texts.Can("profile.media.read", "Library"))
             {
                 _work = await readWork.ExecuteAsync<WorkDetailsV1>(new WorkParametersV1(item.WorkId), HttpContext.RequestAborted);
+                if (item.MediaAssetTypeId == MediaAssetType.Audio)
+                {
+                    _credits = await readCredits.ExecuteAsync<BaseDataList<WorkCreditV1>>(new WorkParametersV1(item.WorkId), HttpContext.RequestAborted);
+                }
                 if (item.ParentUnitNumber is { } season && item.WorkUnitTypeId == WorkUnitType.Episode)
                 {
                     _episodes = await readEpisodes.ExecuteAsync<BaseDataList<WorkEpisodeV1>>(new ReadWorkEpisodesParametersV1(item.WorkId, (int)season), HttpContext.RequestAborted);
                 }
             }
         }
+
+        // The album's artists as the provider credited them.
+        private string Artists() => string.Join(", ", _credits.Where(credit => credit.PersonRoleId == PersonRole.Artist).Select(credit => credit.Name).Distinct());
 
         // Language, then the track's own title and channel layout.
         private PlayerTrack Track(PlaybackTrackV1 track, int index)

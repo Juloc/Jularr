@@ -357,7 +357,7 @@ namespace Jularr.E2E.Tests
             await page.Keyboard.PressAsync("Escape");
             await page.SetViewportSizeAsync(1280, 720);
 
-            await page.Locator(".player__sidebar a[data-action=close]").ClickAsync();
+            await page.Locator(".player__sidebar a[data-action=details]").ClickAsync();
             await Assertions.Expect(page.Locator(".app-layout")).ToBeVisibleAsync();
             Assert.IsTrue(await video.EvaluateAsync<bool>("video => video === window.__originalPlayerVideo"));
             Assert.AreEqual(1, await page.Locator("video").CountAsync());

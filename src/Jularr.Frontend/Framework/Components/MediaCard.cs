@@ -18,6 +18,7 @@ namespace Jularr.Frontend.Framework
         private string? _resume;
         private string? _resumeUnit;
         private bool _isResume;
+        private bool _square;
         private string? _actionKey;
         private string? _actionHref;
         private IUiComponent? _action;
@@ -38,14 +39,22 @@ namespace Jularr.Frontend.Framework
         {
             var card = new MediaCard(assets, item.Title, "/Details/" + item.Id.ToString(CultureInfo.InvariantCulture), item.PosterUrl)
                 .Facts(item.ReleaseYear, MediaTypeLabel.Key(item.MediaTypeId, item.MediaSubtypeId), item.Rating)
-                .Availability(new MediaAvailability(assets, item.AvailabilityStateId, item.AvailableUnits, item.MonitoredUnits)).HoverPreview(MediaPreviewAddress.Work(item.Id));
+                .Availability(new MediaAvailability(assets, item.AvailabilityStateId, item.AvailableUnits, item.MonitoredUnits)).HoverPreview(MediaPreviewAddress.Work(item.Id))
+                .Square(item.MediaTypeId == MediaType.Music);
             return item.ProgressStateId == ProgressStateType.InProgress ? card.Progress(item.ProgressPercent) : card;
         }
 
         // A title TMDB found, as the Work it is; one the profile already holds shows what its state says.
         public static MediaCard For(FrontendAssets assets, DiscoverItemV1 item, string href) =>
             new MediaCard(assets, item.Title, href, item.PosterUrl).Facts(item.ReleaseYear, MediaTypeLabel.Key(item.MediaTypeId, null), item.Rating).State(item.MediaStateTypeId)
-                .HoverPreview(MediaPreviewAddress.Work(item.WorkId));
+                .HoverPreview(MediaPreviewAddress.Work(item.WorkId)).Square(item.MediaTypeId == MediaType.Music);
+
+        // A record's cover is square, not a tall poster; without one a music note stands in.
+        public MediaCard Square(bool square = true)
+        {
+            _square = square;
+            return this;
+        }
 
         // The year, the type and the rating; whatever is unknown is left out.
         public MediaCard Facts(int? year, string? typeKey, decimal? rating)
@@ -167,7 +176,7 @@ namespace Jularr.Frontend.Framework
 
         public void WriteTo(TextWriter writer, HtmlEncoder encoder, UiText texts)
         {
-            var art = MediaImage.Or(assets, posterUrl, title, 342, 513, sizes: "auto, 176px");
+            var art = MediaImage.Or(assets, posterUrl, title, 342, _square ? 342 : 513, _square ? NoCoverKind.Music : NoCoverKind.Poster, sizes: "auto, 176px");
             var cover = new List<IUiComponent>
             {
                 new A(art).Class("media-card__art").Attribute("href", href).Attribute("aria-label", title)
@@ -195,7 +204,7 @@ namespace Jularr.Frontend.Framework
             var foot = Foot(texts);
             if (foot is not null) cover.Add(foot);
 
-            var surface = new Div([.. cover]).Class("media-card__surface").Attribute("tabindex", "0")
+            var surface = new Div([.. cover]).Class(_square ? "media-card__surface media-card__surface--square" : "media-card__surface").Attribute("tabindex", "0")
                 .Attribute("aria-label", title).Attribute("data-media-card", "true");
 
             // The title links to the details and the facts follow in one line.

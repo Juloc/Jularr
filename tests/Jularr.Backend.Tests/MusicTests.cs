@@ -121,7 +121,8 @@ namespace Jularr.Backend.Tests
             var html = await player.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, player.StatusCode, html);
             StringAssert.Contains(html, "data-href=\"/Player/3\"");
-            StringAssert.Contains(html, "Track 1 &#xB7; One");
+            // A song shows its own title, with the artist and the album beneath.
+            StringAssert.Contains(html, "player__title\">One<");
 
             // Each artist or author is one person, whatever their name contains, and leads to everything credited to them.
             using var details = await host.SendAsync(HttpMethod.Get, "/Details/10");

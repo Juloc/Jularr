@@ -42,7 +42,7 @@ namespace Jularr.Frontend.Framework
 
             if (priority) image.Attribute("fetchpriority", "high");
             // A failed load is swapped for the matching stand-in by MediaImage.entry.ts.
-            if (kind == NoCoverKind.Person) image.Attribute("data-no-cover", "person");
+            if (kind != NoCoverKind.Poster) image.Attribute("data-no-cover", kind == NoCoverKind.Person ? "person" : "music");
 
             if (variants is { Count: > 0 })
             {
