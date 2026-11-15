@@ -190,7 +190,7 @@ namespace Jularr.E2E.Tests
 
         public ValueTask DisposeAsync() => _app.DisposeAsync();
 
-        private static IResult Tmdb(HttpContext http, string path)
+        private static async Task<IResult> Tmdb(HttpContext http, string path)
         {
             if (http.Request.Headers.Authorization.ToString() != "Bearer " + TmdbToken)
             {
@@ -198,6 +198,13 @@ namespace Jularr.E2E.Tests
             }
 
             var query = http.Request.Query["query"].ToString();
+
+            // A film search for "Slowpoke" stays unanswered far beyond any limit of the pages that ask.
+            if (path == "search/movie" && query.Contains("Slowpoke", StringComparison.OrdinalIgnoreCase))
+            {
+                await Task.Delay(TimeSpan.FromMinutes(2), http.RequestAborted);
+            }
+
             return path switch
             {
                 "search/movie" => Json(query.Contains("Bunny", StringComparison.OrdinalIgnoreCase) ? "{\"results\":[" + Movie + "]}" : "{\"results\":[]}"),

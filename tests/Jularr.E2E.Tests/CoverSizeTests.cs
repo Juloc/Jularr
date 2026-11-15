@@ -52,6 +52,18 @@ namespace Jularr.E2E.Tests
                 var plainBox = (await plain.First.BoundingBoxAsync())!;
                 Assert.AreEqual(Math.Round(plainBox.Width), Math.Round(resumeBox.Width), $"{name}: the continue cover is as wide as the others");
                 Assert.AreEqual(Math.Round(plainBox.Height), Math.Round(resumeBox.Height), $"{name}: the continue cover is as high as the others");
+
+                // The progress sits inside the cover: a thin bar on its bottom edge under a label of what is left, never over the title or the buttons.
+                var foot = (await resume.First.Locator(".media-card__foot").BoundingBoxAsync())!;
+                var bar = (await resume.First.Locator(".media-card__progress").BoundingBoxAsync())!;
+                var title = (await resume.First.Locator(".media-card__title").BoundingBoxAsync())!;
+                Assert.IsTrue(foot.X >= resumeBox.X - 0.5 && foot.X + foot.Width <= resumeBox.X + resumeBox.Width + 0.5 && foot.Y >= resumeBox.Y && foot.Y + foot.Height <= resumeBox.Y + resumeBox.Height + 0.5,
+                    $"{name}: the progress leaves the cover");
+                Assert.IsTrue(bar.Height <= 4 && Math.Abs(bar.Y + bar.Height - (resumeBox.Y + resumeBox.Height)) <= 0.5, $"{name}: the bar is not a thin line on the bottom edge");
+                Assert.IsTrue(foot.Y + foot.Height <= title.Y, $"{name}: the progress reaches the title");
+                var dots = (await resume.First.Locator(".media-card__menu").BoundingBoxAsync())!;
+                Assert.IsTrue(dots.Y + dots.Height <= foot.Y + 20, $"{name}: the progress reaches the buttons");
+                await Assertions.Expect(resume.First.Locator(".media-card__left")).ToContainTextAsync("left");
                 await Evidence.SaveAsync(page, $"cover-size-home-{name}");
 
                 // The library grid: nothing sticks out of the page, and a phone shows three covers in a row.
