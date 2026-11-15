@@ -294,3 +294,67 @@
 @media (max-width: 640px) {
     .discover-paging[data-automatic]:has([data-discover-recommendations]) { min-height: 364px; }
 }
+
+// The mode's genres as a strip of chips above the rows: one line of fixed height that slides sideways, so nothing moves while it is read.
+.discover-genres {
+    display: flex;
+    gap: 8px;
+    margin: 18px 0 2px;
+    padding: 2px 1px 6px;
+    overflow-x: auto;
+    scrollbar-width: none;
+
+    &::-webkit-scrollbar { display: none; }
+}
+
+.discover-genres__chip {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    min-height: 40px;
+    padding: 0 16px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--surface);
+    color: var(--text);
+    font-size: 14px;
+    font-weight: 650;
+    text-decoration: none;
+    white-space: nowrap;
+
+    &:hover { border-color: var(--accent-outline); color: var(--accent-text); }
+    @media (max-width: 640px) { min-height: 44px; }
+}
+
+@media (max-width: 640px) {
+    .discover-genres { margin-top: 10px; }
+}
+
+// The entry to the Explore feed: a button of the bar's tools, as high as the filter button.
+.discover-bar__explore.button {
+    gap: 7px;
+    min-height: 40px;
+    padding: 0 14px 0 12px;
+    font-size: 14px;
+    font-weight: 650;
+
+    @media (max-width: 640px) { min-height: 38px; padding: 0 12px 0 10px; }
+}
+
+// A phone keeps the types and the bar's buttons on one line: Filter and Explore become round icons, the filter count stays on its icon.
+@media (max-width: 640px) {
+    .discover-bar__filters.button,
+    .discover-bar__explore.button {
+        position: relative;
+        justify-content: center;
+        width: 38px;
+        min-height: 38px;
+        padding: 0;
+
+        > span:not(.discover-bar__count) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+    }
+
+    .discover-bar__filters .discover-bar__count { position: absolute; top: -4px; right: -4px; min-width: 18px; height: 18px; border: 2px solid var(--surface); font-size: 10px; }
+    .discover-bar__tools { gap: 6px; }
+    .discover-bar__top { gap: 0 10px; }
+}

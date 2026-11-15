@@ -20,7 +20,7 @@ class Element extends Node {
     constructor(kind, parent = null) { super(); this.kind = kind; this.parent = parent; this.dataset = {}; this.attributes = {}; this.isConnected = true; this.children = []; }
     closest(selector) {
         const kinds = {
-            '.media-card[data-preview-src]': 'card', '.media-card__surface': 'surface', '[data-trailer-action]': 'trailerButton', '.media-card__preview': 'panel', '[data-autoplay-previews]': 'shelf', '.media-grid': 'grid'
+            '.media-card[data-preview-src]': 'card', '.media-card__surface': 'surface', '[data-trailer-action]': 'trailerButton', '.media-card__preview': 'panel', '[data-autoplay-previews]': 'shelf', '.media-grid': 'grid', '[data-touch-previews="off"]': 'quiet'
         };
         const controls = 'button, a.button, form, input, .media-card__actions, .media-card__bookmark, .media-availability-badge, .media-card__preview';
         if (selector === controls) return ['button', 'actions', 'panel'].includes(this.kind) ? this : null;
@@ -56,7 +56,7 @@ class Element extends Node {
 
 
 // A tiny stand-in for the parts of the DOM the card preview touches, with a clock the test advances.
-function world({ canHover = true, autoplay = 'true', inGrid = false, answer = { ok: true, status: 200, html: '<div class="media-card__preview" data-preview-mode="trailer" data-trailer-id="Way9Dexny3w"></div>' } } = {}) {
+function world({ canHover = true, autoplay = 'true', inGrid = false, quiet = false, answer = { ok: true, status: 200, html: '<div class="media-card__preview" data-preview-mode="trailer" data-trailer-id="Way9Dexny3w"></div>' } } = {}) {
     const listeners = {};
     const timers = [];
     let now = 0;
@@ -70,7 +70,7 @@ function world({ canHover = true, autoplay = 'true', inGrid = false, answer = { 
     surface.getAttribute = () => 'Dune';
     const shelf = new Element('shelf');
     shelf.attributes['data-autoplay-previews'] = autoplay;
-    const card = new Element('card', inGrid ? new Element('grid', shelf) : shelf);
+    const card = new Element('card', inGrid ? new Element('grid', shelf) : quiet ? new Element('quiet', shelf) : shelf);
     card.dataset.previewSrc = '/MediaPreview?work=2001';
     card.surface = surface;
     surface.parent = card;
@@ -381,6 +381,12 @@ test('a card that lingers on a touch device starts after the dwell, one at a tim
     half.stop.evaluate();
     await half.advance(5000);
     assert.equal(half.fetches.length, 0);
+
+    // Discover's rows are for browsing: the page says no touch previews, so a lingering card starts nothing there.
+    const browsing = world({ canHover: false, quiet: true });
+    browsing.stop.evaluate();
+    await browsing.advance(5000);
+    assert.equal(browsing.fetches.length, 0);
 
     // The profile's switch: off means no automatic preview at all.
     const off = world({ canHover: false, autoplay: 'false' });
