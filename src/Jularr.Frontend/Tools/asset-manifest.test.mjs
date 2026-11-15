@@ -176,7 +176,11 @@ test("card entry delegates one touch status handler and starts a trailer only fr
     const entry = manifest["Framework/Components/MediaCard.entry.ts"];
     const script = readFileSync(join(build, entry.file), "utf8");
     assert.ok(!script.includes("pointerover"), "Reimporting the entry must not recreate global listeners.");
-    const chunks = entry.imports?.map(key => readFileSync(join(build, manifest[key].file), "utf8")) ?? [];
+    // The entry's chunks and the chunks those import, as the preview code is shared with other pages' entries.
+    const reached = new Set();
+    const walk = key => { if (reached.has(key) || !manifest[key]) return; reached.add(key); (manifest[key].imports ?? []).forEach(walk); };
+    (entry.imports ?? []).forEach(walk);
+    const chunks = [...reached].map(key => readFileSync(join(build, manifest[key].file), "utf8"));
     assert.ok(chunks.some(chunk => chunk.includes("data-open") && chunk.includes("keydown")));
     // The delayed hover preview is the one trailer embed: muted, from the privacy host, only after the delay.
     assert.ok(chunks.every(chunk => !chunk.includes("youtube.com/embed")));
