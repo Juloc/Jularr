@@ -88,8 +88,12 @@ namespace Jularr.Frontend.Pages.User.Discover
         private bool _moreShelves;
 
         // The types whose first shelf is in the part read, so each type is named once, above its first shelf.
-        private readonly List<(DiscoverScopeV1 Scope, DiscoverFeedType Feed)> _rowOrder = [];
+        private readonly List<Row> _rowOrder = [];
+        // A genre row's first page of each of its types.
+        private readonly Dictionary<Row, IReadOnlyList<(DiscoverScopeV1 Scope, IReadOnlyList<DiscoverItemV1> Items, IReadOnlyList<DiscoverCatalogItemV1> Catalog)>> _genreAnswers = [];
         private IReadOnlyList<DiscoverTasteShelfV1> _taste = [];
+        // A genre row with fewer titles than this is left out.
+        private const int MinimumGenreTitles = 5;
 
         // One or more scope slugs, as a comma list or repeated; none or every listed one means all.
         [BindProperty(SupportsGet = true, Name = "type")]
@@ -170,7 +174,8 @@ namespace Jularr.Frontend.Pages.User.Discover
             DefineContent(body);
             body.Content.Add(new P().Class("discover-feedback").Attribute("role", "status"));
             page.Content.Add(new Div([.. body.Content]).Attribute("id", "discover-results").Class("discover-results")
-                .Attribute("data-load-error", texts["discover.loadFailed"]).Attribute("data-search-slow", texts["discover.search.slow"]).Attribute("data-provider-unavailable", _providerUnavailable ? "true" : "false"));
+                .Attribute("data-load-error", texts["discover.loadFailed"]).Attribute("data-search-slow", texts["discover.search.slow"]).Attribute("data-touch-previews", "off")
+                .Attribute("data-provider-unavailable", _providerUnavailable ? "true" : "false"));
         }
 
         private void DefineContent(Page page)
@@ -257,6 +262,9 @@ namespace Jularr.Frontend.Pages.User.Discover
             if (texts.Mode.Key == "hear" && Narrowed) page.Content.Add(new P(new Icon("info", assets, 16), new Span(new Text("mode.hear.audiobooks"))).Class("discover-mode-note"));
             if (texts.CanRequest()) page.Content.Add(MediaAvailability.RequestTemplates(assets));
 
+            // The mode's popular genres as chips, each opening that genre's grid; a list opened from its tab shows only that list.
+            if (FeedType is null && !ContinueOnly && GenreChips() is { } chips) page.Content.Add(chips);
+
             // Watching, listening and reading continue on their own shelves, in the profile's order.
             var continuing = _continue.Where(item => MediaTypeChosen(item.MediaTypeId, item.MediaSubtypeId)).ToList();
             var canPlay = texts.CanPlay();
@@ -334,6 +342,14 @@ namespace Jularr.Frontend.Pages.User.Discover
                 var filter = new List<IUiComponent> { new Icon("filter", assets, 16) };
                 if (narrowed > 0) filter.Add(new Span(new ValueText(narrowed.ToString(CultureInfo.CurrentCulture))).Class("discover-bar__badge"));
                 tools.Add(Drawer.Opener(new Button([.. filter]).IconOnly(texts["discover.filter.open"]).Class("button button--icon discover-bar__tool"), "discover-panel", "filter"));
+            }
+
+            // The vertical feed of the chosen types, one title at a time with its trailer.
+            if (!searching)
+            {
+                var feedTypes = TypeParameter([.. Chosen.Select(scope => scope.Slug)]);
+                tools.Add(new A(new Icon("play", assets, 16), new Span(new Text("discover.explore.title"))).Class("button discover-bar__explore")
+                    .Attribute("href", "/Discover/Feed" + (feedTypes is null ? "" : "?type=" + Uri.EscapeDataString(feedTypes).Replace("%2C", ","))));
             }
 
             tools.Add(Drawer.Opener(new Button(new Icon("settings", assets, 16)).IconOnly(texts["discover.view.open"]).Class("button button--icon discover-bar__tool"), "discover-panel", "view"));
@@ -490,8 +506,22 @@ namespace Jularr.Frontend.Pages.User.Discover
 
             // The rows in the page's order; several types name each row's type, a top 10 shows its ten with their ranks.
             var several = Chosen.Count > 1;
-            foreach (var (scope, feed) in _rowOrder)
+            foreach (var row in _rowOrder)
             {
+                if (row.Genre is { } rowGenre)
+                {
+                    // A genre's row opens the grid of the types it holds; a row that came back with too few titles is left out.
+                    var shown = GenreCards(row);
+                    if (shown.Count >= MinimumGenreTitles)
+                    {
+                        var genreTitle = texts["discover.genre." + rowGenre];
+                        page.Content.Add(new MediaShelf(assets, "discover.filter.genres", GenreAddress(row.Scopes, rowGenre), shown, title: genreTitle));
+                    }
+
+                    continue;
+                }
+
+                var (scope, feed) = (row.Scope, row.Feed);
                 var cards = scope.IsCatalog
                     ? _catalogShelves.Where(shelf => shelf.Scope == scope && shelf.Feed == feed).SelectMany(shelf => Filtered(shelf.Items.Select(item => (scope, item))).Select(entry => CatalogCard(scope, entry.Item))).ToList()
                     : _shelves.Where(shelf => shelf.Type == scope.MediaTypeId && shelf.Feed == feed).SelectMany(shelf => Filtered(shelf.Items).Select(Card)).ToList();
@@ -723,6 +753,7 @@ namespace Jularr.Frontend.Pages.User.Discover
         private async Task LoadAvailabilityAsync()
         {
             var ids = (_results ?? []).Concat(_shelves.SelectMany(shelf => shelf.Items)).Select(item => item.WorkId)
+                .Concat(_genreAnswers.Values.SelectMany(columns => columns).SelectMany(column => column.Items.Select(item => item.WorkId).Concat(column.Catalog.Select(item => item.WorkId))))
                 .Concat((_catalog ?? []).Select(entry => entry.Item.WorkId))
                 .Concat(_catalogShelves.SelectMany(shelf => shelf.Items).Select(item => item.WorkId))
                 .Concat(_known.Select(item => item.WorkId))
@@ -1020,6 +1051,12 @@ namespace Jularr.Frontend.Pages.User.Discover
             new(item.Title, null, item.PosterUrl, Overline(scope, "discover.recentlyAdded"), null, "media.details", "/Details/" + item.Id.ToString(CultureInfo.InvariantCulture), null, null, scope.Slug, 0);
 
         // One shelf of a provider: what it answered, or that it did not answer in time.
+        // A row of the page: a list of one type, or a genre of the types that know it (the list is then unused).
+        private sealed record Row(IReadOnlyList<DiscoverScopeV1> Scopes, DiscoverFeedType Feed, Genre? Genre = null)
+        {
+            public DiscoverScopeV1 Scope => Scopes[0];
+        }
+
         private sealed record ShelfAnswer(DiscoverScopeV1 Scope, DiscoverFeedType Feed, IReadOnlyList<DiscoverItemV1>? Items, IReadOnlyList<DiscoverCatalogItemV1>? Catalog, bool Failed);
 
         // The rows of each mode with all its types: a top 10 first where the mode has one, then its lists in the order a viewer looks for them.
@@ -1046,17 +1083,39 @@ namespace Jularr.Frontend.Pages.User.Discover
 
         // The rows of the page of all lists: the mode's own rows when all its types are chosen, else each chosen type's lists in its order;
         // one list alone (a feed tab) shows that list of every chosen type.
-        private IReadOnlyList<(DiscoverScopeV1 Scope, DiscoverFeedType Feed)> Rows()
+        private IReadOnlyList<Row> Rows()
         {
-            if (FeedType is { } only) return [.. Chosen.Where(scope => scope.Feeds.Contains(only)).Select(scope => (scope, only))];
+            if (FeedType is { } only) return [.. Chosen.Where(scope => scope.Feeds.Contains(only)).Select(scope => new Row([scope], only))];
+            var lists = Chosen.SelectMany(scope => scope.Feeds.Select(feed => new Row([scope], feed))).ToList();
             if (IsAll && Narrowed && ModeRows.TryGetValue(texts.Mode.Key, out var rows))
             {
                 var mode = rows.Select(row => (Scope: Chosen.FirstOrDefault(scope => scope.Slug == row.Scope), row.Feed))
-                    .Where(row => row.Scope is not null && row.Scope.Feeds.Contains(row.Feed)).Select(row => (row.Scope!, row.Feed)).ToList();
-                if (mode.Count > 0) return mode;
+                    .Where(row => row.Scope is not null && row.Scope.Feeds.Contains(row.Feed)).Select(row => new Row([row.Scope!], row.Feed)).ToList();
+                if (mode.Count > 0) lists = mode;
             }
 
-            return [.. Chosen.SelectMany(scope => scope.Feeds.Select(feed => (scope, feed)))];
+            return [.. lists, .. GenreRows()];
+        }
+
+        // A strip of the genre rows' names above the rows, as streaming sites have it: each links to that genre's grid. It keeps its height and slides sideways.
+        private IUiComponent? GenreChips()
+        {
+            var rows = GenreRows().ToList();
+            if (rows.Count == 0) return null;
+            return new Nav([.. rows.Select(row => new A(new Text("discover.genre." + row.Genre)).Class("discover-genres__chip").Attribute("href", GenreAddress(row.Scopes, row.Genre!.Value)))])
+                .Class("discover-genres").Attribute("aria-label", texts["discover.filter.genres"]);
+        }
+
+        // The mode's popular genres after its lists, each for the chosen types that know it.
+        private IEnumerable<Row> GenreRows() => !Narrowed || FeedType is not null ? [] : DiscoverGenreRows.For(texts.Mode.Key)
+            .Select(entry => (entry.Genre, Scopes: Chosen.Where(scope => entry.Scopes.Contains(scope.Slug)).ToList())).Where(entry => entry.Scopes.Count > 0)
+            .Select(entry => new Row(entry.Scopes, DiscoverFeedType.Trending, entry.Genre));
+
+        // The grid of one genre: the types of its row, with the filter's own address.
+        private string GenreAddress(IReadOnlyList<DiscoverScopeV1> scopes, Genre genre)
+        {
+            var types = TypeAddress([.. scopes.Select(scope => scope.Slug)]);
+            return types + (types.Contains('?') ? "&" : "?") + "genre=" + genre;
         }
 
         // Whether a row is its mode's top 10 on the page of all the mode's types; a type chosen alone shows its lists whole.
@@ -1068,9 +1127,10 @@ namespace Jularr.Frontend.Pages.User.Discover
         {
             await LoadListedAsync();
             var started = Stopwatch.GetTimestamp();
-            var all = Rows().Select(row => (Scope: row.Scope, Feed: row.Feed)).ToList();
+            var all = Rows();
             var first = (Math.Clamp(PageNumber, 1, MaximumPart) - 1) * ShelvesPerPart;
             var part = all.Skip(first).Take(ShelvesPerPart).ToList();
+            var lists = part.Where(row => row.Genre is null).ToList();
             _recommendationsRead = true;
             _moreShelves = all.Count > first + ShelvesPerPart;
             _rowOrder.AddRange(part);
@@ -1081,16 +1141,18 @@ namespace Jularr.Frontend.Pages.User.Discover
                 : Task.FromResult(new BaseDataList<DiscoverTasteShelfV1>([]));
 
             // Catalogs read whole answer the part's shelves of each type in one read; the others ask their providers shelf by shelf, together.
-            var reads = part.GroupBy(shelf => shelf.Scope).Select(group => readShelves.ExecuteAsync<BaseDataList<DiscoverShelfV1>>(
+            var reads = lists.GroupBy(shelf => shelf.Scope).Select(group => readShelves.ExecuteAsync<BaseDataList<DiscoverShelfV1>>(
                 new ReadDiscoverShelvesDataV1(group.Key.Slug, [.. group.Select(shelf => shelf.Feed)]), HttpContext.RequestAborted)).ToList();
             var whole = (await Task.WhenAll(reads)).SelectMany(shelves => shelves).ToList();
             var wholeMilliseconds = (long)Stopwatch.GetElapsedTime(started).TotalMilliseconds;
             using var gate = new SemaphoreSlim(ShelfConcurrency);
-            var answers = part.Select(shelf => whole.FirstOrDefault(kept => kept.ScopeSlug == shelf.Scope.Slug && kept.DiscoverFeedTypeId == shelf.Feed) is { } kept
+            var genres = part.Where(row => row.Genre is not null).Select(row => ReadGenreRowAsync(row, gate)).ToList();
+            var answers = lists.Select(shelf => whole.FirstOrDefault(kept => kept.ScopeSlug == shelf.Scope.Slug && kept.DiscoverFeedTypeId == shelf.Feed) is { } kept
                 ? Task.FromResult(new ShelfAnswer(shelf.Scope, shelf.Feed, shelf.Scope.IsCatalog ? null : kept.Items, shelf.Scope.IsCatalog ? kept.CatalogItems : null, false))
                 : ReadProviderShelfAsync(shelf.Scope, shelf.Feed, gate)).ToList();
 
             _taste = await taste;
+            await Task.WhenAll(genres);
 
             // In the order of the media-type bar.
             foreach (var answer in await Task.WhenAll(answers))
@@ -1103,6 +1165,46 @@ namespace Jularr.Frontend.Pages.User.Discover
             var total = Stopwatch.GetElapsedTime(started);
             HttpContext.Response.Headers.Append("Server-Timing", $"local;dur={wholeMilliseconds}, shelves;dur={(long)total.TotalMilliseconds}");
             if (total > SlowShelf) log.LogInformation("Discover shelves: {Shelves} shelves in {Milliseconds} ms ({Local} ms for the local ones)", answers.Count, (long)total.TotalMilliseconds, wholeMilliseconds);
+        }
+
+        // A genre row's cards, the types taking turns title by title.
+        private List<IUiComponent> GenreCards(Row row)
+        {
+            if (!_genreAnswers.TryGetValue(row, out var answers)) return [];
+            var perType = answers.Select(column => column.Scope.IsCatalog
+                ? Filtered(column.Catalog.Select(item => (column.Scope, item))).Select(entry => CatalogCard(column.Scope, entry.Item)).ToList()
+                : Filtered(column.Items).Select(Card).ToList()).ToList();
+            return [.. Enumerable.Range(0, perType.Count == 0 ? 0 : perType.Max(column => column.Count))
+                .SelectMany(index => perType.Where(column => index < column.Count).Select(column => column[index])).Take(20)];
+        }
+
+        // The first page of a genre for each type of its row, together; a type that does not answer leaves the others.
+        private async Task ReadGenreRowAsync(Row row, SemaphoreSlim gate)
+        {
+            var requestAborted = HttpContext.RequestAborted;
+            var columns = await Task.WhenAll(row.Scopes.Select(async scope =>
+            {
+                await gate.WaitAsync(requestAborted);
+                var started = Stopwatch.GetTimestamp();
+                try
+                {
+                    using var limit = CancellationTokenSource.CreateLinkedTokenSource(requestAborted);
+                    limit.CancelAfter(ShelfLimit);
+                    var page = await filtered.ExecuteAsync<DiscoverFilteredV1>(new ReadDiscoverFilteredDataV1(scope.Slug, 1, null, [row.Genre!.Value]), limit.Token);
+                    return (Scope: scope, Items: (IReadOnlyList<DiscoverItemV1>)page.Items, Catalog: (IReadOnlyList<DiscoverCatalogItemV1>)page.CatalogItems);
+                }
+                catch (Exception exception) when (exception is ServiceUnavailableException or KeyNotFoundException or DataValidationException || exception is OperationCanceledException && !requestAborted.IsCancellationRequested)
+                {
+                    return (Scope: scope, Items: (IReadOnlyList<DiscoverItemV1>)[], Catalog: (IReadOnlyList<DiscoverCatalogItemV1>)[]);
+                }
+                finally
+                {
+                    gate.Release();
+                    var elapsed = Stopwatch.GetElapsedTime(started);
+                    if (elapsed > SlowShelf) log.LogWarning("Slow Discover genre row {Scope}/{Genre}: {Milliseconds} ms", scope.Slug, row.Genre, (long)elapsed.TotalMilliseconds);
+                }
+            }));
+            lock (_genreAnswers) _genreAnswers[row] = columns;
         }
 
         private async Task<ShelfAnswer> ReadProviderShelfAsync(DiscoverScopeV1 scope, DiscoverFeedType feed, SemaphoreSlim gate)

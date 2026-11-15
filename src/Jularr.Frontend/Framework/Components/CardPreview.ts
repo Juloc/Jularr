@@ -414,7 +414,8 @@ export function attachCardPreview(env: PreviewEnvironment): (() => void) & { eva
 
     // A touch device has no hover: a card that stays in view near the middle for the dwell opens by itself, one at a time, only where the profile allows it.
     // Not in a grid: its panel is wider than the card and would cover the neighbouring covers and titles of a phone's two columns.
-    const allowed = (card: HTMLElement): boolean => !env.canHover() && env.canAutoplay() && !env.document.hidden && !card.closest('.media-grid')
+    // Not where the page says so (Discover): its rows are for browsing, the trailer waits on the title's page.
+    const allowed = (card: HTMLElement): boolean => !env.canHover() && env.canAutoplay() && !env.document.hidden && !card.closest('.media-grid') && !card.closest('[data-touch-previews="off"]')
         && card.closest('[data-autoplay-previews]')?.getAttribute('data-autoplay-previews') === 'true';
     const dwell = createDwell(dwellDelay, (action, milliseconds) => env.setTimeout(action, milliseconds), handle => env.clearTimeout(handle), id => {
         const card = lingering.get(id);
