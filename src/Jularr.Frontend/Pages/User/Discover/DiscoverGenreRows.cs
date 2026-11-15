@@ -1,6 +1,6 @@
 using Jularr.Backend.Data.Enums.Media;
 
-namespace Jularr.Backend.Logic.Media
+namespace Jularr.Frontend.Pages.User.Discover
 {
     // The popular genres each mode shows as rows of their own on Discover, as streaming sites do: the scopes (media types) whose provider answers the genre well.
     // A genre one of a mode's types does not know (Horror for series) is asked of the other types only. Each genre is one of the scope's filter genres.
