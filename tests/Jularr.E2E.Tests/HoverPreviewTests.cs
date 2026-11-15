@@ -274,15 +274,11 @@ namespace Jularr.E2E.Tests
                 await page.AddInitScriptAsync("const query = window.matchMedia.bind(window); window.matchMedia = text => text.includes('hover: hover') ? query('not all') : text.includes('hover: none') || text.includes('pointer: coarse') ? query('all') : query(text);");
                 var asked = new List<(string Url, DateTime At)>();
                 page.Request += (_, request) => { if (request.Url.Contains("/MediaPreview", StringComparison.Ordinal)) asked.Add((request.Url, DateTime.UtcNow)); };
+                // A phone leaves the highlights out, so the shelf is on the first screen as the page loads: the dwell starts there.
                 await page.GotoAsync("/");
+                var loaded = DateTime.UtcNow;
                 await Assertions.Expect(page.Locator("[data-autoplay-previews]")).ToHaveAttributeAsync("data-autoplay-previews", "true");
                 var panel = page.Locator(".media-card__preview");
-
-                // The highlights fill the top of a phone: the shelf comes into the middle of the screen first.
-                await page.Locator(".media-shelf", new() { Has = page.Locator(".media-card", new() { HasText = "Trailer Film" }) }).First.EvaluateAsync("shelf => shelf.scrollIntoView({ block: 'center' })");
-                await page.WaitForTimeoutAsync(300);
-                asked.Clear();
-                var loaded = DateTime.UtcNow;
 
                 // Nothing is loaded while the card has not lingered yet; then the panel opens by itself, muted, one at a time.
                 await page.WaitForTimeoutAsync(1200);

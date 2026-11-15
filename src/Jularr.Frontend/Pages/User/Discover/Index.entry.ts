@@ -7,6 +7,7 @@ import { inserted, onPage } from '../../../Modules/Navigation/PageSwap';
 let searching: HTMLFormElement | undefined;
 let more: ((next: HTMLAnchorElement) => void) | undefined;
 let recommend: (() => void) | undefined;
+let filter: ((address: URL) => void) | undefined;
 
 document.addEventListener('htmx:config:request', event => {
     if ((event as CustomEvent).detail.ctx.sourceElement === searching && searching?.isConnected) event.preventDefault();
@@ -21,6 +22,52 @@ document.addEventListener('click', event => {
     if (next) more!(next);
     else recommend!();
 });
+
+// The bar's filters, types, lists and tags load only the results below it, with grey cards meanwhile; the address follows, so Back returns.
+function discoverAddress(address: URL): boolean {
+    return address.origin === location.origin && address.pathname === '/';
+}
+
+// The address in the server's own order (as its links have it), lists as comma lists.
+const addressOrder = ['type', 'feed', 'view', 'sort', 'availability', 'genre', 'year', 'season', 'format', 'status', 'country', 'lang', 'source', 'site', 'tag', 'yearFrom', 'yearTo',
+    'episodesFrom', 'episodesTo', 'chaptersFrom', 'chaptersTo', 'volumesFrom', 'volumesTo', 'durationFrom', 'durationTo', 'adult', 'q', 'scope'];
+
+function formAddress(form: HTMLFormElement): URL {
+    const values = new Map<string, string[]>();
+    new FormData(form).forEach((value, name) => {
+        if (typeof value !== 'string' || value === '') return;
+        const list = values.get(name) ?? [];
+        if (!list.includes(value)) list.push(value);
+        values.set(name, list);
+    });
+    const rank = (name: string) => { const index = addressOrder.indexOf(name); return index < 0 ? addressOrder.length : index; };
+    const query = Array.from(values.keys()).sort((a, b) => rank(a) - rank(b))
+        .map(name => name + '=' + encodeURIComponent(values.get(name)!.join(',')).replace(/%2C/g, ','));
+    const address = new URL(form.getAttribute('action') ?? '/', location.href);
+    address.search = query.length ? '?' + query.join('&') : '';
+    return address;
+}
+
+document.addEventListener('submit', event => {
+    const form = event.target;
+    if (!filter || !(form instanceof HTMLFormElement) || !form.closest('#discover-results') || form.method.toLowerCase() !== 'get') return;
+    const address = formAddress(form);
+    if (!discoverAddress(address)) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    form.closest('dialog')?.close();
+    filter(address);
+}, true);
+
+document.addEventListener('click', event => {
+    const link = (event.target as Element | null)?.closest<HTMLAnchorElement>('#discover-results :is(.discover-bar, .discover-chosen) a[href]');
+    if (!filter || !link || link.closest('dialog') || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+    const address = new URL(link.href);
+    if (!discoverAddress(address)) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    filter(address);
+}, true);
 
 // Pages that add nothing new in a row before automatic loading stops; a provider may repeat a page, a filter may empty several.
 const emptyPages = 3;
@@ -100,6 +147,7 @@ function setup(): void {
     searching = undefined;
     more = undefined;
     recommend = undefined;
+    filter = undefined;
 
     if (searchForm && results) {
         searching = searchForm;
@@ -169,7 +217,7 @@ function setup(): void {
         }
 
         // Only HTML from this route.
-        async function load(address: URL, append: boolean): Promise<void> {
+        async function load(address: URL, append: boolean, pushes = false): Promise<void> {
             if (append && loading) return;
             request?.abort();
             recommendationRequest?.abort();
@@ -181,7 +229,17 @@ function setup(): void {
             results!.setAttribute('aria-busy', 'true');
             observer?.disconnect();
             let waiting: HTMLElement | undefined;
-            if (append) {
+            let covered: HTMLElement[] = [];
+            if (!append && pushes) {
+                // Everything under the bar waits behind grey cards until the new results arrive.
+                const bar = results!.querySelector<HTMLElement>('.discover-bar');
+                if (bar) {
+                    covered = Array.from(results!.children).filter((child): child is HTMLElement => child instanceof HTMLElement && child !== bar && !child.classList.contains('discover-feedback'));
+                    covered.forEach(child => { child.hidden = true; });
+                    waiting = skeletons(12, 'media-grid discover-skeletons');
+                    bar.after(waiting);
+                }
+            } else if (append) {
                 const grid = results!.querySelector<HTMLElement>('.media-grid');
                 const columns = grid ? getComputedStyle(grid).gridTemplateColumns.split(' ').filter(Boolean).length : 0;
                 waiting = skeletons(columns || 6, 'media-grid discover-skeletons');
@@ -222,8 +280,9 @@ function setup(): void {
                     results!.replaceWith(incoming);
                     results = incoming;
                     inserted(incoming);
-                    // The search address replaces this history entry and stays reachable by Back.
-                    history.replaceState({ htmx: true }, '', address);
+                    // A filter adds an entry, so Back returns to the choice before; the search address replaces this one and stays reachable by Back.
+                    if (pushes) history.pushState({ htmx: true }, '', address);
+                    else history.replaceState({ htmx: true }, '', address);
                 }
 
                 initializeShelves(results!);
@@ -236,6 +295,7 @@ function setup(): void {
                 if (!append) void recommendations();
             } catch (error) {
                 if (signal.aborted || current !== generation) return;
+                covered.forEach(child => { child.hidden = false; });
                 const feedback = results!.querySelector<HTMLElement>('.discover-feedback');
                 if (feedback) feedback.textContent = results!.dataset.loadError ?? '';
                 // No automatic retry loop: the link shows itself as the retry.
@@ -290,6 +350,7 @@ function setup(): void {
 
         more = next => void load(new URL(next.href), true);
         recommend = () => void recommendations();
+        filter = address => void load(address, false, true);
 
         observeNext();
         void recommendations();

@@ -31,6 +31,57 @@ namespace Jularr.Integrations.Logic.MusicBrainz
                 : [];
         }
 
+        // A page of albums carrying every one of the tags, first released within the years; MusicBrainz orders them by how well they match.
+        public async Task<IReadOnlyList<MusicBrainzAlbum>> DiscoverAsync(IReadOnlyList<string> tags, int? yearFrom, int? yearTo, int page, CancellationToken ct)
+        {
+            var terms = new List<string> { "primarytype:album" };
+            terms.AddRange(tags.Select(tag => "tag:\"" + LuceneSpecial().Replace(tag, @"\$0") + "\""));
+            if (yearFrom is not null || yearTo is not null)
+            {
+                var from = yearFrom is { } low ? Math.Clamp(low, 1800, 2200).ToString(CultureInfo.InvariantCulture) : "*";
+                var to = yearTo is { } high ? Math.Clamp(high, 1800, 2200).ToString(CultureInfo.InvariantCulture) + "-12-31" : "*";
+                terms.Add("firstreleasedate:[" + from + " TO " + to + "]");
+            }
+
+            var offset = (Math.Max(1, page) - 1) * PageSize;
+            using var document = await GetAsync("release-group?fmt=json&limit=" + PageSize.ToString(CultureInfo.InvariantCulture) + "&offset=" + offset.ToString(CultureInfo.InvariantCulture)
+                + "&query=" + Uri.EscapeDataString(string.Join(" AND ", terms)), ct);
+            return document.RootElement.TryGetProperty("release-groups", out var groups) && groups.ValueKind == JsonValueKind.Array
+                ? [.. groups.EnumerateArray().Select(ReadAlbum).OfType<MusicBrainzAlbum>()]
+                : [];
+        }
+
+        public const int PageSize = 20;
+
+        // Albums first released between the two days, a page at a time.
+        public async Task<IReadOnlyList<MusicBrainzAlbum>> ReadNewAlbumsAsync(DateOnly from, DateOnly to, int page, CancellationToken ct)
+        {
+            var query = "primarytype:album AND status:official AND firstreleasedate:[" + from.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) + " TO "
+                + to.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) + "]";
+            var offset = (Math.Max(1, page) - 1) * PageSize;
+            using var document = await GetAsync("release-group?fmt=json&limit=" + PageSize.ToString(CultureInfo.InvariantCulture) + "&offset=" + offset.ToString(CultureInfo.InvariantCulture)
+                + "&query=" + Uri.EscapeDataString(query), ct);
+            return document.RootElement.TryGetProperty("release-groups", out var groups) && groups.ValueKind == JsonValueKind.Array
+                ? [.. groups.EnumerateArray().Select(ReadAlbum).OfType<MusicBrainzAlbum>()]
+                : [];
+        }
+
+        // The albums ListenBrainz's listeners played most this month, a page at a time; ListenBrainz shares MusicBrainz's ids.
+        public async Task<IReadOnlyList<MusicBrainzAlbum>> ReadPopularAlbumsAsync(int page, CancellationToken ct)
+        {
+            var offset = (Math.Max(1, page) - 1) * PageSize;
+            using var document = await GetAsync(new Uri("https://api.listenbrainz.org/1/stats/sitewide/release-groups?range=month&count=" + PageSize.ToString(CultureInfo.InvariantCulture)
+                + "&offset=" + offset.ToString(CultureInfo.InvariantCulture)), ct);
+            if (!document.RootElement.TryGetProperty("payload", out var payload) || !payload.TryGetProperty("release_groups", out var groups) || groups.ValueKind != JsonValueKind.Array)
+            {
+                return [];
+            }
+
+            return [.. groups.EnumerateArray().Select(group => Text(group, "release_group_mbid") is { } id && Mbid().IsMatch(id) && Text(group, "release_group_name") is { } title
+                ? new MusicBrainzAlbum(id, Limit(title, 500), Limit(Text(group, "artist_name") ?? "", 500), null, "Album")
+                : null).OfType<MusicBrainzAlbum>()];
+        }
+
         public async Task<MusicBrainzAlbumDetails> ReadAsync(string releaseGroupId, CancellationToken ct)
         {
             if (!Mbid().IsMatch(releaseGroupId))
@@ -109,7 +160,9 @@ namespace Jularr.Integrations.Logic.MusicBrainz
                     : null).OfType<ProviderPerson>().Take(10)]
                 : [];
 
-        private async Task<JsonDocument> GetAsync(string path, CancellationToken ct)
+        private Task<JsonDocument> GetAsync(string path, CancellationToken ct) => GetAsync(new Uri(path, UriKind.Relative), ct);
+
+        private async Task<JsonDocument> GetAsync(Uri address, CancellationToken ct)
         {
             // One request at a time with the service's spacing.
             await _pace.Gate.WaitAsync(ct);
@@ -117,7 +170,7 @@ namespace Jularr.Integrations.Logic.MusicBrainz
             try
             {
                 await _pace.WaitForTurnAsync(ct);
-                response = await http.GetAsync(new Uri(path, UriKind.Relative), HttpCompletionOption.ResponseHeadersRead, ct);
+                response = await http.GetAsync(address, HttpCompletionOption.ResponseHeadersRead, ct);
             }
             catch (Exception exception) when (exception is HttpRequestException || exception is TaskCanceledException && !ct.IsCancellationRequested)
             {

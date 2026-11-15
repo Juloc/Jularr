@@ -35,7 +35,8 @@ namespace Jularr.E2E.Tests
             await Assertions.Expect(page.Locator("#discover-recommendations .media-shelf").First).ToBeVisibleAsync();
             await Evidence.SaveAsync(page, "discover-filter-row");
 
-            // Choosing a genre in its popup applies it when the popup closes: one grid, popularity first, under the highlights.
+            // Choosing a genre in its popup applies it when the popup closes: one grid, popularity first, under the highlights. Only the results load, not the page.
+            await page.EvaluateAsync("window.discoverStays = true");
             await row.Locator(".discover-filter__button").First.ClickAsync();
             var popup = page.Locator("#discover-filter-genre");
             await Assertions.Expect(popup).ToBeVisibleAsync();
@@ -48,8 +49,10 @@ namespace Jularr.E2E.Tests
             await Assertions.Expect(cards.First).ToContainTextAsync("Robot 1");
             await Assertions.Expect(cards.First).ToContainTextAsync("TV");
             await Assertions.Expect(page.Locator(".media-grid").GetByText("Quiet Days")).ToHaveCountAsync(0);
-            await Assertions.Expect(page.Locator(".hero-carousel")).ToBeVisibleAsync();
+            // A filter shows its grid in place of the highlights and the rows.
+            await Assertions.Expect(page.Locator(".hero-carousel")).ToHaveCountAsync(0);
             await Assertions.Expect(page.Locator("#discover-recommendations")).ToHaveCountAsync(0);
+            Assert.IsTrue(await page.EvaluateAsync<bool>("window.discoverStays === true"));
             await Evidence.SaveAsync(page, "discover-filter-grid");
 
             // The grid loads on while scrolling and says where it ends.
@@ -62,6 +65,7 @@ namespace Jularr.E2E.Tests
 
             // More holds the other filters; the format sits in the row.
             await page.GotoAsync("/?type=anime&genre=Mecha");
+            await page.EvaluateAsync("window.discoverStays = true");
             await row.Locator(".discover-filter__more").ClickAsync();
             var drawer = page.Locator("#discover-panel");
             await drawer.GetByText("South Korea (Manhwa)").ClickAsync();
@@ -71,17 +75,25 @@ namespace Jularr.E2E.Tests
             await Assertions.Expect(cards).ToHaveCountAsync(1);
             await Assertions.Expect(cards.First).ToContainTextAsync("Robot 7");
 
-            // On a phone the row swipes sideways and a popup is a sheet from the bottom.
+            // A phone has no row of fields: one Filter button with the count opens every filter, the chosen genre ticked.
             await page.SetViewportSizeAsync(390, 844);
-            await row.Locator(".discover-filter__button").First.ClickAsync();
-            var sheet = await popup.BoundingBoxAsync();
-            Assert.IsTrue(sheet is not null && sheet.X == 0 && Math.Abs(sheet.Y + sheet.Height - 844) < 2, $"{sheet?.X} {sheet?.Y} {sheet?.Height}");
+            await Assertions.Expect(row).ToBeHiddenAsync();
+            var filters = page.Locator(".discover-bar__filters");
+            await Assertions.Expect(filters.Locator(".discover-bar__count")).ToHaveTextAsync("2");
+            await filters.ClickAsync();
+            await Assertions.Expect(drawer).ToBeVisibleAsync();
+            await Assertions.Expect(drawer.Locator("input[name=genre][value=Mecha]")).ToBeCheckedAsync();
             await Evidence.SaveAsync(page, "discover-filter-phone");
             await page.Keyboard.PressAsync("Escape");
             await page.SetViewportSizeAsync(1280, 900);
 
+            // A chosen field's cross clears only that field.
+            await row.Locator(".discover-filter--set .discover-filter__clear").ClickAsync();
+            await Assertions.Expect(page).ToHaveURLAsync(new Regex(@"/\?type=anime&country=KR$"));
+            Assert.IsTrue(await page.EvaluateAsync<bool>("window.discoverStays === true"));
+
             // Clearing keeps the type and brings the shelves back.
-            await row.Locator(".discover-filter__clear").ClickAsync();
+            await page.Locator(".discover-chosen__clear").ClickAsync();
             await Assertions.Expect(page).ToHaveURLAsync(new Regex(@"/\?type=anime$"));
             await Assertions.Expect(page.Locator("#discover-recommendations .media-shelf").First).ToBeVisibleAsync();
         }

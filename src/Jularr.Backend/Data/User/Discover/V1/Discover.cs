@@ -109,6 +109,40 @@ namespace Jularr.Backend.Data.User.Discover.V1
         public IReadOnlyList<DiscoverCatalogItemV1> CatalogItems { get; }
     }
 
+    // The profile's own rows of these types: titles that fit its taste, then a row per genre it likes.
+    public sealed class ReadDiscoverTasteDataV1 : BaseData
+    {
+        public ReadDiscoverTasteDataV1(string[] scopeSlugs)
+        {
+            ScopeSlugs = scopeSlugs;
+        }
+
+        [DataField(typeof(DiscoverFields), nameof(DiscoverFields.ScopeSlugs))]
+        public string[] ScopeSlugs { get; }
+    }
+
+    // One type's part of a profile's own row: "for you" without a genre, else the row of the genre; films and series as Items, the others as CatalogItems.
+    public sealed class DiscoverTasteShelfV1 : BaseResponse
+    {
+        public DiscoverTasteShelfV1(Genre? genreId, string scopeSlug, IReadOnlyList<DiscoverItemV1> items, IReadOnlyList<DiscoverCatalogItemV1> catalogItems)
+        {
+            GenreId = genreId;
+            ScopeSlug = scopeSlug;
+            Items = items;
+            CatalogItems = catalogItems;
+        }
+
+        [DataField(typeof(DiscoverFields), nameof(DiscoverFields.TasteGenreId))]
+        public Genre? GenreId { get; }
+
+        [DataField(typeof(DiscoverFields), nameof(DiscoverFields.ScopeSlug))]
+        public string ScopeSlug { get; }
+
+        public IReadOnlyList<DiscoverItemV1> Items { get; }
+
+        public IReadOnlyList<DiscoverCatalogItemV1> CatalogItems { get; }
+    }
+
     public sealed class SuggestDiscoverDataV1 : BaseData
     {
         public SuggestDiscoverDataV1(string query, string? scopeSlug = null)

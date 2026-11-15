@@ -92,6 +92,18 @@ namespace Jularr.Backend.Service.User.Discover.V1
                 return new DiscoverFilteredV1(new([]), await DiscoverQueries.CatalogItemsAsync(Context, books, profileId, CancellationToken));
             }
 
+            if (scope.MediaTypeId == MediaType.Game)
+            {
+                var games = await _catalog.ReadFilteredGamesAsync(Context, DiscoverFilterScopes.IgdbQuery(Data, sort), Data.Page, CancellationToken);
+                return new DiscoverFilteredV1(new([]), await DiscoverQueries.CatalogItemsAsync(Context, games, profileId, CancellationToken));
+            }
+
+            if (scope.MediaTypeId == MediaType.Music)
+            {
+                var albums = await _catalog.ReadFilteredMusicAsync(Context, DiscoverFilterScopes.MusicTagsOf(Data.GenreIds), Data.YearFrom, Data.YearTo, Data.Page, CancellationToken);
+                return new DiscoverFilteredV1(new([]), await DiscoverQueries.CatalogItemsAsync(Context, albums, profileId, CancellationToken));
+            }
+
             // TMDB's discover lists; a series is TheTVDB's, as on its lists.
             var connection = await _metadata.ConnectAsync(Context, CancellationToken);
             var results = await _metadata.DiscoverAsync(connection, scope.MediaTypeId, DiscoverFilterScopes.TmdbQuery(Data, sort, scope.MediaTypeId == MediaType.Series,
@@ -150,7 +162,7 @@ namespace Jularr.Backend.Service.User.Discover.V1
                     sites = new([.. (scope.MediaSubtypeId == MediaSubtype.Anime ? aniList.AnimeSites : aniList.MangaSites).OrderBy(site => site.Name, StringComparer.OrdinalIgnoreCase)
                         .Select(site => new DiscoverOptionV1(site.Id, site.Name, null, false))]);
                 }
-                else if (offered.Filters.Contains(DiscoverFilter.Site))
+                else if (offered.Filters.Contains(DiscoverFilter.Site) && scope.MediaTypeId is MediaType.Movie or MediaType.Series)
                 {
                     var connection = await _metadata.ConnectAsync(Context, limit.Token);
                     sites = new([.. (await _metadata.ReadProvidersAsync(connection, scope.MediaTypeId, limit.Token)).Take(50)

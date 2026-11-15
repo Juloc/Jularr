@@ -53,9 +53,14 @@ namespace Jularr.Frontend.Pages.Shared
             {
                 new Button(new Icon("menu", assets)).IconOnly(texts["nav.menu"]).Attribute("class", "button button--icon app-menu-toggle")
                     .Attribute("data-sidebar-toggle", "true").Attribute("aria-controls", "app-sidebar").Attribute("aria-expanded", "false"),
-                new Brand(assets, compact: true),
-                Breadcrumb(menu, current, texts)
+                new Brand(assets, compact: true)
             };
+
+            // The user area names its five modes as tabs where the administration has its trail; a page below another keeps its trail beside them.
+            var modeTabs = !adminPath && texts.IsAuthenticated && texts.CanReadMedia();
+            if (modeTabs) header.Add(new ModeTabs(assets));
+            if (!modeTabs || parents is { Count: > 0 }) header.Add(Breadcrumb(menu, current, texts));
+            else header.Add(new Div().Class("app-header-spacer"));
             if (texts.CanReadMedia())
             {
                 // Suggestions open under it while typing (Pages/Shared/HeaderSearch.ts); on a phone it covers the header and the back button closes it.
@@ -112,11 +117,8 @@ namespace Jularr.Frontend.Pages.Shared
                 return;
             }
 
-            // The modes are the user area's own worlds: the switch sits under the brand while media can be read.
-            IUiComponent modes = texts.IsAuthenticated && texts.CanReadMedia() ? new ModeSwitch(assets) : new Div();
             new Aside(
                 new Brand(assets),
-                modes,
                 Links(primary, "nav.primary", "sidebar-navigation", texts),
                 Links(secondary, "nav.secondary", "sidebar-navigation sidebar-secondary", texts)
             ).Class("app-sidebar").Attribute("id", "app-sidebar").WriteTo(writer, encoder, texts);

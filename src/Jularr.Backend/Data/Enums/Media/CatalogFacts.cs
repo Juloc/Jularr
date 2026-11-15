@@ -79,7 +79,35 @@ namespace Jularr.Backend.Data.Enums.Media
         Reality = 30,
         Soap = 31,
         Talk = 32,
-        Politics = 33
+        Politics = 33,
+        // Games' genres as IGDB names them, then music's as MusicBrainz tags them.
+        RolePlaying = 34,
+        Shooter = 35,
+        Strategy = 36,
+        Platformer = 37,
+        Puzzle = 38,
+        Racing = 39,
+        Fighting = 40,
+        Simulation = 41,
+        Indie = 42,
+        Arcade = 43,
+        VisualNovel = 44,
+        CardGame = 45,
+        Rock = 46,
+        Pop = 47,
+        HipHop = 48,
+        Electronic = 49,
+        Jazz = 50,
+        Classical = 51,
+        Metal = 52,
+        Folk = 53,
+        RhythmAndBlues = 54,
+        CountryMusic = 55,
+        Soundtrack = 56,
+        Punk = 57,
+        Blues = 58,
+        Reggae = 59,
+        Soul = 60
     }
 
     // The filters Discover offers a scope, as its catalog can answer them.

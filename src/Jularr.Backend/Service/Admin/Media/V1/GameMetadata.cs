@@ -76,6 +76,18 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             }
         }
 
+        public async Task<IReadOnlyList<IgdbGame>> DiscoverAsync(IgdbConnection connection, IgdbDiscoverQuery query, int page, CancellationToken ct)
+        {
+            try
+            {
+                return await _igdb.DiscoverAsync(connection, query, page, ct);
+            }
+            catch (IgdbException exception)
+            {
+                throw Translate(exception);
+            }
+        }
+
         public async Task<IgdbGame> ReadAsync(IgdbConnection connection, string id, CancellationToken ct)
         {
             try

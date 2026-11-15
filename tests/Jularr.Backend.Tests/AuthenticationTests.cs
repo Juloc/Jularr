@@ -372,9 +372,12 @@ namespace Jularr.Backend.Tests
             Assert.IsFalse(body.Contains("password", StringComparison.OrdinalIgnoreCase));
             // The cookie is Secure only when the request itself is https: a browser drops a Secure cookie that comes over
             // plain http (a server reached by its LAN address), which made every sign-in end on the sign-in page.
-            Assert.IsTrue(login.Headers.GetValues("Set-Cookie").Any(value => value.Contains("httponly", StringComparison.OrdinalIgnoreCase)
-                && value.Contains("samesite=strict", StringComparison.OrdinalIgnoreCase)
-                && !value.Contains("secure", StringComparison.OrdinalIgnoreCase)));
+            // The session cookie is Lax: the installed app opened from the home screen arrives as a visit from outside, and a Strict cookie stayed home
+            // on that first page, which then asked to sign in until a reload.
+            var session = login.Headers.GetValues("Set-Cookie").Single(value => value.StartsWith(".AspNetCore.Cookies=", StringComparison.Ordinal));
+            Assert.IsTrue(session.Contains("httponly", StringComparison.OrdinalIgnoreCase), session);
+            Assert.IsTrue(session.Contains("samesite=lax", StringComparison.OrdinalIgnoreCase), session);
+            Assert.IsFalse(session.Contains("secure", StringComparison.OrdinalIgnoreCase), session);
 
             using var read = await host.SendAsync(HttpMethod.Get, "/api/v1/profiles/101");
             Assert.AreEqual(HttpStatusCode.OK, read.StatusCode);

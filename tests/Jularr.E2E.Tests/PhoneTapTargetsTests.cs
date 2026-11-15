@@ -33,7 +33,7 @@ namespace Jularr.E2E.Tests
             ("/", ".app-header .app-notifications", 42, 44, "header icons sit 8px apart"),
             ("/", ".app-header .app-search__icon", 42, 44, "header icons sit 8px apart"),
             ("/", ".app-header .app-menu-toggle", 42, 44, "header icons sit 8px apart"),
-            ("/", ".app-header .theme-toggle", 42, 44, "header icons sit 8px apart"),
+            ("/", ".app-header .mode-tabs__tab", 36, 44, "five mode tabs share one pill of the header"),
             ("/Calendar", "a.calendar__date", 44, 44, ""),
             ("/Admin/Wanted", "input.list-select", 44, 44, ""),
             ("/Admin/Wanted", "a.list-identity__title", 44, 44, ""),

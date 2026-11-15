@@ -43,9 +43,10 @@ namespace Jularr.Integrations.Logic.OpenLibrary
             return ReadResults(document.RootElement, "docs");
         }
 
-        public async Task<IReadOnlyList<OpenLibraryResult>> ReadTrendingAsync(int page, CancellationToken ct)
+        // The works read most this week, or over another period (daily, weekly, monthly, yearly, forever).
+        public async Task<IReadOnlyList<OpenLibraryResult>> ReadTrendingAsync(int page, CancellationToken ct, string period = "weekly")
         {
-            using var document = await GetAsync("trending/weekly.json?limit=20&page=" + page.ToString(CultureInfo.InvariantCulture), ct);
+            using var document = await GetAsync("trending/" + period + ".json?limit=20&page=" + page.ToString(CultureInfo.InvariantCulture), ct);
             return ReadResults(document.RootElement, "works");
         }
 

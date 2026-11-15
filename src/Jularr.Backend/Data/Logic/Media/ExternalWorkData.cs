@@ -307,6 +307,45 @@ namespace Jularr.Backend.Data.Logic.Media
         public int? DurationFrom { get; init; }
         public int? DurationTo { get; init; }
         public bool Adult { get; init; }
+
+        // A profile's own shelf: any of these genres, the most of them first, and only what the profile has not watched, read or kept on its watchlist.
+        public short[]? AnyGenres { get; init; }
+        public bool Unseen { get; init; }
+    }
+
+    // The kinds whose Works tell a profile's taste, and how many genres to name.
+    internal sealed class ExternalWorkTasteData : BaseData
+    {
+        public ExternalWorkTasteData(long profileId, IReadOnlyList<(int Type, int Subtype)> kinds, int limit)
+        {
+            ProfileId = profileId;
+            MediaTypeIds = [.. kinds.Select(kind => kind.Type)];
+            MediaSubtypeIds = [.. kinds.Select(kind => kind.Subtype)];
+            Limit = limit;
+        }
+
+        [DataField(typeof(ProfileFields), nameof(ProfileFields.Id))]
+        public long ProfileId { get; }
+
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.KindTypes))]
+        public int[] MediaTypeIds { get; }
+
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.KindSubtypes))]
+        public int[] MediaSubtypeIds { get; }
+
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.Limit))]
+        public int Limit { get; }
+    }
+
+    internal sealed class ExternalWorkTasteGenreData : BaseData
+    {
+        public ExternalWorkTasteGenreData(Genre genre)
+        {
+            Genre = genre;
+        }
+
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.Genre))]
+        public Genre Genre { get; }
     }
 
     // Shelves read in one statement; a browse page goes on at its offset.

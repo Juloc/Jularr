@@ -212,7 +212,7 @@ namespace Jularr.E2E.Tests
                         + "\"genres\":[{\"id\":16,\"name\":\"Animation\"}],\"external_ids\":{\"imdb_id\":\"tt" + bulk.ToString("D7", System.Globalization.CultureInfo.InvariantCulture) + "\"}}"),
                 "tv/99001" => Json(Series),
                 _ when path.StartsWith("trending/", StringComparison.Ordinal) || path.StartsWith("discover/", StringComparison.Ordinal) || path.EndsWith("/top_rated", StringComparison.Ordinal)
-                    || path == "movie/upcoming" => Json(path.Contains("movie", StringComparison.Ordinal) ? "{\"results\":[" + Movie + "]}" : "{\"results\":[" + Series + "]}"),
+                    || path is "movie/upcoming" or "movie/now_playing" or "tv/on_the_air" => Json(path.Contains("movie", StringComparison.Ordinal) ? "{\"results\":[" + Movie + "]}" : "{\"results\":[" + Series + "]}"),
                 _ => Results.NotFound()
             };
         }

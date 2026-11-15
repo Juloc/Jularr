@@ -528,7 +528,7 @@ namespace Jularr.Backend.Tests
             var asked = await FindAsync();
             Assert.AreEqual((workId, MediaStateType.Requested), (asked.WorkId, asked.MediaStateTypeId));
 
-            // Books trend globally on Open Library; other rankings are not offered.
+            // Books trend globally on Open Library, beside the year's most read, the new and the classics; a top list is not offered.
             using var trending = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/feed", new ReadDiscoverCatalogFeedDataV1(MediaType.Book, DiscoverFeedType.Trending));
             Assert.AreEqual(HttpStatusCode.OK, trending.StatusCode, await trending.Content.ReadAsStringAsync());
             var trend = (await trending.Content.ReadFromJsonAsync<BaseDataList<DiscoverCatalogItemV1>>())!.Single();
@@ -876,7 +876,7 @@ namespace Jularr.Backend.Tests
                                   {"key":"/books/OL4M","title":"Orgueil et prÃ©jugÃ©s","physical_format":"Paperback"}
                                 ]}
                                 """),
-                            "/trending/weekly.json" => Json("""{"works":[{"key":"/works/OL66554W","title":"Pride and Prejudice","author_name":["Jane Austen"],"first_publish_year":1813,"cover_i":14348537}]}"""),
+                            "/trending/weekly.json" or "/trending/yearly.json" => Json("""{"works":[{"key":"/works/OL66554W","title":"Pride and Prejudice","author_name":["Jane Austen"],"first_publish_year":1813,"cover_i":14348537}]}"""),
                             _ => new HttpResponseMessage(HttpStatusCode.NotFound)
                         };
                     case "api.hardcover.app":

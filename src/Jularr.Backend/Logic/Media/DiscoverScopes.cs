@@ -3,7 +3,8 @@ using Jularr.Backend.Data.User.Discover.V1;
 
 namespace Jularr.Backend.Logic.Media
 {
-    // The Discover scopes in the order of the media-type bar; films and series come from TMDB, anime and the other types from their own catalogs.
+    // The Discover scopes in the order of the media-type bar, each with its lists in the order of its bar; films and series come from TMDB, anime and the other types from
+    // their own catalogs.
     // Anime, manga and light novels have AniList's lists and orders; the other types sort only where Jularr holds their whole catalog.
     internal static class DiscoverScopes
     {
@@ -13,14 +14,14 @@ namespace Jularr.Backend.Logic.Media
 
         public static IReadOnlyList<DiscoverScopeV1> All { get; } =
         [
-            Scope("movies", MediaType.Movie, null, DiscoverFeedType.Trending, DiscoverFeedType.Top, DiscoverFeedType.New, DiscoverFeedType.Upcoming),
-            Scope("series", MediaType.Series, null, DiscoverFeedType.Trending, DiscoverFeedType.Top, DiscoverFeedType.New),
+            Scope("movies", MediaType.Movie, null, DiscoverFeedType.Trending, DiscoverFeedType.New, DiscoverFeedType.Top, DiscoverFeedType.Upcoming),
+            Scope("series", MediaType.Series, null, DiscoverFeedType.Trending, DiscoverFeedType.New, DiscoverFeedType.Top, DiscoverFeedType.Upcoming),
             Scope("anime", MediaType.Series, MediaSubtype.Anime, DiscoverFeedType.Trending, DiscoverFeedType.Season, DiscoverFeedType.NextSeason, DiscoverFeedType.Popular, DiscoverFeedType.Top100),
-            Scope("lightnovels", MediaType.Book, MediaSubtype.LightNovel, DiscoverFeedType.Trending, DiscoverFeedType.Popular, DiscoverFeedType.Top100),
-            Scope("books", MediaType.Book, null, DiscoverFeedType.Trending),
-            Scope("manga", MediaType.Book, MediaSubtype.Manga, DiscoverFeedType.Trending, DiscoverFeedType.Popular, DiscoverFeedType.Manhwa, DiscoverFeedType.Top100),
-            Scope("music", MediaType.Music, null),
-            Scope("games", MediaType.Game, null)
+            Scope("lightnovels", MediaType.Book, MediaSubtype.LightNovel, DiscoverFeedType.Trending, DiscoverFeedType.New, DiscoverFeedType.Popular, DiscoverFeedType.Top100),
+            Scope("books", MediaType.Book, null, DiscoverFeedType.Trending, DiscoverFeedType.New, DiscoverFeedType.Popular, DiscoverFeedType.Classics),
+            Scope("manga", MediaType.Book, MediaSubtype.Manga, DiscoverFeedType.Trending, DiscoverFeedType.New, DiscoverFeedType.Popular, DiscoverFeedType.Manhwa, DiscoverFeedType.Top100),
+            Scope("music", MediaType.Music, null, DiscoverFeedType.New, DiscoverFeedType.Popular),
+            Scope("games", MediaType.Game, null, DiscoverFeedType.Popular, DiscoverFeedType.New, DiscoverFeedType.Top, DiscoverFeedType.Upcoming, DiscoverFeedType.Retro)
         ];
 
         public static bool IsCatalog(MediaType type, MediaSubtype? subtype) => subtype == MediaSubtype.Anime || type is not (MediaType.Movie or MediaType.Series);
@@ -43,6 +44,7 @@ namespace Jularr.Backend.Logic.Media
         {
             DiscoverFeedType.Trending => DiscoverSort.Trending,
             DiscoverFeedType.Top or DiscoverFeedType.Top100 => DiscoverSort.Score,
+            DiscoverFeedType.New => DiscoverSort.Released,
             _ => DiscoverSort.Popularity
         };
 

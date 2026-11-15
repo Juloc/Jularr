@@ -12,8 +12,5 @@ namespace Jularr.Frontend.Modules.Appearance
 
         // Personal lists as rows instead of the grid.
         public static string? ListLayout(HttpRequest request) => request.Cookies["list-layout"] is "list" ? "list" : null;
-
-        // Discover's shelves wrapped into a grid.
-        public static string? DiscoverLayout(HttpRequest request) => request.Cookies["discover-layout"] is "grid" ? "grid" : null;
     }
 }

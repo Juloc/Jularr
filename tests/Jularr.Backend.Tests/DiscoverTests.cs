@@ -262,8 +262,9 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(603, trending.TmdbId);
             Assert.AreEqual(MediaStateType.NotRequested, trending.MediaStateTypeId);
             Assert.AreEqual("https://image.tmdb.org/t/p/w500/poster.jpg", trending.PosterUrl);
-            using var upcomingSeries = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/feed", new ReadDiscoverFeedDataV1(MediaType.Series, DiscoverFeedType.Upcoming));
-            Assert.AreEqual(HttpStatusCode.BadRequest, upcomingSeries.StatusCode);
+            // A list a type lacks is refused.
+            using var seriesSeason = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/feed", new ReadDiscoverFeedDataV1(MediaType.Series, DiscoverFeedType.Season));
+            Assert.AreEqual(HttpStatusCode.BadRequest, seriesSeason.StatusCode);
 
             // The title shown is a Work already; the normal request asks for it, and its import fills the same Work.
             using var requested = await host.SendAsync(HttpMethod.Post, $"/api/v1/works/{trending.WorkId}/requests", new CreateRequestDataV1(1));
@@ -997,11 +998,12 @@ namespace Jularr.Backend.Tests
             var browseHtml = await browse.Content.ReadAsStringAsync();
             StringAssert.Contains(browseHtml, "The Matrix Show");
 
-            // A ranking names itself and leads back to its type; the page keeps the one capsule bar and no row of tabs.
+            // A list of a type chosen alone is its grid under its name; the type's lists stay beside the types, this one marked, and For you leads back.
             StringAssert.Contains(browseHtml, "<h2>Top rated</h2>");
             StringAssert.Contains(browseHtml, "href=\"/?type=series\"");
-            Assert.AreEqual(1, System.Text.RegularExpressions.Regex.Matches(browseHtml, "class=\"capsule-bar__areas\"").Count);
-            Assert.AreEqual(0, System.Text.RegularExpressions.Regex.Matches(browseHtml, "class=\"navigation-tabs[ \"]").Count);
+            Assert.AreEqual(1, System.Text.RegularExpressions.Regex.Matches(browseHtml, "navigation-tabs--types").Count);
+            Assert.AreEqual(1, System.Text.RegularExpressions.Regex.Matches(browseHtml, "navigation-tabs--chips").Count);
+            StringAssert.Contains(browseHtml, "href=\"/?type=series&amp;view=Top\" class=\"navigation-tabs__link navigation-tabs__link--active\"");
 
             // The title's page is the Work's; its first open brings the details from the catalog, and it requests the title as any Work.
             using var title = await host.SendAsync(HttpMethod.Get, "/Details/" + workId);
@@ -1143,25 +1145,37 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
-        [DataRow(true, "primary_release_date")]
-        [DataRow(false, "first_air_date")]
-        public async Task Tmdb_NewFeed_OrdersFirstReleasesAndSearchForwardsItsPage(bool movie, string dateField)
+        [DataRow(true, "/3/movie/now_playing", "US")]
+        [DataRow(false, "/3/tv/on_the_air", "")]
+        public async Task Tmdb_NewFeed_IsWhatPlaysNow_AndSearchForwardsItsPage(bool movie, string path, string region)
         {
+            // A film's new list is what plays in cinemas of the region, a series' the series on the air.
             var kind = movie ? TmdbMediaKind.Movie : TmdbMediaKind.Series;
             using var handler = new FakeTmdb();
             using var client = new HttpClient(handler) { BaseAddress = new Uri("https://api.themoviedb.org/3/") };
             var tmdb = new TmdbClient(client);
             await tmdb.ReadFeedAsync(new TmdbConnection(Token, "en-US"), kind, TmdbFeed.New, "US", 2, CancellationToken.None);
             var request = handler.Requests.Single();
-            StringAssert.Contains(request.AbsolutePath, "/discover/");
+            Assert.AreEqual(path, request.AbsolutePath);
             var query = QueryHelpers.ParseQuery(request.Query);
-            Assert.AreEqual(dateField + ".desc", query["sort_by"].ToString());
-            Assert.AreEqual(DateTime.UtcNow.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture), query[dateField + ".lte"].ToString());
+            Assert.AreEqual(region, query.TryGetValue("region", out var asked) ? asked.ToString() : "");
             Assert.AreEqual("2", query["page"].ToString());
-            Assert.AreEqual("false", query["include_adult"].ToString());
 
             await tmdb.SearchAsync(new TmdbConnection(Token, "en-US"), kind, "Matrix", null, CancellationToken.None, page: 3);
             Assert.AreEqual("3", QueryHelpers.ParseQuery(handler.Requests.Last().Query)["page"].ToString());
+        }
+
+        [TestMethod]
+        public async Task Tmdb_UpcomingSeries_BeginAfterToday_MostAwaitedFirst()
+        {
+            using var handler = new FakeTmdb();
+            using var client = new HttpClient(handler) { BaseAddress = new Uri("https://api.themoviedb.org/3/") };
+            await new TmdbClient(client).ReadFeedAsync(new TmdbConnection(Token, "en-US"), TmdbMediaKind.Series, TmdbFeed.Upcoming, "US", 1, CancellationToken.None);
+            var request = handler.Requests.Single();
+            Assert.AreEqual("/3/discover/tv", request.AbsolutePath);
+            var query = QueryHelpers.ParseQuery(request.Query);
+            Assert.AreEqual("popularity.desc", query["sort_by"].ToString());
+            Assert.AreEqual(DateTime.UtcNow.AddDays(1).ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture), query["first_air_date.gte"].ToString());
         }
 
         [TestMethod]
@@ -1499,6 +1513,39 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Taste_ForYouAndGenreRows_FollowWhatTheProfileWatched_AndLeaveOutWhatItSaw()
+        {
+            var provider = new FakeAniList();
+            await using var host = await CreateHostAsync(anime: provider);
+            await host.Fixture.RunSqlAsync("""
+                UPDATE "InstanceModules" SET "IsEnabled" = TRUE WHERE "Key" = 'LocalDiscovery';
+                UPDATE "ExternalWorkSyncs" SET "CompletedAt" = now() WHERE "Namespace" = 'anilist';
+                INSERT INTO "Works" ("Id", "CatalogNamespace", "MediaTypeId", "MediaSubtypeId", "CanonicalTitle", "ReleaseYear", "ImageUrl", "Popularity", "IsAdult", "GenreIds") VALUES
+                    (9401, 'anilist', 2, 1, 'Seen Mecha', 2020, 'https://img.test/401.jpg', 900, FALSE, '{10,1}'),
+                    (9402, 'anilist', 2, 1, 'Mecha Action', 2021, 'https://img.test/402.jpg', 300, FALSE, '{10,1}'),
+                    (9403, 'anilist', 2, 1, 'Only Mecha', 2021, 'https://img.test/403.jpg', 800, FALSE, '{10}'),
+                    (9404, 'anilist', 2, 1, 'Kept Mecha', 2022, 'https://img.test/404.jpg', 700, FALSE, '{10}'),
+                    (9405, 'anilist', 2, 1, 'Quiet Life', 2022, 'https://img.test/405.jpg', 999, FALSE, '{16}');
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") SELECT "Id", 'anilist', "Id"::text FROM "Works" WHERE "Id" BETWEEN 9401 AND 9405;
+                INSERT INTO "MediaProgress" ("ProfileId", "WorkId", "ProgressPositionTypeId", "PositionMs", "IsCompleted", "CompletedAt")
+                    SELECT "Id", 9401, 1, 1000, TRUE, now() FROM "Profiles";
+                INSERT INTO "WatchlistEntries" ("ProfileId", "WorkId") SELECT "Id", 9404 FROM "Profiles";
+                """);
+
+            using var response = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/taste", new ReadDiscoverTasteDataV1(["anime"]));
+            Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, await response.Content.ReadAsStringAsync());
+            var shelves = (await response.Content.ReadFromJsonAsync<BaseDataList<DiscoverTasteShelfV1>>())!;
+
+            // For you: titles of the liked genres, those sharing the most of them first; nothing watched or kept, nothing of another genre.
+            var forYou = shelves.Single(shelf => shelf.GenreId is null);
+            CollectionAssert.AreEqual(new[] { "9402", "9403" }, forYou.CatalogItems.Select(item => item.ExternalId).ToArray());
+
+            // A row for each of the two favourite genres, the most liked first.
+            CollectionAssert.AreEqual(new Genre?[] { null, Genre.Mecha, Genre.Action }, shelves.Select(shelf => shelf.GenreId).ToArray());
+            CollectionAssert.AreEqual(new[] { "9403", "9402" }, shelves.Single(shelf => shelf.GenreId == Genre.Mecha).CatalogItems.Select(item => item.ExternalId).ToArray());
+        }
+
+        [TestMethod]
         public async Task Filter_WholeCatalog_NarrowsLocallyByEveryFacet()
         {
             var provider = new FakeAniList();
@@ -1591,7 +1638,7 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
-        public async Task Razor_Filters_ShowAGridUnderTheHighlights_AndOnlyTheTypeKeepsTheShelves()
+        public async Task Razor_Filters_ShowAGridInPlaceOfTheHighlights_AndOnlyTheTypeKeepsTheShelves()
         {
             await using var host = await CreateHostAsync(razor: true);
 
@@ -1603,7 +1650,7 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(html, "discover-filter-season");
             StringAssert.Contains(html, "id=\"discover-recommendations\"");
 
-            // A filter shows the grid with its sort and the highlights above it; a repeated choice is shown as one list.
+            // A filter shows the grid with its sort in place of the highlights and the shelves; a repeated choice is shown as one list.
             using var repeated = await host.SendAsync(HttpMethod.Get, "/?type=anime&genre=Mecha&genre=Sports");
             Assert.AreEqual(HttpStatusCode.Redirect, repeated.StatusCode);
             Assert.AreEqual("/?type=anime&genre=Mecha,Sports", repeated.Headers.Location!.OriginalString);
@@ -1611,7 +1658,7 @@ namespace Jularr.Backend.Tests
             html = await filtered.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, filtered.StatusCode, html);
             StringAssert.Contains(html, "media-grid");
-            StringAssert.Contains(html, "hero-carousel");
+            Assert.IsFalse(html.Contains("hero-carousel", StringComparison.Ordinal), "A filter's grid replaces the highlights.");
             StringAssert.Contains(html, "name=\"sort\"");
             Assert.IsFalse(html.Contains("id=\"discover-recommendations\"", StringComparison.Ordinal), "Filtered titles replace the shelves.");
 
@@ -1728,8 +1775,8 @@ namespace Jularr.Backend.Tests
                 }
                 var body = request.RequestUri!.AbsolutePath switch
                 {
-                    "/3/trending/movie/week" or "/3/movie/top_rated" or "/3/discover/movie" or "/3/movie/upcoming" or "/3/search/movie" => "{\"results\":[" + Movie + "]}",
-                    "/3/trending/tv/week" or "/3/tv/top_rated" or "/3/discover/tv" or "/3/search/tv" => "{\"results\":[" + (WithUnlinkedShow ? Unlinked + "," : "") + Show + "]}",
+                    "/3/trending/movie/week" or "/3/movie/top_rated" or "/3/discover/movie" or "/3/movie/upcoming" or "/3/movie/now_playing" or "/3/search/movie" => "{\"results\":[" + Movie + "]}",
+                    "/3/trending/tv/week" or "/3/tv/top_rated" or "/3/discover/tv" or "/3/tv/on_the_air" or "/3/search/tv" => "{\"results\":[" + (WithUnlinkedShow ? Unlinked + "," : "") + Show + "]}",
                     "/3/tv/1400" => Unlinked[..^1] + ",\"external_ids\":{},\"seasons\":[]}",
                     "/3/movie/603" => Movie[..^1] + ",\"external_ids\":{\"imdb_id\":\"tt0133093\"},\"belongs_to_collection\":{\"id\":2344,\"name\":\"The Matrix Collection\"}," + MovieDetails
                         + ",\"original_language\":\"en\",\"translations\":{\"translations\":[{\"iso_639_1\":\"de\",\"iso_3166_1\":\"AT\",\"data\":{\"title\":\"Matrix (AT)\",\"overview\":\"\"}},"

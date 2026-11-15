@@ -10,6 +10,8 @@ using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Logic.Acquisition;
 using Jularr.Backend.Data.System.Acquisition.V1;
+using Jularr.Backend.Data.User.Discover.V1;
+using Jularr.Backend.Data.Public.Authentication.V1;
 using Jularr.Backend.Logic.Acquisition;
 using Jularr.Backend.Logic.Library;
 using Jularr.Backend.Service.System.Acquisition.V1;
@@ -29,6 +31,60 @@ namespace Jularr.Backend.Tests
     {
         private const string Connections = "/api/v1/admin/acquisition/connections";
         internal const string Album = "0f1e2d3c-4b5a-6978-8a9b-0c1d2e3f4a5b";
+
+        [TestMethod]
+        public async Task Music_DiscoverFilter_AsksMusicBrainzForAlbumsWithTheTagsAndYears()
+        {
+            var musicBrainz = new FakeMusicBrainzSearch();
+            await using var host = await Host.CreateAsync(razor: true, library: true, services: services => services.AddHttpClient<MusicBrainzClient>().ConfigurePrimaryHttpMessageHandler(() => musicBrainz));
+            using var state = await host.SendAsync(HttpMethod.Get, "/api/v1/auth");
+            using var login = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/login", new LoginDataV1("a@example.test", "test-password-123"));
+
+            // Music offers its genres and years; a rock album of the nineties is every tag and the year range, as albums.
+            using var options = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/filter-options", new ReadDiscoverFilterOptionsDataV1("music", false));
+            var offered = (await options.Content.ReadFromJsonAsync<DiscoverFilterOptionsV1>())!;
+            CollectionAssert.AreEquivalent(new[] { DiscoverFilter.Genre, DiscoverFilter.Year }, offered.Filters);
+            using var found = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/filtered", new ReadDiscoverFilteredDataV1("music", 3, genreIds: [Genre.Rock, Genre.HipHop], yearFrom: 1990, yearTo: 1999));
+            Assert.AreEqual(HttpStatusCode.OK, found.StatusCode, await found.Content.ReadAsStringAsync());
+            Assert.AreEqual("Example Album", (await found.Content.ReadFromJsonAsync<DiscoverFilteredV1>())!.CatalogItems.Single().Title);
+            var query = Uri.UnescapeDataString(musicBrainz.Queries.Single());
+            StringAssert.Contains(query, "offset=40");
+            StringAssert.Contains(query, "query=primarytype:album AND tag:\"rock\" AND tag:\"hip hop\" AND firstreleasedate:[1990 TO 1999-12-31]");
+
+            // Music's own lists: new albums of the last weeks from MusicBrainz, the month's most played from ListenBrainz.
+            using var fresh = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/feed", new ReadDiscoverCatalogFeedDataV1(MediaType.Music, DiscoverFeedType.New));
+            Assert.AreEqual(HttpStatusCode.OK, fresh.StatusCode, await fresh.Content.ReadAsStringAsync());
+            StringAssert.Contains(Uri.UnescapeDataString(musicBrainz.Queries.Last()), "primarytype:album AND status:official AND firstreleasedate:[");
+            using var popular = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/feed", new ReadDiscoverCatalogFeedDataV1(MediaType.Music, DiscoverFeedType.Popular));
+            Assert.AreEqual(HttpStatusCode.OK, popular.StatusCode, await popular.Content.ReadAsStringAsync());
+            var played = (await popular.Content.ReadFromJsonAsync<BaseDataList<DiscoverCatalogItemV1>>())!.Single();
+            Assert.AreEqual("Most Played", played.Title);
+            StringAssert.StartsWith(musicBrainz.Queries.Last(), "/1/stats/sitewide/release-groups?range=month&count=20&offset=0");
+        }
+
+        private sealed class FakeMusicBrainzSearch : HttpMessageHandler
+        {
+            public List<string> Queries { get; } = [];
+
+            protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+            {
+                Queries.Add(request.RequestUri!.PathAndQuery);
+                if (request.RequestUri.Host == "api.listenbrainz.org")
+                {
+                    return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                    {
+                        Content = new StringContent("""{"payload":{"release_groups":[{"release_group_mbid":"22222222-2222-3333-4444-555555555555","release_group_name":"Most Played","artist_name":"Loud Band","listen_count":900}]}}""",
+                            Encoding.UTF8, "application/json")
+                    });
+                }
+
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent("""{"release-groups":[{"id":"11111111-2222-3333-4444-555555555555","title":"Example Album","primary-type":"Album","first-release-date":"1994-05-01","artist-credit":[{"name":"Example Band","artist":{"id":"aaaaaaaa-2222-3333-4444-555555555555","name":"Example Band"}}]}]}""",
+                        Encoding.UTF8, "application/json")
+                });
+            }
+        }
 
         [TestMethod]
         public async Task Album_PlaysItsPresentTracksInOrderAndLeadsToTheArtist()

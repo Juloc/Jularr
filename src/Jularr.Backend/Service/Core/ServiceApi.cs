@@ -387,14 +387,16 @@ namespace Jularr.Backend.Service.Core
                 .Validate(options => options.SessionLifetimeHours is >= 1 and <= 720, "Session lifetime must be 1-720 hours.")
                 .ValidateOnStart();
 
-            // Harden session cookies.
+            // Harden session cookies. Lax, not Strict: an installed app opened from the home screen, a link from a mail or from Plex arrive as visits
+            // from outside, and a Strict cookie would stay home on that first page, which then asks to sign in although the session is valid.
+            // Writes stay protected: Lax never travels with another site's form posts, and every write also needs the antiforgery token.
             services.PostConfigure<CookieAuthenticationOptions>(CookieAuthenticationDefaults.AuthenticationScheme, options =>
             {
                 options.EventsType = typeof(SessionCookieEvents);
                 options.SlidingExpiration = false;
                 options.Cookie.HttpOnly = true;
                 options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
-                options.Cookie.SameSite = SameSiteMode.Strict;
+                options.Cookie.SameSite = SameSiteMode.Lax;
             });
 
             // Bound external communication; pasted source links reach public addresses only. Files and long lists keep coming for a long time,

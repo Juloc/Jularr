@@ -67,7 +67,7 @@ namespace Jularr.Backend.Service.System.Media.V1
                     {
                         var works = entry.Namespace is "tmdb_movie" or "tmdb_tv"
                             ? await _metadata.FetchExternalFeedAsync(Context, entry, ct)
-                            : await _catalog.FetchExternalFeedAsync(entry, ct);
+                            : await _catalog.FetchExternalFeedAsync(Context, entry, ct);
                         answeredEmpty = works.Count == 0;
                         return works;
                     }, CancellationToken, refresh: true);

@@ -273,6 +273,34 @@
   "discover.genre.Soap": ["Soap", "Seifenoper"],
   "discover.genre.Talk": ["Talk", "Talk"],
   "discover.genre.Politics": ["Politics", "Politik"],
+  "discover.genre.RolePlaying": ["Role-playing", "Rollenspiel"],
+  "discover.genre.Shooter": ["Shooter", "Shooter"],
+  "discover.genre.Strategy": ["Strategy", "Strategie"],
+  "discover.genre.Platformer": ["Platformer", "Jump ’n’ Run"],
+  "discover.genre.Puzzle": ["Puzzle", "Rätsel"],
+  "discover.genre.Racing": ["Racing", "Rennspiel"],
+  "discover.genre.Fighting": ["Fighting", "Kampfspiel"],
+  "discover.genre.Simulation": ["Simulation", "Simulation"],
+  "discover.genre.Indie": ["Indie", "Indie"],
+  "discover.genre.Arcade": ["Arcade", "Arcade"],
+  "discover.genre.VisualNovel": ["Visual novel", "Visual Novel"],
+  "discover.genre.CardGame": ["Card & board", "Karten & Brett"],
+  "discover.genre.Rock": ["Rock", "Rock"],
+  "discover.genre.Pop": ["Pop", "Pop"],
+  "discover.genre.HipHop": ["Hip-hop", "Hip-Hop"],
+  "discover.genre.Electronic": ["Electronic", "Elektronisch"],
+  "discover.genre.Jazz": ["Jazz", "Jazz"],
+  "discover.genre.Classical": ["Classical", "Klassik"],
+  "discover.genre.Metal": ["Metal", "Metal"],
+  "discover.genre.Folk": ["Folk", "Folk"],
+  "discover.genre.RhythmAndBlues": ["R&B", "R&B"],
+  "discover.genre.CountryMusic": ["Country", "Country"],
+  "discover.genre.Soundtrack": ["Soundtrack", "Soundtrack"],
+  "discover.genre.Punk": ["Punk", "Punk"],
+  "discover.genre.Blues": ["Blues", "Blues"],
+  "discover.genre.Reggae": ["Reggae", "Reggae"],
+  "discover.genre.Soul": ["Soul", "Soul"],
+  "discover.filter.platform": ["Platform", "Plattform"],
   "discover.season.1": ["Winter", "Winter"],
   "discover.season.2": ["Spring", "Frühling"],
   "discover.season.3": ["Summer", "Sommer"],
@@ -4237,13 +4265,36 @@
    "In Jularr",
    "In Jularr"
   ],
+  "discover.forYou": ["For you", "Für dich"],
+  "discover.becauseGenre": ["Because you like {0}", "Weil du {0} magst"],
+  "discover.filter.remove": ["Remove {0}", "{0} entfernen"],
+  "discover.feed.Classics": ["Classics", "Klassiker"],
+  "discover.feed.Retro": ["Retro", "Retro"],
+  "discover.feed.movies.New": ["New in cinemas", "Neu im Kino"],
+  "discover.feed.series.New": ["New episodes", "Neue Folgen"],
+  "discover.feed.anime.Season": ["This season", "Diese Season"],
+  "discover.feed.anime.NextSeason": ["Next season", "Nächste Season"],
+  "discover.feed.anime.Popular": ["Popular", "Beliebt"],
+  "discover.feed.manga.New": ["New", "Neu"],
+  "discover.feed.manga.Popular": ["Popular", "Beliebt"],
+  "discover.feed.manga.Manhwa": ["Manhwa", "Manhwa"],
+  "discover.feed.lightnovels.New": ["New", "Neu"],
+  "discover.feed.lightnovels.Popular": ["Popular", "Beliebt"],
+  "discover.feed.books.New": ["Newly published", "Neu erschienen"],
+  "discover.feed.books.Popular": ["Most read", "Meistgelesen"],
+  "discover.feed.music.New": ["New albums", "Neue Alben"],
+  "discover.feed.music.Popular": ["Popular", "Beliebt"],
+  "discover.feed.games.Popular": ["Popular", "Beliebt"],
+  "discover.feed.games.New": ["New", "Neu"],
+  "discover.watchlist": ["Watchlist", "Merkliste"],
+  "discover.top10": ["Top 10 {0}", "Top 10 {0}"],
   "discover.feed.Trending": [
    "Trending",
-   "Im Trend"
+   "Trending"
   ],
   "discover.feed.Top": [
    "Top rated",
-   "Bestbewertet"
+   "Top bewertet"
   ],
   "discover.feed.New": [
    "New releases",
@@ -4409,10 +4460,6 @@
    "Customize Discover",
    "Discover gestalten"
   ],
-  "discover.view.toggle": [
-   "Switch between rows and grid",
-   "Zwischen Reihen und Raster wechseln"
-  ],
   "discover.feeds": [
    "Lists",
    "Listen"
@@ -4512,18 +4559,6 @@
   "discover.filter.feed": [
    "Result list",
    "Ergebnisfeed"
-  ],
-  "discover.layout": [
-   "Show shelves as",
-   "Medien-Reihen anzeigen"
-  ],
-  "discover.layout.rows": [
-   "Rows",
-   "Reihen"
-  ],
-  "discover.layout.grid": [
-   "Grid",
-   "Raster"
   ],
   "media.state.NotRequested": [
    "Not requested",
@@ -4789,6 +4824,7 @@
    "Play",
    "Spielen"
   ],
+  "mode.tab": ["Mode: {0}", "Modus: {0}"],
   "mode.switch": [
    "Switch mode",
    "Modus wechseln"

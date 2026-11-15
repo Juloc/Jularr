@@ -24,7 +24,11 @@ namespace Jularr.E2E.Tests
                 INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle", "ReleaseYear") VALUES (8001, 1, 'Source Film', 2001);
                 INSERT INTO "WorkRelations" ("WorkId", "RelatedWorkId", "WorkRelationTypeId", "SourceKey") VALUES (8001, 9604, 1, 'tmdb');
                 """);
+            // A phone leaves the highlights out and starts with the shelves; a small tablet still shows them, with the phone's large controls.
             await page.SetViewportSizeAsync(375, 812);
+            await page.GotoAsync("/");
+            await Assertions.Expect(page.Locator(".hero-carousel")).ToBeHiddenAsync();
+            await page.SetViewportSizeAsync(700, 1000);
 
             // The title never sits under the arrows, and the carousel's own controls are at least 36px.
             await page.GotoAsync("/");
@@ -61,6 +65,7 @@ namespace Jularr.E2E.Tests
             Assert.AreEqual(0, misses.Length, string.Join("; ", misses));
 
             // The relation dialog's search button lies inside the dialog box, with room below it.
+            await page.SetViewportSizeAsync(375, 812);
             await page.GotoAsync("/Details/8001?tab=related");
             await page.GetByRole(AriaRole.Button, new() { Name = "Add relation" }).ClickAsync();
             var dialog = page.Locator("dialog#details-relation-add");
