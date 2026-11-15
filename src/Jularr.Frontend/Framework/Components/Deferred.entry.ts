@@ -1,12 +1,12 @@
 import { inserted, onPage } from "../../Modules/Navigation/PageSwap";
 
 // Loads every deferred part of the page (DeferredSection) at once, each in place of its skeleton. A failed part keeps its room
-// and offers to try again; a part that arrives replaces the skeleton without moving the page.
+// and offers to try again (also one that does not answer within 20 s, so a skeleton never stays); a part that arrives replaces the skeleton without moving the page.
 function load(section: HTMLElement): void {
     const address = section.dataset.deferred;
     if (!address || section.dataset.deferredLoading) return;
     section.dataset.deferredLoading = "true";
-    fetch(address, { credentials: "same-origin", headers: { "X-Requested-With": "fetch" } })
+    fetch(address, { credentials: "same-origin", signal: AbortSignal.timeout(20000), headers: { "X-Requested-With": "fetch" } })
         .then(response => {
             if (!response.ok) throw new Error(String(response.status));
             return response.text();

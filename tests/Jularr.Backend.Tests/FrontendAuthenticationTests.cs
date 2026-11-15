@@ -74,9 +74,11 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(writer.ToString(), "data-full=\"Series\"");
             Assert.IsFalse(writer.ToString().Contains("media-card__rating", StringComparison.Ordinal));
             writer.GetStringBuilder().Clear();
-            new MediaCard(assets, "Show", "/Details/1", null).Facts(2023, "media.type.Series", null).Resume("S01 E05 · 22 min left").WriteTo(writer, HtmlEncoder.Default, texts);
+            new MediaCard(assets, "Show", "/Details/1", null).Facts(2023, "media.type.Series", null).Resume("22 min left", "S01 E05").WriteTo(writer, HtmlEncoder.Default, texts);
             StringAssert.Contains(writer.ToString(), "media-card media-card--resume");
-            StringAssert.Contains(writer.ToString(), "data-full=\"Series 2023 | S01 E05 &#xB7; 22 min left\"");
+            StringAssert.Contains(writer.ToString(), "data-full=\"2023 &#xB7; Series\"");
+            StringAssert.Contains(writer.ToString(), "class=\"media-card__foot\"");
+            StringAssert.Contains(writer.ToString(), "<span class=\"media-card__unit\">S01 E05</span><span class=\"media-card__left\">22 min left</span>");
 
             // The coarse state shows a tag only where the title is held or requested.
             foreach (var (state, tag) in new[] { (MediaStateType.Available, "available"), (MediaStateType.Requested, "requested") })

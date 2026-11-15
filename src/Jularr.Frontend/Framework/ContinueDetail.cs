@@ -10,21 +10,27 @@ namespace Jularr.Frontend.Framework
     {
         public static string? Format(Func<string, string> text, ContinueItemV1 item)
         {
-            var parts = new List<string>();
+            var (unit, left) = Parts(text, item);
+            return unit is null ? left : left is null ? unit : unit + " · " + left;
+        }
+
+        // The unit ("S01 E05") and what is left ("22 min left", or "42 %" of a read title) apart, so a small cover can keep the second.
+        public static (string? Unit, string? Left) Parts(Func<string, string> text, ContinueItemV1 item)
+        {
             var unit = Unit(text, item.WorkUnitTypeId, item.UnitNumber, item.ParentUnitNumber);
-            if (unit is not null) parts.Add(unit);
+            string? left = null;
 
             // Played media say how long is left; read media their unit, else the share read.
             if (item.DurationMs is > 0 and { } duration && item.PositionMs > 0 && duration > item.PositionMs)
             {
-                parts.Add(Left(text, duration - item.PositionMs));
+                left = Left(text, duration - item.PositionMs);
             }
             else if (unit is null && item.Progression is { } share and > 0)
             {
-                parts.Add(Math.Clamp(share, 0, 1).ToString("P0", CultureInfo.CurrentCulture));
+                left = Math.Clamp(share, 0, 1).ToString("P0", CultureInfo.CurrentCulture);
             }
 
-            return parts.Count == 0 ? null : string.Join(" · ", parts);
+            return (unit, left);
         }
 
         // The unit as a short code or word; an episode with its season reads as S01 E05.

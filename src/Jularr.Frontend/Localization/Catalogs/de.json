@@ -4344,6 +4344,10 @@
    "Try again",
    "Erneut versuchen"
   ],
+  "discover.search.slow": [
+   "No answer from this source in time.",
+   "Keine Antwort dieser Quelle in der Zeit."
+  ],
   "deferred.failed": [
    "This part could not be loaded.",
    "Dieser Teil konnte nicht geladen werden."

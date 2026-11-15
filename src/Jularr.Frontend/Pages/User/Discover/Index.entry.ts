@@ -72,6 +72,10 @@ document.addEventListener('click', event => {
 // Pages that add nothing new in a row before automatic loading stops; a provider may repeat a page, a filter may empty several.
 const emptyPages = 3;
 
+// How long a page of results and one provider's answer to a search may take before the page gives up on it.
+const resultsLimit = 15000;
+const answerLimit = 7000;
+
 // Grey cards stand where the next page arrives: a row under the grid, three at the end of a shelf.
 function skeletons(count: number, className: string): HTMLElement {
     const holder = document.createElement('div');
@@ -158,6 +162,61 @@ function setup(): void {
         let observer: IntersectionObserver | undefined;
         let recommendationRequest: AbortController | undefined;
         let recommendationObserver: IntersectionObserver | undefined;
+        let groupRequest: AbortController | undefined;
+
+        // A search's kept titles are on the page at once; each type with a provider has its place with grey cards and joins its own cards when it answers. A provider
+        // that is slow or fails blocks neither the page nor the others: it gives up after a short limit with a quiet note in its place, and a place that has
+        // nothing leaves, so grey cards never stay and never show where nothing comes.
+        function searchGroups(): void {
+            groupRequest?.abort();
+            const waiting = Array.from(results!.querySelectorAll<HTMLElement>('[data-search-group]'));
+            if (!waiting.length) return;
+            groupRequest = new AbortController();
+            const signal = groupRequest.signal;
+            const current = generation;
+            let open = waiting.length;
+            const settled = () => {
+                if (--open > 0 || signal.aborted || current !== generation) return;
+                if (!results!.querySelector('.media-shelf, .discover-search-note')) results!.querySelector('.discover-search-none')?.removeAttribute('hidden');
+            };
+
+            waiting.forEach(async holder => {
+                const items = holder.parentElement;
+                const shelf = holder.closest<HTMLElement>('.media-shelf');
+                try {
+                    const response = await fetch(holder.dataset.searchSrc!, { signal: AbortSignal.any([signal, AbortSignal.timeout(answerLimit)]), headers: { Accept: 'text/html' } });
+                    if (!response.ok || response.redirected) throw new Error('Unavailable search');
+                    const answer = new DOMParser().parseFromString(await response.text(), 'text/html').querySelector<HTMLElement>('.discover-search-answer');
+                    if (!answer || answer.dataset.state === 'failed') throw new Error('Unavailable search');
+                    if (signal.aborted || current !== generation || !items || !shelf) return;
+
+                    const known = new Set(Array.from(items.querySelectorAll<HTMLAnchorElement>('.media-card__link'), link => link.getAttribute('href')));
+                    const cards = Array.from(answer.querySelectorAll('.media-card')).filter(card => {
+                        const identity = card.querySelector('a')?.getAttribute('href');
+                        if (!identity || known.has(identity)) return false;
+                        known.add(identity);
+                        return true;
+                    });
+                    holder.replaceWith(...cards);
+                    if (!items.querySelector('.media-card')) shelf.remove();
+                    else {
+                        inserted(items);
+                        initializeShelves(shelf);
+                        initializeCards();
+                    }
+                } catch {
+                    if (signal.aborted || current !== generation) return;
+                    const note = document.createElement('p');
+                    note.className = 'discover-search-note';
+                    note.setAttribute('role', 'status');
+                    note.textContent = results!.dataset.searchSlow ?? '';
+                    holder.replaceWith(note);
+                    if (shelf) initializeShelves(shelf);
+                } finally {
+                    settled();
+                }
+            });
+        }
 
         // Provider shelves never block local HTML. They arrive a few at a time in place of their link: the first ones at once, the next ones as the page nears them,
         // with grey cards where they arrive; a part that fails leaves its link as the retry.
@@ -220,6 +279,7 @@ function setup(): void {
         async function load(address: URL, append: boolean, pushes = false): Promise<void> {
             if (append && loading) return;
             request?.abort();
+            groupRequest?.abort();
             recommendationRequest?.abort();
             recommendationObserver?.disconnect();
             request = new AbortController();
@@ -249,7 +309,8 @@ function setup(): void {
             try {
                 const endpoint = new URL(address);
                 endpoint.searchParams.set('handler', 'Results');
-                const response = await fetch(endpoint, { signal, headers: { Accept: 'text/html' } });
+                // A page that never answers ends as a failure with its retry, never as grey cards that stay.
+                const response = await fetch(endpoint, { signal: AbortSignal.any([signal, AbortSignal.timeout(resultsLimit)]), headers: { Accept: 'text/html' } });
                 if (!response.ok || response.redirected) throw new Error('Unavailable results');
 
                 const page = new DOMParser().parseFromString(await response.text(), 'text/html');
@@ -292,7 +353,10 @@ function setup(): void {
                 empty = append && appended === 0 ? empty + 1 : 0;
                 if (empty < emptyPages) observeNext();
                 else manual(false);
-                if (!append) void recommendations();
+                if (!append) {
+                    searchGroups();
+                    void recommendations();
+                }
             } catch (error) {
                 if (signal.aborted || current !== generation) return;
                 covered.forEach(child => { child.hidden = false; });
@@ -353,6 +417,7 @@ function setup(): void {
         filter = address => void load(address, false, true);
 
         observeNext();
+        searchGroups();
         void recommendations();
     }
 }
