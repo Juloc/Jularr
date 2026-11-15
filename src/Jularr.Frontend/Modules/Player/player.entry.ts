@@ -1068,10 +1068,12 @@ async function start(player: HTMLElement, keepView = false): Promise<void> {
     // The view: the whole screen over the page, or the bar in a corner. The page below is out of reach (and keeps its place) while the whole screen is open.
     function applyView(): void {
         player.classList.toggle("player--mini", view.mini);
-        document.body.classList.add("player-active");
+        // "player-active" is set only when the player is ready and its controls answer; it is the sign that tests and other scripts wait for.
         document.body.classList.toggle("player-mini", view.mini);
         document.documentElement.classList.toggle("player-open", !view.mini);
-        document.getElementById("app-content")?.toggleAttribute("inert", !view.mini);
+        // Only a page of the app below the player is shut off; the player's own page holds the player itself.
+        const content = document.getElementById("app-content");
+        if (content?.dataset.shell === "app") content.toggleAttribute("inert", !view.mini);
         host.toggleAttribute("data-mini", view.mini);
         if (view.mini) host.dataset.corner = savedCorner();
     }
