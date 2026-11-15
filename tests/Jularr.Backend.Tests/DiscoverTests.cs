@@ -1638,7 +1638,7 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
-        public async Task Razor_Filters_ShowAGridUnderTheHighlights_AndOnlyTheTypeKeepsTheShelves()
+        public async Task Razor_Filters_ShowAGridInPlaceOfTheHighlights_AndOnlyTheTypeKeepsTheShelves()
         {
             await using var host = await CreateHostAsync(razor: true);
 
@@ -1650,7 +1650,7 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(html, "discover-filter-season");
             StringAssert.Contains(html, "id=\"discover-recommendations\"");
 
-            // A filter shows the grid with its sort and the highlights above it; a repeated choice is shown as one list.
+            // A filter shows the grid with its sort in place of the highlights and the shelves; a repeated choice is shown as one list.
             using var repeated = await host.SendAsync(HttpMethod.Get, "/?type=anime&genre=Mecha&genre=Sports");
             Assert.AreEqual(HttpStatusCode.Redirect, repeated.StatusCode);
             Assert.AreEqual("/?type=anime&genre=Mecha,Sports", repeated.Headers.Location!.OriginalString);
@@ -1658,7 +1658,7 @@ namespace Jularr.Backend.Tests
             html = await filtered.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, filtered.StatusCode, html);
             StringAssert.Contains(html, "media-grid");
-            StringAssert.Contains(html, "hero-carousel");
+            Assert.IsFalse(html.Contains("hero-carousel", StringComparison.Ordinal), "A filter's grid replaces the highlights.");
             StringAssert.Contains(html, "name=\"sort\"");
             Assert.IsFalse(html.Contains("id=\"discover-recommendations\"", StringComparison.Ordinal), "Filtered titles replace the shelves.");
 

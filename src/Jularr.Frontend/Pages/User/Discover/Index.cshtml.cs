@@ -1074,10 +1074,10 @@ namespace Jularr.Frontend.Pages.User.Discover
 
                 return new ShelfAnswer(scope, feed, await feeds.ExecuteAsync<BaseDataList<DiscoverItemV1>>(new ReadDiscoverFeedDataV1(scope.MediaTypeId, feed), limit.Token), null, false);
             }
-            catch (Exception exception) when (exception is ServiceUnavailableException || exception is OperationCanceledException && !requestAborted.IsCancellationRequested)
+            catch (Exception exception) when (exception is ServiceUnavailableException or KeyNotFoundException || exception is OperationCanceledException && !requestAborted.IsCancellationRequested)
             {
-                // Other shelves remain useful.
-                outcome = exception is ServiceUnavailableException ? "unavailable" : "timed out";
+                // Other shelves remain useful; a list its provider does not know is one that did not answer.
+                outcome = exception is OperationCanceledException ? "timed out" : "unavailable";
                 return new ShelfAnswer(scope, feed, null, null, true);
             }
             finally
