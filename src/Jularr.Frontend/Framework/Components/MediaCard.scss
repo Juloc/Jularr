@@ -61,15 +61,8 @@
 
         > * { flex: none; min-width: 0; }
         > * + *::before { content: "·"; margin: 0 5px; }
-        &--resume > * + *::before { content: "|"; margin: 0 5px; }
     }
-    &__type, &__lead { flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; }
-    &__detail { flex: 0 0 auto; }
-    // A small cover (a phone) keeps the one fact of a card to continue: what is left.
-    @container (max-width: 130px) {
-        &__info--resume &__lead { display: none; }
-        &__info--resume > * + *::before { content: none; }
-    }
+    &__type { flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; }
     &__rating { display: inline-flex; align-items: center; gap: 3px; .ui-icon { color: var(--accent-text); fill: currentColor; } }
 
     // Shown over the cover when a clipped text is hovered or focused.
@@ -251,18 +244,37 @@
     }
 
     // A short label over the cover, bottom left.
-    &__label { position: absolute; bottom: 14px; left: 6px; z-index: 3; max-width: calc(100% - 12px); pointer-events: none; }
+    &__label { position: absolute; bottom: 8px; left: 6px; z-index: 3; max-width: calc(100% - 12px); pointer-events: none; }
 
-    // Progress is a thin capsule over the foot of the cover.
-    &__progress-shell {
+    // Where the profile is, inside the cover: a small label on a soft shade over a thin bar on the bottom edge (the cover's rounded corners cut it).
+    // Neither takes room from the title, and the round action in the middle and the corner buttons never reach it.
+    &__foot {
         position: absolute;
-        inset: auto 8px 6px;
+        inset: auto 0 0;
         z-index: 3;
-        padding: 2px;
-        border-radius: 999px;
-        background: rgb(255 255 255 / 28%);
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        padding-top: 20px;
+        background: linear-gradient(transparent, rgb(0 0 0 / 68%));
         pointer-events: none;
     }
+    &__resume {
+        display: flex;
+        min-width: 0;
+        margin: 0;
+        padding: 0 8px;
+        color: #fff;
+        font-size: var(--text-control);
+        font-weight: 650;
+        line-height: 14px;
+        text-shadow: 0 1px 2px rgb(0 0 0 / 55%);
+        white-space: nowrap;
+    }
+    &__unit { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; &::after { content: "\00b7"; margin: 0 4px; } }
+    &__left { flex: 0 0 auto; }
+    // The label is the cover's own text: it stays on one line, the unit first to give way, and a small cover keeps only what is left.
+    @container (max-width: 130px) { &__unit { display: none; } &__resume { padding: 0 6px; font-size: var(--text-small); } }
     &__progress {
         display: block;
         appearance: none;
@@ -270,13 +282,15 @@
         height: 3px;
         overflow: hidden;
         border: 0;
-        border-radius: 999px;
-        background: rgb(255 255 255 / 45%);
+        border-radius: 0;
+        background: rgb(255 255 255 / 35%);
         color: var(--accent);
         &::-webkit-progress-bar { background: transparent; }
-        &::-webkit-progress-value { border-radius: inherit; background: var(--accent); }
-        &::-moz-progress-bar { border-radius: inherit; background: var(--accent); }
+        &::-webkit-progress-value { background: var(--accent); }
+        &::-moz-progress-bar { background: var(--accent); }
     }
+    // A label over the cover (a state chip) rises above the foot.
+    &__surface:has(&__foot) &__label { bottom: 38px; }
 
     &__surface:focus-within, &__surface[data-open] {
         .media-card__actions { opacity: 1; visibility: visible; }

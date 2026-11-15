@@ -16,6 +16,7 @@ namespace Jularr.Frontend.Framework
         private string? _typeKey;
         private decimal? _rating;
         private string? _resume;
+        private string? _resumeUnit;
         private bool _isResume;
         private string? _actionKey;
         private string? _actionHref;
@@ -55,11 +56,13 @@ namespace Jularr.Frontend.Framework
             return this;
         }
 
-        // A card to continue: the line reads "Type Year | detail" and the detail says where the profile is.
-        public MediaCard Resume(string? detail)
+        // A card to continue: a small label at the foot of the cover says where the profile is, above the thin progress bar. The unit ("S01 E05") gives way
+        // first on a small cover; what is left stays.
+        public MediaCard Resume(string? detail, string? unit = null)
         {
             _isResume = true;
             _resume = detail;
+            _resumeUnit = unit;
             return this;
         }
 
@@ -188,9 +191,9 @@ namespace Jularr.Frontend.Framework
 
             if (action is not null) cover.Add(new Div(action).Class("media-card__actions"));
 
-            // Progress is a thin capsule and never moves other content.
-            var progress = ProgressBar(texts);
-            if (progress is not null) cover.Add(new Div(progress).Class("media-card__progress-shell"));
+            // Where the profile is: a small label on a soft shade and a thin bar on the bottom edge, both inside the cover; they never move other content.
+            var foot = Foot(texts);
+            if (foot is not null) cover.Add(foot);
 
             var surface = new Div([.. cover]).Class("media-card__surface").Attribute("tabindex", "0")
                 .Attribute("aria-label", title).Attribute("data-media-card", "true");
@@ -207,6 +210,23 @@ namespace Jularr.Frontend.Framework
             var card = new Div([surface, new Div([.. details]).Class("media-card__details"), .. _menu is null ? Array.Empty<IUiComponent>() : [new Div(_menu).Class("media-card__menu")]]).Class((_isResume ? "media-card media-card--resume" : "media-card") + (_menu is not null ? " media-card--menu" : "")).Attribute("data-list-key", href);
             if (_hoverPreview is not null) card.Attribute("data-preview-src", _hoverPreview);
             card.WriteTo(writer, encoder, texts);
+        }
+
+        private HtmlElement? Foot(UiText texts)
+        {
+            var bar = ProgressBar(texts);
+            var parts = new List<IUiComponent>();
+            var text = _resume ?? (_percent is { } share ? share.ToString(CultureInfo.CurrentCulture) + "%" : null);
+            if (text is not null)
+            {
+                var label = new List<IUiComponent>();
+                if (_resumeUnit is not null) label.Add(new Span(new ValueText(_resumeUnit)).Class("media-card__unit"));
+                label.Add(new Span(new ValueText(text)).Class("media-card__left"));
+                parts.Add(new P([.. label]).Class("media-card__resume").Attribute("data-full", _resumeUnit is null ? text : _resumeUnit + " · " + text));
+            }
+
+            if (bar is not null) parts.Add(bar);
+            return parts.Count == 0 ? null : new Div([.. parts]).Class("media-card__foot");
         }
 
         private HtmlElement? ProgressBar(UiText texts)
@@ -228,22 +248,11 @@ namespace Jularr.Frontend.Framework
                 : null;
         }
 
-        // Year · type · rating, or for a card to continue "Type Year | detail".
+        // Year · type · rating.
         private HtmlElement? Info(UiText texts)
         {
             var type = _typeKey is null ? null : texts[_typeKey];
             var year = _year?.ToString(CultureInfo.InvariantCulture);
-            if (_isResume)
-            {
-                var lead = string.Join(' ', new[] { type, year }.Where(part => part is not null));
-                if (lead.Length == 0 && _resume is null) return null;
-
-                var parts = new List<IUiComponent>();
-                if (lead.Length > 0) parts.Add(new Span(new ValueText(lead)).Class("media-card__lead"));
-                if (_resume is not null) parts.Add(new Span(new ValueText(_resume)).Class("media-card__detail"));
-                return new P([.. parts]).Class("media-card__info media-card__info--resume").Attribute("data-full", string.Join(" | ", new[] { lead.Length > 0 ? lead : null, _resume }.Where(part => part is not null)));
-            }
-
             var rating = _rating?.ToString("0.0", CultureInfo.CurrentCulture);
             if (year is null && type is null && rating is null) return null;
 

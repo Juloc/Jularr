@@ -1917,6 +1917,7 @@ namespace Jularr.Frontend.Localization
             new("discover.pages", "Result pages"),
             new("discover.end", "No more titles."),
             new("discover.retry", "Try again"),
+            new("discover.search.slow", "No answer from this source in time."),
             new("discover.loadFailed", "Results could not be loaded. Try again or open the next page."),
             new("deferred.failed", "This part could not be loaded."),
             new("deferred.retry", "Try again"),
