@@ -1,5 +1,6 @@
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Logic.Media;
+using Jularr.Frontend.Pages.User.Discover;
 
 namespace Jularr.Backend.Tests
 {

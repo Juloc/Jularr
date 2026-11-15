@@ -257,7 +257,7 @@ namespace Jularr.E2E.Tests
 
         [TestMethod]
         [Timeout(300_000)]
-        public async Task Touch_ACardThatLingers_StartsItsPreviewAfterTwoSeconds_UnlessTheProfileSwitchedItOff()
+        public async Task Touch_DiscoverCardsNeverStartATrailerByThemselves_TheDetailsPageKeepsIt()
         {
             await using var jularr = await JularrInstance.StartAsync(NoCatalogSync);
             await using var browser = await BrowserSession.StartAsync(jularr);
@@ -269,39 +269,20 @@ namespace Jularr.E2E.Tests
 
             try
             {
-                // A phone: no hover, a narrow screen. The shelf of recently added titles on Discover carries the cards (a grid never starts one by itself).
+                // A phone: no hover, a narrow screen. Discover's shelves are on the first screen, and the profile allows previews.
                 await page.SetViewportSizeAsync(390, 800);
                 await page.AddInitScriptAsync("const query = window.matchMedia.bind(window); window.matchMedia = text => text.includes('hover: hover') ? query('not all') : text.includes('hover: none') || text.includes('pointer: coarse') ? query('all') : query(text);");
-                var asked = new List<(string Url, DateTime At)>();
-                page.Request += (_, request) => { if (request.Url.Contains("/MediaPreview", StringComparison.Ordinal)) asked.Add((request.Url, DateTime.UtcNow)); };
-                // A phone leaves the highlights out, so the shelf is on the first screen as the page loads: the dwell starts there.
+                var asked = new List<string>();
+                page.Request += (_, request) => { if (request.Url.Contains("/MediaPreview", StringComparison.Ordinal)) asked.Add(request.Url); };
                 await page.GotoAsync("/");
-                var loaded = DateTime.UtcNow;
                 await Assertions.Expect(page.Locator("[data-autoplay-previews]")).ToHaveAttributeAsync("data-autoplay-previews", "true");
-                var panel = page.Locator(".media-card__preview");
 
-                // Nothing is loaded while the card has not lingered yet; then the panel opens by itself, muted, one at a time.
-                await page.WaitForTimeoutAsync(1200);
-                Assert.AreEqual(0, asked.Count, "no data before the dwell is over");
-                await Assertions.Expect(panel).ToBeVisibleAsync(new() { Timeout = 10000 });
-                Assert.IsTrue((asked[0].At - loaded).TotalMilliseconds >= 1800, "the preview waited for about two seconds");
-                await Assertions.Expect(panel).ToHaveCountAsync(1);
-                if (await panel.GetAttributeAsync("data-preview-mode") == "trailer") await Assertions.Expect(panel.Locator("iframe")).ToHaveAttributeAsync("src", new System.Text.RegularExpressions.Regex("mute=1"));
-                else await Assertions.Expect(panel.Locator("iframe")).ToHaveCountAsync(0);
-                await Evidence.SaveAsync(page, "hover-preview-touch");
-
-                // Scrolling away ends it.
-                await page.EvaluateAsync("() => document.dispatchEvent(new Event('scroll'))");
-                await Assertions.Expect(panel).ToHaveCountAsync(0);
-
-                // The profile's switch: off means no automatic preview.
-                await jularr.RunSqlAsync("""INSERT INTO "ProfilePlaybackPreferences" ("ProfileId", "AutoplayPreviews") SELECT "Id", FALSE FROM "Profiles" ON CONFLICT ("ProfileId") DO UPDATE SET "AutoplayPreviews" = FALSE;""");
-                asked.Clear();
-                await page.GotoAsync("/");
-                await Assertions.Expect(page.Locator("[data-autoplay-previews]")).ToHaveAttributeAsync("data-autoplay-previews", "false");
+                // The owner's choice: Discover never plays a trailer by itself on a touch screen; a card that lingers stays a card.
+                await Assertions.Expect(page.Locator("#discover-results")).ToHaveAttributeAsync("data-touch-previews", "off");
                 await page.WaitForTimeoutAsync(4000);
-                Assert.AreEqual(0, asked.Count, "the switch is off: nothing starts by itself");
-                await Assertions.Expect(panel).ToHaveCountAsync(0);
+                Assert.AreEqual(0, asked.Count, "a lingering card starts nothing on Discover");
+                await Assertions.Expect(page.Locator(".media-card__preview")).ToHaveCountAsync(0);
+                await Evidence.SaveAsync(page, "hover-preview-touch");
             }
             catch
             {
