@@ -575,7 +575,12 @@ namespace Jularr.Frontend.Pages.User.Discover
         }
 
         // Each step of the page in Server-Timing after its shell and data parts, so a slow part shows on the live instance.
-        private void Step(string name, long started) => PageBudgets.Step(HttpContext, name, Stopwatch.GetElapsedTime(started));
+        // Only the plain page names them: its parts (Recommendations, Results) keep their own entries.
+        private void Step(string name, long started)
+        {
+            if (Request.Query.ContainsKey("handler")) return;
+            PageBudgets.Step(HttpContext, name, Stopwatch.GetElapsedTime(started));
+        }
 
         private async Task<TResult?> Timed<TResult>(string name, Task<TResult?> read) where TResult : class
         {
