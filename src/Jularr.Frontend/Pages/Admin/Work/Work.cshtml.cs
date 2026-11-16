@@ -287,6 +287,24 @@ namespace Jularr.Frontend.Pages.Admin.Work
             return LocalRedirect(Address(Tab));
         }
 
+        // The files of the Files tab with the plan of their new names, for the tab's deferred part: the plan reads every file's name against the naming and takes seconds
+        // on a long series, so the page answers first with a skeleton and this part follows. Only what the part shows is read.
+        public async Task<IActionResult> OnGetManageFilesAsync()
+        {
+            if (!texts.CanManageMedia()) return NotFound();
+            var ct = HttpContext.RequestAborted;
+            var managementTask = readManagement.ExecuteAsync<WorkManagementV1>(new WorkParametersV1(Id), ct);
+            var renamesTask = texts.CanManageStorage() ? readRenames.ExecuteAsync<LibraryRenamePlanV1>(new ReadLibraryRenamesParametersV1(1, 100, Id), ct) : Task.FromResult<LibraryRenamePlanV1?>(null)!;
+            await Task.WhenAll(managementTask, renamesTask);
+            _management = await managementTask;
+            if (_management.MediaTypeId is not (MediaType.Series or MediaType.Music) && !(_management.MediaTypeId == MediaType.Book && _management.MediaSubtypeId is not null)) return NotFound();
+            _renames = await renamesTask;
+            using var writer = new StringWriter(CultureInfo.InvariantCulture);
+            ManageFiles(_management, antiforgery.GetAndStoreTokens(HttpContext).RequestToken).WriteTo(writer, global::System.Text.Encodings.Web.HtmlEncoder.Default, texts);
+            Response.Headers.CacheControl = "no-store";
+            return Content(writer.ToString(), "text/html");
+        }
+
         // The title's files move only for the plan that was shown.
         public async Task<IActionResult> OnPostRenameFilesAsync([BindRequired] string fingerprint)
         {
@@ -342,9 +360,8 @@ namespace Jularr.Frontend.Pages.Admin.Work
             var profilesTask = ReadWhenAsync(choices, () => profiles.ExecuteAsync<BaseDataList<AcquisitionProfileDetailsV1>>(new ReadAcquisitionProfilesParametersV1(wantedItemId!.Value), ct));
             var librariesTask = ReadWhenAsync(choices, () => libraries.ExecuteAsync<BaseDataList<WantedLibraryV1>>(new WantedItemParametersV1(wantedItemId!.Value), ct));
             var tagsTask = ReadWhenAsync(choices, () => tags.ExecuteAsync<PageResult<AcquisitionTagDetailsV1>>(new ReadAcquisitionTagsParametersV1(1, automatic: false), ct));
-            var renamesTask = ReadWhenAsync(Tab == WorkTab.Files && texts.CanManageStorage(), () => readRenames.ExecuteAsync<LibraryRenamePlanV1>(new ReadLibraryRenamesParametersV1(1, 100, Id), ct));
             var eventsTask = ReadWhenAsync(Tab == WorkTab.History, () => readEvents.ExecuteAsync<PageResult<ActivityEventV1>>(new ReadActivityEventsParametersV1(Id, Math.Max(1, HistoryPage)), ct));
-            await Task.WhenAll(targetsTask, groupsTask, languagesTask, releasesTask, profilesTask, librariesTask, tagsTask, renamesTask, eventsTask);
+            await Task.WhenAll(targetsTask, groupsTask, languagesTask, releasesTask, profilesTask, librariesTask, tagsTask, eventsTask);
 
             var targets = (await targetsTask)?.ToDictionary(target => target.Id) ?? [];
             _wanted = wantedItemId is { } wanted ? targets.GetValueOrDefault(wanted) : null;
@@ -354,7 +371,6 @@ namespace Jularr.Frontend.Pages.Admin.Work
             _releases = await releasesTask ?? _releases;
             _profiles = await profilesTask ?? _profiles;
             _libraries = await librariesTask ?? _libraries;
-            _renames = await renamesTask;
             _events = await eventsTask;
             if (await tagsTask is { } page && _wanted is { } target)
             {

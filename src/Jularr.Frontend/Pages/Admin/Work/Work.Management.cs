@@ -50,6 +50,7 @@ namespace Jularr.Frontend.Pages.Admin.Work
 
             // Everything below the breadcrumb is one region: an action on this page (a switch, a search, a delete) swaps it and keeps the open sections.
             var regionStart = page.Content.Count;
+            page.Content.Add(new PostForm(Address(Tab), csrf, []).Attribute("id", ActionsForm).Attribute("hidden", "hidden"));
             page.Content.Add(Hero(work, csrf));
             var tabs = new List<NavigationTab> { new(isSeries ? "work.tab.seasons" : hasVolumes ? "work.tab.volumes" : hasTracks ? "work.tab.tracks" : hasGroups ? work.MediaTypeId == MediaType.Game ? "work.tab.platforms" : "work.tab.editions" : "work.tab.files", Address(), Tab == WorkTab.Units), new("work.tab.history", Address(WorkTab.History), Tab == WorkTab.History) };
             if (hasUnits && texts.CanManageMedia()) tabs.Add(new("work.tab.manage", Address(WorkTab.Files), Tab == WorkTab.Files));
@@ -66,7 +67,7 @@ namespace Jularr.Frontend.Pages.Admin.Work
                     DefineMetadata(page, standalone: false);
                     break;
                 case WorkTab.Files when hasUnits && texts.CanManageMedia():
-                    page.Content.Add(ManageFiles(work, csrf));
+                    page.Content.Add(work.Files.Any(file => !file.IsMissing) ? new DeferredSection(Address(WorkTab.Files, "ManageFiles"), 400) : ManageFiles(work, csrf));
                     break;
                 default:
                     page.Content.Add(isSeries ? Seasons(work, csrf) : hasVolumes || hasTracks ? FlatUnits(work, csrf) : hasGroups ? Groups(work, csrf) : Files(work, csrf));
@@ -613,22 +614,17 @@ namespace Jularr.Frontend.Pages.Admin.Work
             if (scope is null || _wanted is null) return new Span();
             if (!automaticSearch) return new A(Icon("user", 22)).Class("work-icon").Attribute("href", WantedStatus.Search(_wanted.Id, scope.ParentUnitNumber, scope.UnitNumber)).Attribute("data-search-dialog", "")
                 .TextAttribute("aria-label", labelKey).TextAttribute("title", labelKey);
-            return new Form<SearchWantedDataV1>(form =>
-            {
-                form.Hidden(data => data.ParentUnitNumber);
-                form.Hidden(data => data.UnitNumber);
-                form.Content(IconSubmit("search", labelKey));
-            }, Address(Tab, "Automatic"), csrf, scope);
+            return Acts(IconSubmit("search", labelKey), Address(Tab, "Automatic")
+                + (scope.ParentUnitNumber is { } parentNumber ? "&parentUnitNumber=" + parentNumber.ToString(CultureInfo.InvariantCulture) : "")
+                + (scope.UnitNumber is { } unitNumber ? "&unitNumber=" + unitNumber.ToString(CultureInfo.InvariantCulture) : ""));
         }
 
         private IUiComponent UnitSwitch(WorkManagementUnitV1 unit, WorkManagementV1 work, string? csrf)
         {
             if (_wanted is null || !CanAcquire) return new Span(new Text(unit.IsMonitored ? "work.monitor.on" : "work.monitor.off")).Class("work-switch work-switch--static" + (unit.IsMonitored ? " work-switch--on" : ""));
-            return new Form<UpdateWantedUnitDataV1>(form =>
-            {
-                form.Hidden(data => data.IsMonitored);
-                form.Content(new SwitchButton(unit.IsMonitored, unit.IsMonitored ? "work.monitor.stop" : "work.monitor.start"));
-            }, Address(Tab, "Unit") + "&workUnitId=" + unit.Id.ToString(CultureInfo.InvariantCulture), csrf, new UpdateWantedUnitDataV1(!unit.IsMonitored));
+            return Acts(new SwitchButton(unit.IsMonitored, unit.IsMonitored ? "work.monitor.stop" : "work.monitor.start"),
+                Address(Tab, "Unit") + "&workUnitId=" + unit.Id.ToString(CultureInfo.InvariantCulture) + "&isMonitored=" + (unit.IsMonitored ? "false" : "true"),
+                Address(Tab, "Unit") + "&workUnitId=" + unit.Id.ToString(CultureInfo.InvariantCulture));
         }
 
         // Where every episode's actions are: the whole unit table has them in its last column, and the gear of the column picker above.
@@ -651,6 +647,13 @@ namespace Jularr.Frontend.Pages.Admin.Work
         // The actions of a unit row are attached after the data cells; a file row has none yet.
         private static IUiComponent RowActions(Dictionary<string, Td> cells) => cells.TryGetValue("actions", out var actions) ? actions : new Td(new Span()).Attribute("data-col", "actions");
 
+        // The one form of the page that its rows' buttons submit: a row's action is a button with its own address, not a form with its own token, so a list of hundreds of rows
+        // (and its strips on a narrow screen) carries one token instead of three each. The key finds the same button again once an action has swapped the region.
+        private const string ActionsForm = "work-actions";
+
+        private static HtmlElement Acts(HtmlElement button, string address, string? key = null) =>
+            button.Attribute("form", ActionsForm).Attribute("formaction", address).Attribute("formmethod", "post").Attribute("data-focus-key", key ?? address);
+
         private static Td Cell(string column, IUiComponent content, string? sort = null, IUiComponent? extra = null)
         {
             var cell = new Td(extra is null ? [content] : [content, extra]);
@@ -667,7 +670,7 @@ namespace Jularr.Frontend.Pages.Admin.Work
         {
             if (!texts.CanManageMedia()) yield break;
             if (canEdit) yield return IconSubmit("pencil", "work.file.edit").Attribute("type", "button").Attribute("data-edit-file", file.Id.ToString(CultureInfo.InvariantCulture));
-            yield return new PostForm(Address(Tab, "DeleteFiles"), csrf, [("storedFileIds", file.Id.ToString(CultureInfo.InvariantCulture))], IconSubmit("trash", "work.file.delete"));
+            yield return Acts(IconSubmit("trash", "work.file.delete"), Address(Tab, "DeleteFiles") + "&storedFileIds=" + file.Id.ToString(CultureInfo.InvariantCulture));
         }
 
         // All files of a series with a box each: delete the chosen ones, and rename every file whose name differs from the naming.
