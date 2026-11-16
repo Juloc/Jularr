@@ -30,7 +30,9 @@ namespace Jularr.Frontend.Framework
             {
                 if (timings.IsEnabled && context.RequestServices.GetRequiredService<UiText>().Can("instance.settings.read", "Diagnostics"))
                 {
-                    context.Response.Headers.Append("Server-Timing", string.Create(CultureInfo.InvariantCulture, $"shell;dur={timing.Shell.TotalMilliseconds:0.#}, data;dur={timing.Data.TotalMilliseconds:0.#}"));
+                    var parts = string.Create(CultureInfo.InvariantCulture, $"shell;dur={timing.Shell.TotalMilliseconds:0.#}, data;dur={timing.Data.TotalMilliseconds:0.#}");
+                    lock (timing.Steps) if (timing.Steps.Count > 0) parts += ", " + string.Join(", ", timing.Steps);
+                    context.Response.Headers.Append("Server-Timing", parts);
                 }
 
                 return Task.CompletedTask;
@@ -69,8 +71,17 @@ namespace Jularr.Frontend.Framework
             if (handler is not null && (handler.Name is not null || handler.HttpMethod != "Get")) timing.Handler = ":" + handler.HttpMethod + handler.Name;
         }
 
+        // A step of the page handler ("hero", "recent"), named after the shell and data parts; reads that run together report from any thread.
+        internal static void Step(HttpContext context, string name, TimeSpan elapsed)
+        {
+            if (context.Features.Get<PageTiming>() is not { } timing) return;
+            var entry = string.Create(CultureInfo.InvariantCulture, $"{name};dur={elapsed.TotalMilliseconds:0.#}");
+            lock (timing.Steps) timing.Steps.Add(entry);
+        }
+
         private sealed class PageTiming
         {
+            public readonly List<string> Steps = [];
             public TimeSpan Shell;
             public TimeSpan Data;
             public string Handler = "";

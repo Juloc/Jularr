@@ -570,20 +570,12 @@ namespace Jularr.Frontend.Pages.User.Discover
             var availability = Stopwatch.GetTimestamp();
             await LoadAvailabilityAsync();
             Step("availability", availability);
-            // Each step of the plain page in Server-Timing, so a slow part shows on the live instance.
-            if (_steps.Count > 0) HttpContext.Response.Headers.Append("Server-Timing", string.Join(", ", _steps));
             PreparePage();
             return Page();
         }
 
-        private readonly List<string> _steps = [];
-
-        // The reads that run together finish on any thread.
-        private void Step(string name, long started)
-        {
-            var entry = string.Create(CultureInfo.InvariantCulture, $"{name};dur={Stopwatch.GetElapsedTime(started).TotalMilliseconds:0.#}");
-            lock (_steps) _steps.Add(entry);
-        }
+        // Each step of the page in Server-Timing after its shell and data parts, so a slow part shows on the live instance.
+        private void Step(string name, long started) => PageBudgets.Step(HttpContext, name, Stopwatch.GetElapsedTime(started));
 
         private async Task<TResult?> Timed<TResult>(string name, Task<TResult?> read) where TResult : class
         {
