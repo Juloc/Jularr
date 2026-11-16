@@ -271,9 +271,19 @@ namespace Jularr.E2E.Tests
                 // A server that restarted no longer knows its sessions: the next segment answers Not Found. The player plans a fresh session at once and plays on.
                 await OpenWithTracksAsync(page, details, pilot);
                 await page.WaitForFunctionAsync("() => document.querySelector('video').currentTime > 2.5", null, new() { Timeout = Steps.MediaTimeout });
-                const string segments = "**/api/v1/playback/sessions/*/segments/*.ts";
+                // The first conversion asked for after this point is the lost one: its playlist and segments answer Not Found, the next session's pass.
+                const string segments = "**/api/v1/playback/sessions/*/**";
                 var lost = 0;
-                await page.RouteAsync(segments, route => Interlocked.Increment(ref lost) == 1 ? route.FulfillAsync(new() { Status = 404 }) : route.ContinueAsync());
+                string? doomed = null;
+                await page.RouteAsync(segments, route =>
+                {
+                    var path = new Uri(route.Request.Url).AbsolutePath;
+                    var id = path.Split('/')[5];
+                    if (doomed is null && (path.EndsWith(".m3u8", StringComparison.Ordinal) || path.EndsWith(".ts", StringComparison.Ordinal))) doomed = id;
+                    if (id != doomed) return route.ContinueAsync();
+                    Interlocked.Increment(ref lost);
+                    return route.FulfillAsync(new() { Status = 404 });
+                });
                 var plans = new ConcurrentQueue<string>();
                 void Planned(object? sender, IRequest request)
                 {

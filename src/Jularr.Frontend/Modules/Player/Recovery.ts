@@ -6,6 +6,8 @@ const LongestDelayMs = 15_000;
 
 // A picture that stands still without any error: the loader is nudged first, a fresh session follows.
 export const ResumeStallSeconds = 20;
+// A picture that stands still this long asks the server whether its session is still there.
+export const LostProbeSeconds = 4;
 export const ReplanStallSeconds = 60;
 
 export function stallStep(stalledSeconds: number): "none" | "resume" | "replan" {

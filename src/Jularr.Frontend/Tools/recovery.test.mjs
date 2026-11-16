@@ -39,3 +39,8 @@ test('A fresh session starts where the picture was, also when the picture was al
     assert.equal(exports.restartPoint(0, 812.4), 812.4);
     assert.equal(exports.restartPoint(0, 0), 0);
 });
+
+test('A picture that stands still four seconds asks whether its session is still there, before nudging and replanning', () => {
+    assert.equal(exports.LostProbeSeconds, 4);
+    assert.ok(exports.LostProbeSeconds < exports.ResumeStallSeconds);
+});

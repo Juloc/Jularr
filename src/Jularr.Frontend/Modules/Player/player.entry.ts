@@ -10,7 +10,7 @@ import type { StyledSubtitles } from "./StyledSubtitles";
 import { deviceKind, libassWanted } from "./Device";
 import { Automatic, nextQuality, recordStall, StallSeconds, troubled } from "./AutoQuality";
 import { pickSecondSubtitle, pickTranslationSource, SecondSubtitleLine, type SubtitleOption } from "./Subtitles";
-import { healed, AttemptsBeforeNotice, replanDelay, restartPoint, sessionLost, stallStep } from "./Recovery";
+import { healed, AttemptsBeforeNotice, LostProbeSeconds, replanDelay, restartPoint, sessionLost, stallStep } from "./Recovery";
 import { activeMarker, chapterIndexAt, markerKey, modeFor, parseMarkers, parseMode, shouldAutoSkip, skipPlan, skipShown, SkipShowSeconds, type Marker } from "./Skip";
 
 // Playback client: capability probe, server PlaybackPlan, transport and progress reporting.
@@ -712,13 +712,21 @@ async function start(player: HTMLElement, keepView = false): Promise<void> {
     let watchedTime = -1;
     let progressAt = performance.now();
     let nudged = false;
+    let probed = false;
     window.setInterval(() => {
         const now = performance.now();
         if (video.paused || video.ended || !plan || casting || leaving || escalating || switching || Math.abs(video.currentTime - watchedTime) > 0.01) {
             watchedTime = video.currentTime;
             progressAt = now;
             nudged = false;
+            probed = false;
             return;
+        }
+        // The browser's own HLS player says nothing when the server lost the session (a restart): after a short stand still the player asks whether the session
+        // is still there, and plans a fresh one at once when it is not.
+        if (!probed && plan.playbackModeTypeId !== 1 && (now - progressAt) / 1000 >= LostProbeSeconds) {
+            probed = true;
+            void probeSession(plan.streamUrl);
         }
         const step = stallStep((now - progressAt) / 1000);
         if (step === "resume" && !nudged) {
@@ -730,6 +738,11 @@ async function start(player: HTMLElement, keepView = false): Promise<void> {
             void escalate();
         }
     }, 2_000);
+
+    async function probeSession(address: string): Promise<void> {
+        const response = await fetch(address, { credentials: "same-origin", cache: "no-store" }).catch(() => null);
+        if (response && sessionLost(response.status) && plan?.streamUrl === address) void escalate();
+    }
 
     // Transport state.
     video.addEventListener("play", () => setPlaying(true));
