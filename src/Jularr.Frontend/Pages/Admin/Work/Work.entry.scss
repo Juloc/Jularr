@@ -1,3 +1,6 @@
+@use "../../../Framework/Components/HitArea";
+@use "../../../Framework/Components/ActionMenu";
+
 // The management page of a title: the cover on its banner, seasons as accordions, and tables whose columns a person chooses.
 
 .work-hero {
@@ -114,6 +117,16 @@
 }
 
 .work-actions .work-switch--on .work-switch__track { background: #fff; &::after { background: var(--accent); } }
+
+// The hero's actions sit in a row; the more menu is for the phone, where only the main action stays out.
+// The tabs of the page wrap on a narrow screen instead of sliding: every label stays whole.
+@media (max-width: 720px) {
+    .navigation-tabs--wrap { flex-wrap: wrap; overflow: visible; row-gap: 11px; }
+}
+
+.work-action { display: contents; }
+.work-action--more { display: none; }
+.work-hero .action-menu__item--danger { color: var(--danger); }
 
 // Seasons
 
@@ -399,7 +412,7 @@ th[aria-sort="descending"] .work-sort::after { content: " ▾"; }
     touch-action: none;
 }
 
-// Two lines for every unit on a narrow screen: the first stays in view, the second is a tinted strip that slides sideways. A season is one scroller, so its strips slide together.
+// Two lines for every unit on a narrow screen: the first stays in view (switch, number, name, actions), the second wraps its facts as small tags under the name.
 
 .work-strips { display: none; }
 
@@ -407,31 +420,15 @@ th[aria-sort="descending"] .work-sort::after { content: " ▾"; }
     .work-table-wrap--striped { display: none; }
     .work-tools__columns { display: inline-flex; }
 
-    .work-strips {
-        display: block;
-        container: strips / inline-size;
-        overflow-x: auto;
-        overscroll-behavior-x: contain;
-        scrollbar-width: none;
-        cursor: grab;
-        &::-webkit-scrollbar { display: none; }
-        &.work-strips--dragging { cursor: grabbing; user-select: none; }
-    }
-
-    .work-strip { width: max-content; min-width: 100%; border-top: 1px solid var(--border); }
+    .work-strips { display: block; }
+    .work-strip { border-top: 1px solid var(--border); }
 
     .work-strip__main {
-        position: sticky;
-        left: 0;
-        z-index: 1;
-        box-sizing: border-box;
         display: grid;
         grid-template-columns: auto auto minmax(0, 1fr) auto;
         align-items: center;
         gap: 10px;
-        width: 100cqw;
-        padding: 8px 12px 4px;
-        background: var(--surface);
+        padding: 8px 12px 2px;
     }
 
     .work-strip__number { min-width: 2ch; color: var(--muted); font-weight: 600; font-size: 13px; text-align: right; }
@@ -440,30 +437,36 @@ th[aria-sort="descending"] .work-sort::after { content: " ▾"; }
 
     .work-strip__facts {
         display: flex;
+        flex-wrap: wrap;
         align-items: center;
-        gap: 18px;
-        box-sizing: border-box;
-        min-width: 100%;
-        padding: 6px 14px 8px 0;
-        background: light-dark(#f4f1fa, #2a2535);
-        white-space: nowrap;
+        gap: 4px 6px;
+        padding: 2px 12px 10px 12px;
     }
 
-    // The handle shows that the line slides; it stays at the left edge.
-    .work-strip__handle {
-        position: sticky;
-        left: 0;
-        flex: none;
-        width: 22px;
-        align-self: stretch;
+    .work-fact {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 2px 9px;
+        border-radius: 999px;
         background: light-dark(#f4f1fa, #2a2535);
-        display: grid;
-        place-items: center;
-        color: var(--muted);
+        font-size: 12px;
     }
 
-    .work-fact { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
-    .work-fact__label { color: var(--muted); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.02em; }
+    // A tag whose value says what it is (a date, a size, a quality, a language) needs no label; the others keep it.
+    .work-fact__label { color: var(--muted); font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.02em; }
+    .work-fact[data-col="aired"] .work-fact__label,
+    .work-fact[data-col="released"] .work-fact__label,
+    .work-fact[data-col="status"] .work-fact__label,
+    .work-fact[data-col="quality"] .work-fact__label,
+    .work-fact[data-col="size"] .work-fact__label,
+    .work-fact[data-col="languages"] .work-fact__label,
+    .work-fact[data-col="format"] .work-fact__label,
+    .work-fact[data-col="length"] .work-fact__label { display: none; }
+    .work-fact[hidden] { display: none; }
+    .work-fact[data-col="status"], .work-fact[data-col="quality"] { padding: 0; background: transparent; }
+    .work-fact .work-size { flex-direction: row; align-items: baseline; gap: 6px; }
+    .work-fact .work-size__bar { display: none; }
 
     .work-strip--file .work-strip__main { padding-top: 4px; }
     .work-strip--file .work-title-text { color: var(--muted); font-weight: 500; }
@@ -484,15 +487,39 @@ th[aria-sort="descending"] .work-sort::after { content: " ▾"; }
 }
 
 @media (max-width: 720px) {
-    .work-hero__content { flex-direction: column; padding: 18px; }
-    .work-actions .work-delete { flex: 1 1 100%; justify-content: center; }
-    .work-cover img, .work-cover .no-cover { width: 120px; height: 180px; }
-    .work-hero__body { min-height: 0; }
-    .work-title h1 { font-size: 26px; }
-    .work-season__head { grid-template-columns: 1fr auto; }
-    .work-season__actions { grid-column: 1 / -1; justify-self: start; }
+    // The cover stands beside the title and the actions follow at once: one big action and the more menu. The menu opens over the page, so the hero no longer clips; the banner does.
+    .work-hero { overflow: visible; }
+    .work-banner { overflow: hidden; border-radius: 16px; }
+    .work-hero__content { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px 12px; padding: 14px; }
+    .work-hero__body { display: contents; }
+    .work-cover { grid-column: 1; grid-row: 1; }
+    .work-cover img, .work-cover .no-cover { width: 64px; height: 96px; border-radius: 8px; }
+    .work-title { grid-column: 2; grid-row: 1; align-self: center; h1 { font-size: 22px; } }
+    .work-facts, .work-overview, .work-hero__bottom { grid-column: 1 / -1; }
+    .work-overview { -webkit-line-clamp: 2; }
+    .work-hero__bottom { flex-direction: column; align-items: stretch; margin-top: 0; }
+    .work-figures { font-size: 13px; }
 
-    // Name, bar and figures one below the other between the switch and the round button.
+    .work-actions { flex-wrap: nowrap; gap: 8px; justify-content: flex-end; }
+    .work-action--aside { display: none; }
+    .work-action--main { display: block; flex: 1; min-width: 0; .ui-form, form { display: flex; } button { flex: 1; justify-content: center; } }
+    .work-action--more { display: block; }
+    .work-actions .button, .work-actions .action-menu__button { min-height: 44px; }
+    .work-actions .action-menu__button { min-width: 44px; justify-content: center; padding: 0; }
+    .work-hero .action-menu__panel { left: auto; right: 0; }
+    .work-hero .action-menu__item { min-height: 44px; color: var(--text); }
+    .work-hero .action-menu__item--danger { color: var(--danger); }
+}
+
+// The season's head follows the width of its content, not of the screen: the content beside the menu of a tablet is as narrow as a phone.
+@container work (max-width: 720px) {
+    // The season: name and figures, then the actions and the round button, all in one row.
+    .work-season__head { grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; padding: 10px 12px; }
+    .work-season__lead { grid-column: 1; }
+    .work-season__actions { grid-column: 2; grid-row: 1; justify-self: end; }
+    .work-season__toggle { grid-column: 3; grid-row: 1; }
+
+    // Name, bar and figures one below the other between the switch and the actions.
     .work-season__lead {
         display: grid;
         grid-template-columns: auto 1fr;
@@ -504,3 +531,8 @@ th[aria-sort="descending"] .work-sort::after { content: " ▾"; }
         .work-coverage { grid-column: 2; flex-direction: column; align-items: flex-start; gap: 4px; white-space: normal; }
     }
 }
+
+// The icons of a row and the round button are small to the eye; a finger reaches 44px around each.
+.work-icon { @include HitArea.phone-hit-area(8px, 8px, $border: 0px); }
+@media (max-width: 640px) { .work-icons { gap: 8px; } }
+.work-season__toggle { @include HitArea.phone-hit-area(4px, 8px); }

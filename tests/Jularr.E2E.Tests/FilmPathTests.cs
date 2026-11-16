@@ -122,24 +122,18 @@ namespace Jularr.E2E.Tests
                 await Steps.FollowAsync(page, page.GetByRole(AriaRole.Button, new() { Name = "Mark unwatched", Exact = true }).First);
                 await Assertions.Expect(page.Locator(".episode-card .state-chip--success")).ToHaveCountAsync(0);
 
-                // On a narrow screen every unit is two lines: the facts of all units of the season slide together while the first line stays, and the columns are a sheet from the bottom.
+                // On a narrow screen every unit is two lines: the first stays, the second wraps its facts as tags under the name (nothing slides or is cut off), and the columns are a sheet from the bottom.
                 await Steps.OpenWantedAsync(page, FakeServices.SeriesTitle);
                 await page.SetViewportSizeAsync(390, 844);
                 var strips = page.Locator(".work-strips").First;
                 await Assertions.Expect(strips.Locator(".work-strip").First).ToBeVisibleAsync();
                 await Assertions.Expect(page.Locator("[data-work-table=units]")).ToBeHiddenAsync();
-                Assert.IsTrue(await strips.EvaluateAsync<bool>("element => element.scrollWidth > element.clientWidth"), "The facts do not slide.");
-                var line = strips.Locator(".work-strip__main").Last;
-                var facts = strips.Locator(".work-strip__facts .work-fact").Last;
-                var lineBefore = (await line.BoundingBoxAsync())!;
-                var factBefore = (await facts.BoundingBoxAsync())!;
-                await strips.EvaluateAsync("element => { element.scrollLeft = 120; }");
-                Assert.AreEqual(lineBefore.X, (await line.BoundingBoxAsync())!.X, 1, "The first line moved.");
-                Assert.IsTrue((await facts.BoundingBoxAsync())!.X < factBefore.X - 50, "The facts did not move.");
+                Assert.IsFalse(await strips.EvaluateAsync<bool>("element => element.scrollWidth > element.clientWidth + 1"), "The facts still slide sideways.");
+                Assert.IsTrue(await strips.EvaluateAsync<bool>("""
+                    element => [...element.querySelectorAll('.work-strip__facts .work-fact')].every(fact => { const box = fact.getBoundingClientRect(), bounds = element.getBoundingClientRect(); return box.left >= bounds.left - 0.5 && box.right <= bounds.right + 0.5; })
+                    """), "A fact leaves the screen.");
                 Assert.IsFalse(await page.Locator("body").EvaluateAsync<bool>("body => body.scrollWidth > innerWidth + 1"));
-                await strips.EvaluateAsync("element => { element.scrollLeft = 0; }");
                 await Evidence.SaveAsync(page, "work-strips-mobile");
-                await strips.EvaluateAsync("element => { element.scrollLeft = 120; }");
                 await page.GetByRole(AriaRole.Button, new() { Name = "Columns", Exact = true }).ClickAsync();
                 var sheet = page.Locator("[data-column-picker]");
                 await Assertions.Expect(sheet).ToBeVisibleAsync();
