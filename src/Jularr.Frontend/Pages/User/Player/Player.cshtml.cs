@@ -82,6 +82,7 @@ namespace Jularr.Frontend.Pages.User.Player
                     if (_episodes.Count > 0) details.Attribute("hidden", "hidden");
                     panes.Add(details);
                     player.Sidebar(new Div(new Div(new NavigationTabs(tabs, "nav.tabs")).Attribute("data-player-tabs", ""), new Div([.. panes])));
+                    player.About(About(work, item, context));
                 }
                 page.Content.Add(player);
             }
@@ -89,6 +90,26 @@ namespace Jularr.Frontend.Pages.User.Player
             {
                 page.Content.Add(new P(new Text(FormError.ResourceKey)).Class("player__status").Attribute("role", "alert"));
             }
+        }
+
+        // The screen of a phone held upright, under the small picture: the title, the episode or season line, a short summary and the episodes that follow (tapping one plays it).
+        private IUiComponent About(WorkDetailsV1 work, PlaybackItemV1 item, string? context)
+        {
+            var index = _episodes.ToList().FindIndex(episode => episode.MediaAssetId == item.MediaAssetId);
+            var summary = (index >= 0 ? _episodes[index].Overview : null) ?? work.Overview;
+            var parts = new List<IUiComponent> { new H2(new ValueText(work.CanonicalTitle)).Class("player__about-title") };
+            if (!string.IsNullOrWhiteSpace(context)) parts.Add(new P(new ValueText(context)).Class("player__about-context"));
+            if (!string.IsNullOrWhiteSpace(summary)) parts.Add(new P(new ValueText(summary)).Class("player__about-summary"));
+            var next = index < 0 ? [] : _episodes.Skip(index + 1).Where(episode => episode.MediaAssetId is not null).Take(10).ToArray();
+            if (next.Length > 0)
+            {
+                parts.Add(new H3(new Text("player.upNext")).Class("player__about-heading"));
+                parts.Add(new Div([.. next.Select(episode => (IUiComponent)new EpisodeCard(assets, MediaUnitLabel.Format(texts, WorkUnitType.Episode, episode.Number, episode.SeasonNumber, null) ?? "",
+                    episode.Title, episode.ImageUrl, episode.RuntimeMinutes, "media.state." + episode.MediaStateTypeId, "/Player/" + episode.MediaAssetId!.Value.ToString(CultureInfo.InvariantCulture))
+                    .Progress(episode.IsCompleted ? episode.DurationMs : episode.ResumePositionMs, episode.DurationMs).Compact())]).Class("player__upnext"));
+            }
+
+            return new Div([.. parts]);
         }
 
         public async Task<IActionResult> OnGetAsync()

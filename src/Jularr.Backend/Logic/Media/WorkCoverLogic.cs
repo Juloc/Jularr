@@ -286,13 +286,41 @@ namespace Jularr.Backend.Logic.Media
             return ctx.ReadSql.ReadListAsync<ReadingSourceData>(sql, ct);
         }
 
-        // The poster fact of a Work without one, given to the provider that names its kind of book (a manga's, a light novel's AniList, else Open Library), so that provider's next
-        // refresh replaces it; the address it carries is the marker that SaveWorkCoverAsync turns into the stored file's.
+        // The poster fact of a Work without one, given to the provider that names its kind (an album's MusicBrainz, a manga's, a light novel's AniList, else Open Library), so that provider's
+        // next refresh replaces it; the address it carries is the marker that SaveWorkCoverAsync turns into the stored file's. An album whose Cover Art Archive address failed has that fact
+        // already: its address is moved to the marker, so the stored file takes its place and the failed address is not asked again.
         public static async Task SavePosterFromFileAsync(this LogicContext ctx, WorkCoverTargetData data, CancellationToken ct)
         {
             var sql = new SqlStatement();
             sql.Statement =
                 """
+                WITH moved AS (
+                    UPDATE
+                        "WorkMetadataFacts" AS fact
+                    SET
+                        "Value" = @SourceUrl,
+                        "UpdatedAt" = now()
+                    WHERE
+                        fact."WorkId" = @WorkId
+                        AND fact."FactKey" = 'Poster'
+                        AND NOT fact."IsManual"
+                        AND fact."Value" ~ '^https?://'
+                        AND EXISTS (
+                            SELECT
+                                1
+                            FROM
+                                "WorkCovers" AS cover
+                            WHERE
+                                cover."WorkId" = fact."WorkId"
+                                AND cover."WorkUnitId" IS NULL
+                                AND cover."CoverKindId" = 1
+                                AND cover."SourceUrl" = fact."Value"
+                                AND cover."StoredAt" IS NULL
+                                AND cover."FailedAt" IS NOT NULL
+                        )
+                    RETURNING
+                        fact."Id"
+                )
                 INSERT INTO
                     "WorkMetadataFacts" ("WorkId", "FactKey", "UiLocaleId", "Value", "ProviderId")
                 SELECT
@@ -303,10 +331,116 @@ namespace Jularr.Backend.Logic.Media
                     provider."Id"
                 FROM
                     "Works" AS work
-                    JOIN "Providers" AS provider ON provider."Key" = CASE WHEN work."MediaSubtypeId" IN (2, 3) THEN 'anilist' ELSE 'openlibrary' END
+                    JOIN "Providers" AS provider ON provider."Key" = CASE WHEN work."MediaTypeId" = 6 THEN 'musicbrainz' WHEN work."MediaSubtypeId" IN (2, 3) THEN 'anilist' ELSE 'openlibrary' END
                 WHERE
                     work."Id" = @WorkId
+                    AND NOT EXISTS (SELECT 1 FROM "WorkMetadataFacts" AS existing WHERE existing."WorkId" = work."Id" AND existing."FactKey" = 'Poster')
                 ON CONFLICT DO NOTHING;
+                """;
+            sql.Parameters.Add(data);
+            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+        }
+
+        // The albums of the library whose audio files carry a picture: albums with a readable file and no poster that is kept or still to be fetched. An album whose provider names no poster, or
+        // whose named one failed, qualifies; one tried within a week does not. It starts from the library's audio files, never from every album the catalogs know.
+        public static Task<IReadOnlyList<ReadingSourceData>> ReadAlbumFileCoverTargetsAsync(this LogicContext ctx, WorkCoverQueryData query, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    work."Id" AS "WorkId",
+                    work."CanonicalTitle" AS "Title",
+                    file."Id" AS "StoredFileId",
+                    file."RelativePath",
+                    file."SizeBytes",
+                    file."ModifiedAt",
+                    FALSE AS "IsMissing",
+                    root."RelativePath" AS "RootRelativePath",
+                    mount."Id" AS "StorageMountId",
+                    NULL::bigint AS "DocumentId",
+                    FALSE AS "IsCached"
+                FROM
+                    "Works" AS work
+                    JOIN LATERAL (
+                        SELECT
+                            candidate."Id",
+                            candidate."LibraryRootId",
+                            candidate."RelativePath",
+                            candidate."SizeBytes",
+                            candidate."ModifiedAt"
+                        FROM
+                            "MediaAssets" AS asset
+                            JOIN "StoredFiles" AS candidate ON candidate."MediaAssetId" = asset."Id"
+                        WHERE
+                            asset."WorkId" = work."Id"
+                            AND asset."MediaAssetTypeId" = 2
+                            AND candidate."MissingSince" IS NULL
+                            AND NOT candidate."IsSubtitle"
+                        ORDER BY
+                            candidate."RelativePath",
+                            candidate."Id"
+                        LIMIT 1
+                    ) AS file ON TRUE
+                    JOIN "LibraryRoots" AS root ON root."Id" = file."LibraryRootId"
+                    JOIN "StorageMounts" AS mount ON mount."Id" = root."StorageMountId"
+                WHERE
+                    work."MediaTypeId" = 6
+                    AND NOT EXISTS (
+                        SELECT
+                            1
+                        FROM
+                            "WorkCovers" AS cover
+                        WHERE
+                            cover."WorkId" = work."Id"
+                            AND cover."WorkUnitId" IS NULL
+                            AND cover."CoverKindId" = 1
+                            AND (cover."StoredAt" IS NOT NULL OR cover."FileTriedAt" > now() - interval '7 days')
+                    )
+                    AND (
+                        NOT EXISTS (
+                            SELECT
+                                1
+                            FROM
+                                "WorkMetadataFacts" AS fact
+                            WHERE
+                                fact."WorkId" = work."Id"
+                                AND fact."FactKey" = 'Poster'
+                        )
+                        OR EXISTS (
+                            SELECT
+                                1
+                            FROM
+                                "WorkMetadataFacts" AS fact
+                                JOIN "WorkCovers" AS failed ON failed."WorkId" = fact."WorkId" AND failed."WorkUnitId" IS NULL AND failed."CoverKindId" = 1
+                                    AND failed."SourceUrl" = fact."Value" AND failed."StoredAt" IS NULL AND failed."FailedAt" IS NOT NULL
+                            WHERE
+                                fact."WorkId" = work."Id"
+                                AND fact."FactKey" = 'Poster'
+                                AND NOT fact."IsManual"
+                        )
+                    )
+                ORDER BY
+                    work."Id"
+                LIMIT @Limit;
+                """;
+            sql.Parameters.Add(query);
+            return ctx.ReadSql.ReadListAsync<ReadingSourceData>(sql, ct);
+        }
+
+        // An album the files of which carry no picture is not asked again for a week; the failed provider address it may have stays as it is.
+        public static async Task SaveAlbumFileCoverTriedAsync(this LogicContext ctx, WorkCoverTargetData data, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                INSERT INTO
+                    "WorkCovers" ("WorkId", "WorkUnitId", "CoverKindId", "SourceUrl", "FailedAt", "FileTriedAt")
+                VALUES
+                    (@WorkId, @WorkUnitId, @CoverKindId, @SourceUrl, now(), now())
+                ON CONFLICT ("WorkId", "CoverKindId", "WorkUnitId") DO UPDATE
+                SET
+                    "FileTriedAt" = now();
                 """;
             sql.Parameters.Add(data);
             await ctx.ExecuteAsyncForAffectedRows(sql, ct);

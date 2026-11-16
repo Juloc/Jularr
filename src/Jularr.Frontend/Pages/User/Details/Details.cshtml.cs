@@ -31,7 +31,7 @@ namespace Jularr.Frontend.Pages.User.Details
 {
     // A title's own page: the hero, one row of tabs and the blocks of the Overview, each of which is also a tab of its own ([hero](Details.Hero.cs),
     // [tabs and blocks](Details.Blocks.cs), [units](Details.Units.cs), [versions](Details.Versions.cs)).
-    public sealed partial class DetailsModel(OpenWorkV1 open, ReadWorkV1 read, ReadWorkAvailabilityV1 readAvailability, ReadWorkEditionsV1 readEditions, UpdateWatchlistV1 update, CreateRequestV1 request,
+    public sealed partial class DetailsModel(OpenWorkV1 open, ReadWorkV1 read, ReadWorkAvailabilityV1 readAvailability, ReadWorkEditionsV1 readEditions, ReadWorkMissingTracksV1 readMissingTracks, UpdateWatchlistV1 update, CreateRequestV1 request,
         ReadUiLocalesV1 locales, ReadWorkPlatformsV1 readPlatforms, ReadRequestProfilesV1 readRequestProfiles, ReadWorkCollectionsV1 readCollections, AddCollectionWorkV1 addToCollection,
         RemoveCollectionWorkV1 removeFromCollection, ReadWorkSeasonsV1 readSeasons, ReadWorkEpisodesV1 readEpisodes, ReadWorkCreditsV1 readCredits,
         ReadWorkRecommendationsV1 readRecommendations, ReadWorkRelationsV1 readRelations, AdminServices.CreateWorkRelationV1 createRelation, AdminServices.DeleteWorkRelationV1 deleteRelation, SuggestDiscoverV1 suggest,
@@ -43,6 +43,7 @@ namespace Jularr.Frontend.Pages.User.Details
         private IReadOnlyList<WorkSeasonV1> _seasons = [];
         private IReadOnlyList<WorkEpisodeV1> _episodes = [];
         private IReadOnlyList<WorkEditionV1> _editions = [];
+        private IReadOnlyList<WorkMissingTrackV1> _missingTracks = [];
         private WorkDetailsV1? _work;
         private IReadOnlyList<WorkCollectionV1> _collections = [];
         private PageResult<WorkAvailabilityV1>? _availability;
@@ -317,6 +318,12 @@ namespace Jularr.Frontend.Pages.User.Details
                 if (_work.MediaTypeId == MediaType.Music && _availability.Items.Count >= 48 && PageNumber == 1)
                 {
                     _availability = await readAvailability.ExecuteAsync<PageResult<WorkAvailabilityV1>>(new ReadWorkAvailabilityParametersV1(Id, page: 1, pageSize: PageRequest.MaximumPageSize), token);
+                }
+
+                // The tracks of the album that have no file here are listed as missing.
+                if (_work.MediaTypeId == MediaType.Music)
+                {
+                    _missingTracks = (await readMissingTracks.ExecuteAsync<BaseDataList<WorkMissingTrackV1>>(new WorkParametersV1(Id), token));
                 }
 
                 _editions = await editionsTask;

@@ -328,6 +328,45 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(60, Regex.Matches(list, "<a [^>]*href=\"/Player/\\d+\"[^>]*aria-label=\"Play\"").Count, "The tracks of a long album are not cut after the first page.");
         }
 
+        // A phone held upright shows title, the episode line, a short summary and the following episodes under the small picture; the page carries them for every layout and the style hides them elsewhere.
+        [TestMethod]
+        public async Task Razor_PlayerForAnEpisode_CarriesTitleSummaryAndUpNextForPhonePortrait()
+        {
+            using var storage = new LibraryTests.TemporaryDirectory();
+            await using var host = await LibraryTests.CreateHostAsync(storage.Path, razor: true);
+            var rootId = await LibraryTests.CreateRootAsync(host, await LibraryTests.CreateMountAsync(host), "Series", MediaType.Series);
+            await host.Fixture.RunSqlAsync($$"""
+                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle") VALUES (9401, 2, 'Example Show');
+                INSERT INTO "WorkUnits" ("Id", "WorkId", "WorkUnitTypeId", "Number") VALUES (9410, 9401, 1, 1);
+                INSERT INTO "WorkUnits" ("WorkId", "ParentWorkUnitId", "WorkUnitTypeId", "Number", "Title", "Overview")
+                SELECT 9401, 9410, 2, number, 'Chapter ' || number, 'Summary of episode ' || number FROM generate_series(1, 4) AS number;
+                INSERT INTO "WorkEditions" ("WorkId") VALUES (9401);
+                INSERT INTO "WorkVersions" ("WorkId", "WorkEditionId") SELECT "WorkId", "Id" FROM "WorkEditions";
+                INSERT INTO "MediaAssets" ("WorkId", "WorkVersionId", "WorkUnitId", "MediaAssetTypeId") SELECT unit."WorkId", version."Id", unit."Id", 1 FROM "WorkUnits" AS unit JOIN "WorkVersions" AS version ON version."WorkId" = unit."WorkId" WHERE unit."WorkUnitTypeId" = 2;
+                INSERT INTO "StoredFiles" ("LibraryRootId", "RelativePath", "SizeBytes", "ModifiedAt", "LastSeenAt", "MediaAssetId") SELECT {{rootId}}, asset."Id" || '.mp4', 100, now(), now(), asset."Id" FROM "MediaAssets" AS asset;
+                """);
+            var assets = (long[])(await host.ScalarAsync("SELECT array_agg(asset.\"Id\" ORDER BY unit.\"Number\") FROM \"MediaAssets\" AS asset JOIN \"WorkUnits\" AS unit ON unit.\"Id\" = asset.\"WorkUnitId\""))!;
+
+            using var player = await host.SendAsync(HttpMethod.Get, "/Player/" + assets[1]);
+            var html = await player.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, player.StatusCode, html);
+            var about = html[html.IndexOf("class=\"player__about\"", StringComparison.Ordinal)..];
+            StringAssert.Contains(about, ">Example Show</h2>");
+            StringAssert.Contains(about, "player__about-context");
+            StringAssert.Contains(about, "Summary of episode 2");
+
+            // The episodes after this one follow, nearest first; earlier ones and this one do not.
+            StringAssert.Contains(about, "Up next");
+            Assert.AreEqual(1, Regex.Matches(about, "class=\"player__upnext\"").Count);
+            Assert.IsTrue(about.IndexOf("/Player/" + assets[2], StringComparison.Ordinal) < about.IndexOf("/Player/" + assets[3], StringComparison.Ordinal));
+            Assert.IsFalse(about.Contains("href=\"/Player/" + assets[0] + "\"", StringComparison.Ordinal), about);
+            Assert.IsFalse(about.Contains("href=\"/Player/" + assets[1] + "\"", StringComparison.Ordinal));
+
+            // The last episode has nothing after it, so no list.
+            using var last = await host.SendAsync(HttpMethod.Get, "/Player/" + assets[3]);
+            Assert.IsFalse((await last.Content.ReadAsStringAsync()).Contains("Up next", StringComparison.Ordinal));
+        }
+
         [TestMethod]
         [DataRow("mp4", "h264", "aac", null)]
         [DataRow("mkv", "h264", "aac", PlaybackModeType.Remux)]

@@ -940,6 +940,7 @@ namespace Jularr.Frontend.Localization
             new("player.next.countdown", "Next episode in {0}"),
             new("player.next.play", "Play now"),
             new("player.next.cancel", "Cancel"),
+            new("player.upNext", "Up next"),
             new("playback.introSkipMode", "Intro and recap"),
             new("playback.outroSkipMode", "Credits and preview"),
             new("playback.skipMode.Off", "Off"),

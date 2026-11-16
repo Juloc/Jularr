@@ -37,6 +37,28 @@ namespace Jularr.Integrations.Logic.Media
             }
         }
 
+        // The picture the file carries itself (ID3 APIC, FLAC picture, MP4 covr): the front cover where the tags say which it is, else the first. None when it has no usable image.
+        public static (byte[] Bytes, string ContentType)? ReadCover(string name, Stream stream)
+        {
+            try
+            {
+                using var file = TagLib.File.Create(new StreamFile(name, stream), TagLib.ReadStyle.None);
+                var pictures = file.Tag.Pictures;
+                var picture = pictures.FirstOrDefault(item => item.Type == TagLib.PictureType.FrontCover) ?? pictures.FirstOrDefault();
+                if (picture is null || picture.Data.Count is 0 or > CoverClient.MaximumBytes)
+                {
+                    return null;
+                }
+
+                var bytes = picture.Data.Data;
+                return CoverClient.Recognize(bytes) is { } type ? (bytes, type) : null;
+            }
+            catch (Exception exception) when (exception is TagLib.CorruptFileException or TagLib.UnsupportedFormatException or IOException or UnauthorizedAccessException)
+            {
+                return null;
+            }
+        }
+
         private sealed class StreamFile(string name, Stream stream) : TagLib.File.IFileAbstraction
         {
             public string Name => name;

@@ -325,6 +325,7 @@ td .details-chips { flex-wrap: nowrap; }
 }
 
 .details-tracks { display: grid; gap: 12px; }
+.details-track--missing { display: block; min-width: 0; color: var(--muted); }
 
 .details-disc {
     display: flex;

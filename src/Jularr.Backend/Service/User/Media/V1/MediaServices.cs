@@ -341,6 +341,50 @@ namespace Jularr.Backend.Service.User.Media.V1
         }
     }
 
+    // The tracks of an album that no file is here for, so the album page can list what is missing as Lidarr does. Stored metadata only; storage is never contacted.
+    [ServiceEndpoint("GET", "/api/v1/works/{workId:long}/missing-tracks")]
+    public sealed class ReadWorkMissingTracksV1 : UserService<WorkParametersV1>
+    {
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<BaseDataList<WorkMissingTrackV1>>()];
+        protected override ModuleRequirement GetInstanceModules(WorkParametersV1 parameters) => ModuleRequirement.All("Library");
+        protected override ServicePermission GetPermission(WorkParametersV1 parameters, Type resultType) => new("profile.media.read");
+
+        protected override async Task<IServiceOutput> OnRead()
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    unit."Id" AS "WorkUnitId",
+                    unit."Number",
+                    unit."DiscNumber"::integer AS "DiscNumber",
+                    unit."Title"
+                FROM
+                    "WorkUnits" AS unit
+                WHERE
+                    unit."WorkId" = @WorkId
+                    AND unit."WorkUnitTypeId" = 5
+                    AND NOT EXISTS (
+                        SELECT
+                            1
+                        FROM
+                            "MediaAssets" AS asset
+                            JOIN "StoredFiles" AS file ON file."MediaAssetId" = asset."Id"
+                        WHERE
+                            asset."WorkUnitId" = unit."Id"
+                    )
+                    AND EXISTS (SELECT 1 FROM "ProfileWorks" AS visible WHERE visible."ProfileId" = @ProfileId AND visible."WorkId" = @WorkId)
+                ORDER BY
+                    unit."DiscNumber" NULLS FIRST,
+                    unit."Number"
+                LIMIT 1000;
+                """;
+            sql.Parameters.Add(Parameters);
+            sql.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));
+            return new BaseDataList<WorkMissingTrackV1>(await Context.ReadSql.ReadListAsync<WorkMissingTrackV1>(sql, CancellationToken));
+        }
+    }
+
     [ServiceEndpoint("GET", "/api/v1/works/{workId:long}/editions")]
     public sealed class ReadWorkEditionsV1 : UserService<WorkParametersV1>
     {

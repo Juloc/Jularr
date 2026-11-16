@@ -34,10 +34,18 @@ namespace Jularr.Frontend.Framework
         private static readonly string[] Presets = ["0.25", "0.5", "0.75", "1", "1.25", "1.5", "2", "3", "4"];
         private static readonly PlaybackQuality[] Qualities = Enum.GetValues<PlaybackQuality>();
         private IUiComponent? _sidebar;
+        private IUiComponent? _about;
 
         public UiPlayer Sidebar(IUiComponent content)
         {
             _sidebar = content;
+            return this;
+        }
+
+        // What a phone held upright shows under the small picture: title, summary and what follows. Other layouts hide it.
+        public UiPlayer About(IUiComponent content)
+        {
+            _about = content;
             return this;
         }
 
@@ -162,6 +170,7 @@ namespace Jularr.Frontend.Framework
                         .Attribute("popovertarget", "player-sidebar").Attribute("popovertargetaction", "hide"),
                     _sidebar).Class("player__sidebar").Attribute("id", "player-sidebar").Attribute("aria-label", texts["details.episodes"]));
             }
+            if (_about is not null) content.Add(new Div(_about).Class("player__about"));
             new Div([.. content]).Class(source.Audio is null ? "player" : "player player--audio").Attribute("hx-ignore", "")
                 .Attribute("data-address", source.Address ?? "").Attribute("data-back", source.BackHref)
                 .Attribute("data-start-url", source.StartUrl)
