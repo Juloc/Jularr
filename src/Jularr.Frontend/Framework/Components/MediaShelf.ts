@@ -6,8 +6,8 @@ const resize = new ResizeObserver(entries => {
 });
 
 function update(items: HTMLElement): void {
-    if (!items.isConnected) return;
-    const shelf = items.closest('.media-shelf')!;
+    const shelf = items.closest('.media-shelf');
+    if (!items.isConnected || !shelf) return;
     const position = Math.abs(items.scrollLeft);
     const maximum = items.scrollWidth - items.clientWidth;
     shelf.querySelectorAll<HTMLButtonElement>('[data-shelf-direction]').forEach(button => {
@@ -28,7 +28,8 @@ export function initializeShelves(root: ParentNode = document): void {
         }
     }
 
-    root.querySelectorAll<HTMLElement>('.media-shelf__items').forEach(items => {
+    // A grey shelf that waits for its titles has no arrows.
+    root.querySelectorAll<HTMLElement>('.media-shelf > .media-shelf__items').forEach(items => {
         if (!initialized.has(items)) {
             initialized.add(items);
             items.addEventListener('scroll', () => update(items), { passive: true });

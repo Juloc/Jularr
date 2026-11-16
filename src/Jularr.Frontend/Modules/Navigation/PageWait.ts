@@ -49,7 +49,12 @@ function begin(source: Element | undefined, address: string, skeleton: boolean):
         if (!skeleton || !main) return;
         main.setAttribute("aria-busy", "true");
         main.dataset.waitingFor = kindOf(address);
-        main.append(pageSkeleton(main.dataset.waitingFor));
+        // The same page with other choices (Discover in another mode, a filtered list) keeps its layout: only its pictures turn grey until the new ones arrive.
+        // Another page's skeleton keeps the height of the page it covers, so the scrollbar stays and nothing moves sideways.
+        if (main.dataset.waitingFor !== "same") {
+            main.style.minHeight = main.offsetHeight + "px";
+            main.append(pageSkeleton(main.dataset.waitingFor));
+        }
     }, ReloadBudget);
     giveUp = window.setTimeout(end, GiveUp);
 }
@@ -66,14 +71,16 @@ function end(): void {
     const main = document.querySelector<HTMLElement>("#app-content #main-content");
     if (!main?.dataset.waitingFor) return;
     main.querySelector(":scope > .page-skeleton")?.remove();
+    main.style.removeProperty("min-height");
     main.removeAttribute("aria-busy");
     delete main.dataset.waitingFor;
 }
 
-// Admin pages are lists, user pages are covers.
-export function kindOf(address: string): "rows" | "covers" {
+// Admin pages are lists, user pages are covers; a user page that stays the same page keeps its own layout.
+export function kindOf(address: string): "rows" | "covers" | "same" {
     const path = new URL(address, location.href).pathname.toLowerCase();
-    return path.startsWith("/admin") ? "rows" : "covers";
+    if (path.startsWith("/admin")) return "rows";
+    return path === location.pathname.toLowerCase() ? "same" : "covers";
 }
 
 function pageSkeleton(kind: string): HTMLElement {

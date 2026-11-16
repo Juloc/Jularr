@@ -561,7 +561,8 @@
     .media-shelf__items & { flex: 0 0 144px; }
     &::before, &::after { content: ""; display: block; border-radius: 12px; background: var(--surface); }
     &::before { aspect-ratio: 2 / 3; }
-    &::after { width: 70%; height: 12px; margin-top: 10px; border-radius: 6px; }
+    // The title line and the room of the facts line below it, so a grey card is as tall as a real one.
+    &::after { width: 70%; height: 12px; margin-top: 10px; margin-bottom: 22px; border-radius: 6px; }
     @media (prefers-reduced-motion: reduce) { animation: none; }
 }
 

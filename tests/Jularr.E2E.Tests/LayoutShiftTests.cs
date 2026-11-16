@@ -104,6 +104,18 @@ namespace Jularr.E2E.Tests
                         if (score >= 0.01) shifts.Add($"{width}px {path}: {score:0.0000} ({result.GetProperty("sources").GetString()})");
                     }
 
+                    // Another mode on Discover keeps the page in place: no page skeleton, the rows start where they started, only pictures and titles change.
+                    await page.GotoAsync("/?mode=watch");
+                    await page.EvaluateAsync(Measure);
+                    const string firstRow = "() => Math.round(document.querySelector('#discover-results :is(.media-shelf, .media-shelf-waiting)').getBoundingClientRect().top)";
+                    var before = await page.EvaluateAsync<int>(firstRow);
+                    await page.Locator(".mode-tabs__tab[href='/?mode=animanga']").ClickAsync();
+                    await Assertions.Expect(page.Locator(".mode-tabs__tab.is-active[href='/?mode=animanga']")).ToBeVisibleAsync();
+                    Assert.AreEqual(0, await page.Locator("#main-content > .page-skeleton").CountAsync(), $"{width}px: a switch of the mode shows the page skeleton.");
+                    var after = await page.EvaluateAsync<int>(firstRow);
+                    if (Math.Abs(after - before) > 4) shifts.Add($"{width}px mode switch: the first row moved from {before} to {after}");
+                    await page.GotoAsync("/?mode=watch");
+
                     // Scrolling down the Library loads its further pages; the cards above hold still and the row of the link moves unseen.
                     await page.GotoAsync("/Library");
                     for (var step = 0; step < 6 && await page.Locator("[data-infinite-status]").TextContentAsync() != "No more titles."; step++)

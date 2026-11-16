@@ -196,8 +196,9 @@
 // Where the lists no longer fit beside the types (a narrow desktop, a tablet, a phone) they take their own line under them, the whole width, sliding sideways.
 @media (max-width: 1280px) {
     .discover-bar__top { flex-wrap: wrap; gap: 0 16px; }
-    .navigation-tabs--types { order: 1; }
-    .discover-bar__tools { order: 2; }
+    // The types slide sideways beside the tools instead of pushing them onto a line of their own, so every mode's bar is as tall as the others.
+    .navigation-tabs--types { order: 1; flex: 1 1 0; min-width: 0; overflow-x: auto; scrollbar-width: none; &::-webkit-scrollbar { display: none; } }
+    .discover-bar__tools { order: 2; flex: none; }
     // A full-width break, so the capsule starts its own line but keeps only the width it needs.
     .discover-bar__top::after { content: ""; order: 3; flex-basis: 100%; height: 0; }
     .discover-bar__top > .navigation-tabs--chips { order: 4; flex: 0 1 auto; max-width: 100%; margin-top: 6px; }
@@ -211,27 +212,27 @@
 
 // Shelves: the rhythm of the mockup.
 .discover-results {
-    .media-shelf { margin-bottom: 0; }
+    .media-shelf, .media-shelf-waiting { margin-bottom: 0; }
 
-    .media-shelf__heading {
+    .media-shelf__heading, .media-shelf-waiting__heading {
         gap: 12px;
         margin: 26px 0 18px;
 
-        h2 { font-size: 21px; letter-spacing: -.5px; line-height: normal; }
+        h2, .media-shelf-waiting__title { font-size: 21px; letter-spacing: -.5px; line-height: normal; }
     }
 
     .media-shelf__items { gap: 16px; padding: 3px 1px 14px; }
 }
 
 @media (max-width: 760px) {
-    .discover-results .media-shelf__heading { margin: 27px 0 14px; h2 { font-size: 18px; } }
+    .discover-results :is(.media-shelf__heading, .media-shelf-waiting__heading) { margin: 27px 0 14px; :is(h2, .media-shelf-waiting__title) { font-size: 18px; } }
 
     // Phones swipe the rows; without arrows the title keeps its full width, also when a swipe would show them.
     .discover-results .media-shelf__controls { display: none; }
 }
 
 @media (max-width: 640px) {
-    .discover-results .media-shelf__heading { margin: 16px 0 8px; h2 { font-size: 17px; } }
+    .discover-results :is(.media-shelf__heading, .media-shelf-waiting__heading) { margin: 16px 0 8px; :is(h2, .media-shelf-waiting__title) { font-size: 17px; } }
     .discover-results .media-shelf__items { gap: 8px; padding: 2px 1px 8px; }
 }
 
