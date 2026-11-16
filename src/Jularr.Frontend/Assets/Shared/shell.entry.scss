@@ -50,6 +50,9 @@
 
 *, *::before, *::after { box-sizing: border-box; }
 html { min-height: 100%; }
+// The scrollbar keeps its room on a desktop: a page that is shorter for a moment (a skeleton, a short list) never moves the header and the content sideways.
+// Phones and tablets lay their scrollbar over the page.
+@media (min-width: 1025px) { html { scrollbar-gutter: stable; } }
 body {
     min-width: 0;
     min-height: 100dvh;
@@ -98,7 +101,16 @@ body[data-page-wait]::before {
     transform-origin: left;
     animation: page-wait 1.6s ease-out infinite;
 }
-#main-content[data-waiting-for] > :not(.page-skeleton) { display: none; }
+#main-content[data-waiting-for]:not([data-waiting-for="same"]) > :not(.page-skeleton) { display: none; }
+// The same page with other choices stays where it is; its covers and pictures turn grey and pulse until the new page takes their place.
+#main-content[data-waiting-for="same"], #discover-results[data-waiting-for="same"] {
+    :is(.media-card__surface, .hero-carousel__art, .hero-carousel__poster) {
+        background: var(--surface-hover);
+        animation: skeleton-pulse 1.4s ease-in-out infinite;
+        img, video, picture { opacity: 0; }
+    }
+    :is(.media-card__details, .hero-carousel__body) { opacity: .35; }
+}
 .skeleton-block {
     display: block;
     border-radius: var(--radius-small);
@@ -117,7 +129,7 @@ body[data-page-wait]::before {
 @keyframes skeleton-pulse { 50% { opacity: .45; } }
 @media (prefers-reduced-motion: reduce) {
     body[data-page-wait]::before { animation: none; transform: scaleX(.6); }
-    .skeleton-block { animation: none; }
+    .skeleton-block, [data-waiting-for="same"] :is(.media-card__surface, .hero-carousel__art, .hero-carousel__poster) { animation: none; }
 }
 
 .page-title { margin: 0 0 26px; font-size: clamp(24px, 3vw, 29px); }

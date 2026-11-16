@@ -488,6 +488,14 @@ namespace Jularr.Frontend.Pages.User.Discover
             return new Div([.. recommendations.Content]).Attribute("id", "discover-recommendations");
         }
 
+        // The heading a row shows, the same before and after its titles arrive.
+        private string RowTitle(Row row)
+        {
+            if (row.Genre is { } genre) return texts["discover.genre." + genre];
+            if (IsTop(row.Scope, row.Feed)) return string.Format(CultureInfo.CurrentCulture, texts["discover.top10"], texts["discover.type." + row.Scope.Slug]);
+            return Chosen.Count > 1 ? texts[FeedLabel(row.Scope, row.Feed)] + " · " + texts["discover.type." + row.Scope.Slug] : texts[FeedLabel(row.Scope, row.Feed)];
+        }
+
         private MediaShelf ContinueShelf(string titleKey, IEnumerable<ContinueItemV1> items) => new(assets, titleKey, null, [.. items.Select(item =>
         {
             var readable = ReadableMedia.IsReadable(item.MediaAssetTypeId);
@@ -547,9 +555,13 @@ namespace Jularr.Frontend.Pages.User.Discover
 
             if (!tasteShown) AddTaste(page);
 
-            // The next part: the page's script loads it as the page nears it, without script it is a link.
+            // The next part: the page's script loads it as the page nears it, without script it is a link. Every row still to come waits as a grey shelf under its real heading,
+            // so the page has its whole height before they arrive and a switch of the mode only changes pictures.
             if (_recommendationsRead ? _moreShelves : !_providerUnavailable)
             {
+                var next = (_recommendationsRead ? Math.Clamp(PageNumber, 1, MaximumPart) : 0) * ShelvesPerPart;
+                var waiting = Rows().Skip(next).Select(row => MediaShelf.Waiting(RowTitle(row), row.Genre is null && IsTop(row.Scope, row.Feed))).ToList();
+                if (waiting.Count > 0) page.Content.Add(new Div([.. waiting]).Class("discover-waiting").Attribute("aria-hidden", "true"));
                 var address = Address(Current with { View = null, Page = _recommendationsRead ? Math.Clamp(PageNumber, 1, MaximumPart) + 1 : 1 });
                 page.Content.Add(new Nav(new A(new Text(_recommendationsRead ? "list.loadMore" : "discover.loadRecommendations")).Class("button")
                     .Attribute("data-discover-recommendations", "true").Attribute("data-navigation", "full").Attribute("data-retry-label", texts["discover.retry"])

@@ -34,14 +34,22 @@
     }
 }
 
+// A row before its titles arrive: grey cards under the real heading, as tall as the row will be; it does not scroll.
+.media-shelf-waiting {
+    margin-bottom: 24px;
+    &__heading { display: flex; align-items: center; gap: 16px; min-height: var(--control-height); margin-bottom: 12px; }
+    &__title { flex: 1; min-width: 0; overflow: hidden; font-size: 20px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+    .media-shelf__items { overflow: hidden; }
+}
+
 [dir="rtl"] .media-shelf__control {
     .ui-icon { transform: rotate(180deg); }
     &--next .ui-icon { transform: none; }
 }
 
 @media (max-width: 640px) {
-    .media-shelf { margin-bottom: 14px; }
-    .media-shelf__heading { gap: 10px; margin-bottom: 8px; h2 { font-size: 17px; } }
+    .media-shelf, .media-shelf-waiting { margin-bottom: 14px; }
+    .media-shelf__heading, .media-shelf-waiting__heading { gap: 10px; margin-bottom: 8px; h2, .media-shelf-waiting__title { font-size: 17px; } }
     .media-shelf__items { gap: 8px; }
 }
 

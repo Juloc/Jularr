@@ -230,8 +230,10 @@ function setup(): void {
             recommendationRequest = new AbortController();
             const signal = recommendationRequest.signal;
             const current = generation;
-            const waiting = skeletons(6, 'media-shelf__items discover-skeletons');
-            paging.before(waiting);
+            // The page sent the part's rows as grey shelves under their headings; a page without them gets one grey row.
+            const sent = region.querySelector<HTMLElement>(':scope > .discover-waiting');
+            const waiting = sent ?? skeletons(6, 'media-shelf__items discover-skeletons');
+            if (!sent) paging.before(waiting);
             try {
                 const response = await fetch(link.href, { signal, headers: { Accept: 'text/html', 'X-Jularr-Fragment': 'recommendations' } });
                 if (!response.ok || response.redirected) throw new Error('Unavailable recommendations');
@@ -262,17 +264,18 @@ function setup(): void {
             }
         }
 
-        // The next part loads as the page nears its link; a part that leaves the link in reach lets the following one load at once.
+        // The next part loads as the page nears its first grey row (or its link); a part that leaves it in reach lets the following one load at once.
         function observeRecommendations(): void {
             const paging = results!.querySelector<HTMLElement>('#discover-recommendations .discover-paging');
             if (!paging || !('IntersectionObserver' in window)) {
                 if (paging) delete paging.dataset.automatic;
                 return;
             }
+            const near = results!.querySelector<HTMLElement>('#discover-recommendations > .discover-waiting > .media-shelf-waiting') ?? paging;
             recommendationObserver = new IntersectionObserver(entries => {
                 if (entries.some(entry => entry.isIntersecting)) void recommendations();
             }, { rootMargin: '600px' });
-            recommendationObserver.observe(paging);
+            recommendationObserver.observe(near);
         }
 
         // Only HTML from this route.
@@ -290,8 +293,11 @@ function setup(): void {
             observer?.disconnect();
             let waiting: HTMLElement | undefined;
             let covered: HTMLElement[] = [];
-            if (!append && pushes) {
-                // Everything under the bar waits behind grey cards until the new results arrive.
+            if (!append && pushes && !results!.querySelector('.media-grid')) {
+                // Rows stay where they are and only their pictures turn grey: another type's rows take the same places.
+                results!.dataset.waitingFor = 'same';
+            } else if (!append && pushes) {
+                // A grid waits behind grey cards under the bar until the new results arrive.
                 const bar = results!.querySelector<HTMLElement>('.discover-bar');
                 if (bar) {
                     covered = Array.from(results!.children).filter((child): child is HTMLElement => child instanceof HTMLElement && child !== bar && !child.classList.contains('discover-feedback'));
@@ -360,6 +366,7 @@ function setup(): void {
             } catch (error) {
                 if (signal.aborted || current !== generation) return;
                 covered.forEach(child => { child.hidden = false; });
+                delete results!.dataset.waitingFor;
                 const feedback = results!.querySelector<HTMLElement>('.discover-feedback');
                 if (feedback) feedback.textContent = results!.dataset.loadError ?? '';
                 // No automatic retry loop: the link shows itself as the retry.

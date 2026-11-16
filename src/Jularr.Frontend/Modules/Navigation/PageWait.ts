@@ -49,7 +49,8 @@ function begin(source: Element | undefined, address: string, skeleton: boolean):
         if (!skeleton || !main) return;
         main.setAttribute("aria-busy", "true");
         main.dataset.waitingFor = kindOf(address);
-        main.append(pageSkeleton(main.dataset.waitingFor));
+        // The same page with other choices (Discover in another mode, a filtered list) keeps its layout: only its pictures turn grey until the new ones arrive.
+        if (main.dataset.waitingFor !== "same") main.append(pageSkeleton(main.dataset.waitingFor));
     }, ReloadBudget);
     giveUp = window.setTimeout(end, GiveUp);
 }
@@ -70,10 +71,11 @@ function end(): void {
     delete main.dataset.waitingFor;
 }
 
-// Admin pages are lists, user pages are covers.
-export function kindOf(address: string): "rows" | "covers" {
+// Admin pages are lists, user pages are covers; a user page that stays the same page keeps its own layout.
+export function kindOf(address: string): "rows" | "covers" | "same" {
     const path = new URL(address, location.href).pathname.toLowerCase();
-    return path.startsWith("/admin") ? "rows" : "covers";
+    if (path.startsWith("/admin")) return "rows";
+    return path === location.pathname.toLowerCase() ? "same" : "covers";
 }
 
 function pageSkeleton(kind: string): HTMLElement {
