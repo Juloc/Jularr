@@ -538,6 +538,13 @@ namespace Jularr.Backend.Data.User.Playback.V1
         // The server had no room for the wanted conversion and plays a lighter one.
         [DataField(typeof(PlaybackFields), nameof(PlaybackFields.IsReduced))]
         public bool IsReduced { get; }
+
+        // The Owner's choices: seconds the player loads ahead, and seconds of a standing picture before it asks whether its session is still there.
+        [DataField(typeof(TranscodeFields), nameof(TranscodeFields.BufferSeconds))]
+        public int BufferSeconds { get; init; } = 120;
+
+        [DataField(typeof(TranscodeFields), nameof(TranscodeFields.ReconnectSeconds))]
+        public int ReconnectSeconds { get; init; } = 3;
     }
 
     public sealed class UpdatePlaybackDataV1 : BaseData

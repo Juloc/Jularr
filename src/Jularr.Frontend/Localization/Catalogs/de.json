@@ -12933,6 +12933,14 @@
    "Conversions at once",
    "Gleichzeitige Umwandlungen"
   ],
+  "admin.transcoding.bufferSeconds": [
+   "Player buffer (seconds)",
+   "Puffer des Players (Sekunden)"
+  ],
+  "admin.transcoding.reconnectSeconds": [
+   "Reconnect after a stall (seconds)",
+   "Neu verbinden nach Stillstand (Sekunden)"
+  ],
   "admin.transcoding.ladder": [
    "Lower qualities offered",
    "Angebotene niedrigere Qualitäten"

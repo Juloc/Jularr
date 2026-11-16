@@ -14,8 +14,10 @@ namespace Jularr.Backend.Data.Admin.Transcoding.V1
 
     public sealed class TranscodeSettingsV1 : BaseResponse
     {
-        public TranscodeSettingsV1(TranscodeAcceleration transcodeAccelerationTypeId, int maxTranscodes, int[] ladderHeights, long version)
+        public TranscodeSettingsV1(TranscodeAcceleration transcodeAccelerationTypeId, int maxTranscodes, int[] ladderHeights, long version, int bufferSeconds = 120, int reconnectSeconds = 3)
         {
+            BufferSeconds = bufferSeconds;
+            ReconnectSeconds = reconnectSeconds;
             TranscodeAccelerationTypeId = transcodeAccelerationTypeId;
             MaxTranscodes = maxTranscodes;
             LadderHeights = ladderHeights;
@@ -34,12 +36,22 @@ namespace Jularr.Backend.Data.Admin.Transcoding.V1
 
         [DataField(typeof(TranscodeFields), nameof(TranscodeFields.Version))]
         public long Version { get; }
+
+        // Seconds the player loads ahead; the server converts that far and a little more.
+        [DataField(typeof(TranscodeFields), nameof(TranscodeFields.BufferSeconds))]
+        public int BufferSeconds { get; }
+
+        // Seconds of a standing picture before the player asks whether its session is still there and plans a fresh one when it is not.
+        [DataField(typeof(TranscodeFields), nameof(TranscodeFields.ReconnectSeconds))]
+        public int ReconnectSeconds { get; }
     }
 
     public sealed class UpdateTranscodeSettingsDataV1 : BaseData
     {
-        public UpdateTranscodeSettingsDataV1(TranscodeAcceleration transcodeAccelerationTypeId, int maxTranscodes, int[] ladderHeights, long version)
+        public UpdateTranscodeSettingsDataV1(TranscodeAcceleration transcodeAccelerationTypeId, int maxTranscodes, int[] ladderHeights, long version, int bufferSeconds = 120, int reconnectSeconds = 3)
         {
+            BufferSeconds = bufferSeconds;
+            ReconnectSeconds = reconnectSeconds;
             TranscodeAccelerationTypeId = transcodeAccelerationTypeId;
             MaxTranscodes = maxTranscodes;
             LadderHeights = ladderHeights;
@@ -58,6 +70,14 @@ namespace Jularr.Backend.Data.Admin.Transcoding.V1
 
         [DataField(typeof(TranscodeFields), nameof(TranscodeFields.Version))]
         public long Version { get; }
+
+        // Seconds the player loads ahead; the server converts that far and a little more.
+        [DataField(typeof(TranscodeFields), nameof(TranscodeFields.BufferSeconds))]
+        public int BufferSeconds { get; }
+
+        // Seconds of a standing picture before the player asks whether its session is still there and plans a fresh one when it is not.
+        [DataField(typeof(TranscodeFields), nameof(TranscodeFields.ReconnectSeconds))]
+        public int ReconnectSeconds { get; }
     }
 
     // One way to convert video and whether this machine offers it.
