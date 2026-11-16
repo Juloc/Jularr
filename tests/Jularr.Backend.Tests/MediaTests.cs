@@ -461,6 +461,18 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(MediaAvailabilityState.OtherAudio, other.AvailabilityStateId);
             CollectionAssert.AreEquivalent(new[] { "ja" }, other.AudioLanguages);
 
+            // A track's language changed later is read again: the file keeps the codes of its tracks.
+            await host.Fixture.RunSqlAsync("""
+                UPDATE "MediaTracks" SET "Language" = 'en_US' WHERE "MediaTrackTypeId" = 2 AND "StoredFileId" IN (
+                    SELECT file."Id" FROM "StoredFiles" AS file JOIN "MediaAssets" AS asset ON asset."Id" = file."MediaAssetId" WHERE asset."WorkId" = 30);
+                """);
+            Assert.AreEqual(MediaAvailabilityState.ProfileAudio, (await ReadCardAsync(host, "/api/v1/watchlist", 30)).AvailabilityStateId);
+            await host.Fixture.RunSqlAsync("""
+                UPDATE "MediaTracks" SET "Language" = 'ja' WHERE "MediaTrackTypeId" = 2 AND "StoredFileId" IN (
+                    SELECT file."Id" FROM "StoredFiles" AS file JOIN "MediaAssets" AS asset ON asset."Id" = file."MediaAssetId" WHERE asset."WorkId" = 30);
+                """);
+            Assert.AreEqual(MediaAvailabilityState.OtherAudio, (await ReadCardAsync(host, "/api/v1/watchlist", 30)).AvailabilityStateId);
+
             // Nothing of it is here.
             var missing = await ReadCardAsync(host, "/api/v1/watchlist", 40);
             Assert.AreEqual(MediaAvailabilityState.Missing, missing.AvailabilityStateId);
