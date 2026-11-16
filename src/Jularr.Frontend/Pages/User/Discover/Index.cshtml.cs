@@ -89,6 +89,7 @@ namespace Jularr.Frontend.Pages.User.Discover
 
         // The types whose first shelf is in the part read, so each type is named once, above its first shelf.
         private readonly List<Row> _rowOrder = [];
+        private readonly Dictionary<DiscoverScopeV1, Task<IReadOnlyList<DiscoverItemV1>?>> _heroLists = [];
         // A genre row's first page of each of its types.
         private readonly Dictionary<Row, IReadOnlyList<(DiscoverScopeV1 Scope, IReadOnlyList<DiscoverItemV1> Items, IReadOnlyList<DiscoverCatalogItemV1> Catalog)>> _genreAnswers = [];
         private IReadOnlyList<DiscoverTasteShelfV1> _taste = [];
@@ -761,6 +762,15 @@ namespace Jularr.Frontend.Pages.User.Discover
             var heroFeed = Feed is null ? DiscoverFeedType.Trending : FeedType;
             var keptTask = Timed("kept", ReadWhenAsync(hero && heroFeed is not null,
                 () => readShelves.ExecuteAsync<BaseDataList<DiscoverShelfV1>>(new ReadDiscoverShelvesDataV1(selected?.Slug, [heroFeed!.Value]), HttpContext.RequestAborted)));
+            // Series, which no catalog keeps whole, ask their list beside the other reads instead of after them.
+            if (hero && heroFeed is { } listFeed)
+            {
+                foreach (var scope in Chosen.Where(scope => IsSeriesList(scope) && scope.Feeds.Contains(listFeed)))
+                {
+                    _heroLists[scope] = ReadHeroFeedAsync(scope, listFeed);
+                }
+            }
+
             await Task.WhenAll(continueTask, recentTask, keptTask, watchlistTask);
             _watchlist = (await watchlistTask)?.Items ?? _watchlist;
 
@@ -952,7 +962,7 @@ namespace Jularr.Frontend.Pages.User.Discover
                                 .Select(item => (item.WorkId, CatalogSlide(scope, item, heroFeed)))]
                             : [.. Filtered(shelf.Items).OrderBy(item => item.BackdropUrl is null && item.PosterUrl is null).Take(HeroPerType).Select(item => (item.WorkId, ItemSlide(scope, item, heroFeed)))];
                     }
-                    else if (IsSeriesList(scope) && await ReadHeroFeedAsync(scope, heroFeed) is { } listed)
+                    else if (IsSeriesList(scope) && await (_heroLists.GetValueOrDefault(scope) ?? ReadHeroFeedAsync(scope, heroFeed)) is { } listed)
                     {
                         featured[scope] = [.. Filtered(listed).OrderBy(item => item.BackdropUrl is null && item.PosterUrl is null).Take(HeroPerType).Select(item => (item.WorkId, ItemSlide(scope, item, heroFeed)))];
                     }
