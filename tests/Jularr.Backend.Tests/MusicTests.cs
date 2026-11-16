@@ -141,6 +141,42 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Album_ListsEveryTrackOfItsMetadata_AndTheOnesWithoutAFileAreMissing()
+        {
+            using var storage = new TemporaryDirectory();
+            await using var host = await LibraryTests.CreateHostAsync(storage.Path, razor: true);
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle") VALUES (10, 6, 'Album');
+                INSERT INTO "WorkUnits" ("Id", "WorkId", "WorkUnitTypeId", "Number", "Title", "DiscNumber") VALUES (101, 10, 5, 1, 'Opening Song', 1), (102, 10, 5, 2, 'Lost Song', 1), (103, 10, 5, 3, 'Far Song', 2);
+                INSERT INTO "WorkEditions" ("Id", "WorkId") VALUES (1, 10);
+                INSERT INTO "WorkVersions" ("Id", "WorkId", "WorkEditionId") VALUES (1, 10, 1);
+                INSERT INTO "MediaAssets" ("Id", "WorkId", "WorkVersionId", "WorkUnitId", "MediaAssetTypeId") VALUES (1, 10, 1, 101, 2);
+                """);
+            var mountId = await LibraryTests.CreateMountAsync(host);
+            var rootId = await LibraryTests.CreateRootAsync(host, mountId, "Music", MediaType.Music);
+            await host.Fixture.RunSqlAsync($"""
+                INSERT INTO "StoredFiles" ("LibraryRootId", "RelativePath", "SizeBytes", "ModifiedAt", "LastSeenAt", "MediaAssetId", "MissingSince") VALUES ({rootId}, 'Album/01.flac', 1, now(), now(), 1, NULL);
+                """);
+
+            // The tracks the metadata names and no file is here for, in their order on the discs.
+            using var read = await host.SendAsync(HttpMethod.Get, "/api/v1/works/10/missing-tracks");
+            Assert.AreEqual(HttpStatusCode.OK, read.StatusCode, await read.Content.ReadAsStringAsync());
+            var missing = (await read.Content.ReadFromJsonAsync<BaseDataList<Jularr.Backend.Data.User.Media.V1.WorkMissingTrackV1>>())!;
+            CollectionAssert.AreEqual(new[] { "Lost Song", "Far Song" }, missing.Select(track => track.Title).ToArray());
+
+            // The album page lists all three: the one with a file plays, the others are muted, marked missing and cannot be played.
+            using var page = await host.SendAsync(HttpMethod.Get, "/Details/10?tab=tracks");
+            var html = await page.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
+            StringAssert.Contains(html, "Opening Song");
+            StringAssert.Contains(html, "details-track--missing\"><span class=\"truncated\"");
+            Assert.AreEqual(2, System.Text.RegularExpressions.Regex.Matches(html, "details-track--missing\"><span class=\"truncated\"").Count);
+            StringAssert.Contains(html, "Far Song");
+            Assert.AreEqual(2, System.Text.RegularExpressions.Regex.Matches(html, ">Missing<").Count);
+            Assert.IsFalse(System.Text.RegularExpressions.Regex.IsMatch(html, "href=\"/Player/(?!1\")"), "only the track with a file can be played");
+        }
+
+        [TestMethod]
         public async Task Music_MusicBrainzAlbumSearchAndImport_PlacesTracksOnTheirUnits()
         {
             using var storage = new TemporaryDirectory();

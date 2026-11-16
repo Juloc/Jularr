@@ -467,6 +467,30 @@ namespace Jularr.Backend.Data.User.Media.V1
         public int? DiscNumber { get; }
     }
 
+    // A track of an album that has no file here: its place on the disc and its name, from the album's metadata.
+    public sealed class WorkMissingTrackV1 : BaseResponse
+    {
+        public WorkMissingTrackV1(long workUnitId, decimal number, int? discNumber, string? title)
+        {
+            WorkUnitId = workUnitId;
+            Number = number;
+            DiscNumber = discNumber;
+            Title = title;
+        }
+
+        [DataField(typeof(WorkUnitFields), nameof(WorkUnitFields.Id))]
+        public long WorkUnitId { get; }
+
+        [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.UnitNumber))]
+        public decimal Number { get; }
+
+        [DataField(typeof(WorkManagementFields), nameof(WorkManagementFields.DiscNumber))]
+        public int? DiscNumber { get; }
+
+        [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.UnitTitle))]
+        public string? Title { get; }
+    }
+
     // An edition of a title: a cut or release name, or a book's language and format, with how much of it is here.
     public sealed class WorkEditionV1 : BaseResponse
     {

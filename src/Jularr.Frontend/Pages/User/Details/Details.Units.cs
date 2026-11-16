@@ -206,6 +206,15 @@ namespace Jularr.Frontend.Pages.User.Details
             : chapter.HasProgress ? Chip(new Text("progress.started"), UiTone.Info, "play")
             : Chip(new Text("details.state.unread"), UiTone.Neutral, "clock");
 
+        // Every track of the album: those with a file and, after them in their place on the disc, those the metadata names that have none yet (shown as missing).
+        private WorkAvailabilityV1[] AlbumTracks(IReadOnlyList<WorkAvailabilityV1> items)
+        {
+            var tracks = items.Where(item => item.WorkUnitTypeId == WorkUnitType.Track).ToList();
+            tracks.AddRange(_missingTracks.Select(track => new WorkAvailabilityV1(0, 0, MediaAssetType.Audio, WorkUnitType.Track, track.Number, null, 0, 0, null, false, null, [], [], null, false, false,
+                null, track.Title, track.WorkUnitId, false, 0, null, null, track.DiscNumber)));
+            return [.. tracks];
+        }
+
         // The tracks of an album by disc, with their length, state and the way to play or mark them; the Overview shows the first five.
         private IUiComponent Tracks(IReadOnlyList<WorkAvailabilityV1> tracks, bool preview)
         {
@@ -219,8 +228,8 @@ namespace Jularr.Frontend.Pages.User.Details
                 left -= rows.Length;
                 if (discs.Length > 1) parts.Add(new H3(new Icon("disc", assets, 14), new ValueText(" "), new ValueText(string.Format(CultureInfo.CurrentCulture, texts["details.disc"], disc.Key))).Class("details-disc"));
                 parts.Add(new Table<WorkAvailabilityV1>(rows).Compact()
-                    .Content("details.track.number", track => new ValueText((track.UnitNumber ?? 0).ToString("0.###", CultureInfo.CurrentCulture)))
-                    .Content("details.track.title", track => new Truncated(track.UnitTitle ?? MediaUnitLabel.Format(texts, track.WorkUnitTypeId, track.UnitNumber, null) ?? ""))
+                    .Content("details.track.number", track => Dimmed(track, new ValueText((track.UnitNumber ?? 0).ToString("0.###", CultureInfo.CurrentCulture))))
+                    .Content("details.track.title", track => Dimmed(track, new Truncated(track.UnitTitle ?? MediaUnitLabel.Format(texts, track.WorkUnitTypeId, track.UnitNumber, null) ?? "")))
                     .Content("details.duration", track => new ValueText(track.DurationMs is { } duration ? ShortClock(duration) : ""))
                     .Content("table.status", track => TrackState(track))
                     .Content("common.actions", track => new Div(PlayIcon(track), TrackMark(track)).Class("details-row__actions")));
@@ -228,6 +237,9 @@ namespace Jularr.Frontend.Pages.User.Details
 
             return new Div([.. parts]).Class("details-tracks");
         }
+
+        // A track without a file is muted: its number and title stay to show what is missing.
+        private static IUiComponent Dimmed(WorkAvailabilityV1 track, IUiComponent content) => track.IsAvailable ? content : new Span(content).Class("details-track--missing");
 
         private IUiComponent TrackState(WorkAvailabilityV1 track) =>
             !track.IsAvailable ? Chip(new Text("library.missing"), UiTone.Warning, "cloud")

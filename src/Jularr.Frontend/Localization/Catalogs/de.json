@@ -2347,6 +2347,10 @@
    "Cancel",
    "Abbrechen"
   ],
+  "player.upNext": [
+   "Up next",
+   "Als Nächstes"
+  ],
   "progress.watched": [
    "Watched",
    "Gesehen"

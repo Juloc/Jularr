@@ -429,3 +429,17 @@ html.player-open { overflow: hidden; }
     .player__chapter-now { display: none; }
 }
 .player--touch:not(.player--mini) .player__status { inset: 52px auto auto 50%; width: max-content; max-width: calc(100% - 24px); margin: 0; padding: 6px 12px; font-size: .8rem; transform: translateX(-50%); pointer-events: none; }
+
+// A phone or small tablet held upright: the picture stays small at the top, and what is beneath it names what plays, summarises it and lists what follows. Nothing of it where the picture is large.
+.player__about { display: none; }
+@media (max-width: 900px) and (orientation: portrait) {
+    .player:not(.player--mini):not(.player--audio) > .player__about {
+        display: grid; align-content: start; gap: 8px; min-width: 0; padding: 16px 16px max(16px, env(safe-area-inset-bottom));
+        .player__about-title { margin: 0; font-size: 1.15rem; overflow-wrap: anywhere; }
+        .player__about-context { margin: 0; color: var(--muted); font-size: .9rem; overflow-wrap: anywhere; }
+        .player__about-summary { margin: 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 5; line-clamp: 5; overflow: hidden; color: var(--text); font-size: .9rem; overflow-wrap: anywhere; }
+        .player__about-heading { margin: 8px 0 0; font-size: .95rem; }
+        .player__upnext { display: grid; gap: 8px; }
+    }
+    .player-main:fullscreen .player > .player__about { display: none; }
+}

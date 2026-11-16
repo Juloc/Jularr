@@ -1402,6 +1402,21 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task CoverFileTriedMigration_AddsTheColumn_AndKeepsTheStoredCovers()
+        {
+            using var folder = new LibraryTests.TemporaryDirectory();
+            var cs = TestPostgres.ResolveConnectionString(nameof(CoverFileTriedMigration_AddsTheColumn_AndKeepsTheStoredCovers));
+            var options = Backup(folder.Path, out _);
+            await new DatabaseBaseline(cs, migrations: []).StartAsync(CancellationToken.None);
+            await InsertWorkAsync(cs);
+            await ExecuteAsync(cs, "INSERT INTO \"WorkCovers\" (\"WorkId\", \"CoverKindId\", \"SourceUrl\", \"FailedAt\") VALUES (501, 1, 'https://coverartarchive.org/release-group/x/front-500', now());");
+
+            var sql = await File.ReadAllTextAsync(Path.Combine(RepositoryRoot(), "database", "migrations", "0064_cover_file_tried.sql"));
+            await new DatabaseBaseline(cs, options, Tools(cs, FakeDump(folder.Path, true), null), [Probe(2, sql)]).StartAsync(CancellationToken.None);
+            Assert.AreEqual(1L, await ScalarAsync(cs, "SELECT count(*) FROM \"WorkCovers\" WHERE \"WorkId\" = 501 AND \"FileTriedAt\" IS NULL AND \"FailedAt\" IS NOT NULL;"));
+        }
+
+        [TestMethod]
         public async Task LegacyBaselineDatabase_WithAPendingMigration_BacksUpThenMarksVersionOneAndMigrates()
         {
             using var folder = new LibraryTests.TemporaryDirectory();

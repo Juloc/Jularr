@@ -40,7 +40,7 @@ namespace Jularr.Frontend.Pages.User.Details
                 blocks.Add(new("volumes", kind switch { WorkKind.Manga => "details.tab.volumes.manga", WorkKind.LightNovel => "details.tab.volumes.lightNovel", _ => "details.tab.volumes.book" },
                     volumes.Count, preview => VolumeList(volumes, preview)));
             }
-            else if (kind == WorkKind.Music && items.Where(item => item.WorkUnitTypeId == WorkUnitType.Track).ToArray() is { Length: > 0 } tracks)
+            else if (kind == WorkKind.Music && AlbumTracks(items) is { Length: > 0 } tracks)
             {
                 blocks.Add(new("tracks", "details.tab.tracks", tracks.Length, preview => Tracks(tracks, preview)));
             }

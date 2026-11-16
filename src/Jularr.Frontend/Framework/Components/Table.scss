@@ -95,10 +95,10 @@
         display: block;
 
         thead { display: none; }
-        tbody { display: grid; gap: 9px; }
-        tbody tr { display: grid; gap: 8px; padding: 13px; border: 1px solid var(--border); border-radius: 16px; background: var(--surface); box-shadow: var(--shadow); }
+        tbody { display: grid; grid-template-columns: minmax(0, 1fr); gap: 9px; }
+        tbody tr { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; padding: 13px; border: 1px solid var(--border); border-radius: 16px; background: var(--surface); box-shadow: var(--shadow); }
         tbody tr:hover { background: var(--surface); }
-        td { display: flex; align-items: center; justify-content: space-between; gap: 12px; height: auto; padding: 0; border: 0; text-align: end; }
+        td { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; height: auto; padding: 0; border: 0; text-align: end; }
         td:empty { display: none; }
         td::before { content: attr(data-label) / ""; flex: none; color: var(--muted); font-size: var(--text-small); font-weight: 680; text-align: start; }
     }

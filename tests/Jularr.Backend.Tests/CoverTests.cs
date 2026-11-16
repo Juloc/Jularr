@@ -387,6 +387,105 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task AlbumFileCovers_TakeThePictureOfTheAudioFiles_WhereNoProviderHasOne_AndAnAlbumWithoutOneRestsAWeek()
+        {
+            using var storage = new LibraryTests.TemporaryDirectory();
+            await using var host = await LibraryTests.CreateHostAsync(storage.Path);
+            var mountId = await LibraryTests.CreateMountAsync(host);
+            var rootId = await LibraryTests.CreateRootAsync(host, mountId, "Music", MediaType.Music);
+            var music = Path.Combine(storage.Path, mountId.ToString(System.Globalization.CultureInfo.InvariantCulture), "Music");
+            foreach (var album in new[] { "Covered", "Plain", "Pending" })
+            {
+                Directory.CreateDirectory(Path.Combine(music, album));
+                WriteFlac(Path.Combine(music, album, "01.flac"), album == "Plain" ? null : FakeImages.Png);
+            }
+
+            // Covered: the Cover Art Archive has none (its address failed). Plain: no poster at all, and no picture in the files. Pending: an address not tried yet.
+            await host.Fixture.RunSqlAsync($"""
+                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle") VALUES (10, 6, 'Covered'), (20, 6, 'Plain'), (30, 6, 'Pending');
+                INSERT INTO "WorkEditions" ("Id", "WorkId") VALUES (1, 10), (2, 20), (3, 30);
+                INSERT INTO "WorkVersions" ("Id", "WorkId", "WorkEditionId") VALUES (1, 10, 1), (2, 20, 2), (3, 30, 3);
+                INSERT INTO "MediaAssets" ("Id", "WorkId", "WorkVersionId", "MediaAssetTypeId") VALUES (1, 10, 1, 2), (2, 20, 2, 2), (3, 30, 3, 2);
+                INSERT INTO "StoredFiles" ("LibraryRootId", "RelativePath", "SizeBytes", "ModifiedAt", "LastSeenAt", "MediaAssetId", "MissingSince")
+                VALUES ({rootId}, 'Covered/01.flac', 1, now(), now(), 1, NULL), ({rootId}, 'Plain/01.flac', 1, now(), now(), 2, NULL), ({rootId}, 'Pending/01.flac', 1, now(), now(), 3, NULL);
+                INSERT INTO "WorkMetadataFacts" ("WorkId", "FactKey", "UiLocaleId", "Value", "ProviderId")
+                SELECT work, 'Poster', NULL, 'https://coverartarchive.org/release-group/' || work || '/front-500', provider."Id"
+                FROM (VALUES (10), (30)) AS albums (work) CROSS JOIN "Providers" AS provider WHERE provider."Key" = 'musicbrainz';
+                INSERT INTO "WorkCovers" ("WorkId", "WorkUnitId", "CoverKindId", "SourceUrl", "FailedAt") VALUES (10, NULL, 1, 'https://coverartarchive.org/release-group/10/front-500', now());
+                """);
+
+            await RunAsync(host, scope => scope.ServiceProvider.GetRequiredService<StoreAlbumFileCoversV1>().ExecuteAsync<UpdateResult>(new CoverParametersV1(), default));
+            const string Poster = "SELECT \"Value\" FROM \"WorkMetadataFacts\" WHERE \"FactKey\" = 'Poster' AND \"WorkId\" = ";
+            StringAssert.StartsWith((string)(await host.ScalarAsync(Poster + 10))!, "/api/v1/covers/10/poster?v=");
+            using var served = await host.SendAsync(HttpMethod.Get, "/api/v1/covers/10/poster");
+            Assert.AreEqual(HttpStatusCode.OK, served.StatusCode);
+            CollectionAssert.AreEqual(FakeImages.Png, await served.Content.ReadAsByteArrayAsync());
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"WorkCovers\" WHERE \"WorkId\" = 10 AND \"StoredAt\" IS NOT NULL"));
+
+            // The album with no picture keeps no poster and is not asked again for a week; an address still to be fetched is left to its provider.
+            Assert.IsNull(await host.ScalarAsync(Poster + 20));
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"WorkCovers\" WHERE \"WorkId\" = 20 AND \"StoredAt\" IS NULL AND \"FileTriedAt\" IS NOT NULL"));
+            Assert.AreEqual("https://coverartarchive.org/release-group/30/front-500", await host.ScalarAsync(Poster + 30));
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"WorkCovers\" WHERE \"WorkId\" = 30"));
+            WriteFlac(Path.Combine(music, "Plain", "01.flac"), FakeImages.Png);
+            await RunAsync(host, scope => scope.ServiceProvider.GetRequiredService<StoreAlbumFileCoversV1>().ExecuteAsync<UpdateResult>(new CoverParametersV1(), default));
+            Assert.IsNull(await host.ScalarAsync(Poster + 20));
+            await host.Fixture.RunSqlAsync("UPDATE \"WorkCovers\" SET \"FileTriedAt\" = now() - interval '8 days' WHERE \"WorkId\" = 20");
+            await RunAsync(host, scope => scope.ServiceProvider.GetRequiredService<StoreAlbumFileCoversV1>().ExecuteAsync<UpdateResult>(new CoverParametersV1(), default));
+            StringAssert.StartsWith((string)(await host.ScalarAsync(Poster + 20))!, "/api/v1/covers/20/poster?v=");
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"WorkMetadataFacts\" WHERE \"FactKey\" = 'Poster' AND \"WorkId\" = 20"));
+        }
+
+        // A FLAC stream header without audio, with a front cover where one is given.
+        private static void WriteFlac(string path, byte[]? picture)
+        {
+            var info = new byte[34];
+            info[0] = 0x10;
+            info[2] = 0x10;
+            System.Buffers.Binary.BinaryPrimitives.WriteUInt64BigEndian(info.AsSpan(10), (44100UL << 44) | (1UL << 41) | (15UL << 36));
+            File.WriteAllBytes(path, [.. "fLaC"u8, 0x80, 0, 0, 34, .. info, .. new byte[64]]);
+            using var file = TagLib.File.Create(path);
+            file.Tag.Title = "Track";
+            if (picture is not null)
+            {
+                file.Tag.Pictures = [new TagLib.Picture(new TagLib.ByteVector(picture)) { Type = TagLib.PictureType.FrontCover, MimeType = "image/png" }];
+            }
+
+            file.Save();
+        }
+
+        [TestMethod]
+        public void AudioTagReader_ReadsTheEmbeddedPicture_OfFlacAndId3()
+        {
+            using var folder = new LibraryTests.TemporaryDirectory();
+            var flac = Path.Combine(folder.Path, "a.flac");
+            WriteFlac(flac, FakeImages.Png);
+            using (var stream = File.OpenRead(flac))
+            {
+                Assert.AreEqual("image/png", AudioTagReader.ReadCover("a.flac", stream)?.ContentType);
+            }
+
+            var mp3 = Path.Combine(folder.Path, "a.mp3");
+            File.WriteAllBytes(mp3, new byte[2048]);
+            using (var file = TagLib.File.Create(mp3, TagLib.ReadStyle.None))
+            {
+                file.Tag.Pictures = [new TagLib.Picture(new TagLib.ByteVector(FakeImages.Png)) { Type = TagLib.PictureType.FrontCover, MimeType = "image/png" }];
+                file.Save();
+            }
+
+            using (var stream = File.OpenRead(mp3))
+            {
+                CollectionAssert.AreEqual(FakeImages.Png, AudioTagReader.ReadCover("a.mp3", stream)?.Bytes);
+            }
+
+            // Without a picture, or with bytes that are no image, there is no cover.
+            var plain = Path.Combine(folder.Path, "b.flac");
+            WriteFlac(plain, null);
+            using var plainStream = File.OpenRead(plain);
+            Assert.IsNull(AudioTagReader.ReadCover("b.flac", plainStream));
+        }
+
+        [TestMethod]
         public async Task CoverSweep_RemovesFilesNoStoredCoverRefersTo_AndKeepsTheRest()
         {
             var images = new FakeImages();

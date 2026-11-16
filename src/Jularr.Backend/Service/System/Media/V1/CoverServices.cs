@@ -10,6 +10,7 @@ using Jularr.Backend.Logic.Reading;
 using Jularr.Backend.Logic.Storage;
 using Jularr.Backend.Service.Core;
 using Jularr.Integrations.Data.Nas;
+using Jularr.Integrations.Logic.Media;
 using Jularr.Integrations.Logic.Storage;
 
 namespace Jularr.Backend.Service.System.Media.V1
@@ -155,6 +156,73 @@ namespace Jularr.Backend.Service.System.Media.V1
             await using var file = await _storage.Open(mount).OpenReadAsync(StoragePath.Combine(book.RootRelativePath, book.RelativePath), CancellationToken);
             using var archive = new ZipArchive(file, ZipArchiveMode.Read, leaveOpen: true);
             return book.RelativePath.EndsWith(".epub", StringComparison.OrdinalIgnoreCase) ? BookCoverLogic.FromEpub(archive) : BookCoverLogic.FromComic(archive);
+        }
+    }
+
+    // Gives the albums of the library that no provider has a cover for (the Cover Art Archive has none for many release groups) the picture their own audio files carry: ID3 APIC, a FLAC picture,
+    // MP4 covr. A few albums per pass; true while more are waiting. The picture is kept like a downloaded one and becomes the album's poster, so the bar, the now-playing screen and the lock
+    // screen show it; an album without one, or whose storage is offline, rests a week. A provider that names a poster later replaces it.
+    public sealed class StoreAlbumFileCoversV1 : SystemService<CoverParametersV1, NoData>
+    {
+        private const int PassSize = 5;
+        private readonly CoverStore _covers;
+        private readonly StorageAccess _storage;
+
+        internal StoreAlbumFileCoversV1(CoverStore covers, StorageAccess storage)
+        {
+            _covers = covers;
+            _storage = storage;
+        }
+
+        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
+        protected override ModuleRequirement GetInstanceModules(CoverParametersV1 parameters) => ModuleRequirement.All("Library");
+        protected override ServicePermission GetPermission(CoverParametersV1 parameters, Type resultType) => new("system.media");
+
+        protected override async Task<IServiceOutput> OnExecute()
+        {
+            if (!_covers.IsEnabled)
+            {
+                return new UpdateResult(false);
+            }
+
+            var albums = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadAlbumFileCoverTargetsAsync(new WorkCoverQueryData(null, PassSize), ct), CancellationToken);
+            foreach (var album in albums)
+            {
+                (byte[] Bytes, string ContentType)? cover = null;
+                try
+                {
+                    cover = await ReadCoverAsync(album);
+                }
+                catch (Exception exception) when (exception is NasMountException or IOException or UnauthorizedAccessException or ServiceUnavailableException)
+                {
+                    // A file that cannot be read now is tried again in a week.
+                }
+
+                if (cover is { } found)
+                {
+                    await _covers.StoreFileAsync(Context, album.WorkId, found.Bytes, found.ContentType, CancellationToken);
+                }
+                else
+                {
+                    await Context.ExecuteBatchAsync(async (ctx, ct) =>
+                    {
+                        await ctx.SaveAlbumFileCoverTriedAsync(new WorkCoverTargetData(album.WorkId, CoverKind.Poster, null, CoverStore.FileSource), ct);
+                        return true;
+                    }, CancellationToken);
+                }
+            }
+
+            return new UpdateResult(albums.Count == PassSize);
+        }
+
+        // The picture of the album's first track; the tracks of one album carry the same one.
+        private async Task<(byte[] Bytes, string ContentType)?> ReadCoverAsync(ReadingSourceData album)
+        {
+            var mount = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadStorageMountAsync(album.StorageMountId, ct), CancellationToken);
+            var path = StoragePath.Combine(album.RootRelativePath, album.RelativePath);
+            await using var file = await _storage.Open(mount).OpenReadAsync(path, CancellationToken);
+            return await Task.Run(() => AudioTagReader.ReadCover(StoragePath.Name(path), file), CancellationToken);
         }
     }
 
