@@ -77,6 +77,7 @@ namespace Jularr.Frontend.Pages.Admin.Work
             if (_wanted is not null && CanAcquire && _profiles.Count > 0 && work.MediaTypeId != MediaType.Game) page.Content.Add(EditDialog(work, csrf, _wanted, "work-edit"));
             if (work.MediaTypeId == MediaType.Game && _profiles.Count > 0) page.Content.AddRange(_platformTargets.Values.Select(target => EditDialog(work, csrf, target, "work-edit-" + target.Id.ToString(CultureInfo.InvariantCulture), true)));
             if (texts.CanManageMedia()) page.Content.Add(DeleteDialog(csrf));
+            if (texts.CanManageMedia() && hasUnits && Tab == WorkTab.Units && work.Files.Any(file => !file.IsMissing)) page.Content.Add(DeleteUnitFilesDialog());
             if (texts.CanManageMedia() && (hasUnits ? Tab == WorkTab.Files : Tab == WorkTab.Units) && work.Files.Any(file => !file.IsMissing)) page.Content.Add(EditFilesDialog(work, csrf));
             var region = page.Content.Skip(regionStart).ToArray();
             page.Content.RemoveRange(regionStart, page.Content.Count - regionStart);
@@ -183,7 +184,9 @@ namespace Jularr.Frontend.Pages.Admin.Work
                 var present = counted.Count(episode => episode.WorkUnitStatusId == WorkUnitStatus.Present);
                 var missing = episodes.Count(episode => episode.WorkUnitStatusId == WorkUnitStatus.Missing);
                 var unaired = episodes.Length - counted.Length;
-                var bytes = work.Files.Where(file => !file.IsMissing && file.WorkUnitIds.Any(id => episodes.Any(episode => episode.Id == id))).Sum(file => file.SizeBytes);
+                var episodeIds = episodes.Select(episode => episode.Id).ToHashSet();
+                var seasonFiles = work.Files.Where(file => !file.IsMissing && file.WorkUnitIds.Any(episodeIds.Contains)).ToArray();
+                var bytes = seasonFiles.Sum(file => file.SizeBytes);
                 var name = season.Number == 0 ? texts["work.specials"] : MediaUnitLabel.Format(texts, WorkUnitType.Season, season.Number, null)!;
                 var info = new List<string> { string.Format(CultureInfo.CurrentCulture, texts["work.coverage"], present, counted.Length) };
                 if (missing > 0) info.Add(string.Format(CultureInfo.CurrentCulture, texts["work.figure.missing"], missing));
@@ -199,7 +202,7 @@ namespace Jularr.Frontend.Pages.Admin.Work
                                 .Class("work-coverage__bar" + (missing > 0 ? " work-coverage__bar--partial" : "")), new Span(new ValueText(string.Join(" · ", info)))).Class("work-coverage")).Class("work-season__lead"),
                         new Button(Icon("chevron-down", 22)).Class("work-season__toggle").Attribute("type", "button").Attribute("data-season-toggle", panelId).Attribute("aria-expanded", open ? "true" : "false")
                             .Attribute("aria-controls", panelId).TextAttribute("aria-label", "work.toggleSeason"),
-                        new Div(SeasonActions(season, work, seasonNumbers, csrf)).Class("work-season__actions")).Class("work-season__head"),
+                        new Div(SeasonActions(season, work, seasonNumbers, csrf, name, seasonFiles)).Class("work-season__actions")).Class("work-season__head"),
                     new Div(UnitTable(episodes, work, seasonNumbers, csrf)).Class("work-season__panel").Attribute("id", panelId).Attribute("data-open", open ? "true" : "false")).Class("work-season"));
             }
 
@@ -351,7 +354,13 @@ namespace Jularr.Frontend.Pages.Admin.Work
                 icons.Add(SearchIcon(episode, seasonNumbers, csrf, "work.interactive.episode", false));
             }
 
-            if (files.Length == 1) icons.AddRange(DeleteIcon(files[0], csrf));
+            if (files.Length > 0 && texts.CanManageMedia())
+            {
+                var number = episode.ParentWorkUnitId is { } parent && seasonNumbers.TryGetValue(parent, out var season) ? season : (decimal?)null;
+                var label = MediaUnitLabel.Format(texts, episode.WorkUnitTypeId, episode.Number, number) ?? "";
+                icons.Add(DeleteFilesButton(episode, UnitTitle(episode) is { Length: > 0 } title ? label + " · " + title : label, files, "unit", "work.unit.deleteFiles"));
+            }
+
             return icons;
         }
 
@@ -599,9 +608,33 @@ namespace Jularr.Frontend.Pages.Admin.Work
             return new Span(new Text(key)).Class("work-status work-status--" + tone);
         }
 
-        // Search of one unit by the same scope as before: a season, an episode of its season.
-        private IUiComponent SeasonActions(WorkManagementUnitV1 season, WorkManagementV1 work, Dictionary<long, decimal> seasonNumbers, string? csrf) =>
-            _wanted is null || !CanAcquire ? new Span() : new Div(SearchIcon(season, seasonNumbers, csrf, "work.search.season", true), SearchIcon(season, seasonNumbers, csrf, "work.interactive.season", false)).Class("work-icons");
+        // Search of one unit by the same scope as before: a season, an episode of its season; and the delete of all the files of the season.
+        private IUiComponent SeasonActions(WorkManagementUnitV1 season, WorkManagementV1 work, Dictionary<long, decimal> seasonNumbers, string? csrf, string name, WorkManagementFileV1[] files)
+        {
+            var icons = new List<IUiComponent>();
+            if (_wanted is not null && CanAcquire)
+            {
+                icons.Add(SearchIcon(season, seasonNumbers, csrf, "work.search.season", true));
+                icons.Add(SearchIcon(season, seasonNumbers, csrf, "work.interactive.season", false));
+            }
+
+            if (files.Length > 0 && texts.CanManageMedia()) icons.Add(DeleteFilesButton(season, name, files, "season", "work.season.deleteFiles"));
+            return icons.Count == 0 ? new Span() : new Div([.. icons]).Class("work-icons");
+        }
+
+        // The button of a unit or a season that asks before all its files go; the one dialog of the page (DeleteUnitFilesDialog) takes what it says from these values.
+        private HtmlElement DeleteFilesButton(WorkManagementUnitV1 unit, string name, WorkManagementFileV1[] files, string kind, string labelKey) =>
+            IconSubmit("trash", labelKey).Attribute("type", "button").Attribute("data-delete-unit", unit.Id.ToString(CultureInfo.InvariantCulture)).Attribute("data-delete-kind", kind)
+                .Attribute("data-delete-name", name).Attribute("data-delete-count", files.Length.ToString(CultureInfo.InvariantCulture)).Attribute("data-delete-size", ByteSize.Format(files.Sum(file => file.SizeBytes)));
+
+        // One dialog for every unit and season of the page: the script writes the question (name, number of files, size) and the unit's address into it when a button opens it.
+        // Its button is one of the page's one form, like the row buttons.
+        private IUiComponent DeleteUnitFilesDialog() => new Modal(assets, "work-unit-delete", "work.deleteUnit.title", [new Div(
+            new P(new Span()).Attribute("data-delete-text", "").TextAttribute("data-text-unit-one", "work.deleteUnit.one").TextAttribute("data-text-unit-many", "work.deleteUnit.many")
+                .TextAttribute("data-text-season-one", "work.deleteSeason.one").TextAttribute("data-text-season-many", "work.deleteSeason.many"),
+            new Div(new Button(new Text("common.cancel")).Attribute("data-dialog-close", ""),
+                new Button(new Text("work.deleteUnit.title")).Warn().Attribute("type", "submit").Attribute("form", ActionsForm).Attribute("formaction", Address(Tab, "DeleteUnitFiles"))
+                    .Attribute("data-delete-confirm", "")).Class("ui-form__actions")).Class("ui-form")]);
 
         private IUiComponent SearchIcon(WorkManagementUnitV1 unit, Dictionary<long, decimal> seasonNumbers, string? csrf, string labelKey, bool automaticSearch)
         {

@@ -42,6 +42,58 @@ namespace Jularr.Backend.Logic.Library
             return ctx.ReadSql.ReadListAsync<DeletableFileData>(sql, ct);
         }
 
+        // The media files that lie on a unit or, for a season, on its episodes; a file a scan no longer finds is left out, as the page does not count it.
+        public static Task<IReadOnlyList<WorkUnitFileData>> ReadWorkUnitFilesAsync(this LogicContext ctx, WorkUnitFilesQueryData data, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    file."Id" AS "StoredFileId"
+                FROM
+                    "WorkUnits" AS unit
+                    JOIN "MediaAssets" AS asset ON asset."WorkUnitId" = unit."Id"
+                    JOIN "StoredFiles" AS file ON file."MediaAssetId" = asset."Id" AND NOT file."IsSubtitle" AND file."MissingSince" IS NULL
+                WHERE
+                    unit."WorkId" = @WorkId
+                    AND (unit."Id" = @WorkUnitId OR unit."ParentWorkUnitId" = @WorkUnitId)
+                ORDER BY
+                    file."Id";
+                """;
+            sql.Parameters.Add(data);
+            return ctx.ReadSql.ReadListAsync<WorkUnitFileData>(sql, ct);
+        }
+
+        // The unit must belong to the Work; its type tells whether it has a switch, the target is the one that wants the Work.
+        public static async Task<WorkUnitTargetData> ReadWorkUnitTargetAsync(this LogicContext ctx, WorkUnitFilesQueryData data, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    unit."WorkUnitTypeId",
+                    wanted."Id" AS "WantedItemId"
+                FROM
+                    "WorkUnits" AS unit
+                    LEFT JOIN LATERAL (
+                        SELECT
+                            target."Id"
+                        FROM
+                            "WantedItems" AS target
+                        WHERE
+                            target."WorkId" = unit."WorkId"
+                        ORDER BY
+                            target."Id"
+                        LIMIT 1
+                    ) AS wanted ON TRUE
+                WHERE
+                    unit."Id" = @WorkUnitId
+                    AND unit."WorkId" = @WorkId;
+                """;
+            sql.Parameters.Add(data);
+            return await ctx.ReadSql.ReadOptionalAsync<WorkUnitTargetData>(sql, ct) ?? throw new KeyNotFoundException("The unit does not belong to the title.");
+        }
+
         public static async Task ForgetDeletedFilesAsync(this LogicContext ctx, DeletedFilesData data, CancellationToken ct)
         {
             // A unit left without a file is missing again: its target is searched at once, and the unit is switched off when the setting says so.

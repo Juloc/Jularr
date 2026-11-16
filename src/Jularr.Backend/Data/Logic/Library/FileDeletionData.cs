@@ -1,6 +1,9 @@
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Enums.Media;
+using Jularr.Backend.Data.Fields.Acquisition;
 using Jularr.Backend.Data.Fields.Instance;
 using Jularr.Backend.Data.Fields.Library;
+using Jularr.Backend.Data.Fields.Media;
 using Jularr.Backend.Data.Fields.Storage;
 
 namespace Jularr.Backend.Data.Logic.Library
@@ -63,5 +66,48 @@ namespace Jularr.Backend.Data.Logic.Library
 
         [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.UnmonitorsDeletedUnits))]
         public bool UnmonitorsDeletedUnits { get; }
+    }
+
+    // The unit (an episode, a volume, a track) or the season whose files an administrator deletes at once.
+    internal sealed class WorkUnitFilesQueryData : BaseData
+    {
+        public WorkUnitFilesQueryData(long workId, long workUnitId)
+        {
+            WorkId = workId;
+            WorkUnitId = workUnitId;
+        }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.Id))]
+        public long WorkId { get; }
+
+        [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.WorkUnitId))]
+        public long WorkUnitId { get; }
+    }
+
+    internal sealed class WorkUnitFileData : BaseData
+    {
+        public WorkUnitFileData(long storedFileId)
+        {
+            StoredFileId = storedFileId;
+        }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.Id))]
+        public long StoredFileId { get; }
+    }
+
+    // What the unit is and whether a target wants its Work: only a season, an episode and a volume have a switch.
+    internal sealed class WorkUnitTargetData : BaseData
+    {
+        public WorkUnitTargetData(WorkUnitType workUnitTypeId, long? wantedItemId)
+        {
+            WorkUnitTypeId = workUnitTypeId;
+            WantedItemId = wantedItemId;
+        }
+
+        [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.WorkUnitTypeId))]
+        public WorkUnitType WorkUnitTypeId { get; }
+
+        [DataField(typeof(WantedItemFields), nameof(WantedItemFields.Id), false)]
+        public long? WantedItemId { get; }
     }
 }

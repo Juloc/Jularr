@@ -3,6 +3,22 @@ using Jularr.Backend.Data.Fields.Media;
 
 namespace Jularr.Backend.Data.Admin.Media.V1
 {
+    // One unit of a Work: an episode, a season, a volume or a track.
+    public sealed class WorkUnitParametersV1 : BaseParameters
+    {
+        public WorkUnitParametersV1(long workId, long workUnitId)
+        {
+            WorkId = workId;
+            WorkUnitId = workUnitId;
+        }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.Id))]
+        public long WorkId { get; }
+
+        [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.WorkUnitId))]
+        public long WorkUnitId { get; }
+    }
+
     public sealed class WorkUnitGroupParametersV1 : BaseParameters
     {
         public WorkUnitGroupParametersV1(long workId, long workUnitGroupId)
