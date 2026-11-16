@@ -442,6 +442,13 @@ namespace Jularr.Backend.Tests
 
             var read = timings.Read(100).Single(timing => timing.Service == "Probe/Service");
             Assert.AreEqual(1L, timings.ReadPages().Single(page => page.Service == "/Probe/Page").Count);
+            // Pages' services stand apart from the workers, the slowest on average first.
+            timings.Record("System/ProbeWorker", TimeSpan.FromMinutes(9), false);
+            timings.Record("User/ProbeSlow", TimeSpan.FromMinutes(5), false);
+            var requests = timings.ReadRequests();
+            Assert.IsFalse(requests.Any(timing => timing.Service.StartsWith("System/", StringComparison.Ordinal) || timing.Service.StartsWith("Page", StringComparison.Ordinal)));
+            Assert.AreEqual("User/ProbeSlow", requests[0].Service);
+            Assert.IsTrue(requests.Any(timing => timing.Service == "Probe/Service"));
             Assert.AreEqual(4L, read.Count);
             Assert.AreEqual(1L, read.Errors);
             Assert.AreEqual(70d, read.MaxMilliseconds);

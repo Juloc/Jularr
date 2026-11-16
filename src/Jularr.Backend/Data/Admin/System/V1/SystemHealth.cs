@@ -164,8 +164,9 @@ namespace Jularr.Backend.Data.Admin.System.V1
     // The services that took the most time in the last 24 hours, and what all calls came to.
     public sealed class ServiceTimingsV1 : BaseResponse
     {
-        public ServiceTimingsV1(long calls, long errors, int averageMilliseconds, BaseDataList<ServiceTimingV1> services, BaseDataList<ServiceTimingV1> pages)
+        public ServiceTimingsV1(long calls, long errors, int averageMilliseconds, BaseDataList<ServiceTimingV1> services, BaseDataList<ServiceTimingV1> pages, BaseDataList<ServiceTimingV1> requests)
         {
+            Requests = requests;
             Calls = calls;
             Errors = errors;
             AverageMilliseconds = averageMilliseconds;
@@ -186,5 +187,8 @@ namespace Jularr.Backend.Data.Admin.System.V1
 
         // Every Razor page by its view path (Service), the slowest on average first; a page's time holds the services it called.
         public BaseDataList<ServiceTimingV1> Pages { get; }
+
+        // The services of pages and the API, without the System workers, the slowest on average first.
+        public BaseDataList<ServiceTimingV1> Requests { get; }
     }
 }

@@ -48,15 +48,19 @@ namespace Jularr.Frontend.Pages.Admin.Performance
                         ? new StateChip(new Text("performance.overBudget"), UiTone.Warning)
                         : new StateChip(new Text("performance.withinBudget"), UiTone.Success))
                 : new P(new Text("performance.pagesEmpty"))]));
-            page.Content.Add(new UiSection("performance.services", [timings.Services.Count > 0
-                ? new Table<ServiceTimingV1>(timings.Services).Dense()
-                    .Text(item => item.Service, "performance.service")
-                    .Content("performance.calls", item => new ValueText(item.Count.ToString("N0", CultureInfo.CurrentCulture)))
-                    .Content("performance.average", item => new ValueText(item.AverageMilliseconds.ToString("N0", CultureInfo.CurrentCulture) + " ms"))
-                    .Content("performance.maximum", item => new ValueText(item.MaximumMilliseconds.ToString("N0", CultureInfo.CurrentCulture) + " ms"))
-                    .Content("performance.errorCount", item => new ValueText(item.Errors.ToString("N0", CultureInfo.CurrentCulture)))
-                : new P(new Text("performance.empty"))]));
+            // What the pages wait for, the slowest on average first; the workers follow by their whole time.
+            page.Content.Add(new UiSection("performance.requests", [Services(timings.Requests)]));
+            page.Content.Add(new UiSection("performance.services", [Services(timings.Services)]));
         }
+
+        private static IUiComponent Services(IReadOnlyList<ServiceTimingV1> services) => services.Count > 0
+            ? (IUiComponent)new Table<ServiceTimingV1>(services).Dense()
+                .Text(item => item.Service, "performance.service")
+                .Content("performance.calls", item => new ValueText(item.Count.ToString("N0", CultureInfo.CurrentCulture)))
+                .Content("performance.average", item => new ValueText(item.AverageMilliseconds.ToString("N0", CultureInfo.CurrentCulture) + " ms"))
+                .Content("performance.maximum", item => new ValueText(item.MaximumMilliseconds.ToString("N0", CultureInfo.CurrentCulture) + " ms"))
+                .Content("performance.errorCount", item => new ValueText(item.Errors.ToString("N0", CultureInfo.CurrentCulture)))
+            : new P(new Text("performance.empty"));
 
         public async Task<IActionResult> OnGetAsync()
         {

@@ -14558,6 +14558,10 @@
    "Load and memory use",
    "Leistung und Speichernutzung"
   ],
+  "performance.requests": [
+   "Services of pages, slowest first",
+   "Dienste der Seiten, langsamste zuerst"
+  ],
   "performance.services": [
    "Services by runtime",
    "Services nach Laufzeit"
