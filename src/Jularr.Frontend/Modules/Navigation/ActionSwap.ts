@@ -13,7 +13,7 @@ interface Context {
     push?: string;
     replace?: string;
     text?: string;
-    request: { method: string; action: string };
+    request: { method: string; action: string; submitter?: Element | null };
     response?: { raw: Response };
 }
 
@@ -29,6 +29,40 @@ interface Snapshot {
 }
 
 const actions = new WeakMap<Context, Snapshot>();
+
+// An action answers at once: the button that was pressed shows that its action is on the way and cannot be pressed again until the answer is swapped in
+// (or failed). The styles are Pending.scss: a ring takes the place of the content; nothing is disabled, so the button's own value still travels.
+const pressed = new Set<HTMLElement>();
+let releasing: ReturnType<typeof setTimeout> | undefined;
+
+function press(button: Element | null | undefined): void {
+    if (!(button instanceof HTMLElement)) return;
+    button.dataset.pending = "true";
+    button.setAttribute("aria-busy", "true");
+    pressed.add(button);
+    // A request that never ends must not lock the button for good.
+    clearTimeout(releasing);
+    releasing = setTimeout(release, 60000);
+}
+
+function release(): void {
+    clearTimeout(releasing);
+    pressed.forEach(button => {
+        delete button.dataset.pending;
+        button.removeAttribute("aria-busy");
+    });
+    pressed.clear();
+}
+
+// A second press while the first is on the way is dropped before anything handles it.
+document.addEventListener("submit", event => {
+    const submitter = (event as SubmitEvent).submitter;
+    if (submitter instanceof HTMLElement && submitter.dataset.pending !== undefined) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+    }
+}, true);
+addEventListener("pageshow", release);
 
 const fingerprintOf = (form: HTMLFormElement): FormFingerprint => ({
     action: form.getAttribute("action") ?? "",
@@ -76,6 +110,8 @@ document.addEventListener("htmx:config:request", event => {
         ctx.select = selectorOf(region);
     }
 
+    press(ctx.request.submitter);
+
     // The page stays where it is; htmx would bring the top of the swapped element into view.
     ctx.swap = "outerHTML show:none";
     const scope = ctx.target ?? document.body;
@@ -118,6 +154,7 @@ document.addEventListener("htmx:after:swap", event => {
     const action = actions.get(ctx);
     if (!action) return;
     actions.delete(ctx);
+    release();
     if (!action.same) return;
     const scope: ParentNode = action.region ? document.getElementById(action.region) ?? document : document.getElementById(Content) ?? document;
     if (action.region) regionSwapped();
@@ -132,5 +169,6 @@ document.addEventListener("htmx:error", event => {
     const ctx = contextOf(event);
     if (!actions.has(ctx)) return;
     actions.delete(ctx);
+    release();
     document.dispatchEvent(new CustomEvent("jularr:hint", { detail: { text: document.querySelector<HTMLElement>("[data-action-toast]")?.dataset.failed ?? "", failed: true } }));
 });

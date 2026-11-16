@@ -1,0 +1,34 @@
+// A button whose action is on its way (ActionSwap.ts sets data-pending): the same size, its content out of sight and a ring turning in its place.
+// Nothing is disabled, so the button's own value still travels; a second press is dropped by the script.
+[data-pending] {
+    position: relative;
+    pointer-events: none;
+    cursor: progress;
+    color: transparent;
+
+    > * { visibility: hidden; }
+
+    &::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        margin: auto;
+        width: 1.1em;
+        height: 1.1em;
+        border: 2px solid var(--muted);
+        border-top-color: transparent;
+        border-radius: 50%;
+        animation: pending-spin .8s linear infinite;
+    }
+
+    // A switch keeps its track and only dims: the ring would hide which way it goes.
+    &.work-switch { opacity: .55; }
+    &.work-switch > * { visibility: visible; }
+    &.work-switch::after { display: none; }
+
+    @media (prefers-reduced-motion: reduce) {
+        &::after { animation: none; border-top-color: var(--muted); opacity: .6; }
+    }
+}
+
+@keyframes pending-spin { to { transform: rotate(360deg); } }
