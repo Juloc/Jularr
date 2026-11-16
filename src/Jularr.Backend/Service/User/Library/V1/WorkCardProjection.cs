@@ -169,9 +169,13 @@ namespace Jularr.Backend.Service.User.Library.V1
             JOIN "ProfileWorkStates" AS profileState ON profileState."ProfileId" = @ProfileId AND profileState."WorkId" = work."Id"
             LEFT JOIN LATERAL (
                 -- Content choices are independent of the interface and acquisition settings.
+                -- The track codes that name them, and every code that names a language at all: a file's stored codes are compared with these alone.
                 SELECT
                     profile."FirstContentLanguage" AS "Language",
-                    ARRAY[profile."FirstContentLanguage", profile."SecondContentLanguage"] AS "Languages"
+                    ARRAY[profile."FirstContentLanguage", profile."SecondContentLanguage"] AS "Languages",
+                    ARRAY(SELECT alias.key FROM jsonb_each_text(@LanguageAliases::jsonb) AS alias
+                        WHERE alias.value IN (profile."FirstContentLanguage", profile."SecondContentLanguage")) AS "PreferredCodes",
+                    ARRAY(SELECT jsonb_object_keys(@LanguageAliases::jsonb)) AS "KnownCodes"
                 FROM
                     "Profiles" AS profile
                 WHERE
@@ -255,27 +259,24 @@ namespace Jularr.Backend.Service.User.Library.V1
                             LIMIT 1
                         ) AS document ON TRUE
                         CROSS JOIN LATERAL (
+                            -- A video compares its file's stored audio codes; a book its document's or edition's language.
                             SELECT
-                                coalesce(bool_or(content."Language" = ANY(profileLanguage."Languages")), FALSE) AS "HasPreferredLanguage",
-                                count(*) > 0 AS "HasKnownLanguage"
+                                CASE WHEN asset."MediaAssetTypeId" IN (3, 4) THEN coalesce(reading."Language" = ANY(profileLanguage."Languages"), FALSE)
+                                    ELSE asset."MediaAssetTypeId" IN (1, 2) AND file."AudioLanguageCodes" && profileLanguage."PreferredCodes" END AS "HasPreferredLanguage",
+                                CASE WHEN asset."MediaAssetTypeId" IN (3, 4) THEN reading."Language" IS NOT NULL
+                                    ELSE asset."MediaAssetTypeId" IN (1, 2) AND file."AudioLanguageCodes" && profileLanguage."KnownCodes" END AS "HasKnownLanguage"
                             FROM (
                                 SELECT
-                                    @LanguageAliases::jsonb ->> lower(split_part(replace(track."Language", '_', '-'), '-', 1)) AS "Language"
-                                FROM
-                                    "MediaTracks" AS track
-                                WHERE
-                                    track."StoredFileId" = file."Id"
-                                    AND track."MediaTrackTypeId" = 2
-                                    AND asset."MediaAssetTypeId" IN (1, 2)
-                                UNION ALL
-                                SELECT
-                                    @LanguageAliases::jsonb ->> lower(split_part(replace(coalesce(nullif(document."Language", 'und'), edition."LanguageCode"), '_', '-'), '-', 1))
-                                WHERE
-                                    asset."MediaAssetTypeId" IN (3, 4)
-                            ) AS content
+                                    @LanguageAliases::jsonb ->> lower(split_part(replace(coalesce(nullif(document."Language", 'und'), edition."LanguageCode"), '_', '-'), '-', 1)) AS "Language"
+                            ) AS reading
                             WHERE
                                 profileLanguage."Language" IS NOT NULL
-                                AND content."Language" IS NOT NULL
+                            UNION ALL
+                            SELECT
+                                FALSE,
+                                FALSE
+                            WHERE
+                                profileLanguage."Language" IS NULL
                         ) AS language
                         CROSS JOIN LATERAL (
                             SELECT CASE WHEN language."HasKnownLanguage" AND NOT language."HasPreferredLanguage" THEN EXISTS (
@@ -283,12 +284,10 @@ namespace Jularr.Backend.Service.User.Library.V1
                                     1
                                 FROM
                                     "StoredFiles" AS subtitleFile
-                                    JOIN "MediaTracks" AS track ON track."StoredFileId" = subtitleFile."Id" AND track."MediaTrackTypeId" = 3
                                 WHERE
                                     subtitleFile."MediaAssetId" = asset."Id"
                                     AND subtitleFile."MissingSince" IS NULL
-                                    AND NOT track."IsForced"
-                                    AND (@LanguageAliases::jsonb ->> lower(split_part(replace(track."Language", '_', '-'), '-', 1))) = ANY(profileLanguage."Languages")
+                                    AND subtitleFile."SubtitleLanguageCodes" && profileLanguage."PreferredCodes"
                             ) ELSE FALSE END AS "HasPreferredSubtitles"
                         ) AS subtitles
                 ) AS present ON TRUE
