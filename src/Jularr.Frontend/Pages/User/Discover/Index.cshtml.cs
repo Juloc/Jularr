@@ -567,9 +567,35 @@ namespace Jularr.Frontend.Pages.User.Discover
             {
                 return Redirect(canonical);
             }
+            var availability = Stopwatch.GetTimestamp();
             await LoadAvailabilityAsync();
+            Step("availability", availability);
+            // Each step of the plain page in Server-Timing, so a slow part shows on the live instance.
+            if (_steps.Count > 0) HttpContext.Response.Headers.Append("Server-Timing", string.Join(", ", _steps));
             PreparePage();
             return Page();
+        }
+
+        private readonly List<string> _steps = [];
+
+        // The reads that run together finish on any thread.
+        private void Step(string name, long started)
+        {
+            var entry = string.Create(CultureInfo.InvariantCulture, $"{name};dur={Stopwatch.GetElapsedTime(started).TotalMilliseconds:0.#}");
+            lock (_steps) _steps.Add(entry);
+        }
+
+        private async Task<TResult?> Timed<TResult>(string name, Task<TResult?> read) where TResult : class
+        {
+            var started = Stopwatch.GetTimestamp();
+            try
+            {
+                return await read;
+            }
+            finally
+            {
+                Step(name, started);
+            }
         }
 
         public async Task<IActionResult> OnGetResultsAsync()
@@ -668,8 +694,12 @@ namespace Jularr.Frontend.Pages.User.Discover
                 return;
             }
 
+            var started = Stopwatch.GetTimestamp();
             await LoadListedAsync();
+            Step("listed", started);
+            started = Stopwatch.GetTimestamp();
             await LoadFilterOptionsAsync();
+            Step("filters", started);
 
             var selected = Selected;
             try
@@ -712,26 +742,28 @@ namespace Jularr.Frontend.Pages.User.Discover
             // Local shelves never wait for the provider; what does not depend on another read is read together.
             if (texts.CanArrangeHome())
             {
+                started = Stopwatch.GetTimestamp();
                 _layout = await readLayout.ExecuteAsync<BaseDataList<HomeShelfV1>>(new HomeLayoutParametersV1(), HttpContext.RequestAborted);
+                Step("layout", started);
             }
 
             // The highlights continue and fill up from the same reads as the shelves, also while those shelves are hidden.
             var hero = View is null && !Filtering && string.IsNullOrWhiteSpace(Query);
             var shown = _layout.Where(shelf => !shelf.IsHidden).Select(shelf => shelf.HomeShelfTypeId).ToHashSet();
-            var continueTask = ReadWhenAsync((texts.CanPlay() || texts.CanRead()) && (hero || shown.Overlaps([HomeShelfType.ContinueWatching, HomeShelfType.ContinueListening, HomeShelfType.ContinueReading])),
-                () => continuation.ExecuteAsync<BaseDataList<ContinueItemV1>>(new ReadContinueParametersV1(), HttpContext.RequestAborted));
+            var continueTask = Timed("continue", ReadWhenAsync((texts.CanPlay() || texts.CanRead()) && (hero || shown.Overlaps([HomeShelfType.ContinueWatching, HomeShelfType.ContinueListening, HomeShelfType.ContinueReading])),
+                () => continuation.ExecuteAsync<BaseDataList<ContinueItemV1>>(new ReadContinueParametersV1(), HttpContext.RequestAborted)));
 
             // The chosen types narrow the read: a type without its subtypes, a subtype across its types.
             var recentTypes = IsAll && !Narrowed ? null : Chosen.Where(scope => scope.MediaSubtypeId is null).Select(scope => scope.MediaTypeId).ToArray();
             var recentSubtypes = IsAll && !Narrowed ? null : Chosen.Where(scope => scope.MediaSubtypeId is not null).Select(scope => scope.MediaSubtypeId!.Value).ToArray();
-            var recentTask = ReadWhenAsync(hero || shown.Contains(HomeShelfType.RecentlyAdded),
-                () => library.ExecuteAsync<PageResult<LibraryItemV1>>(new ReadLibraryParametersV1(recentTypes, pageSize: 20, mediaSubtypeIds: recentSubtypes), HttpContext.RequestAborted));
+            var recentTask = Timed("recent", ReadWhenAsync(hero || shown.Contains(HomeShelfType.RecentlyAdded),
+                () => library.ExecuteAsync<PageResult<LibraryItemV1>>(new ReadLibraryParametersV1(recentTypes, pageSize: 20, mediaSubtypeIds: recentSubtypes), HttpContext.RequestAborted)));
             // The watchlist shelf of the chosen types, on the page of all lists.
-            var watchlistTask = ReadWhenAsync(Feed is null && View is null && !Filtering && string.IsNullOrWhiteSpace(Query),
-                () => readWatchlist.ExecuteAsync<PageResult<LibraryItemV1>>(new ReadWatchlistParametersV1(1, 20, recentTypes, recentSubtypes), HttpContext.RequestAborted));
+            var watchlistTask = Timed("watchlist", ReadWhenAsync(Feed is null && View is null && !Filtering && string.IsNullOrWhiteSpace(Query),
+                () => readWatchlist.ExecuteAsync<PageResult<LibraryItemV1>>(new ReadWatchlistParametersV1(1, 20, recentTypes, recentSubtypes), HttpContext.RequestAborted)));
             var heroFeed = Feed is null ? DiscoverFeedType.Trending : FeedType;
-            var keptTask = ReadWhenAsync(hero && heroFeed is not null,
-                () => readShelves.ExecuteAsync<BaseDataList<DiscoverShelfV1>>(new ReadDiscoverShelvesDataV1(selected?.Slug, [heroFeed!.Value]), HttpContext.RequestAborted));
+            var keptTask = Timed("kept", ReadWhenAsync(hero && heroFeed is not null,
+                () => readShelves.ExecuteAsync<BaseDataList<DiscoverShelfV1>>(new ReadDiscoverShelvesDataV1(selected?.Slug, [heroFeed!.Value]), HttpContext.RequestAborted)));
             await Task.WhenAll(continueTask, recentTask, keptTask, watchlistTask);
             _watchlist = (await watchlistTask)?.Items ?? _watchlist;
 
@@ -739,7 +771,9 @@ namespace Jularr.Frontend.Pages.User.Discover
             _recent = (await recentTask)?.Items ?? _recent;
             if (hero)
             {
+                started = Stopwatch.GetTimestamp();
                 await LoadHeroAsync(await keptTask);
+                Step("hero", started);
             }
         }
 
