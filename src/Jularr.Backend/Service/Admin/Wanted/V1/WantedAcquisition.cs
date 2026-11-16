@@ -55,12 +55,14 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
         private readonly DownloadStorage _downloads;
         private readonly StorageAccess _storage;
         private readonly WorkSignals _signals;
+        private readonly ActiveSearches _searches;
         private readonly ILogger<WantedAcquisition> _logger;
 
         public WantedAcquisition(NewznabClient newznab, SabnzbdClient sabnzbd, QbittorrentClient qbittorrent, DirectSources direct, NyaaSources nyaa,
-            IDataProtectionProvider protection, IMemoryCache offers, TimeProvider time, DownloadStorage downloads, StorageAccess storage, WorkSignals signals, ILogger<WantedAcquisition> logger)
+            IDataProtectionProvider protection, IMemoryCache offers, TimeProvider time, DownloadStorage downloads, StorageAccess storage, WorkSignals signals, ActiveSearches searches, ILogger<WantedAcquisition> logger)
         {
             _logger = logger;
+            _searches = searches;
             _storage = storage;
             _signals = signals;
             _downloads = downloads;
@@ -89,6 +91,9 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             }
 
             var kind = AcquisitionSelectionLogic.GetKind(target.MediaTypeId, target.MediaSubtypeId);
+
+            // The pages show what is being searched while it runs.
+            using var searching = _searches.Begin(target.WantedItemId, scope?.ParentNumber, scope?.UnitNumber);
 
             var now = _time.GetUtcNow().UtcDateTime;
             var profile = AcquisitionSelectionLogic.ReadProfile(target);

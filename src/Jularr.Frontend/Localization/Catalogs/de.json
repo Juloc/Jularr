@@ -9613,6 +9613,18 @@
    "{0} unaired",
    "{0} noch nicht gesendet"
   ],
+  "work.live.season.Searching": [
+   "Searching for {0} of {1}",
+   "Suche läuft für {0} von {1}"
+  ],
+  "work.live.season.Downloading": [
+   "{0} of {1} loading",
+   "{0} von {1} laden"
+  ],
+  "work.live.season.Importing": [
+   "{0} of {1} importing",
+   "{0} von {1} werden importiert"
+  ],
   "work.empty": [
    "This title has no seasons yet.",
    "Dieser Titel hat noch keine Staffeln."
