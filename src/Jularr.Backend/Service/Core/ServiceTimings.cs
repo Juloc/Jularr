@@ -45,6 +45,10 @@ namespace Jularr.Backend.Service.Core
         // The services that took the most time in total first, over the window of 24 hourly slices.
         internal IReadOnlyList<ServiceTiming> Read(int count) => [.. Window().Where(timing => !IsPage(timing.Service)).OrderByDescending(timing => timing.TotalMilliseconds).Take(count)];
 
+        // The services pages and the API call (all but the System workers), the slowest on average first: what holds a page shows here, not under the workers' totals.
+        internal IReadOnlyList<ServiceTiming> ReadRequests() =>
+            [.. Window().Where(timing => !IsPage(timing.Service) && !timing.Service.StartsWith("System/", StringComparison.Ordinal)).OrderByDescending(timing => timing.TotalMilliseconds / timing.Count)];
+
         // Every page by its view path, the slowest on average first.
         internal IReadOnlyList<ServiceTiming> ReadPages() =>
             [.. Window().Where(timing => IsPage(timing.Service)).Select(timing => timing with { Service = timing.Service[PagePrefix.Length..] }).OrderByDescending(timing => timing.TotalMilliseconds / timing.Count)];

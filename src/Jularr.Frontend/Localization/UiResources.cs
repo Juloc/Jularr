@@ -4350,6 +4350,7 @@ namespace Jularr.Frontend.Localization
             new("performance.kpi.errors", "Error rate"),
             new("performance.window", "Period: 24 hours"),
             new("performance.history", "Load and memory use"),
+            new("performance.requests", "Services of pages, slowest first"),
             new("performance.services", "Services by runtime"),
             new("performance.service", "Service"),
             new("performance.calls", "Calls"),

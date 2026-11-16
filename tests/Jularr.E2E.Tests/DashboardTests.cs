@@ -42,6 +42,7 @@ namespace Jularr.E2E.Tests
                 await page.GotoAsync("/Admin/Performance");
                 await Assertions.Expect(page.Locator(".kpi-tile", new() { HasText = "Response time" })).ToHaveCountAsync(1);
                 await Assertions.Expect(page.GetByRole(AriaRole.Heading, new() { Name = "Services by runtime" })).ToBeVisibleAsync();
+                await Assertions.Expect(page.GetByRole(AriaRole.Heading, new() { Name = "Services of pages, slowest first" })).ToBeVisibleAsync();
 
                 // Every page opened so far is listed by its view path against its budget.
                 await Assertions.Expect(page.GetByRole(AriaRole.Heading, new() { Name = "Pages by server time" })).ToBeVisibleAsync();

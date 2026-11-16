@@ -121,7 +121,7 @@ namespace Jularr.Backend.Service.Admin.System.V1
         protected override ModuleRequirement GetInstanceModules(ReadPerformanceParametersV1 parameters) => ModuleRequirement.All("Diagnostics");
         protected override ServicePermission GetPermission(ReadPerformanceParametersV1 parameters, Type resultType) => new("instance.settings.read");
 
-        // What all service calls of the last 24 hours came to, the 20 services that took the most time and every page, the slowest on average first.
+        // What all service calls of the last 24 hours came to, the 20 services that took the most time, and every page and every service of pages and the API, the slowest on average first.
         protected override Task<IServiceOutput> OnRead()
         {
             static ServiceTimingV1 Item(ServiceTiming timing) => new(timing.Service, timing.Count, timing.Errors, (int)Math.Min(int.MaxValue, Math.Round(timing.TotalMilliseconds / timing.Count)),
@@ -129,7 +129,8 @@ namespace Jularr.Backend.Service.Admin.System.V1
 
             var totals = _timings.Totals();
             return Task.FromResult<IServiceOutput>(new ServiceTimingsV1(totals.Calls, totals.Errors, totals.Calls == 0 ? 0 : (int)Math.Min(int.MaxValue, Math.Round(totals.TotalMilliseconds / totals.Calls)),
-                new BaseDataList<ServiceTimingV1>(_timings.Read(20).Select(Item)), new BaseDataList<ServiceTimingV1>(_timings.ReadPages().Select(Item))));
+                new BaseDataList<ServiceTimingV1>(_timings.Read(20).Select(Item)), new BaseDataList<ServiceTimingV1>(_timings.ReadPages().Select(Item)),
+                new BaseDataList<ServiceTimingV1>(_timings.ReadRequests().Select(Item))));
         }
     }
 }
