@@ -106,6 +106,28 @@ namespace Jularr.E2E.Tests
                 await Assertions.Expect(collapseAll).ToContainTextAsync("Collapse all");
                 await Assertions.Expect(season.Locator("tr.work-row").First).ToBeVisibleAsync();
 
+                // An episode's actions are buttons of the page's one form, not a form (with a token) each: the switch flips the episode in place and keeps the focus.
+                Assert.AreEqual(1, await page.Locator("#work-actions").CountAsync());
+                Assert.AreEqual(0, await page.Locator("tr.work-row form").CountAsync());
+                var rowSwitch = page.Locator("tr.work-row td[data-col=monitored] .work-switch").First;
+                var rowLabel = (await rowSwitch.GetAttributeAsync("aria-label"))!;
+                await rowSwitch.ClickAsync();
+                await Assertions.Expect(page.Locator("tr.work-row td[data-col=monitored] .work-switch").First).Not.ToHaveAttributeAsync("aria-label", rowLabel);
+                Assert.IsTrue(await page.EvaluateAsync<bool>("() => window.keptContent === document.getElementById('app-content')"), "The episode's switch swapped the whole page content.");
+                Assert.IsTrue(await page.EvaluateAsync<bool>("() => document.activeElement?.classList.contains('work-switch') === true"), "The episode's switch lost the focus.");
+
+                // Without a form around it a switch still sits in the middle of its row and of its season's header, as it did inside one.
+                var offsets = await page.EvaluateAsync<double[]>("""
+                    () => {
+                        const middle = element => { const box = element.getBoundingClientRect(); return box.top + box.height / 2; };
+                        const row = document.querySelector('tr.work-row');
+                        const lead = document.querySelector('.work-season__lead');
+                        return [middle(row.querySelector('td[data-col=monitored] .work-switch')) - middle(row), middle(lead.querySelector('.work-switch')) - middle(lead.querySelector('h2'))];
+                    }
+                    """);
+                Assert.IsTrue(Math.Abs(offsets[0]) <= 1, "An episode's switch is " + offsets[0] + " px off the middle of its row.");
+                Assert.IsTrue(Math.Abs(offsets[1]) <= 1, "A season's switch is " + offsets[1] + " px off the middle of its name.");
+
                 // A result such as "nothing found" is the hint, never a message inside the hero.
                 Assert.AreEqual(0, await hero.Locator("[role=status]").CountAsync());
 
