@@ -268,6 +268,35 @@ namespace Jularr.E2E.Tests
                 session.Problems.Clear();
                 foreach (var id in started) await EndSessionAsync(page, id);
 
+                // A server that restarted no longer knows its sessions: the next segment answers Not Found. The player plans a fresh session at once and plays on.
+                await OpenWithTracksAsync(page, details, pilot);
+                await page.WaitForFunctionAsync("() => document.querySelector('video').currentTime > 1", null, new() { Timeout = Steps.MediaTimeout });
+                const string segments = "**/api/v1/playback/sessions/*/segments/*.ts";
+                var lost = 0;
+                await page.RouteAsync(segments, route => Interlocked.Increment(ref lost) == 1 ? route.FulfillAsync(new() { Status = 404 }) : route.ContinueAsync());
+                var plans = new ConcurrentQueue<string>();
+                void Planned(object? sender, IRequest request)
+                {
+                    if (request.Method == "POST" && request.Url.Contains("/sessions", StringComparison.Ordinal)) plans.Enqueue(request.Url);
+                }
+
+                page.Request += Planned;
+                await page.Locator("[data-action=settings]").ClickAsync();
+                await page.Locator("#player-settings").GetByRole(AriaRole.Tab, new() { Name = "Audio", Exact = true }).ClickAsync();
+                await page.Locator("[data-panel=audio] select[data-setting=audio]").SelectOptionAsync(stream!);
+                await page.Keyboard.PressAsync("Escape");
+                for (var waited = 0; (lost < 1 || plans.Count < 2) && waited < 120; waited++) await page.WaitForTimeoutAsync(500);
+                Assert.IsTrue(lost >= 1 && plans.Count >= 2, $"The lost session was not planned again ({lost} lost segments, {plans.Count} plans).");
+                var recoveredAt = await page.Locator("video").EvaluateAsync<double>("video => video.currentTime");
+                Assert.IsTrue(recoveredAt > 0.5, "The fresh session started over at the beginning.");
+                await page.WaitForFunctionAsync("at => { const video = document.querySelector('video'); return !video.paused && video.currentTime > at + 1; }", recoveredAt,
+                    new() { Timeout = Steps.MediaTimeout });
+                page.Request -= Planned;
+                await page.UnrouteAsync(segments);
+                Assert.IsTrue(session.Problems.All(problem => problem.Contains("404", StringComparison.Ordinal) || problem.Contains("Playback error", StringComparison.Ordinal)),
+                    string.Join("\n", session.Problems));
+                session.Problems.Clear();
+
                 // The broken file stops with the player's general failure, not silently.
                 await page.GotoAsync(details);
                 await brokenEpisode.ClickAsync();

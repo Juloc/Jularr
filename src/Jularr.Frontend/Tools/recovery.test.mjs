@@ -26,3 +26,16 @@ test('A picture that plays on for twenty seconds after a repair is healed', () =
     assert.equal(exports.healed(100, 119.9), false);
     assert.equal(exports.healed(100, 120), true);
 });
+
+test('A session the server lost or stopped is planned again at once; other answers are retried', () => {
+    assert.equal(exports.sessionLost(404), true);
+    assert.equal(exports.sessionLost(410), true);
+    assert.equal(exports.sessionLost(503), false);
+    assert.equal(exports.sessionLost(undefined), false);
+});
+
+test('A fresh session starts where the picture was, also when the picture was already torn down', () => {
+    assert.equal(exports.restartPoint(812.4, 800), 812.4);
+    assert.equal(exports.restartPoint(0, 812.4), 812.4);
+    assert.equal(exports.restartPoint(0, 0), 0);
+});

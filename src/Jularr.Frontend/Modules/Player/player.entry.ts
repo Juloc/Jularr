@@ -10,7 +10,7 @@ import type { StyledSubtitles } from "./StyledSubtitles";
 import { deviceKind, libassWanted } from "./Device";
 import { Automatic, nextQuality, recordStall, StallSeconds, troubled } from "./AutoQuality";
 import { pickSecondSubtitle, pickTranslationSource, SecondSubtitleLine, type SubtitleOption } from "./Subtitles";
-import { healed, AttemptsBeforeNotice, replanDelay, stallStep } from "./Recovery";
+import { healed, AttemptsBeforeNotice, replanDelay, restartPoint, sessionLost, stallStep } from "./Recovery";
 import { activeMarker, chapterIndexAt, markerKey, modeFor, parseMarkers, parseMode, shouldAutoSkip, skipPlan, skipShown, SkipShowSeconds, type Marker } from "./Skip";
 
 // Playback client: capability probe, server PlaybackPlan, transport and progress reporting.
@@ -149,6 +149,9 @@ async function start(player: HTMLElement, keepView = false): Promise<void> {
     // Repairing in place did not help: the same video is planned again, a fresh session at the same place.
     let replans = 0;
     let replannedAt = 0;
+    // The last place the picture played and whether the person wants it to play, kept while a broken source is torn down.
+    let playedAt = 0;
+    let wantsPlay = false;
     let escalating = false;
     let sourceReady = false;
     let sourcePosition = 0;
@@ -453,8 +456,8 @@ async function start(player: HTMLElement, keepView = false): Promise<void> {
                 }
             });
             instance.on(Hls.Events.ERROR, (_, data) => {
-                // A conversion stopped for room answers Gone: its session is over, so the video is planned again.
-                if (data.response?.code === 410) { instance.destroy(); void escalate(); return; }
+                // A session the server lost (a restart) or stopped for room never answers again: a fresh one is planned at once, where the picture stands, and plays on.
+                if (sessionLost(data.response?.code)) { instance.stopLoad(); void escalate(); return; }
                 if (!data.fatal) return;
                 console.warn("Playback error", data.type, data.details, data.response?.code);
                 // A dropped connection or a broken segment in the middle of the film is retried in place a few times before the player gives up,
@@ -526,8 +529,9 @@ async function start(player: HTMLElement, keepView = false): Promise<void> {
         if (switching) return false;
         switching = true;
         try {
-            const position = video.currentTime;
-            const playing = !video.paused;
+            // A repair goes on where the picture played, and plays when the person wanted it to.
+            const position = escalating ? restartPoint(video.currentTime, playedAt) : video.currentTime;
+            const playing = escalating ? wantsPlay || !video.paused : !video.paused;
             const replacement = await requestPlan(streamIndex, qualityChoice);
             if (!replacement) return false;
             report(true, false);
@@ -693,7 +697,10 @@ async function start(player: HTMLElement, keepView = false): Promise<void> {
     video.addEventListener("seeking", () => showLoading());
     video.addEventListener("canplay", stopLoading);
     video.addEventListener("seeked", () => { if (video.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) stopLoading(); });
-    video.addEventListener("playing", () => { recoveries = 0; stopLoading(); });
+    video.addEventListener("playing", () => { recoveries = 0; wantsPlay = true; stopLoading(); });
+    video.addEventListener("play", () => { wantsPlay = true; });
+    // Only a pause the person chose counts; a source that breaks or is replaced keeps the wish to play.
+    video.addEventListener("pause", () => { if (!escalating && !switching && !video.ended && !video.error) wantsPlay = false; });
     video.addEventListener("pause", stopLoading);
     video.addEventListener("ended", stopLoading);
 
@@ -727,6 +734,7 @@ async function start(player: HTMLElement, keepView = false): Promise<void> {
     video.addEventListener("timeupdate", () => {
         if (video.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) stopLoading();
         if (replans > 0 && !escalating && healed(replannedAt, video.currentTime)) replans = 0;
+        if (sourceReady && video.currentTime > 0.5) playedAt = video.currentTime;
         if (!seeking) timeline.value = String(Math.floor(video.currentTime));
         timeline.style.setProperty('--played', `${Number(timeline.value) / Math.max(1, Number(timeline.max)) * 100}%`);
         player.querySelector("[data-role=time]")!.textContent = clock(video.currentTime);
