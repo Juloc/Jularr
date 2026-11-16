@@ -281,6 +281,119 @@ namespace Jularr.Backend.Tests
             }
         }
 
+        // A change the database does not show (a search begins, a search ends) wakes the open streams, and costs nothing while nobody watches.
+        [TestMethod]
+        public async Task ActiveSearches_BeginAndEnd_WakeTheStreams_AndAreListedOnce()
+        {
+            var changes = new LiveChanges();
+            var searches = new ActiveSearches(changes);
+            using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            var before = changes.Sequence;
+            searches.Begin(1, null, null).Dispose();
+            Assert.AreEqual(before, changes.Sequence, "Nobody watches, so nothing is signalled.");
+
+            using var watching = changes.TryJoin("1");
+            var seen = changes.Sequence;
+            var woken = changes.WaitForChangeAsync(seen, TimeSpan.FromSeconds(5), cancellation.Token);
+            var first = searches.Begin(7, 1, 2);
+            Assert.AreEqual(seen + 1, await woken);
+            using var second = searches.Begin(7, 1, 2);
+            using var other = searches.Begin(7, 1, null);
+            CollectionAssert.AreEquivalent(new[] { new ActiveSearch(7, 1, 2), new ActiveSearch(7, 1, null) }, searches.Snapshot().ToArray(), "The same search twice is one.");
+
+            first.Dispose();
+            first.Dispose();
+            Assert.AreEqual(2, searches.Snapshot().Count, "One of the two equal searches still runs.");
+            second.Dispose();
+            other.Dispose();
+            Assert.AreEqual(0, searches.Snapshot().Count);
+        }
+
+        // The units of a season are named while they are searched or downloaded, each with its own phase and percent, and the season sums them up; a search without a download
+        // shows on its target. Nothing is named once it is over, which is how a page knows to read itself again.
+        [TestMethod]
+        public async Task LiveStream_UnitsOfASeason_ShowTheirSearchAndDownload_AndTheSeasonSumsThemUp()
+        {
+            await using var host = await Host.CreateAsync(razor: true, media: true, services: services => services.AddHostedService<LiveWorker>(), endpoints: endpoints => endpoints.MapJularrLive());
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle") VALUES (30, 2, 'Show'), (31, 2, 'Quiet');
+                INSERT INTO "WorkUnits" ("Id", "WorkId", "WorkUnitTypeId", "Number") VALUES (3100, 30, 1, 1);
+                INSERT INTO "WorkUnits" ("Id", "WorkId", "ParentWorkUnitId", "WorkUnitTypeId", "Number", "ReleasedOn")
+                SELECT 3000 + number, 30, 3100, 2, number, current_date - 30 FROM generate_series(1, 4) AS number;
+                INSERT INTO "WantedItems" ("Id", "WorkId") VALUES (630, 30), (631, 31);
+                INSERT INTO "AcquisitionConnections" ("Id", "Name", "AcquisitionConnectionTypeId", "BaseUrl", "ProtectedApiKey")
+                VALUES (900, 'Indexer One', 1, 'https://indexer.example.test/', NULL), (901, 'Client One', 2, 'https://client.example.test/', decode('00', 'hex'));
+                INSERT INTO "AcquisitionReleases" ("Id", "WantedItemId", "AcquisitionConnectionId", "ReleaseIdentity", "Title", "AcquisitionReleaseStatusTypeId", "ParentUnitNumber", "UnitStart", "UnitEnd")
+                VALUES (730, 630, 900, 'three', 'Show.S01E02-E03', 1, 1, 2, 3);
+                INSERT INTO "Operations" ("Id", "OperationTypeId", "OperationStatusTypeId", "AcquisitionReleaseId", "AcquisitionConnectionId", "ProgressPercent", "SizeBytes", "RemainingBytes", "EtaSeconds", "DownloadStateTypeId", "StartedAt")
+                VALUES (830, 2, 2, 730, 901, 40, 1000, 600, 60, 2, now());
+                """);
+            await SignInAsync(host);
+            using var ending = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+            using var response = await host.OpenStreamAsync("/live/events", ending.Token);
+            using var reader = new StreamReader(await response.Content.ReadAsStreamAsync(ending.Token));
+
+            // The two episodes the release brings download, the season says so; the others are not named.
+            var (name, entities) = await NextEventAsync(reader, ending.Token);
+            Assert.AreEqual("snapshot", name);
+            foreach (var id in new[] { "unit:3002", "unit:3003" })
+            {
+                Assert.AreEqual("downloading", entities.GetProperty(id).GetProperty("phase").GetString());
+                Assert.AreEqual(40, entities.GetProperty(id).GetProperty("percent").GetInt32());
+                Assert.AreEqual("Downloading 40 %", entities.GetProperty(id).GetProperty("text").GetProperty("phase").GetString());
+            }
+
+            Assert.IsFalse(entities.TryGetProperty("unit:3001", out _));
+            Assert.IsFalse(entities.TryGetProperty("unit:3004", out _));
+            Assert.AreEqual("2 of 4 loading", entities.GetProperty("season:3100").GetProperty("text").GetProperty("phase").GetString());
+
+            // A search of the whole season marks what it would take: the episodes with nothing, not the two that load.
+            var searches = host.Services.GetRequiredService<ActiveSearches>();
+            var season = searches.Begin(630, 1, null);
+            while (true)
+            {
+                var (_, changed) = await NextEventAsync(reader, ending.Token);
+                if (!changed.TryGetProperty("unit:3001", out var searching)) continue;
+                Assert.AreEqual("searching", searching.GetProperty("phase").GetString());
+                Assert.AreEqual("Searching", searching.GetProperty("text").GetProperty("phase").GetString());
+                Assert.IsTrue(changed.TryGetProperty("unit:3004", out _));
+                Assert.AreEqual("downloading", changed.GetProperty("unit:3002").GetProperty("phase").GetString(), "A download wins over a search.");
+                break;
+            }
+
+            // It ends, and the units are not named any more.
+            season.Dispose();
+            while (true)
+            {
+                var (_, changed) = await NextEventAsync(reader, ending.Token);
+                if (changed.TryGetProperty("unit:3001", out _)) continue;
+                Assert.IsFalse(changed.TryGetProperty("unit:3004", out _));
+                break;
+            }
+
+            // One unit searched on its own is named even though it has a file or no download; unpacking is importing without a percent.
+            using var single = searches.Begin(630, 1, 4);
+            await host.Fixture.RunSqlAsync("UPDATE \"Operations\" SET \"DownloadStateTypeId\" = 4 WHERE \"Id\" = 830");
+            while (true)
+            {
+                var (_, changed) = await NextEventAsync(reader, ending.Token);
+                if (!changed.TryGetProperty("unit:3004", out _) || changed.GetProperty("unit:3002").GetProperty("phase").GetString() != "importing") continue;
+                Assert.IsFalse(changed.GetProperty("unit:3002").TryGetProperty("percent", out _));
+                Assert.AreEqual("2 of 4 importing", changed.GetProperty("season:3100").GetProperty("text").GetProperty("phase").GetString());
+                break;
+            }
+
+            // A target that only searches says so on its own entity.
+            using var quiet = searches.Begin(631, null, null);
+            while (true)
+            {
+                var (_, changed) = await NextEventAsync(reader, ending.Token);
+                if (!changed.TryGetProperty("wanted:631", out var target)) continue;
+                Assert.AreEqual("searching", target.GetProperty("phase").GetString());
+                break;
+            }
+        }
+
         // The profile 101 of account 41 and the profile 202 of account 42 each wait for a download that runs.
         private static async Task SeedDownloadsAsync(Host host)
         {

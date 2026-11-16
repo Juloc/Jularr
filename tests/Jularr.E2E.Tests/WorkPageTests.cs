@@ -128,6 +128,37 @@ namespace Jularr.E2E.Tests
                 Assert.IsTrue(Math.Abs(offsets[0]) <= 1, "An episode's switch is " + offsets[0] + " px off the middle of its row.");
                 Assert.IsTrue(Math.Abs(offsets[1]) <= 1, "A season's switch is " + offsets[1] + " px off the middle of its name.");
 
+                // A pressed button answers at once: a ring on it while the server is slow, and a second press while it waits goes nowhere.
+                var presses = 0;
+                var slowPosts = new System.Text.RegularExpressions.Regex("handler=Unit");
+                await page.RouteAsync(slowPosts, async route => { presses++; await Task.Delay(1500); await route.ContinueAsync(); });
+                var slowSwitch = page.Locator("tr.work-row td[data-col=monitored] .work-switch").First;
+                await slowSwitch.ClickAsync();
+                await Assertions.Expect(page.Locator("[data-pending]")).ToHaveCountAsync(1);
+                await slowSwitch.EvaluateAsync("button => button.click()");
+                await Assertions.Expect(page.Locator("[data-pending]")).ToHaveCountAsync(0, new() { Timeout = 20_000 });
+                Assert.AreEqual(1, presses, "A second press while the first waited was sent too.");
+                await page.UnrouteAsync(slowPosts);
+
+                // A download that runs for the newest season shows in the status pill of its episodes and as a sum in the season's head, without moving anything; when it is over
+                // the page reads itself again and the pills are the server's own.
+                await jularr.RunSqlAsync("""
+                    INSERT INTO "AcquisitionConnections" ("Name", "AcquisitionConnectionTypeId", "BaseUrl", "ProtectedApiKey") VALUES ('Client One', 2, 'https://client.example.test/', decode('00', 'hex'));
+                    INSERT INTO "AcquisitionReleases" ("WantedItemId", "ReleaseIdentity", "Title", "AcquisitionReleaseStatusTypeId", "ParentUnitNumber")
+                    SELECT wanted."Id", 'e2e-live', 'Show.S01', 1, season."Number" FROM "WantedItems" AS wanted JOIN "WorkUnits" AS season ON season."WorkId" = wanted."WorkId" AND season."WorkUnitTypeId" = 1
+                    ORDER BY season."Number" DESC LIMIT 1;
+                    INSERT INTO "Operations" ("OperationTypeId", "OperationStatusTypeId", "AcquisitionReleaseId", "AcquisitionConnectionId", "ProgressPercent", "SizeBytes", "RemainingBytes", "EtaSeconds", "DownloadStateTypeId", "StartedAt")
+                    SELECT 2, 2, release."Id", (SELECT "Id" FROM "AcquisitionConnections" WHERE "Name" = 'Client One'), 40, 1000, 600, 60, 2, now() FROM "AcquisitionReleases" AS release WHERE release."ReleaseIdentity" = 'e2e-live';
+                    """);
+                var live = page.Locator("tr.work-row td[data-col=status] .work-status[data-live-phase=downloading]").First;
+                await Assertions.Expect(live).ToBeVisibleAsync(new() { Timeout = 30_000 });
+                await Assertions.Expect(live.Locator(".work-status__live")).ToContainTextAsync("Downloading 40 %");
+                await Assertions.Expect(page.Locator(".work-season__live").First).ToContainTextAsync("loading");
+                await Evidence.SaveAsync(page, "work-unit-live-download");
+                await jularr.RunSqlAsync("UPDATE \"Operations\" SET \"OperationStatusTypeId\" = 3, \"FinishedAt\" = now() WHERE \"AcquisitionReleaseId\" IN (SELECT \"Id\" FROM \"AcquisitionReleases\" WHERE \"ReleaseIdentity\" = 'e2e-live')");
+                await Assertions.Expect(page.Locator(".work-status[data-live-phase]")).ToHaveCountAsync(0, new() { Timeout = 30_000 });
+                await Assertions.Expect(page.Locator(".work-season__live").First).ToBeHiddenAsync();
+
                 // A result such as "nothing found" is the hint, never a message inside the hero.
                 Assert.AreEqual(0, await hero.Locator("[role=status]").CountAsync());
 

@@ -178,6 +178,12 @@ export async function refresh(): Promise<void> {
 
 export const isRefreshing = () => refreshing;
 
+// One region of the current page again from the server, in place and at the same position (a page whose live values say that something finished); the page's setups run over it.
+export async function refreshRegion(id: string): Promise<void> {
+    await htmx.ajax("GET", location.pathname + location.search, { target: "#" + id, select: "#" + id, swap: "outerHTML show:none" });
+    regionSwapped();
+}
+
 export function pushAddress(address: string): void {
     history.pushState({ htmx: true }, "", address);
 }

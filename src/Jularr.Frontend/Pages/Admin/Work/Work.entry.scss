@@ -322,6 +322,57 @@ th[aria-sort="descending"] .work-sort::after { content: " ▾"; }
     }
 }
 
+// A unit that is searched, downloaded or imported now (Work.entry.ts sets data-live-phase and --live-percent): the pill keeps its size, its own content turns invisible and the
+// live text takes its place over a bar of the percent; a search pulses, an import moves.
+.work-status[data-live-phase] {
+    position: relative;
+    overflow: hidden;
+    background: var(--accent-soft);
+    color: var(--accent-text);
+
+    > :not(.work-status__live) { visibility: hidden; }
+
+    .work-status__live {
+        position: absolute;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        white-space: nowrap;
+        z-index: 1;
+    }
+
+    &[data-live-phase="downloading"] {
+        background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 38%, transparent) calc(var(--live-percent, 0) * 1%), var(--accent-soft) 0);
+    }
+
+    &[data-live-phase="searching"] { animation: work-live-pulse 1.4s ease-in-out infinite; }
+
+    &[data-live-phase="importing"] {
+        background: linear-gradient(90deg, var(--accent-soft) 0, color-mix(in srgb, var(--accent) 38%, transparent) 50%, var(--accent-soft) 100%) 0 0 / 200% 100%;
+        animation: work-live-slide 1.6s linear infinite;
+    }
+}
+
+.work-season__live {
+    display: inline-block;
+    padding: 1px 8px;
+    border-radius: 999px;
+    background: var(--accent-soft);
+    color: var(--accent-text);
+    font-size: 12px;
+    font-weight: 600;
+
+    &[data-live-phase="searching"] { animation: work-live-pulse 1.4s ease-in-out infinite; }
+}
+
+@keyframes work-live-pulse { 50% { opacity: .55; } }
+@keyframes work-live-slide { to { background-position: -200% 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+    .work-status[data-live-phase],
+    .work-season__live { animation: none !important; }
+}
+
 .work-quality-block { display: inline-flex; align-items: center; gap: 6px; }
 
 .work-quality {
