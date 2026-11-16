@@ -299,8 +299,17 @@ namespace Jularr.E2E.Tests
                 for (var waited = 0; (lost < 1 || plans.Count < 2) && waited < 120; waited++) await page.WaitForTimeoutAsync(500);
                 Assert.IsTrue(lost >= 1 && plans.Count >= 2, $"The lost session was not planned again ({lost} lost segments, {plans.Count} plans).");
                 // The fresh session plays again from where the picture stood, not from the start.
-                await page.WaitForFunctionAsync("() => { const video = document.querySelector('video'); return !video.paused && video.readyState >= 3 && video.currentTime > 0; }", null,
-                    new() { Timeout = Steps.MediaTimeout });
+                const string videoState = "() => { const video = document.querySelector('video'); return JSON.stringify({ url: location.pathname, paused: video.paused, ended: video.ended, "
+                    + "time: video.currentTime, ready: video.readyState, error: video.error?.code ?? null, src: video.currentSrc.slice(0, 60) }); }";
+                try
+                {
+                    await page.WaitForFunctionAsync("() => { const video = document.querySelector('video'); return !video.paused && video.readyState >= 3 && video.currentTime > 0; }", null,
+                        new() { Timeout = Steps.MediaTimeout });
+                }
+                catch (TimeoutException)
+                {
+                    Assert.Fail($"The fresh session did not play: {await page.EvaluateAsync<string>(videoState)}; plans {string.Join(", ", plans)}; lost {lost}; {string.Join(" | ", session.Problems)}");
+                }
                 var recoveredAt = await page.Locator("video").EvaluateAsync<double>("video => video.currentTime");
                 Assert.IsTrue(recoveredAt >= lostFrom - 1, $"The fresh session started at {recoveredAt:0.0} s instead of near {lostFrom:0.0} s.");
                 await page.WaitForFunctionAsync("at => { const video = document.querySelector('video'); return !video.paused && video.currentTime > at + 1; }", recoveredAt,

@@ -255,6 +255,8 @@ async function start(player: HTMLElement, keepView = false): Promise<void> {
     // The pause before an end is no position worth saving.
     video.addEventListener("pause", () => { if (!video.ended) report(false); });
     video.addEventListener("ended", () => {
+        // A source that broke before it loaded (a lost session being planned again) ends nothing: the title is not over.
+        if (!sourceReady || escalating) return;
         report(true);
         // An album continues with the next track at once; a season's next episode follows after a countdown, and not at all when the profile turned autoplay off.
         // The mini player of an episode stops where it is; a song's bar goes on.
