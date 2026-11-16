@@ -91,12 +91,12 @@ namespace Jularr.Backend.Tests
             await using var host = await LibraryTests.CreateHostAsync(storage.Path, razor: true);
             var timings = host.Services.GetRequiredService<ServiceTimings>();
 
-            // The Owner's page names its shell and data parts; the address's query adds no key of its own.
+            // The Owner's page names its shell and data parts, then any steps of its own (Discover's reads); the address's query adds no key of its own.
             foreach (var path in new[] { "/Admin/Catalog", "/Admin/Catalog?unknown=1", "/" })
             {
                 using var page = await host.SendAsync(HttpMethod.Get, path);
                 Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, path + await page.Content.ReadAsStringAsync());
-                StringAssert.Matches(string.Join(", ", page.Headers.GetValues("Server-Timing")), new Regex(@"^shell;dur=[0-9.]+, data;dur=[0-9.]+$"), path);
+                StringAssert.Matches(string.Join(", ", page.Headers.GetValues("Server-Timing")), new Regex(@"^shell;dur=[0-9.]+, data;dur=[0-9.]+(, [a-z]+;dur=[0-9.]+)*$"), path);
             }
 
             Assert.AreEqual(2L, timings.ReadPages().Single(item => item.Service == "/Admin/Catalog/Catalog").Count);
