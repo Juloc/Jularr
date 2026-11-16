@@ -699,8 +699,11 @@ async function start(player: HTMLElement, keepView = false): Promise<void> {
     video.addEventListener("seeked", () => { if (video.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) stopLoading(); });
     video.addEventListener("playing", () => { recoveries = 0; wantsPlay = true; stopLoading(); });
     video.addEventListener("play", () => { wantsPlay = true; });
-    // Only a pause the person chose counts; a source that breaks or is replaced keeps the wish to play.
-    video.addEventListener("pause", () => { if (!escalating && !switching && !video.ended && !video.error) wantsPlay = false; });
+    // Only a pause the person chose counts: one with a picture loaded. A source that breaks or is replaced pauses the element too, and its pause arrives a moment later,
+    // when the new source has nothing loaded yet; that keeps the wish to play.
+    video.addEventListener("pause", () => {
+        if (!escalating && !switching && !video.ended && !video.error && sourceReady && video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) wantsPlay = false;
+    });
     video.addEventListener("pause", stopLoading);
     video.addEventListener("ended", stopLoading);
 
