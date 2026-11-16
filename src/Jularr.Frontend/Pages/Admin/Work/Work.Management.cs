@@ -196,11 +196,11 @@ namespace Jularr.Frontend.Pages.Admin.Work
                     new Div(
                         new Div(UnitSwitch(season, work, csrf), new H2(new ValueText(name)),
                             new Div(new Progress().Attribute("value", present.ToString(CultureInfo.InvariantCulture)).Attribute("max", Math.Max(1, counted.Length).ToString(CultureInfo.InvariantCulture))
-                                .Class("work-coverage__bar" + (missing > 0 ? " work-coverage__bar--partial" : "")), new Span(new ValueText(string.Join(" · ", info))),
-                                new Span().Class("work-season__live").Attribute("data-season-live", season.Id.ToString(CultureInfo.InvariantCulture)).Attribute("hidden", "hidden")).Class("work-coverage")).Class("work-season__lead"),
+                                .Class("work-coverage__bar" + (missing > 0 ? " work-coverage__bar--partial" : "")), new Span(new ValueText(string.Join(" · ", info)))).Class("work-coverage")).Class("work-season__lead"),
                         new Button(Icon("chevron-down", 22)).Class("work-season__toggle").Attribute("type", "button").Attribute("data-season-toggle", panelId).Attribute("aria-expanded", open ? "true" : "false")
                             .Attribute("aria-controls", panelId).TextAttribute("aria-label", "work.toggleSeason"),
-                        new Div(SeasonActions(season, work, seasonNumbers, csrf)).Class("work-season__actions")).Class("work-season__head"),
+                        new Div(new Span().Class("work-season__live").Attribute("data-season-live", season.Id.ToString(CultureInfo.InvariantCulture)).Attribute("hidden", "hidden"),
+                            SeasonActions(season, work, seasonNumbers, csrf)).Class("work-season__actions")).Class("work-season__head"),
                     new Div(UnitTable(episodes, work, seasonNumbers, csrf)).Class("work-season__panel").Attribute("id", panelId).Attribute("data-open", open ? "true" : "false")).Class("work-season"));
             }
 

@@ -208,7 +208,7 @@
 }
 
 .work-season--open .work-season__toggle svg { transform: rotate(180deg); }
-.work-season__actions { justify-self: end; }
+.work-season__actions { justify-self: end; display: flex; align-items: center; gap: 12px; }
 .work-season__panel { border-top: 1px solid var(--border); > p { margin: 0; padding: 14px 16px; color: var(--muted); } }
 
 .work-icons { display: flex; align-items: center; justify-content: flex-end; gap: 4px; }
@@ -305,6 +305,9 @@ th[aria-sort="descending"] .work-sort::after { content: " ▾"; }
     &--off { background: light-dark(#eceaf1, #35313f); color: var(--muted); }
 }
 
+// Room for the live text from the start (a percent, "Searching", "Importing"), so a pill never changes its width when its unit starts to be searched or downloaded.
+.work-status[data-unit-live] { min-width: 7.5em; text-align: center; }
+
 .work-status--dated {
     display: inline-grid;
     align-items: center;
@@ -330,9 +333,12 @@ th[aria-sort="descending"] .work-sort::after { content: " ▾"; }
     background: var(--accent-soft);
     color: var(--accent-text);
 
+    // Its own content (a word, or the dated pill's labels) turns invisible and keeps its room.
+    color: transparent;
     > :not(.work-status__live) { visibility: hidden; }
 
     .work-status__live {
+        color: var(--accent-text);
         position: absolute;
         inset: 0;
         display: grid;
@@ -362,6 +368,7 @@ th[aria-sort="descending"] .work-sort::after { content: " ▾"; }
     font-size: 12px;
     font-weight: 600;
 
+    &[hidden] { display: none; }
     &[data-live-phase="searching"] { animation: work-live-pulse 1.4s ease-in-out infinite; }
 }
 

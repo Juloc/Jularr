@@ -150,13 +150,31 @@ namespace Jularr.E2E.Tests
                     INSERT INTO "Operations" ("OperationTypeId", "OperationStatusTypeId", "AcquisitionReleaseId", "AcquisitionConnectionId", "ProgressPercent", "SizeBytes", "RemainingBytes", "EtaSeconds", "DownloadStateTypeId", "StartedAt")
                     SELECT 2, 2, release."Id", (SELECT "Id" FROM "AcquisitionConnections" WHERE "Name" = 'Client One'), 40, 1000, 600, 60, 2, now() FROM "AcquisitionReleases" AS release WHERE release."ReleaseIdentity" = 'e2e-live';
                     """);
+                await page.Locator("th [data-columns-open]").First.ClickAsync();
+                await page.Locator("[data-column-picker]").GetByRole(AriaRole.Checkbox, new() { Name = "Status", Exact = true }).CheckAsync();
+                await page.Keyboard.PressAsync("Escape");
                 var live = page.Locator("tr.work-row td[data-col=status] .work-status[data-live-phase=downloading]").First;
                 await Assertions.Expect(live).ToBeVisibleAsync(new() { Timeout = 30_000 });
-                await Assertions.Expect(live.Locator(".work-status__live")).ToContainTextAsync("Downloading 40 %");
+                await Assertions.Expect(live.Locator(".work-status__live")).ToHaveTextAsync("40 %");
                 await Assertions.Expect(page.Locator(".work-season__live").First).ToContainTextAsync("loading");
                 await Evidence.SaveAsync(page, "work-unit-live-download");
+
+                // On a phone the episodes are strips; the pill there shows the download as well and the page does not run wider than the screen.
+                var desktop = page.ViewportSize!;
+                foreach (var (name, width, height) in new[] { ("phone", 375, 812), ("tablet", 768, 1024) })
+                {
+                    await page.SetViewportSizeAsync(width, height);
+                    await Assertions.Expect(page.Locator("tr.work-row .work-status[data-live-phase=downloading]:visible, [data-work-strips] .work-status[data-live-phase=downloading]:visible").First).ToBeVisibleAsync();
+                    Assert.IsTrue(await page.EvaluateAsync<bool>("() => document.documentElement.scrollWidth <= document.documentElement.clientWidth"), "The live status makes the page wider than the " + name + ".");
+                    await Evidence.SaveAsync(page, "work-unit-live-download-" + name);
+                }
+
+                await page.SetViewportSizeAsync(desktop.Width, desktop.Height);
+                await page.EvaluateAsync("() => { window.regionBeforeDone = document.getElementById('work-page'); }");
                 await jularr.RunSqlAsync("UPDATE \"Operations\" SET \"OperationStatusTypeId\" = 3, \"FinishedAt\" = now() WHERE \"AcquisitionReleaseId\" IN (SELECT \"Id\" FROM \"AcquisitionReleases\" WHERE \"ReleaseIdentity\" = 'e2e-live')");
-                await Assertions.Expect(page.Locator(".work-status[data-live-phase]")).ToHaveCountAsync(0, new() { Timeout = 30_000 });
+                await page.WaitForFunctionAsync("() => document.getElementById('work-page') !== window.regionBeforeDone", null, new() { Timeout = 30_000 });
+                await Assertions.Expect(page.Locator(".work-status[data-live-phase]")).ToHaveCountAsync(0);
+                await Assertions.Expect(page.Locator("tr.work-row td[data-col=status] .work-status").First).ToHaveTextAsync("Missing");
                 await Assertions.Expect(page.Locator(".work-season__live").First).ToBeHiddenAsync();
 
                 // A result such as "nothing found" is the hint, never a message inside the hero.

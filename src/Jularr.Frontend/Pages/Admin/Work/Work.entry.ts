@@ -364,6 +364,7 @@ function applyUnitLive(): void {
         let label = pill.querySelector<HTMLElement>(':scope > .work-status__live');
         if (!entity) {
             label?.remove();
+            pill.removeAttribute('title');
             delete pill.dataset.livePhase;
             pill.style.removeProperty('--live-percent');
             return;
@@ -379,6 +380,7 @@ function applyUnitLive(): void {
         const text = entity.text?.phase ?? '';
         if (label.textContent !== text) label.textContent = text;
         pill.dataset.livePhase = entity.phase ?? '';
+        pill.title = entity.text?.title ?? '';
         if (entity.percent === undefined || entity.percent === null) pill.style.removeProperty('--live-percent');
         else pill.style.setProperty('--live-percent', String(entity.percent));
     });

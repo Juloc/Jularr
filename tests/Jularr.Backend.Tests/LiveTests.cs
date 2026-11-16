@@ -340,7 +340,8 @@ namespace Jularr.Backend.Tests
             {
                 Assert.AreEqual("downloading", entities.GetProperty(id).GetProperty("phase").GetString());
                 Assert.AreEqual(40, entities.GetProperty(id).GetProperty("percent").GetInt32());
-                Assert.AreEqual("Downloading 40 %", entities.GetProperty(id).GetProperty("text").GetProperty("phase").GetString());
+                Assert.AreEqual("40 %", entities.GetProperty(id).GetProperty("text").GetProperty("phase").GetString());
+                Assert.AreEqual("Downloading 40 %", entities.GetProperty(id).GetProperty("text").GetProperty("title").GetString());
             }
 
             Assert.IsFalse(entities.TryGetProperty("unit:3001", out _));
