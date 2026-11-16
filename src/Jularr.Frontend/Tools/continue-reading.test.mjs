@@ -8,7 +8,7 @@ const source = readFileSync(new URL('../Framework/Components/ContinueReadingBar.
 const script = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText;
 const module = { exports: {} };
 runInNewContext(script, { exports: module.exports, module });
-const { isHidden } = module.exports;
+const { isHidden, wantsBar } = module.exports;
 
 test('a dismissed bar stays hidden until the reading position changes', () => {
     assert.equal(isHidden('12:0.5', null), false);
@@ -20,4 +20,10 @@ test('a dismissed bar stays hidden until the reading position changes', () => {
 test('a bar without a key is never shown', () => {
     assert.equal(isHidden(undefined, null), true);
     assert.equal(isHidden('', null), true);
+});
+
+test('the Explore feed fills the screen and never gets the bar', () => {
+    assert.equal(wantsBar('/Discover/Feed'), false);
+    assert.equal(wantsBar('/'), true);
+    assert.equal(wantsBar('/Library'), true);
 });

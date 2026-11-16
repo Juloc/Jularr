@@ -504,12 +504,19 @@ namespace Jularr.Frontend.Pages.User.Discover
         {
             if (_providerUnavailable) page.Content.Add(new P(new Text("discover.providerUnavailable")).Attribute("role", "status"));
 
-            // The rows in the page's order; several types name each row's type, a top 10 shows its ten with their ranks.
+            // The rows in the page's order; several types name each row's type, a top 10 shows its ten with their ranks. The profile's own rows stand before the first genre row.
             var several = Chosen.Count > 1;
+            var tasteShown = false;
             foreach (var row in _rowOrder)
             {
                 if (row.Genre is { } rowGenre)
                 {
+                    if (!tasteShown)
+                    {
+                        AddTaste(page);
+                        tasteShown = true;
+                    }
+
                     // A genre's row opens the grid of the types it holds; a row that came back with too few titles is left out.
                     var shown = GenreCards(row);
                     if (shown.Count >= MinimumGenreTitles)
@@ -538,17 +545,7 @@ namespace Jularr.Frontend.Pages.User.Discover
                 page.Content.Add(new MediaShelf(assets, FeedLabel(scope, feed), Address(ranking), [.. cards], Address(ranking with { Page = 2 }), title: name));
             }
 
-            // "For you", then a row for each genre the profile likes; each mixes its types one after the other.
-            foreach (var row in _taste.GroupBy(shelf => shelf.GenreId))
-            {
-                var columns = row.Select(shelf => Chosen.FirstOrDefault(scope => scope.Slug == shelf.ScopeSlug) is { } scope
-                    ? (scope.IsCatalog ? Filtered(shelf.CatalogItems.Select(item => (scope, item))).Select(entry => CatalogCard(scope, entry.Item)) : Filtered(shelf.Items).Select(Card)).ToList()
-                    : []).ToList();
-                var cards = Enumerable.Range(0, columns.Count == 0 ? 0 : columns.Max(column => column.Count))
-                    .SelectMany(index => columns.Where(column => index < column.Count).Select(column => column[index])).Take(20).ToList();
-                var title = row.Key is { } genre ? string.Format(CultureInfo.CurrentCulture, texts["discover.becauseGenre"], texts["discover.genre." + genre]) : texts["discover.forYou"];
-                page.Content.Add(new MediaShelf(assets, "discover.forYou", null, cards, title: title));
-            }
+            if (!tasteShown) AddTaste(page);
 
             // The next part: the page's script loads it as the page nears it, without script it is a link.
             if (_recommendationsRead ? _moreShelves : !_providerUnavailable)
@@ -1122,6 +1119,21 @@ namespace Jularr.Frontend.Pages.User.Discover
         private bool IsTop(DiscoverScopeV1 scope, DiscoverFeedType feed) => FeedType is null && IsAll && Narrowed
             && ModeTop.TryGetValue(texts.Mode.Key, out var top) && top == (scope.Slug, feed);
 
+        // "For you", then a row for each genre the profile likes; each mixes its types one after the other.
+        private void AddTaste(Page page)
+        {
+            foreach (var row in _taste.GroupBy(shelf => shelf.GenreId))
+            {
+                var columns = row.Select(shelf => Chosen.FirstOrDefault(scope => scope.Slug == shelf.ScopeSlug) is { } scope
+                    ? (scope.IsCatalog ? Filtered(shelf.CatalogItems.Select(item => (scope, item))).Select(entry => CatalogCard(scope, entry.Item)) : Filtered(shelf.Items).Select(Card)).ToList()
+                    : []).ToList();
+                var cards = Enumerable.Range(0, columns.Count == 0 ? 0 : columns.Max(column => column.Count))
+                    .SelectMany(index => columns.Where(column => index < column.Count).Select(column => column[index])).Take(20).ToList();
+                var title = row.Key is { } genre ? string.Format(CultureInfo.CurrentCulture, texts["discover.becauseGenre"], texts["discover.genre." + genre]) : texts["discover.forYou"];
+                page.Content.Add(new MediaShelf(assets, "discover.forYou", null, cards, title: title));
+            }
+        }
+
         // The part of the recommendation shelves the address names (p): the page's rows in their order.
         private async Task LoadRecommendationsAsync()
         {
@@ -1135,8 +1147,10 @@ namespace Jularr.Frontend.Pages.User.Discover
             _moreShelves = all.Count > first + ShelvesPerPart;
             _rowOrder.AddRange(part);
 
-            // The profile's own rows close the page of all lists, read locally beside the last part's shelves.
-            var taste = !_moreShelves && FeedType is null && Chosen.Count > 0
+            // The profile's own rows come before the genre rows (the part that holds the first genre row), or close the page when it has none; read locally beside that part.
+            var firstGenre = all.ToList().FindIndex(row => row.Genre is not null);
+            var tastePart = firstGenre >= 0 ? firstGenre >= first && firstGenre < first + ShelvesPerPart : !_moreShelves;
+            var taste = tastePart && FeedType is null && Chosen.Count > 0
                 ? readTaste.ExecuteAsync<BaseDataList<DiscoverTasteShelfV1>>(new ReadDiscoverTasteDataV1([.. Chosen.Select(scope => scope.Slug)]), HttpContext.RequestAborted)
                 : Task.FromResult(new BaseDataList<DiscoverTasteShelfV1>([]));
 

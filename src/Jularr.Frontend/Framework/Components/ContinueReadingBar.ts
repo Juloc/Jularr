@@ -6,9 +6,14 @@ export function isHidden(key: string | undefined, hidden: string | null): boolea
     return !key || key === hidden;
 }
 
+// Pages that fill the screen themselves (the Explore feed) never get the bar.
+export function wantsBar(path: string): boolean {
+    return !path.startsWith("/Discover/Feed");
+}
+
 export async function showContinueReading(): Promise<void> {
     const main = document.querySelector<HTMLElement>(".app-main");
-    if (!main || main.querySelector(".continue-bar") || document.body.classList.contains("player-active")) return;
+    if (!main || main.querySelector(".continue-bar") || document.body.classList.contains("player-active") || !wantsBar(location.pathname)) return;
 
     let response: Response;
     try {
