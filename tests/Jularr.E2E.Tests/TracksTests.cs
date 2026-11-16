@@ -291,13 +291,34 @@ namespace Jularr.E2E.Tests
                 }
 
                 page.Request += Planned;
+                // What the page does from here, for the message when the fresh session does not play.
+                await page.EvaluateAsync("""
+                    () => {
+                        const trace = window.__trace = [];
+                        const started = performance.now();
+                        const note = text => trace.push(Math.round(performance.now() - started) + ' ' + text);
+                        const fetchBefore = window.fetch;
+                        window.fetch = (input, init) => { note('fetch ' + (init?.method ?? 'GET') + ' ' + String(input?.url ?? input).replace(location.origin, '')); return fetchBefore(input, init); };
+                        const video = document.querySelector('video');
+                        for (const name of ['error', 'ended', 'pause', 'play', 'emptied', 'loadedmetadata', 'waiting', 'stalled'])
+                            video.addEventListener(name, () => note(name + ' t=' + video.currentTime.toFixed(1) + ' err=' + (video.error?.code ?? '-') + ' src=' + video.currentSrc.slice(-40)));
+                        const replace = history.replaceState.bind(history);
+                        history.replaceState = (state, title, url) => { note('replaceState ' + url + ' ' + new Error().stack.split('\n').slice(2, 5).join(' < ')); return replace(state, title, url); };
+                    }
+                    """);
                 var lostFrom = await page.Locator("video").EvaluateAsync<double>("video => video.currentTime");
                 await page.Locator("[data-action=settings]").ClickAsync();
                 await page.Locator("#player-settings").GetByRole(AriaRole.Tab, new() { Name = "Audio", Exact = true }).ClickAsync();
                 await page.Locator("[data-panel=audio] select[data-setting=audio]").SelectOptionAsync(stream!);
                 await page.Keyboard.PressAsync("Escape");
-                for (var waited = 0; (lost < 1 || plans.Count < 2) && waited < 120; waited++) await page.WaitForTimeoutAsync(500);
-                Assert.IsTrue(lost >= 1 && plans.Count >= 2, $"The lost session was not planned again ({lost} lost segments, {plans.Count} plans).");
+                // The same title is planned again (not the next episode).
+                bool Replanned() => lost >= 1 && plans.Count >= 2 && plans.Count(url => url == plans.First()) >= 2;
+                for (var waited = 0; !Replanned() && waited < 120; waited++) await page.WaitForTimeoutAsync(500);
+                if (!Replanned())
+                {
+                    Assert.Fail($"The lost session was not planned again ({lost} lost, plans {string.Join(", ", plans)}); "
+                        + $"trace: {await page.EvaluateAsync<string>("() => (window.__trace ?? ['(page replaced)']).join(' | ')")}");
+                }
                 // The fresh session plays again from where the picture stood, not from the start.
                 const string videoState = "() => { const video = document.querySelector('video'); return JSON.stringify({ url: location.pathname, paused: video.paused, ended: video.ended, "
                     + "time: video.currentTime, ready: video.readyState, error: video.error?.code ?? null, src: video.currentSrc.slice(0, 60) }); }";
@@ -308,7 +329,8 @@ namespace Jularr.E2E.Tests
                 }
                 catch (TimeoutException)
                 {
-                    Assert.Fail($"The fresh session did not play: {await page.EvaluateAsync<string>(videoState)}; plans {string.Join(", ", plans)}; lost {lost}; {string.Join(" | ", session.Problems)}");
+                    Assert.Fail($"The fresh session did not play: {await page.EvaluateAsync<string>(videoState)}; plans {string.Join(", ", plans)}; lost {lost}; {string.Join(" | ", session.Problems)}; "
+                        + $"trace: {await page.EvaluateAsync<string>("() => (window.__trace ?? ['(page replaced)']).join(' | ')")}");
                 }
                 var recoveredAt = await page.Locator("video").EvaluateAsync<double>("video => video.currentTime");
                 Assert.IsTrue(recoveredAt >= lostFrom - 1, $"The fresh session started at {recoveredAt:0.0} s instead of near {lostFrom:0.0} s.");
