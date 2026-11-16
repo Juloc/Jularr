@@ -93,3 +93,8 @@
 
 // Playback owns the slot.
 .player-active .continue-bar { display: none; }
+
+// A phone keeps the bar at the end of the page instead of over its content: the screen is too small to cover a row of cards.
+@media (max-width: 640px) {
+    .continue-bar { position: static; margin: 20px 0 8px; }
+}
