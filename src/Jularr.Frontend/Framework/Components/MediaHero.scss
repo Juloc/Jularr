@@ -316,6 +316,10 @@
     @media (max-width: 700px) {
         &--poster &__layout { grid-template-columns: minmax(0, 1fr); gap: 0; }
         &--poster &__poster { display: none; }
+        // Without a backdrop (most albums, books, games) the cover is the title's only picture: a phone shows it centred above the title, square for music.
+        &--poster:not(:has(.media-hero__backdrop .media-image)) &__layout { gap: 0.875rem; }
+        &--poster:not(:has(.media-hero__backdrop .media-image)) &__poster { display: block; justify-self: center; width: min(7.5rem, 36vw); }
+        &--square:not(:has(.media-hero__backdrop .media-image)) &__poster { width: min(11rem, 52vw); }
         &--poster &__content { min-height: 0; }
         &--poster &__footer, &--poster &__footer--progress {
             display: flex;
