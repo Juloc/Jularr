@@ -49,7 +49,11 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             // A season switches all its episodes; a track has no switch. Only when something went: nothing deleted changes nothing else.
             if (deleted > 0 && target.WantedItemId is { } wantedItemId && target.WorkUnitTypeId is WorkUnitType.Season or WorkUnitType.Episode or WorkUnitType.Volume)
             {
-                await Context.SetUnitMonitoringAsync(new WantedUnitMonitoringData(wantedItemId, Parameters.WorkUnitId, false), CancellationToken);
+                await Context.ExecuteBatchAsync(async (ctx, token) =>
+                {
+                    await ctx.SetUnitMonitoringAsync(new WantedUnitMonitoringData(wantedItemId, Parameters.WorkUnitId, false), token);
+                    return true;
+                }, CancellationToken);
             }
 
             return new DeleteLibraryFilesResultV1(deleted, kept);

@@ -1365,6 +1365,98 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"WorkUnits\" WHERE \"WorkUnitTypeId\" = 2 AND \"IsMonitored\""));
         }
 
+        // The delete of an episode and of a season: all their files go, the units stay in the Work but are not monitored any more, and another season is not touched.
+        [TestMethod]
+        public async Task DeleteWorkUnitFiles_AnEpisodeAndASeason_RemoveTheirFilesAndSwitchThemOff()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, new FakeUsenet(), razor: true);
+            using var created = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works", new CreateWorkDataV1(MediaType.Series, "Show"));
+            var workId = (await created.Content.ReadFromJsonAsync<WorkDetailsV1>())!.Id;
+            await host.Fixture.RunSqlAsync($"""
+                INSERT INTO "WorkUnits" ("WorkId", "WorkUnitTypeId", "Number") VALUES ({workId}, 1, 1), ({workId}, 1, 2);
+                INSERT INTO "WorkUnits" ("WorkId", "ParentWorkUnitId", "WorkUnitTypeId", "Number", "IsMonitored")
+                SELECT {workId}, season."Id", 2, episode."Number", TRUE
+                FROM (VALUES (1), (2)) AS episode ("Number") CROSS JOIN "WorkUnits" AS season
+                WHERE season."WorkId" = {workId} AND season."WorkUnitTypeId" = 1;
+                INSERT INTO "WorkEditions" ("Id", "WorkId") VALUES (900, {workId});
+                INSERT INTO "WorkVersions" ("Id", "WorkId", "WorkEditionId") VALUES (900, {workId}, 900);
+                INSERT INTO "MediaAssets" ("WorkId", "WorkVersionId", "WorkUnitId", "MediaAssetTypeId")
+                SELECT {workId}, 900, unit."Id", 1 FROM "WorkUnits" AS unit WHERE unit."WorkUnitTypeId" = 2;
+                INSERT INTO "StoredFiles" ("LibraryRootId", "RelativePath", "SizeBytes", "ModifiedAt", "MediaAssetId", "LastSeenAt")
+                SELECT (SELECT "Id" FROM "LibraryRoots" WHERE "RelativePath" = 'Movies'), 'Show/S' || season."Number"::integer || 'E' || unit."Number"::integer || file.suffix || '.mkv', 10, now(), asset."Id", now()
+                FROM "MediaAssets" AS asset
+                    JOIN "WorkUnits" AS unit ON unit."Id" = asset."WorkUnitId"
+                    JOIN "WorkUnits" AS season ON season."Id" = unit."ParentWorkUnitId"
+                    CROSS JOIN (VALUES (''), ('-alt')) AS file (suffix)
+                WHERE NOT (season."Number" = 2 AND file.suffix = '-alt');
+                """);
+            var mount = await host.ScalarAsync("SELECT \"StorageMountId\" FROM \"LibraryRoots\" WHERE \"RelativePath\" = 'Movies'");
+            string DiskPath(string name) => Path.Combine(storage.Path, Convert.ToString(mount, System.Globalization.CultureInfo.InvariantCulture)!, "Movies", "Show", name);
+            string[] names = ["S1E1.mkv", "S1E1-alt.mkv", "S1E2.mkv", "S1E2-alt.mkv", "S2E1.mkv", "S2E2.mkv"];
+            Directory.CreateDirectory(Path.GetDirectoryName(DiskPath("x"))!);
+            foreach (var name in names) await File.WriteAllTextAsync(DiskPath(name), "x");
+            async Task<long> UnitAsync(int season, int episode) => (long)(await host.ScalarAsync($"SELECT unit.\"Id\" FROM \"WorkUnits\" AS unit JOIN \"WorkUnits\" AS parent ON parent.\"Id\" = unit.\"ParentWorkUnitId\" WHERE parent.\"WorkId\" = {workId} AND parent.\"Number\" = {season} AND unit.\"Number\" = {episode}"))!;
+            async Task<long> SeasonAsync(int number) => (long)(await host.ScalarAsync($"SELECT \"Id\" FROM \"WorkUnits\" WHERE \"WorkId\" = {workId} AND \"WorkUnitTypeId\" = 1 AND \"Number\" = {number}"))!;
+            async Task<DeleteLibraryFilesResultV1> DeleteAsync(long unitId)
+            {
+                using var response = await host.SendAsync(HttpMethod.Post, $"/api/v1/admin/works/{workId}/units/{unitId}/files/deletion");
+                Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, await response.Content.ReadAsStringAsync());
+                return (await response.Content.ReadFromJsonAsync<DeleteLibraryFilesResultV1>())!;
+            }
+
+            // The page asks first: one dialog and a button for each episode and season with files, no form of their own.
+            using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Works/" + workId);
+            var html = await page.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
+            StringAssert.Contains(html, "id=\"work-unit-delete\"");
+            StringAssert.Contains(html, "data-delete-kind=\"season\"");
+            StringAssert.Contains(html, "data-delete-kind=\"unit\"");
+            Assert.AreEqual(1, System.Text.RegularExpressions.Regex.Matches(html, "id=\"work-unit-delete\"").Count);
+
+            await host.Fixture.RunSqlAsync($"INSERT INTO \"WantedItems\" (\"Id\", \"WorkId\") VALUES (600, {workId});");
+
+            // An episode with two versions: both go and only that episode is not monitored; the episode itself stays.
+            var first = await UnitAsync(1, 1);
+            var result = await DeleteAsync(first);
+            Assert.AreEqual(2, result.DeletedCount);
+            Assert.AreEqual(0, result.KeptCount);
+            Assert.IsFalse(File.Exists(DiskPath("S1E1.mkv")) || File.Exists(DiskPath("S1E1-alt.mkv")), "The files of the episode are still there.");
+            Assert.IsTrue(File.Exists(DiskPath("S1E2.mkv")), "The file of another episode went.");
+            Assert.AreEqual(false, await host.ScalarAsync($"SELECT \"IsMonitored\" FROM \"WorkUnits\" WHERE \"Id\" = {first}"));
+            Assert.AreEqual(true, await host.ScalarAsync($"SELECT \"IsMonitored\" FROM \"WorkUnits\" WHERE \"Id\" = {await UnitAsync(1, 2)}"));
+
+            // A season takes the files of all its episodes and switches every episode of it off, also the one that had no file.
+            var season = await SeasonAsync(1);
+            var seasonResult = await DeleteAsync(season);
+            Assert.AreEqual(2, seasonResult.DeletedCount);
+            Assert.IsFalse(File.Exists(DiskPath("S1E2.mkv")) || File.Exists(DiskPath("S1E2-alt.mkv")));
+            Assert.AreEqual(0L, await host.ScalarAsync($"SELECT count(*) FROM \"WorkUnits\" WHERE \"ParentWorkUnitId\" = {season} AND \"IsMonitored\""));
+            Assert.AreEqual(2L, await host.ScalarAsync($"SELECT count(*) FROM \"WorkUnits\" WHERE \"ParentWorkUnitId\" = {season}"), "The episodes stay in the Work.");
+            Assert.IsTrue(File.Exists(DiskPath("S2E1.mkv")), "The file of another season went.");
+            Assert.AreEqual(true, await host.ScalarAsync($"SELECT \"IsMonitored\" FROM \"WorkUnits\" WHERE \"Id\" = {await UnitAsync(2, 1)}"));
+
+            // Nothing left to delete changes nothing.
+            var empty = await DeleteAsync(season);
+            Assert.AreEqual(0, empty.DeletedCount);
+
+            // The page's own handler, with the token of its one form, does the same for the other season and reports it as a hint.
+            var other = await SeasonAsync(2);
+            using var posted = await host.SendAsync(HttpMethod.Post, "/Admin/Works/" + workId + "?handler=DeleteUnitFiles&workUnitId=" + other,
+                new Dictionary<string, string> { ["__RequestVerificationToken"] = LibraryTests.Token(html) });
+            Assert.AreEqual(HttpStatusCode.Redirect, posted.StatusCode, await posted.Content.ReadAsStringAsync());
+            Assert.IsFalse(File.Exists(DiskPath("S2E1.mkv")));
+            Assert.AreEqual(0L, await host.ScalarAsync($"SELECT count(*) FROM \"WorkUnits\" WHERE \"WorkId\" = {workId} AND \"WorkUnitTypeId\" = 2 AND \"IsMonitored\""));
+
+            // A unit of another Work is not reachable through this one.
+            using var other2 = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works", new CreateWorkDataV1(MediaType.Series, "Other"));
+            var otherWork = (await other2.Content.ReadFromJsonAsync<WorkDetailsV1>())!.Id;
+            var foreign = (long)(await host.ScalarAsync($"INSERT INTO \"WorkUnits\" (\"WorkId\", \"WorkUnitTypeId\", \"Number\") VALUES ({otherWork}, 1, 1) RETURNING \"Id\""))!;
+            using var refused = await host.SendAsync(HttpMethod.Post, $"/api/v1/admin/works/{workId}/units/{foreign}/files/deletion");
+            Assert.AreEqual(HttpStatusCode.NotFound, refused.StatusCode);
+        }
+
         // Episodes show as missing, unaired or not monitored, counted without the specials.
         [TestMethod]
         public async Task WorkManagement_ShowsTheStateOfEveryEpisode()
