@@ -25,7 +25,7 @@ interface Snapshot {
     same: boolean;
     scroll: { x: number; y: number };
     details: Map<string, boolean>;
-    focus?: { form?: FormFingerprint; index: number; id: string; selector?: string };
+    focus?: { form?: FormFingerprint; index: number; id: string; key?: string; selector?: string };
 }
 
 const actions = new WeakMap<Context, Snapshot>();
@@ -37,18 +37,20 @@ const fingerprintOf = (form: HTMLFormElement): FormFingerprint => ({
 
 const controlsOf = (form: HTMLFormElement) => Array.from(form.querySelectorAll<HTMLElement>("button, input[type=submit], input[type=checkbox], select, textarea, input:not([type=hidden])"));
 
-// The control that has focus is found again in the new elements: by its id, else by its form and its place in that form.
+// The control that has focus is found again in the new elements: by its id, else by its key (a button of a page's shared form names its action), else by its form and its place in that form.
 function focusOf(scope: Element): Snapshot["focus"] {
     const active = document.activeElement;
     if (!(active instanceof HTMLElement) || active === document.body || !scope.contains(active)) return undefined;
     if (active.id) return { id: active.id, index: -1 };
+    if (active.dataset.focusKey) return { id: "", key: active.dataset.focusKey, index: -1 };
     const form = active.closest("form");
     return form ? { form: fingerprintOf(form), index: controlsOf(form).indexOf(active), id: "" } : undefined;
 }
 
 function restoreFocus(scope: ParentNode, focus: Snapshot["focus"]): void {
     if (!focus) return;
-    const element = focus.id ? document.getElementById(focus.id) : (() => {
+    // The same action may sit in a table and in a narrow screen's strips: the one that is shown gets the focus.
+    const element = focus.key ? Array.from(scope.querySelectorAll<HTMLElement>("[data-focus-key]")).filter(item => item.dataset.focusKey === focus.key).find(item => item.getClientRects().length > 0) : focus.id ? document.getElementById(focus.id) : (() => {
         const forms = Array.from(scope.querySelectorAll<HTMLFormElement>("form"));
         const found = focus.form ? forms[matchForm(focus.form, forms.map(fingerprintOf))] : undefined;
         return found ? controlsOf(found)[focus.index] : undefined;

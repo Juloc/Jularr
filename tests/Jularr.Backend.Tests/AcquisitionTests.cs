@@ -2733,6 +2733,41 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual("WrongSeason", candidates.Single(candidate => candidate.Title == "Example.Show.S01E01.1080p.WEB-DL.H264-GRP").ReasonCode);
         }
 
+        // A long series stays light: its rows' actions share the page's one form, so the page carries a handful of forms and tokens however many episodes it lists.
+        [TestMethod]
+        public async Task WorkPage_ALongSeries_CarriesOneFormForItsRows()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            var usenet = new FakeUsenet { Results = FakeUsenet.SeriesResults };
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, usenet, razor: true);
+            await host.Fixture.RunSqlAsync("UPDATE \"LibraryRoots\" SET \"MediaTypeId\" = 2");
+            var tmdb = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Providers\" WHERE \"Key\" = 'tmdb'"))!;
+            using var saved = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/providers/" + tmdb + "/secret", new SaveProviderSecretDataV1(FakeUsenet.TmdbToken));
+            await SaveTvdbKeyAsync(host);
+            using var imported = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works/metadata", new ImportMetadataWorkDataV1(MediaType.Series, "1399"));
+            var work = (await imported.Content.ReadFromJsonAsync<WorkDetailsV1>())!;
+            await host.Fixture.RunSqlAsync($"""
+                INSERT INTO "AcquisitionRequests" ("Id", "WorkId", "RequestedByProfileId", "RequestedByAccountId", "UiLocaleId", "AcquisitionRequestStatusTypeId", "DecidedByAccountId", "DecidedAt")
+                VALUES (500, {work.Id}, 202, 42, 1, 2, 41, now());
+                INSERT INTO "WantedItems" ("Id", "WorkId") VALUES (600, {work.Id});
+                INSERT INTO "RequestTargets" ("AcquisitionRequestId", "WantedItemId") VALUES (500, 600);
+                INSERT INTO "WorkUnits" ("WorkId", "ParentWorkUnitId", "WorkUnitTypeId", "Number", "ReleasedOn")
+                SELECT {work.Id}, season."Id", 2, 100 + episode, current_date - episode
+                FROM "WorkUnits" AS season CROSS JOIN generate_series(1, 200) AS episode
+                WHERE season."WorkId" = {work.Id} AND season."WorkUnitTypeId" = 1 AND season."Number" = 1;
+                """);
+
+            using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Works/" + work.Id);
+            var html = await page.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
+            Assert.IsTrue(System.Text.RegularExpressions.Regex.Matches(html, "work-switch").Count >= 400, "The episodes' switches are missing.");
+            var forms = System.Text.RegularExpressions.Regex.Matches(html, "<form[ >]").Count;
+            var tokens = System.Text.RegularExpressions.Regex.Matches(html, "__RequestVerificationToken").Count;
+            Console.WriteLine($"work page of {200 + 2} episodes: {html.Length / 1024} KB, {forms} forms, {tokens} tokens");
+            Assert.IsTrue(forms < 20 && tokens < 20, $"The page carries {forms} forms and {tokens} tokens.");
+        }
+
         [TestMethod]
         public async Task Monitoring_SpecialsStartOff_ASeasonSwitchesItsEpisodes_NewUnitsFollowTheTarget()
         {
@@ -2796,6 +2831,17 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(true, await host.ScalarAsync("SELECT \"NextSearchAt\" IS NULL FROM \"WantedItems\" WHERE \"Id\" = 600"), "Switching on searches in the next cycle.");
             using var partly = await host.SendAsync(HttpMethod.Get, "/Admin/Works/" + workId);
             StringAssert.Contains(await partly.Content.ReadAsStringAsync(), "Not monitored");
+
+            // A row's actions are buttons of the page's one form, each with its own address: the page carries a handful of tokens, not three for every row, and the address alone
+            // (no values of its own) switches the episode off again.
+            StringAssert.Contains(html, "id=\"work-actions\"");
+            StringAssert.Contains(html, "Deferred.entry", "The Files tab loads its list with this script; tabs swap in place, so every tab of the page carries it.");
+            StringAssert.Contains(html, "formaction=\"/Admin/Works/" + workId + "?handler=Unit&amp;workUnitId=" + episode.Id + "&amp;isMonitored=");
+            Assert.IsTrue(System.Text.RegularExpressions.Regex.Matches(html, "__RequestVerificationToken").Count < 12, "The page carries a token for every row.");
+            using var viaButton = await host.SendAsync(HttpMethod.Post, "/Admin/Works/" + workId + "?handler=Unit&workUnitId=" + episode.Id + "&isMonitored=false",
+                new Dictionary<string, string> { ["__RequestVerificationToken"] = LibraryTests.Token(html) });
+            Assert.AreEqual(HttpStatusCode.Redirect, viaButton.StatusCode, await viaButton.Content.ReadAsStringAsync());
+            Assert.AreEqual(false, await host.ScalarAsync($"SELECT \"IsMonitored\" FROM \"WorkUnits\" WHERE \"Id\" = {episode.Id}"));
 
             // A unit of another Work is not reachable through this target and stays untouched.
             var foreignId = (long)(await host.ScalarAsync($"""

@@ -65,7 +65,7 @@ namespace Jularr.E2E.Tests
                 // The second episode is switched off on the title's page: nothing monitored is missing, the request completes and the Missing list drops the series.
                 await Steps.OpenWantedAsync(page, FakeServices.SeriesTitle);
                 await Assertions.Expect(EpisodeRow(page, "1")).ToContainTextAsync("On disk");
-                await Steps.SubmitAsync(page, EpisodeRow(page, "2").Locator("form").Filter(new() { Has = page.GetByRole(AriaRole.Switch, new() { Name = "Stop monitoring" }) }));
+                await Steps.FollowAsync(page, EpisodeRow(page, "2").GetByRole(AriaRole.Switch, new() { Name = "Stop monitoring" }));
                 await Assertions.Expect(EpisodeRow(page, "2")).ToContainTextAsync("Not monitored");
                 await page.GotoAsync("/Admin/Wanted?PageNumber=1&View=Missing");
                 Assert.AreEqual(0, await Steps.ListRow(page, FakeServices.SeriesTitle).CountAsync(), "The series is still listed as missing.");
@@ -168,7 +168,7 @@ namespace Jularr.E2E.Tests
                 await Steps.SubmitAsync(page, editor.Locator("form"));
                 await Assertions.Expect(page.Locator("[data-action-toast]")).ToContainTextAsync("1 updated");
                 await Assertions.Expect(page.Locator("tr.work-file")).ToContainTextAsync("HDTV-720p");
-                await Steps.SubmitAsync(page, page.Locator("main form").Filter(new() { Has = page.GetByRole(AriaRole.Button, new() { Name = "Delete file" }) }));
+                await Steps.FollowAsync(page, page.Locator("[data-work-table=files] button[form=work-actions][aria-label='Delete file']"));
                 await Assertions.Expect(page.Locator("[data-action-toast]")).ToContainTextAsync("1 deleted");
                 await Assertions.Expect(page.GetByText("This film has no file yet.")).ToBeVisibleAsync();
                 Assert.AreEqual(0, Directory.EnumerateFiles(Path.Combine(folders.Library, "Movies"), "*.webm", SearchOption.AllDirectories).Count(), "The film's file is still there.");

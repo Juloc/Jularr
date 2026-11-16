@@ -127,18 +127,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                         WHEN unit."IsMonitored" THEN 2
                         ELSE 5
                     END AS "WorkUnitStatusId",
-                    CASE WHEN unit."WorkUnitTypeId" = 2 AND parent."Number" > 0 THEN (
-                        SELECT
-                            count(*)::integer
-                        FROM
-                            "WorkUnits" AS earlier
-                            JOIN "WorkUnits" AS season ON season."Id" = earlier."ParentWorkUnitId"
-                        WHERE
-                            earlier."WorkId" = unit."WorkId"
-                            AND earlier."WorkUnitTypeId" = 2
-                            AND season."Number" > 0
-                            AND (season."Number", earlier."Number") <= (parent."Number", unit."Number")
-                    ) END AS "AbsoluteNumber",
+                    numbered."AbsoluteNumber",
                     CASE WHEN unit."WorkUnitTypeId" = 2 THEN (
                         SELECT
                             unit."Number" - entry."EpisodeOffset"
@@ -156,6 +145,19 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                 FROM
                     "WorkUnits" AS unit
                     LEFT JOIN "WorkUnits" AS parent ON parent."Id" = unit."ParentWorkUnitId"
+                    LEFT JOIN (
+                        -- The absolute number counts the episodes up to this one in season order, once for all of them (peers of the same season and number share it).
+                        SELECT
+                            episode."Id",
+                            (count(*) OVER (ORDER BY season."Number", episode."Number"))::integer AS "AbsoluteNumber"
+                        FROM
+                            "WorkUnits" AS episode
+                            JOIN "WorkUnits" AS season ON season."Id" = episode."ParentWorkUnitId"
+                        WHERE
+                            episode."WorkId" = @WorkId
+                            AND episode."WorkUnitTypeId" = 2
+                            AND season."Number" > 0
+                    ) AS numbered ON numbered."Id" = unit."Id"
                 WHERE
                     unit."WorkId" = @WorkId
                     AND unit."WorkUnitTypeId" IN (1, 2, 3, 5)
