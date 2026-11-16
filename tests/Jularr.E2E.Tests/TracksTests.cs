@@ -270,7 +270,7 @@ namespace Jularr.E2E.Tests
 
                 // A server that restarted no longer knows its sessions: the next segment answers Not Found. The player plans a fresh session at once and plays on.
                 await OpenWithTracksAsync(page, details, pilot);
-                await page.WaitForFunctionAsync("() => document.querySelector('video').currentTime > 1", null, new() { Timeout = Steps.MediaTimeout });
+                await page.WaitForFunctionAsync("() => document.querySelector('video').currentTime > 2.5", null, new() { Timeout = Steps.MediaTimeout });
                 const string segments = "**/api/v1/playback/sessions/*/segments/*.ts";
                 var lost = 0;
                 await page.RouteAsync(segments, route => Interlocked.Increment(ref lost) == 1 ? route.FulfillAsync(new() { Status = 404 }) : route.ContinueAsync());
@@ -281,14 +281,18 @@ namespace Jularr.E2E.Tests
                 }
 
                 page.Request += Planned;
+                var lostFrom = await page.Locator("video").EvaluateAsync<double>("video => video.currentTime");
                 await page.Locator("[data-action=settings]").ClickAsync();
                 await page.Locator("#player-settings").GetByRole(AriaRole.Tab, new() { Name = "Audio", Exact = true }).ClickAsync();
                 await page.Locator("[data-panel=audio] select[data-setting=audio]").SelectOptionAsync(stream!);
                 await page.Keyboard.PressAsync("Escape");
                 for (var waited = 0; (lost < 1 || plans.Count < 2) && waited < 120; waited++) await page.WaitForTimeoutAsync(500);
                 Assert.IsTrue(lost >= 1 && plans.Count >= 2, $"The lost session was not planned again ({lost} lost segments, {plans.Count} plans).");
+                // The fresh session plays again from where the picture stood, not from the start.
+                await page.WaitForFunctionAsync("() => { const video = document.querySelector('video'); return !video.paused && video.readyState >= 3 && video.currentTime > 0; }", null,
+                    new() { Timeout = Steps.MediaTimeout });
                 var recoveredAt = await page.Locator("video").EvaluateAsync<double>("video => video.currentTime");
-                Assert.IsTrue(recoveredAt > 0.5, "The fresh session started over at the beginning.");
+                Assert.IsTrue(recoveredAt >= lostFrom - 1, $"The fresh session started at {recoveredAt:0.0} s instead of near {lostFrom:0.0} s.");
                 await page.WaitForFunctionAsync("at => { const video = document.querySelector('video'); return !video.paused && video.currentTime > at + 1; }", recoveredAt,
                     new() { Timeout = Steps.MediaTimeout });
                 page.Request -= Planned;
