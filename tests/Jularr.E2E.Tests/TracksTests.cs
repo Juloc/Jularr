@@ -149,6 +149,90 @@ namespace Jularr.E2E.Tests
                 await page.Keyboard.PressAsync("Escape");
                 CollectionAssert.AreEqual(Array.Empty<string>(), session.Problems.ToArray());
 
+                // A server that restarted no longer knows its sessions: the next segment answers Not Found. The player plans a fresh session at once and plays on.
+                // Early in the episode, far from its credits.
+                await page.EvaluateAsync("() => { const video = document.querySelector('video'); video.currentTime = 1; return video.play(); }");
+                await page.WaitForFunctionAsync("() => { const video = document.querySelector('video'); return !video.paused && video.currentTime > 1.2; }", null, new() { Timeout = Steps.MediaTimeout });
+                // The first conversion asked for after this point is the lost one: its playlist and segments answer Not Found, the next session's pass.
+                const string segments = "**/api/v1/playback/sessions/*/**";
+                var lost = 0;
+                string? doomed = null;
+                await page.RouteAsync(segments, route =>
+                {
+                    var path = new Uri(route.Request.Url).AbsolutePath;
+                    var id = path.Split('/')[5];
+                    if (doomed is null && (path.EndsWith(".m3u8", StringComparison.Ordinal) || path.EndsWith(".ts", StringComparison.Ordinal))) doomed = id;
+                    if (id != doomed) return route.ContinueAsync();
+                    Interlocked.Increment(ref lost);
+                    return route.FulfillAsync(new() { Status = 404 });
+                });
+                var plans = new ConcurrentQueue<string>();
+                void Planned(object? sender, IRequest request)
+                {
+                    if (request.Method == "POST" && request.Url.Contains("/sessions", StringComparison.Ordinal)) plans.Enqueue(request.Url);
+                }
+
+                page.Request += Planned;
+                // What the page does from here, for the message when the fresh session does not play.
+                await page.EvaluateAsync("""
+                    () => {
+                        const trace = window.__trace = [];
+                        const started = performance.now();
+                        const note = text => trace.push(Math.round(performance.now() - started) + ' ' + text);
+                        const fetchBefore = window.fetch;
+                        window.fetch = (input, init) => { note('fetch ' + (init?.method ?? 'GET') + ' ' + String(input?.url ?? input).replace(location.origin, '')); return fetchBefore(input, init); };
+                        const video = document.querySelector('video');
+                        for (const name of ['error', 'ended', 'pause', 'play', 'emptied', 'loadedmetadata', 'waiting', 'stalled'])
+                            video.addEventListener(name, () => note(name + ' t=' + video.currentTime.toFixed(1) + ' err=' + (video.error?.code ?? '-') + ' src=' + video.currentSrc.slice(-40)));
+                        const replace = history.replaceState.bind(history);
+                        history.replaceState = (state, title, url) => { note('replaceState ' + url + ' ' + new Error().stack.split('\n').slice(2, 5).join(' < ')); return replace(state, title, url); };
+                    }
+                    """);
+                var lostFrom = await page.Locator("video").EvaluateAsync<double>("video => video.currentTime");
+                // A moved audio asks for a new conversion; that one is the lost session.
+                await page.Locator("[data-action=settings]").ClickAsync();
+                await page.Locator("#player-settings").GetByRole(AriaRole.Tab, new() { Name = "Audio", Exact = true }).ClickAsync();
+                await page.Locator("#player-settings [data-panel=audio] [data-setting=audio-offset]").FillAsync("100");
+                await page.Keyboard.PressAsync("Tab");
+                await page.Keyboard.PressAsync("Escape");
+                // The same title is planned again (not the next episode).
+                bool Replanned() => lost >= 1 && plans.Count >= 2 && plans.Count(url => url == plans.First()) >= 2;
+                for (var waited = 0; !Replanned() && waited < 120; waited++) await page.WaitForTimeoutAsync(500);
+                if (!Replanned())
+                {
+                    Assert.Fail($"The lost session was not planned again ({lost} lost, plans {string.Join(", ", plans)}); "
+                        + $"trace: {await page.EvaluateAsync<string>("() => (window.__trace ?? ['(page replaced)']).join(' | ')")}");
+                }
+                // The fresh session plays again from where the picture stood, not from the start.
+                const string videoState = "() => { const video = document.querySelector('video'); return JSON.stringify({ url: location.pathname, paused: video.paused, ended: video.ended, "
+                    + "time: video.currentTime, ready: video.readyState, error: video.error?.code ?? null, src: video.currentSrc.slice(0, 60) }); }";
+                try
+                {
+                    await page.WaitForFunctionAsync("() => { const video = document.querySelector('video'); return !video.paused && video.readyState >= 3 && video.currentTime > 0; }", null,
+                        new() { Timeout = Steps.MediaTimeout });
+                }
+                catch (TimeoutException)
+                {
+                    Assert.Fail($"The fresh session did not play: {await page.EvaluateAsync<string>(videoState)}; plans {string.Join(", ", plans)}; lost {lost}; {string.Join(" | ", session.Problems)}; "
+                        + $"trace: {await page.EvaluateAsync<string>("() => (window.__trace ?? ['(page replaced)']).join(' | ')")}");
+                }
+                var recoveredAt = await page.Locator("video").EvaluateAsync<double>("video => video.currentTime");
+                Assert.IsTrue(recoveredAt >= lostFrom - 1, $"The fresh session started at {recoveredAt:0.0} s instead of near {lostFrom:0.0} s.");
+                await page.WaitForFunctionAsync("at => { const video = document.querySelector('video'); return !video.paused && video.currentTime > at + 1; }", recoveredAt,
+                    new() { Timeout = Steps.MediaTimeout });
+                page.Request -= Planned;
+                await page.UnrouteAsync(segments);
+                // The audio goes back to zero for the steps below, with a conversion of its own that plays on.
+                await page.Locator("[data-action=settings]").ClickAsync();
+                await page.Locator("#player-settings").GetByRole(AriaRole.Tab, new() { Name = "Audio", Exact = true }).ClickAsync();
+                var back = await page.RunAndWaitForResponseAsync(() => page.Locator("#player-settings [data-panel=audio] [data-action=audio-offset-reset]").ClickAsync(),
+                    response => response.Request.Method == "POST" && response.Request.PostData?.Contains("\"audioOffsetMs\":0", StringComparison.Ordinal) == true, new() { Timeout = Steps.MediaTimeout });
+                Assert.AreEqual(200, back.Status);
+                await page.Keyboard.PressAsync("Escape");
+                Assert.IsTrue(session.Problems.All(problem => problem.Contains("404", StringComparison.Ordinal) || problem.Contains("Playback error", StringComparison.Ordinal)),
+                    string.Join("\n", session.Problems));
+                session.Problems.Clear();
+
                 // The file's chapters name its intro and credits: a Skip button while the intro plays (the new plan of the audio choice above kept the markers), then the chapter menu.
                 await page.EvaluateAsync("() => { const video = document.querySelector('video'); video.pause(); video.currentTime = 2.5; }");
                 var skip = page.Locator("[data-action=skip]");
@@ -267,80 +351,6 @@ namespace Jularr.E2E.Tests
                 Assert.IsTrue(session.Problems.All(problem => problem.Contains("503", StringComparison.Ordinal)), string.Join("\n", session.Problems));
                 session.Problems.Clear();
                 foreach (var id in started) await EndSessionAsync(page, id);
-
-                // A server that restarted no longer knows its sessions: the next segment answers Not Found. The player plans a fresh session at once and plays on.
-                await OpenWithTracksAsync(page, details, pilot);
-                await page.WaitForFunctionAsync("() => document.querySelector('video').currentTime > 2.5", null, new() { Timeout = Steps.MediaTimeout });
-                // The first conversion asked for after this point is the lost one: its playlist and segments answer Not Found, the next session's pass.
-                const string segments = "**/api/v1/playback/sessions/*/**";
-                var lost = 0;
-                string? doomed = null;
-                await page.RouteAsync(segments, route =>
-                {
-                    var path = new Uri(route.Request.Url).AbsolutePath;
-                    var id = path.Split('/')[5];
-                    if (doomed is null && (path.EndsWith(".m3u8", StringComparison.Ordinal) || path.EndsWith(".ts", StringComparison.Ordinal))) doomed = id;
-                    if (id != doomed) return route.ContinueAsync();
-                    Interlocked.Increment(ref lost);
-                    return route.FulfillAsync(new() { Status = 404 });
-                });
-                var plans = new ConcurrentQueue<string>();
-                void Planned(object? sender, IRequest request)
-                {
-                    if (request.Method == "POST" && request.Url.Contains("/sessions", StringComparison.Ordinal)) plans.Enqueue(request.Url);
-                }
-
-                page.Request += Planned;
-                // What the page does from here, for the message when the fresh session does not play.
-                await page.EvaluateAsync("""
-                    () => {
-                        const trace = window.__trace = [];
-                        const started = performance.now();
-                        const note = text => trace.push(Math.round(performance.now() - started) + ' ' + text);
-                        const fetchBefore = window.fetch;
-                        window.fetch = (input, init) => { note('fetch ' + (init?.method ?? 'GET') + ' ' + String(input?.url ?? input).replace(location.origin, '')); return fetchBefore(input, init); };
-                        const video = document.querySelector('video');
-                        for (const name of ['error', 'ended', 'pause', 'play', 'emptied', 'loadedmetadata', 'waiting', 'stalled'])
-                            video.addEventListener(name, () => note(name + ' t=' + video.currentTime.toFixed(1) + ' err=' + (video.error?.code ?? '-') + ' src=' + video.currentSrc.slice(-40)));
-                        const replace = history.replaceState.bind(history);
-                        history.replaceState = (state, title, url) => { note('replaceState ' + url + ' ' + new Error().stack.split('\n').slice(2, 5).join(' < ')); return replace(state, title, url); };
-                    }
-                    """);
-                var lostFrom = await page.Locator("video").EvaluateAsync<double>("video => video.currentTime");
-                await page.Locator("[data-action=settings]").ClickAsync();
-                await page.Locator("#player-settings").GetByRole(AriaRole.Tab, new() { Name = "Audio", Exact = true }).ClickAsync();
-                await page.Locator("[data-panel=audio] select[data-setting=audio]").SelectOptionAsync(stream!);
-                await page.Keyboard.PressAsync("Escape");
-                // The same title is planned again (not the next episode).
-                bool Replanned() => lost >= 1 && plans.Count >= 2 && plans.Count(url => url == plans.First()) >= 2;
-                for (var waited = 0; !Replanned() && waited < 120; waited++) await page.WaitForTimeoutAsync(500);
-                if (!Replanned())
-                {
-                    Assert.Fail($"The lost session was not planned again ({lost} lost, plans {string.Join(", ", plans)}); "
-                        + $"trace: {await page.EvaluateAsync<string>("() => (window.__trace ?? ['(page replaced)']).join(' | ')")}");
-                }
-                // The fresh session plays again from where the picture stood, not from the start.
-                const string videoState = "() => { const video = document.querySelector('video'); return JSON.stringify({ url: location.pathname, paused: video.paused, ended: video.ended, "
-                    + "time: video.currentTime, ready: video.readyState, error: video.error?.code ?? null, src: video.currentSrc.slice(0, 60) }); }";
-                try
-                {
-                    await page.WaitForFunctionAsync("() => { const video = document.querySelector('video'); return !video.paused && video.readyState >= 3 && video.currentTime > 0; }", null,
-                        new() { Timeout = Steps.MediaTimeout });
-                }
-                catch (TimeoutException)
-                {
-                    Assert.Fail($"The fresh session did not play: {await page.EvaluateAsync<string>(videoState)}; plans {string.Join(", ", plans)}; lost {lost}; {string.Join(" | ", session.Problems)}; "
-                        + $"trace: {await page.EvaluateAsync<string>("() => (window.__trace ?? ['(page replaced)']).join(' | ')")}");
-                }
-                var recoveredAt = await page.Locator("video").EvaluateAsync<double>("video => video.currentTime");
-                Assert.IsTrue(recoveredAt >= lostFrom - 1, $"The fresh session started at {recoveredAt:0.0} s instead of near {lostFrom:0.0} s.");
-                await page.WaitForFunctionAsync("at => { const video = document.querySelector('video'); return !video.paused && video.currentTime > at + 1; }", recoveredAt,
-                    new() { Timeout = Steps.MediaTimeout });
-                page.Request -= Planned;
-                await page.UnrouteAsync(segments);
-                Assert.IsTrue(session.Problems.All(problem => problem.Contains("404", StringComparison.Ordinal) || problem.Contains("Playback error", StringComparison.Ordinal)),
-                    string.Join("\n", session.Problems));
-                session.Problems.Clear();
 
                 // The broken file stops with the player's general failure, not silently.
                 await page.GotoAsync(details);

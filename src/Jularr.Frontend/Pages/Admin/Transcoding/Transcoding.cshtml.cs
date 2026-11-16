@@ -71,8 +71,12 @@ namespace Jularr.Frontend.Pages.Admin.Transcoding
                 form.Select(item => item.TranscodeAccelerationTypeId, "admin.transcoding.acceleration", accelerations);
                 form.Number(item => item.MaxTranscodes, "admin.transcoding.maxTranscodes");
                 form.Choices(item => item.LadderHeights, "admin.transcoding.ladder", ladder);
+                // The player's read-ahead and how soon it reconnects after the server lost its session.
+                form.Number(item => item.BufferSeconds, "admin.transcoding.bufferSeconds");
+                form.Number(item => item.ReconnectSeconds, "admin.transcoding.reconnectSeconds");
                 form.Save();
-            }, Home, csrf, _input ?? new UpdateTranscodeSettingsDataV1(settings.TranscodeAccelerationTypeId, settings.MaxTranscodes, settings.LadderHeights, settings.Version),
+            }, Home, csrf, _input ?? new UpdateTranscodeSettingsDataV1(settings.TranscodeAccelerationTypeId, settings.MaxTranscodes, settings.LadderHeights, settings.Version,
+                settings.BufferSeconds, settings.ReconnectSeconds),
                 _benchmarkFailed ? null : FormError)]));
         }
 
@@ -96,10 +100,11 @@ namespace Jularr.Frontend.Pages.Admin.Transcoding
             _benchmark = await readBenchmark.ExecuteAsync<TranscodeBenchmarkV1>(new TranscodeBenchmarkParametersV1(), token);
         }
 
-        public async Task<IActionResult> OnPostAsync([BindRequired] TranscodeAcceleration transcodeAccelerationTypeId, int maxTranscodes, int[]? ladderHeights, long version)
+        public async Task<IActionResult> OnPostAsync([BindRequired] TranscodeAcceleration transcodeAccelerationTypeId, int maxTranscodes, int[]? ladderHeights, long version,
+            int bufferSeconds = 120, int reconnectSeconds = 3)
         {
             // An empty ladder offers no lower picture.
-            _input = new UpdateTranscodeSettingsDataV1(transcodeAccelerationTypeId, maxTranscodes, ladderHeights ?? [], version);
+            _input = new UpdateTranscodeSettingsDataV1(transcodeAccelerationTypeId, maxTranscodes, ladderHeights ?? [], version, bufferSeconds, reconnectSeconds);
             await updateSettings.ExecuteAsync<UpdateResult>(new TranscodeSettingsParametersV1(), _input, HttpContext.RequestAborted);
             return LocalRedirect(Home);
         }

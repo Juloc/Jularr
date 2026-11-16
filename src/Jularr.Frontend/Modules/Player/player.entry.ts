@@ -20,10 +20,15 @@ interface PlaybackPlan {
     streamUrl: string;
     resumePositionMs: number;
     isReduced?: boolean;
+    // The Owner's choices: seconds to load ahead, seconds of a standing picture before asking after the session.
+    bufferSeconds?: number;
+    reconnectSeconds?: number;
 }
 
 const Modes = ["", "DirectPlay", "Remux", "Transcode"];
 const ReportInterval = 15_000;
+// Seconds a conversion loads ahead when the server names none.
+const DefaultBufferSeconds = 120;
 // Safari's own extension of the video element for AirPlay.
 interface AirPlayVideo extends HTMLVideoElement { webkitShowPlaybackTargetPicker?(): void; }
 
@@ -445,9 +450,11 @@ async function start(player: HTMLElement, keepView = false): Promise<void> {
             const { default: Hls } = await import("hls.js/light");
             // The server holds a segment until FFmpeg has it (up to two minutes) and answers a passing stall with 503: wait that long and try
             // again instead of giving up, and keep a minute ahead so a slow moment of the storage does not stop the picture.
+            const ahead = next.bufferSeconds ?? DefaultBufferSeconds;
             const instance = new Hls({
                 startPosition: position,
-                maxBufferLength: 60,
+                maxBufferLength: ahead,
+                maxMaxBufferLength: ahead * 2,
                 fragLoadPolicy: {
                     default: {
                         maxTimeToFirstByteMs: 125_000,
@@ -459,7 +466,7 @@ async function start(player: HTMLElement, keepView = false): Promise<void> {
             });
             instance.on(Hls.Events.ERROR, (_, data) => {
                 // A session the server lost (a restart) or stopped for room never answers again: a fresh one is planned at once, where the picture stands, and plays on.
-                if (sessionLost(data.response?.code)) { instance.stopLoad(); void escalate(); return; }
+                if (sessionLost(data.response?.code)) { instance.stopLoad(); void escalate(true); return; }
                 if (!data.fatal) return;
                 console.warn("Playback error", data.type, data.details, data.response?.code);
                 // A dropped connection or a broken segment in the middle of the film is retried in place a few times before the player gives up,
@@ -726,7 +733,7 @@ async function start(player: HTMLElement, keepView = false): Promise<void> {
         }
         // The browser's own HLS player says nothing when the server lost the session (a restart): after a short stand still the player asks whether the session
         // is still there, and plans a fresh one at once when it is not.
-        if (!probed && plan.playbackModeTypeId !== 1 && (now - progressAt) / 1000 >= LostProbeSeconds) {
+        if (!probed && plan.playbackModeTypeId !== 1 && (now - progressAt) / 1000 >= (plan.reconnectSeconds ?? LostProbeSeconds)) {
             probed = true;
             void probeSession(plan.streamUrl);
         }
@@ -739,11 +746,11 @@ async function start(player: HTMLElement, keepView = false): Promise<void> {
             nudged = false;
             void escalate();
         }
-    }, 2_000);
+    }, 1_000);
 
     async function probeSession(address: string): Promise<void> {
         const response = await fetch(address, { credentials: "same-origin", cache: "no-store" }).catch(() => null);
-        if (response && sessionLost(response.status) && plan?.streamUrl === address) void escalate();
+        if (response && sessionLost(response.status) && plan?.streamUrl === address) void escalate(true);
     }
 
     // Transport state.
@@ -1779,10 +1786,12 @@ async function start(player: HTMLElement, keepView = false): Promise<void> {
     // The playback never ends on its own: when repairing in place fails, a new session is planned at the same position, after a growing pause
     // (at most fifteen seconds), for as long as it takes. After several tries in a row the message shows once as a note; the tries go on and a
     // session that plays again takes the message away.
-    async function escalate(): Promise<void> {
+    // A session the server lost is planned again at once; other failures wait a moment before each fresh session.
+    async function escalate(lost = false): Promise<void> {
         if (escalating || switching || casting || leaving || !plan) return;
         escalating = true;
         let told = false;
+        let first = lost;
         try {
             for (;;) {
                 if (replans >= AttemptsBeforeNotice && !told) {
@@ -1790,7 +1799,10 @@ async function start(player: HTMLElement, keepView = false): Promise<void> {
                     await failure();
                 }
                 showLoading();
-                await new Promise(resolve => window.setTimeout(resolve, replanDelay(replans++)));
+                const wait = first ? 0 : replanDelay(replans);
+                replans++;
+                first = false;
+                if (wait > 0) await new Promise(resolve => window.setTimeout(resolve, wait));
                 if (!plan || leaving || casting) return;
                 if (await replan(audioIndex, quality)) {
                     recoveries = 0;
