@@ -400,7 +400,9 @@ namespace Jularr.Backend.Service.User.Playback.V1
                         settings."MaxTranscodes"::integer AS "MaxTranscodes",
                         settings."LadderHeights",
                         benchmark."BestTranscodeAccelerationTypeId",
-                        account."TranscodingPriority"
+                        account."TranscodingPriority",
+                        settings."BufferSeconds"::integer AS "BufferSeconds",
+                        settings."ReconnectSeconds"::integer AS "ReconnectSeconds"
                     FROM
                         "TranscodeSettings" AS settings
                         LEFT JOIN "TranscodeBenchmarks" AS benchmark ON benchmark."Id" = 1
@@ -480,7 +482,7 @@ namespace Jularr.Backend.Service.User.Playback.V1
                     // Moving the audio re-encodes it, whatever the file offers.
                     return new PlaybackTranscodeSource(sessionId, lookup.ProfileId, _storage.Input(files, path), plan.VideoStreamIndex, plan.AudioStreamIndex, plan.CopyVideo, plan.CopyAudio && Data.AudioOffsetMs == 0,
                         source.DurationMs!.Value, plan.AudioKilobits ?? (Data.AudioOffsetMs != 0 ? 192 : null), plan.MaxHeight, plan.VideoKilobits)
-                    { Weight = weight, HasPriority = limits.TranscodingPriority, Encoding = encoding, AudioOffsetMs = Data.AudioOffsetMs };
+                    { Weight = weight, HasPriority = limits.TranscodingPriority, Encoding = encoding, AudioOffsetMs = Data.AudioOffsetMs, AheadSeconds = limits.BufferSeconds };
                 });
                 conversion = candidates[chosen].Plan;
                 if (Data.AudioOffsetMs != 0 && conversion.CopyAudio)
@@ -512,7 +514,11 @@ namespace Jularr.Backend.Service.User.Playback.V1
 
             // Conversions stream on-demand HLS segments.
             var url = "/api/v1/playback/sessions/" + sessionId.ToString("D");
-            return new PlaybackPlanV1(sessionId, mode, url + (conversion is null ? "/stream" : "/playlist.m3u8"), resume, source.DurationMs, audioStreamIndex, quality, reduced);
+            return new PlaybackPlanV1(sessionId, mode, url + (conversion is null ? "/stream" : "/playlist.m3u8"), resume, source.DurationMs, audioStreamIndex, quality, reduced)
+            {
+                BufferSeconds = limits.BufferSeconds,
+                ReconnectSeconds = limits.ReconnectSeconds
+            };
         }
     }
 

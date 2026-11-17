@@ -227,7 +227,7 @@ namespace Jularr.E2E.Tests
         }
 
         // The test's own connections close at once; the host pools its connections as in production.
-        private string ConnectionString => new NpgsqlConnectionStringBuilder(_adminConnection) { Database = _database, Pooling = false }.ConnectionString;
+        internal string ConnectionString => new NpgsqlConnectionStringBuilder(_adminConnection) { Database = _database, Pooling = false }.ConnectionString;
 
         private string HostConnectionString => new NpgsqlConnectionStringBuilder(_adminConnection) { Database = _database }.ConnectionString;
 

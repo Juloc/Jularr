@@ -40,6 +40,23 @@ REAL_TOOLS = ("CoverTests.Cover_WithFfmpegAndCjxl_KeepsOnlyJxlWidths_AndAnswersO
               "SmbStorageTests.Inputs_StallingLoopbackRead_EndsFfmpegWithinItsReadTimeout")
 # Too slow for a PR: the Backend Full shards run them once, the PR shards leave them out (--pr-exclude).
 FULL_ONLY = ("LibraryPerformanceTests.Favorites_LargeCatalog_ReadsStayIndependentOfCatalogSize",)  # 500,000 works, ~37 s
+# Only the nightly Backend Full runs these: classes of 8 s and more that found no real error from 2026-10-30 to
+# 2026-11-17 (628 red runs measured). A PR whose change selects one of them still runs it (choose()).
+NIGHTLY = ("MediaImportTests", "BookTranslationTests", "WorkListTests", "ReadingRetranslationTests",
+           "ExternalWorkSyncTests", "WorkSearchRunTests", "TranscodeTests", "ProgressTests", "AdminMenuTests",
+           "CompanionTests", "VideoIdentityImportTests", "MetadataFillTests", "PlaybackPreferenceTests", "SpeechTests",
+           "ReadingDerivationTests", "VpnTunnelTests", "SeriesCatalogTests", "CatalogCleanupTests",
+           "BrowserAssistanceTests", "DjvuTests", "AniListRelationTests", "PwaAppearanceTests", "ActionHintTests",
+           "StartupStatusTests", "BookFormatTests", "NarouClientTests", "CodexConnectionTests")
+# The browser classes of the same measurement: every class without a real error.
+NIGHTLY_E2E = ("ReaderCodexTests", "SetupFlowTests", "DownloadPagesTests", "ManualBookSearchTests",
+               "UserPanelScrollTests", "RemoteBrowserTests", "ArrSettingsTests", "PhoneGeometryTests",
+               "WantedSearchDialogTests", "ShutdownTests", "WantedTests", "WorkDeletionTests", "WorkSearchRunTests",
+               "AdminPhoneFitTests", "DiscoverSearchTests", "AiPageTests", "DiscoverFilterTests", "PlayerBarTests",
+               "WorkAddTests", "AdminPageSmokeTests", "TranslatedEpubTests", "CoverDeliveryTests", "ContinueMenuTests",
+               "PhoneShellTests", "DiscoverRecommendationsTests", "RequestsPhoneTests", "UserListScrollTests",
+               "WorkRelationsTests", "StackingTests", "MatchesTests", "DiscoverFeedTests", "PhoneLayoutTests",
+               "StartupStatusPageTests")
 
 # A path may belong to several areas (e.g. downloads + storage). The mappings
 # are deliberately plain to make changes auditable in code review. Keep them
@@ -154,6 +171,16 @@ def pr_exclude() -> str:
     return ",".join(REAL_TOOLS + FULL_ONLY)
 
 
+def nightly_exclude() -> str:
+    """ci-shard-tests.py --exclude added to the backend plan of a Backend Full run that is not nightly."""
+    return ",".join(NIGHTLY)
+
+
+def nightly_e2e_exclude() -> str:
+    """ci-shard-tests.py --exclude of the browser plan of a Backend Full run that is not nightly."""
+    return ",".join(NIGHTLY_E2E)
+
+
 def self_test() -> None:
     cases = (
         (["src/Jularr.Backend/Logic/Acquisition/Search.cs"], "AcquisitionTests"),
@@ -179,6 +206,9 @@ def self_test() -> None:
     assert len(pr_units) == len(set(pr_units)) == len(REAL_TOOLS) + len(FULL_ONLY)
     assert not set(FULL_ONLY) & set(units), "a Full-only test still runs in the Backend Full shards"
     assert all(unit.count(".") == 1 for unit in REAL_TOOLS + FULL_ONLY), "Class.Method"
+    assert len(set(NIGHTLY)) == len(NIGHTLY) and len(set(NIGHTLY_E2E)) == len(NIGHTLY_E2E)
+    kept = set(BOOT_CLASSES + SHARED) | {unit.split(".")[0] for unit in SMOKE + BOOT_METHODS + REAL_TOOLS + FULL_ONLY}
+    assert not kept & set(NIGHTLY), "boot, shared, smoke, real-tool and Full-only classes run in every Backend Full"
     filter_text, classes = choose(["docs/README.md"])
     assert not classes and filter_text.count("FullyQualifiedName=") == len(SMOKE) and "~" not in filter_text
     filter_text, classes = choose(["src/Jularr.Frontend/Styles/app.scss"])
@@ -204,14 +234,15 @@ def main() -> int:
     if len(sys.argv) == 2 and sys.argv[1] == "--boot-filter":
         print(boot_filter())
         return 0
-    listings = {"--tools-filter": tools_filter, "--full-exclude": full_exclude, "--pr-exclude": pr_exclude}
+    listings = {"--tools-filter": tools_filter, "--full-exclude": full_exclude, "--pr-exclude": pr_exclude,
+                "--nightly-exclude": nightly_exclude, "--nightly-e2e-exclude": nightly_e2e_exclude}
     if len(sys.argv) == 2 and sys.argv[1] in listings:
         print(listings[sys.argv[1]]())
         return 0
     as_json = len(sys.argv) == 4 and sys.argv[3] == "--json"
     if len(sys.argv) != 3 and not as_json:
         print("Usage: ci-select-backend-tests.py BASE_SHA HEAD_SHA [--json] | --self-test | --boot-filter | --tools-filter"
-              " | --full-exclude | --pr-exclude", file=sys.stderr)
+              " | --full-exclude | --pr-exclude | --nightly-exclude | --nightly-e2e-exclude", file=sys.stderr)
         return 2
     changed = subprocess.check_output(
         ["git", "diff", "--name-only", "--diff-filter=ACMR", sys.argv[1], sys.argv[2]],

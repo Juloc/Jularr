@@ -77,6 +77,25 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Catalog_TrendingOfMoreThanAHundredKnownWorks_AnswersThemAll()
+        {
+            // Without a kept page the trending list is the catalog's Works by their rank, up to 500: their states are read a hundred at a time, never refused.
+            await using var host = await CreateHostAsync();
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "Works" ("Id", "CatalogNamespace", "MediaTypeId", "CanonicalTitle", "TrendingRank")
+                SELECT 90000 + i, 'openlibrary', 3, 'Book ' || i, i FROM generate_series(1, 150) AS i;
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value")
+                SELECT 90000 + i, 'openlibrary', 'OL' || i || 'W' FROM generate_series(1, 150) AS i;
+                """);
+            using var feed = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/feed", new ReadDiscoverCatalogFeedDataV1(MediaType.Book, DiscoverFeedType.Trending));
+            Assert.AreEqual(HttpStatusCode.OK, feed.StatusCode, await feed.Content.ReadAsStringAsync());
+            var items = (await feed.Content.ReadFromJsonAsync<BaseDataList<DiscoverCatalogItemV1>>())!;
+            Assert.AreEqual(150, items.Count);
+            Assert.AreEqual(90001L, items[0].WorkId);
+            Assert.IsTrue(items.All(item => item.MediaStateTypeId == MediaStateType.NotRequested));
+        }
+
+        [TestMethod]
         public async Task AdminImport_MonitorWithAndWithoutSearchNow_StartsTheTargetNowOrADayLater()
         {
             await using var host = await CreateHostAsync(tvdb: new FakeTvdb());

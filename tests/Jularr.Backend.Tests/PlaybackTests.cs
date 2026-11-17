@@ -53,6 +53,8 @@ namespace Jularr.Backend.Tests
             var plan = await StartAsync(host, assetId);
             Assert.AreEqual(PlaybackModeType.DirectPlay, plan.PlaybackModeTypeId);
             Assert.AreEqual(0L, plan.ResumePositionMs);
+            // The plan carries the Owner's buffer and reconnect choices to the player.
+            Assert.AreEqual((120, 3), (plan.BufferSeconds, plan.ReconnectSeconds));
             Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"MediaProgress\""));
 
             // Authorized range responses.

@@ -183,6 +183,29 @@ jobs:
           test "$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.version" }}' "${IMAGE}:${VERSION}")" = "${VERSION}"
           test "$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "${IMAGE}:${VERSION}")" = "${GITHUB_SHA}"
 
+  # The owner's server takes the new latest image at once: Dockhand's webhook of the jularr stack pulls it and redeploys (its stack settings pull images and
+  # force a redeploy). Without the two secrets the step only says so; a prerelease never deploys.
+  deploy:
+    needs: [guard, image]
+    if: needs.guard.outputs.dry_run != 'true' && needs.guard.outputs.prerelease == 'false'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Tell Dockhand to deploy
+        env:
+          URL: ${{ secrets.DOCKHAND_WEBHOOK_URL }}
+          SECRET: ${{ secrets.DOCKHAND_WEBHOOK_SECRET }}
+        run: |
+          if [[ -z "${URL}" || -z "${SECRET}" ]]; then
+            echo "::notice::DOCKHAND_WEBHOOK_URL or DOCKHAND_WEBHOOK_SECRET is not set: deploy by hand in Dockhand."
+            exit 0
+          fi
+          body='{"ref":"refs/heads/main","repository":{"full_name":"Juloc/docker"}}'
+          signature="sha256=$(printf '%s' "${body}" | openssl dgst -sha256 -hmac "${SECRET}" -hex | sed 's/^.* //')"
+          curl -fsS --retry 3 --retry-delay 5 --max-time 60 -X POST "${URL}" -H "Content-Type: application/json" -H "X-GitHub-Event: push" \
+            -H "X-Hub-Signature-256: ${signature}" -d "${body}" -o /dev/null -w "Dockhand answered %{http_code}\n"
+
   release:
     needs: [guard, image]
     if: needs.guard.outputs.dry_run != 'true'

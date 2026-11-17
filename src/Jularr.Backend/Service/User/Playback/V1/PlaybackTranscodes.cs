@@ -34,6 +34,10 @@ namespace Jularr.Backend.Service.User.Playback.V1
 
         // The audio runs later (positive) or earlier (negative) than the picture by this many milliseconds.
         public int AudioOffsetMs { get; init; }
+
+        // How far the player loads ahead (the Owner's setting): the conversion runs that far past the last requested segment and a minute more before it rests.
+        public int AheadSeconds { get; init; } = 120;
+        public int AheadSegments => (int)Math.Ceiling((AheadSeconds + 60) / (double)PlaybackTranscodes.SegmentSeconds);
     }
 
     // One demand-driven FFmpeg job per playback session.
@@ -321,7 +325,7 @@ namespace Jularr.Backend.Service.User.Playback.V1
                 // Bound work while idle or far ahead of the viewer.
                 lock (job)
                 {
-                    if (job.IsRunning && (idle > IdleTimeout || job.Produced() > job.LastRequested + HighWater))
+                    if (job.IsRunning && (idle > IdleTimeout || job.Produced() > job.LastRequested + Math.Max(HighWater, job.Source.AheadSegments)))
                     {
                         Kill(job);
                     }
