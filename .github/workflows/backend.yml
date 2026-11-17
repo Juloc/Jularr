@@ -63,11 +63,14 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 10.0.403
+      # Its own key: the Backend PR cache holds only the backend test packages, so the browser test packages
+      # (Playwright) would download again on every run.
       - uses: actions/cache@v6
         with:
           path: ~/.nuget/packages
-          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', '**/*.props', '**/*.targets') }}
+          key: nuget-full-${{ runner.os }}-${{ hashFiles('**/*.csproj', '**/*.props', '**/*.targets') }}
           restore-keys: |
+            nuget-full-${{ runner.os }}-
             nuget-${{ runner.os }}-
       - uses: actions/setup-node@v7
         with:
@@ -85,18 +88,22 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
         run: python3 scripts/ci-shard-tests.py fetch --repo "${REPOSITORY}" --out "${RUNNER_TEMP}/measured"
-      - name: Compile assets for the Razor and browser tests
-        working-directory: src/Jularr.Frontend
+      # The NuGet restore runs beside the asset build; the compile below needs both.
+      - name: Compile assets for the Razor and browser tests, restore the .NET packages
         run: |
-          npm ci --no-audit --no-fund
-          npm run build
+          set -euo pipefail
+          dotnet restore Jularr.sln > "${RUNNER_TEMP}/restore.log" 2>&1 &
+          restore=$!
+          (cd src/Jularr.Frontend && npm ci --no-audit --no-fund && npm run build)
+          wait "${restore}" || { cat "${RUNNER_TEMP}/restore.log"; exit 1; }
+          cat "${RUNNER_TEMP}/restore.log"
       - name: Frontend unit tests
         working-directory: src/Jularr.Frontend
         run: npm test
+      # One build of the solution compiles both test projects side by side. The analyzers only ever warn and cost a
+      # quarter of the compile; frontend.yml still shows their warnings.
       - name: Compile the backend and browser test projects once
-        run: |
-          dotnet build tests/Jularr.Backend.Tests --configuration Release
-          dotnet build tests/Jularr.E2E.Tests --configuration Release
+        run: dotnet build Jularr.sln --configuration Release --no-restore -p:RunAnalyzers=false
       # The shard counts here equal the matrix entries of `shards`. The real-tool step runs on backend 7/7 after its
       # lanes: --reserve 7=S plans each of its three lanes S/3 seconds lighter (S = 3 x the step's measured time, 30 s).
       # A run that is not nightly also leaves out the nightly classes.
