@@ -5,7 +5,7 @@ name: Backend Full
 #
 # Job graph:
 #   build  ->  smoke (startup, schema, migrations, sessions, setup gate)  ->  gate
-#          ->  shards (6 backend x 2 lanes + 6 browser, each to its end)  ->
+#          ->  shards (6 backend x 3 lanes + 6 browser x 3 lanes, each to its end)  ->
 # `build` compiles everything once, runs the frontend unit tests, plans the shards and publishes the
 # build; smoke and the shards only unpack it and run beside each other. The backend shards leave out
 # what smoke runs. No job is meant to run longer than about 10 minutes.
@@ -90,14 +90,14 @@ jobs:
           dotnet build tests/Jularr.Backend.Tests --configuration Release
           dotnet build tests/Jularr.E2E.Tests --configuration Release
       # The shard counts here equal the matrix entries of `shards`. The real-tool step runs on backend 6/6 after its
-      # lanes: --reserve 6=S plans each of its two lanes S/2 seconds lighter (S = 2 x the step's measured time, 30 s).
+      # lanes: --reserve 6=S plans each of its three lanes S/3 seconds lighter (S = 3 x the step's measured time, 30 s).
       - name: Plan the test shards
         run: |
           set -euo pipefail
-          python3 scripts/ci-shard-tests.py matrix --kind backend --shards 6 --lanes 2 --reserve 6=60 \
+          python3 scripts/ci-shard-tests.py matrix --kind backend --shards 6 --lanes 3 --reserve 6=90 \
             --exclude "$(python3 scripts/ci-select-backend-tests.py --full-exclude)" \
             --measured "${RUNNER_TEMP}/measured" --out ci-plan/backend.json
-          python3 scripts/ci-shard-tests.py matrix --kind e2e --shards 6 --lanes 1 \
+          python3 scripts/ci-shard-tests.py matrix --kind e2e --shards 6 --lanes 3 \
             --measured "${RUNNER_TEMP}/measured" --out ci-plan/e2e.json
       - uses: ./.github/actions/pack-build
 
@@ -159,7 +159,8 @@ jobs:
 
   # The shards of the plan in ci-plan/*.json (scripts/ci-shard-tests.py): balanced by measured seconds per
   # test, a long class split by method. A failing shard does not cancel the others (fail-fast off), so one
-  # run reports every failing shard. Backend shards run two test processes (lanes) each; browser shards run one.
+  # run reports every failing shard. Every shard runs three test processes (lanes) on the runner's four cores; each test has its own
+  # database and port.
   # Change a shard count in the matrix entries of that kind (1/N .. N/N) and in `Plan the test shards` together.
   shards:
     name: ${{ matrix.kind }} (${{ matrix.shard }})
@@ -213,9 +214,8 @@ jobs:
           djvulibre: 'true'
       # A concurrent dotnet CLI lane can fail its NuGet-Migrations named mutex
       # when a hosted runner has no /run/user/<uid>/.dotnet/shm directory.
-      # Give backend lanes a stable user-owned runtime path before launching them.
+      # Give the lanes a stable user-owned runtime path before launching them.
       - name: Prepare .NET runtime mutex directory
-        if: matrix.kind == 'backend'
         run: |
           mkdir -p "$RUNNER_TEMP/dotnet-runtime/.dotnet/shm"
           chmod 700 "$RUNNER_TEMP/dotnet-runtime"
@@ -260,7 +260,7 @@ jobs:
           failed=0
           for pid in "${pids[@]}"; do wait "${pid}" || failed=1; done
           if [[ "${failed}" -ne 0 ]]; then
-            echo "::error::Backend shard ${SHARD}: a test lane failed (lines are prefixed [lane1] / [lane2])."
+            echo "::error::Backend shard ${SHARD}: a test lane failed (lines are prefixed [lane1] .. [lane3])."
             exit 1
           fi
         env:
@@ -286,11 +286,27 @@ jobs:
           set -euo pipefail
           export TMPDIR="${RUNNER_TEMP}"
           findmnt -T "${TMPDIR}" -o TARGET,FSTYPE,SOURCE || true
-          filter="$(python3 scripts/ci-shard-tests.py lanes --plan ci-plan/e2e.json --shard "${SHARD}")"
-          # An empty filter would run every browser test.
-          if [[ -z "${filter}" ]]; then echo "::notice::Browser shard ${SHARD} has no planned tests."; exit 0; fi
-          dotnet test tests/Jularr.E2E.Tests --configuration Release --no-build ${DOTNET_TEST_BLAME} \
-            --filter "${filter}" --logger "trx;LogFileName=e2e-shard.trx" --results-directory TestResults/ci/e2e
+          dotnet --info >/dev/null
+          python3 scripts/ci-shard-tests.py lanes --plan ci-plan/e2e.json --shard "${SHARD}" > "${RUNNER_TEMP}/lanes.txt"
+          mapfile -t lanes < "${RUNNER_TEMP}/lanes.txt"
+          pids=()
+          for index in "${!lanes[@]}"; do
+            # An empty filter would run every browser test.
+            [[ -n "${lanes[$index]}" ]] || continue
+            lane=$((index + 1))
+            (set -o pipefail
+             dotnet test tests/Jularr.E2E.Tests --configuration Release --no-build ${DOTNET_TEST_BLAME} \
+               --filter "${lanes[$index]}" --logger "trx;LogFileName=e2e-lane${lane}.trx" \
+               --results-directory TestResults/ci/e2e 2>&1 | sed -u "s/^/[lane${lane}] /") &
+            pids+=($!)
+          done
+          if [[ "${#pids[@]}" -eq 0 ]]; then echo "::notice::Browser shard ${SHARD} has no planned tests."; exit 0; fi
+          failed=0
+          for pid in "${pids[@]}"; do wait "${pid}" || failed=1; done
+          if [[ "${failed}" -ne 0 ]]; then
+            echo "::error::Browser shard ${SHARD}: a test lane failed (lines are prefixed [lane1] .. [lane3])."
+            exit 1
+          fi
         env:
           JULARR_TEST_FFMPEG: /usr/bin/ffmpeg
           JULARR_TEST_DJVULIBRE: /usr/bin
