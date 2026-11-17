@@ -5,7 +5,7 @@ name: Backend Full
 #
 # Job graph:
 #   build  ->  smoke (startup, schema, migrations, sessions, setup gate)  ->  gate
-#          ->  shards (7 backend x 3 lanes + 8 browser x 3 lanes, each to its end)  ->
+#          ->  shards (7 backend x 3 lanes + 8 browser x 2 lanes, each to its end)  ->
 # `build` compiles everything once, runs the frontend unit tests, plans the shards and publishes the
 # build; smoke and the shards only unpack it and run beside each other. The backend shards leave out
 # what smoke runs. No job is meant to run longer than about 10 minutes.
@@ -114,7 +114,7 @@ jobs:
           echo "Nightly classes included: ${NIGHTLY}"
           python3 scripts/ci-shard-tests.py matrix --kind backend --shards 7 --lanes 3 --reserve 7=90 \
             --exclude "${backend}" --measured "${RUNNER_TEMP}/measured" --out ci-plan/backend.json
-          python3 scripts/ci-shard-tests.py matrix --kind e2e --shards 8 --lanes 3 \
+          python3 scripts/ci-shard-tests.py matrix --kind e2e --shards 8 --lanes 2 \
             ${e2e:+--exclude "${e2e}"} --measured "${RUNNER_TEMP}/measured" --out ci-plan/e2e.json
       - uses: ./.github/actions/pack-build
 
@@ -176,8 +176,8 @@ jobs:
 
   # The shards of the plan in ci-plan/*.json (scripts/ci-shard-tests.py): balanced by measured seconds per
   # test, a long class split by method. A failing shard does not cancel the others (fail-fast off), so one
-  # run reports every failing shard. Every shard runs three test processes (lanes) on the runner's four cores; each test has its own
-  # database and port.
+  # run reports every failing shard. Backend shards run three test processes (lanes) on the runner's four cores, browser shards two (three
+  # browsers at once tip the layout-shift measurement over its limit); each test has its own database and port.
   # Change a shard count in the matrix entries of that kind (1/N .. N/N) and in `Plan the test shards` together.
   shards:
     name: ${{ matrix.kind }} (${{ matrix.shard }})
@@ -324,7 +324,7 @@ jobs:
           failed=0
           for pid in "${pids[@]}"; do wait "${pid}" || failed=1; done
           if [[ "${failed}" -ne 0 ]]; then
-            echo "::error::Browser shard ${SHARD}: a test lane failed (lines are prefixed [lane1] .. [lane3])."
+            echo "::error::Browser shard ${SHARD}: a test lane failed (lines are prefixed [lane1] / [lane2])."
             exit 1
           fi
         env:
