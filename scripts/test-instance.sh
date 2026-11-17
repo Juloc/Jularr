@@ -32,6 +32,16 @@ start() {
   echo "Building the frontend and the host..."
   (cd "${repo}/src/Jularr.Frontend" && npm run build >/dev/null)
   dotnet build "${repo}/src/Jularr.Frontend" -c Release -m:2 -nodeReuse:false -p:UseSharedCompilation=false -v quiet -nologo >/dev/null
+  # The tools of the live image: the pinned FFmpeg of CI, and cjxl (covers as JPEG XL) from the Debian package when it is not installed.
+  eval "$("${repo}/scripts/local-ffmpeg.sh")"
+  local tools="${HOME}/.cache/jularr-tools" cjxl; cjxl="$(command -v cjxl || true)"
+  if [[ -z "${cjxl}" ]]; then
+    cjxl="${tools}/jxl/root/usr/bin/cjxl"
+    if [[ ! -x "${cjxl}" ]]; then
+      rm -rf "${tools}/jxl" && mkdir -p "${tools}/jxl/deb"
+      (cd "${tools}/jxl/deb" && apt-get download libjxl-tools >/dev/null && dpkg -x libjxl-tools_*.deb "${tools}/jxl/root")
+    fi
+  fi
   local address="http://127.0.0.1:$(port "${name}")"
   echo "Jularr ${name}: ${address} (Ctrl+C stops it; the database and the folders stay)"
   echo "Downloads and the library belong under ${dir}/storage; the log is ${dir}/host.log."
@@ -39,6 +49,7 @@ start() {
   ASPNETCORE_URLS="${address}" ASPNETCORE_ENVIRONMENT=Development \
   JULARR_DB="Host=127.0.0.1;Port=15433;Username=${pg_user};Password=${PGPASSWORD};Database=${db}" \
   DataPath="${dir}/data" Storage__MountRoot="${dir}/storage" Storage__RequireMountPoint=false Storage__LocalPaths__0="${dir}/storage" \
+  Media__FfmpegPath="${JULARR_TEST_FFMPEG}" Media__FfprobePath="$(dirname "${JULARR_TEST_FFMPEG}")/ffprobe" Media__CjxlPath="${cjxl}" \
     dotnet bin/Release/net10.0/Jularr.Frontend.dll > >(tee -a "${dir}/host.log" | grep --line-buffered -E "fail|crit|Now listening") 2>&1 &
   echo $! > "${dir}/pid"
   trap 'kill -TERM "$(cat "${dir}/pid")" 2>/dev/null || true' INT TERM
