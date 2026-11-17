@@ -5,7 +5,7 @@ name: Backend Full
 #
 # Job graph:
 #   build  ->  smoke (startup, schema, migrations, sessions, setup gate)  ->  gate
-#          ->  shards (8 backend x 3 lanes + 5 browser x 3 lanes, each to its end)  ->
+#          ->  shards (7 backend x 3 lanes + 8 browser x 3 lanes, each to its end)  ->
 # `build` compiles everything once, runs the frontend unit tests, plans the shards and publishes the
 # build; smoke and the shards only unpack it and run beside each other. The backend shards leave out
 # what smoke runs. No job is meant to run longer than about 10 minutes.
@@ -97,8 +97,8 @@ jobs:
         run: |
           dotnet build tests/Jularr.Backend.Tests --configuration Release
           dotnet build tests/Jularr.E2E.Tests --configuration Release
-      # The shard counts here equal the matrix entries of `shards`. The real-tool step runs on backend 8/8 after its
-      # lanes: --reserve 8=S plans each of its three lanes S/3 seconds lighter (S = 3 x the step's measured time, 30 s).
+      # The shard counts here equal the matrix entries of `shards`. The real-tool step runs on backend 7/7 after its
+      # lanes: --reserve 7=S plans each of its three lanes S/3 seconds lighter (S = 3 x the step's measured time, 30 s).
       # A run that is not nightly also leaves out the nightly classes.
       - name: Plan the test shards
         env:
@@ -112,9 +112,9 @@ jobs:
             e2e="$(python3 scripts/ci-select-backend-tests.py --nightly-e2e-exclude)"
           fi
           echo "Nightly classes included: ${NIGHTLY}"
-          python3 scripts/ci-shard-tests.py matrix --kind backend --shards 8 --lanes 3 --reserve 8=90 \
+          python3 scripts/ci-shard-tests.py matrix --kind backend --shards 7 --lanes 3 --reserve 7=90 \
             --exclude "${backend}" --measured "${RUNNER_TEMP}/measured" --out ci-plan/backend.json
-          python3 scripts/ci-shard-tests.py matrix --kind e2e --shards 5 --lanes 3 \
+          python3 scripts/ci-shard-tests.py matrix --kind e2e --shards 8 --lanes 3 \
             ${e2e:+--exclude "${e2e}"} --measured "${RUNNER_TEMP}/measured" --out ci-plan/e2e.json
       - uses: ./.github/actions/pack-build
 
@@ -188,20 +188,22 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { kind: backend, shard: 1/8 }
-          - { kind: backend, shard: 2/8 }
-          - { kind: backend, shard: 3/8 }
-          - { kind: backend, shard: 4/8 }
-          - { kind: backend, shard: 5/8 }
-          - { kind: backend, shard: 6/8 }
-          - { kind: backend, shard: 7/8 }
-          # Also runs the real-tool tests (FFmpeg, ffprobe, cjxl): shard 8 is planned lighter by their time.
-          - { kind: backend, shard: 8/8, tools: true }
-          - { kind: e2e, shard: 1/5 }
-          - { kind: e2e, shard: 2/5 }
-          - { kind: e2e, shard: 3/5 }
-          - { kind: e2e, shard: 4/5 }
-          - { kind: e2e, shard: 5/5 }
+          - { kind: backend, shard: 1/7 }
+          - { kind: backend, shard: 2/7 }
+          - { kind: backend, shard: 3/7 }
+          - { kind: backend, shard: 4/7 }
+          - { kind: backend, shard: 5/7 }
+          - { kind: backend, shard: 6/7 }
+          # Also runs the real-tool tests (FFmpeg, ffprobe, cjxl): shard 7 is planned lighter by their time.
+          - { kind: backend, shard: 7/7, tools: true }
+          - { kind: e2e, shard: 1/8 }
+          - { kind: e2e, shard: 2/8 }
+          - { kind: e2e, shard: 3/8 }
+          - { kind: e2e, shard: 4/8 }
+          - { kind: e2e, shard: 5/8 }
+          - { kind: e2e, shard: 6/8 }
+          - { kind: e2e, shard: 7/8 }
+          - { kind: e2e, shard: 8/8 }
     services:
       postgres:
         image: postgres:18
