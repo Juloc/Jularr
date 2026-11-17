@@ -107,6 +107,13 @@ namespace Jularr.Backend.Logic.Acquisition
         private static ImportVerdict JudgeSeries(AcquisitionKind kind, IReadOnlyList<string> titles, int? year, string releaseTitle, int? expectedSeason, int? expectedStart, int? expectedEnd, StorageFile[] videos,
             IReadOnlyList<TargetUnit> units, QualityProfile? profile)
         {
+            // The release was taken for this target (found by its ID, or chosen by a person): its own series name counts as one of the target's, as Sonarr
+            // trusts the grab. A file naming yet another series still conflicts.
+            if (Parse(releaseTitle) is { SeriesTitle.Length: > 0 } grabbed && HasEvidence(grabbed))
+            {
+                titles = [.. titles, grabbed.SeriesTitle];
+            }
+
             var candidates = videos.Select(video =>
             {
                 var stem = Path.GetFileNameWithoutExtension(video.RelativePath);

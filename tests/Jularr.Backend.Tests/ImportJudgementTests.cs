@@ -36,6 +36,17 @@ namespace Jularr.Backend.Tests
                 Files("[Grp] Example Show - 04 [1080p].mkv"), Season(1, 6), null).Kind);
         }
 
+        // A release found by the series' ID often carries a name the catalog does not know (a romanised or an English broadcast title): its files are this series.
+        [TestMethod]
+        public void Series_FilesNamedLikeTheGrabbedRelease_AreThisSeries_AnotherNameStillIsNot()
+        {
+            ImportVerdict Verdict(string release, string file) => ImportJudgement.Judge(MediaType.Series, MediaSubtype.Anime, ["Now That I Can Control Reality"], 2026, release, 1, 5, 5,
+                Files(file), Season(1, 8), null);
+            Assert.AreEqual(ImportVerdictKind.Clear, Verdict("[geckyzz] Click Me All Over - S01E05 [720P]", "[geckyzz] Click Me All Over - S01E05 [720P].mkv").Kind);
+            Assert.AreEqual(ImportVerdictKind.Clear, Verdict("[Doomdos] - Mouse Cursor de Genjitsu - S01E05 [720p]", "[Doomdos] - Mouse Cursor de Genjitsu - S01E05 [720p].mkv").Kind);
+            Assert.AreEqual(ImportJudgement.WrongSeries, Verdict("[geckyzz] Click Me All Over - S01E05 [720P]", "[Grp] Other Show - S01E05 [720p].mkv").ReasonKey);
+        }
+
         [TestMethod]
         public void Series_AnotherSeriesSamplesAndExtras_AreNoUse()
         {
