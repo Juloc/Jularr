@@ -125,9 +125,8 @@ namespace Jularr.Backend.Logic.Acquisition
         }
 
         // Sonarr's search cases. The first round (tier 0) is what Sonarr asks first: the series ID with season and episode (a daily show: the year
-        // and MM/dd), for anime also the ID with the absolute number, for a special its own title. Without an ID the title takes the ID's place.
-        // Everything else, also an anime's title with the absolute number (a long title is the indexer's slowest answer), only runs when the
-        // first round found nothing.
+        // and MM/dd), for a special its own title: one query. Without an ID the title takes the ID's place. Everything else, also an anime's ID
+        // and title with the absolute number, only runs when the first round found nothing.
         private static void PlanEpisodic(List<PlannedQuery> rungs, SearchIntent intent, IReadOnlyList<string> titles, NewznabCapabilities caps, bool structuredText)
         {
             var season = intent.Season;
@@ -156,10 +155,10 @@ namespace Jularr.Backend.Logic.Acquisition
                     {
                         var tier = ids++ == 0 ? 0 : 1;
                         Add(rungs, "id", tier, NewznabSearchMode.TvSearch, null, [new(parameter, numeric), .. numbering], $"{key.ToUpperInvariant()}{(numberingText is null ? string.Empty : $" + {numberingText}")}");
-                        // Anime releases carry the absolute number: Sonarr asks the ID with it in the same round.
+                        // Anime releases often carry the absolute number: the ID with it is the first fallback.
                         if (tier == 0 && intent.Kind == AcquisitionKind.Anime && intent.AbsoluteEpisode is > 0 and var absolute && caps.Supports(NewznabSearchMode.TvSearch, "q"))
                         {
-                            Add(rungs, "id", 0, NewznabSearchMode.TvSearch, absolute.ToString("00", CultureInfo.InvariantCulture), [new(parameter, numeric)], $"{key.ToUpperInvariant()} + absolute {absolute}");
+                            Add(rungs, "id", 1, NewznabSearchMode.TvSearch, absolute.ToString("00", CultureInfo.InvariantCulture), [new(parameter, numeric)], $"{key.ToUpperInvariant()} + absolute {absolute}");
                         }
                     }
                 }
