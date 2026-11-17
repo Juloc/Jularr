@@ -38,7 +38,7 @@ start() {
   cd "${repo}/src/Jularr.Frontend"
   ASPNETCORE_URLS="${address}" ASPNETCORE_ENVIRONMENT=Development \
   JULARR_DB="Host=127.0.0.1;Port=15433;Username=${pg_user};Password=${PGPASSWORD};Database=${db}" \
-  DataPath="${dir}/data" Storage__MountRoot="${dir}/storage" Storage__RequireMountPoint=false \
+  DataPath="${dir}/data" Storage__MountRoot="${dir}/storage" Storage__RequireMountPoint=false Storage__LocalPaths__0="${dir}/storage" \
     dotnet bin/Release/net10.0/Jularr.Frontend.dll > >(tee -a "${dir}/host.log" | grep --line-buffered -E "fail|crit|Now listening") 2>&1 &
   echo $! > "${dir}/pid"
   trap 'kill -TERM "$(cat "${dir}/pid")" 2>/dev/null || true' INT TERM
