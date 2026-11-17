@@ -76,7 +76,8 @@ namespace Jularr.E2E.Tests
                 await page.GoBackAsync();
                 await Assertions.Expect(page).ToHaveURLAsync(address);
                 await Assertions.Expect(cards).ToHaveCountAsync(96);
-                Assert.IsTrue(await page.EvaluateAsync<bool>("scrollY > 500"), "Back lost the scroll position.");
+                // The restore runs after the cards are back; under load it takes a few frames.
+                await page.WaitForFunctionAsync("() => scrollY > 500", null, new() { Timeout = 5000 });
                 await page.Locator("[data-infinite-list]").ScrollIntoViewIfNeededAsync();
                 await Assertions.Expect(cards).ToHaveCountAsync(120);
                 await Assertions.Expect(page.Locator("[data-infinite-next]")).ToHaveCountAsync(0);
