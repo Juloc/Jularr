@@ -763,10 +763,22 @@ namespace Jularr.Backend.Service.User.Discover.V1
             [.. works.Select(work => work.WorkId ?? throw new InvalidOperationException("A Discover title is no Work."))];
 
         // The profile's state of the Works it may see, with the images Jularr keeps for them; the provider's own stay in use until then.
+        // A kept list can hold more Works than one read takes (WorkFields.Ids): they are read a hundred at a time.
         private static async Task<IReadOnlyDictionary<long, DiscoverCardStateData>> ReadStatesInBatchAsync(LogicContext context, long[] workIds, long profileId, CancellationToken ct)
         {
-            if (workIds.Length == 0) return new Dictionary<long, DiscoverCardStateData>();
+            var states = new Dictionary<long, DiscoverCardStateData>();
+            foreach (var page in workIds.Distinct().Chunk(StatesPerRead))
+            {
+                foreach (var (id, state) in await ReadStatePageInBatchAsync(context, page, profileId, ct)) states[id] = state;
+            }
 
+            return states;
+        }
+
+        private const int StatesPerRead = 100;
+
+        private static async Task<IReadOnlyDictionary<long, DiscoverCardStateData>> ReadStatePageInBatchAsync(LogicContext context, long[] workIds, long profileId, CancellationToken ct)
+        {
             var sql = new SqlStatement();
             sql.Statement =
                 """
