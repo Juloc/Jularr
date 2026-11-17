@@ -63,11 +63,14 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 10.0.403
+      # Its own key: the Backend PR cache holds only the backend test packages, so the browser test packages
+      # (Playwright) would download again on every run.
       - uses: actions/cache@v6
         with:
           path: ~/.nuget/packages
-          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', '**/*.props', '**/*.targets') }}
+          key: nuget-full-${{ runner.os }}-${{ hashFiles('**/*.csproj', '**/*.props', '**/*.targets') }}
           restore-keys: |
+            nuget-full-${{ runner.os }}-
             nuget-${{ runner.os }}-
       - uses: actions/setup-node@v7
         with:
