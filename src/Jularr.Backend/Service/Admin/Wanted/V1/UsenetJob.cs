@@ -73,7 +73,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
         private static partial Regex RarPart();
 
         public async Task<UsenetPassResult> RunAsync(AcquisitionConnectionData server, string staging, DateTimeOffset until, CancellationToken ct,
-            DownloadStoragePaths paths, long operationId, Func<DownloadStateType, long, long, Task>? report = null)
+            DownloadStoragePaths paths, long operationId, Func<DownloadStateType, long, long, Task>? report = null, CancellationToken finish = default)
         {
             var settings = paths.Settings;
             NzbContent content;
@@ -132,7 +132,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             try
             {
                 progress = await _downloader.DownloadAsync(Server(server), files, directory, finished, until, maximumJobBytes, ct, settings.FreeSpaceReserveBytes!.Value,
-                    bytes => paths.ReserveWrite(operationId, directory, bytes), _speeds.Usenet.WaitAsync, ReportAsync);
+                    bytes => paths.ReserveWrite(operationId, directory, bytes), _speeds.Usenet.WaitAsync, ReportAsync, finish);
             }
             catch (UsenetStorageBudgetException)
             {

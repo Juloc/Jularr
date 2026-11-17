@@ -160,7 +160,8 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                     {
                         new
                         {
-                            download.OperationId, pass.ProgressPercent, pass.SizeBytes, pass.RemainingBytes, EtaSeconds = (int?)null, DownloadStateTypeId = (byte)DownloadStateType.Downloading
+                            download.OperationId, pass.ProgressPercent, pass.SizeBytes, pass.RemainingBytes, EtaSeconds = (int?)null, DownloadStateTypeId = (byte)DownloadStateType.Downloading,
+                            KeepsPause = true
                         }
                     };
                     await Context.ExecuteBatchAsync(async (ctx, ct) =>

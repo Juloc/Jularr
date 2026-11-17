@@ -42,8 +42,11 @@ namespace Jularr.Integrations.Logic.Usenet
         }
 
         public async Task<UsenetProgress> DownloadAsync(UsenetServer server, IReadOnlyList<NzbFile> files, string directory, IReadOnlySet<string> finished, DateTimeOffset until,
-            long maximumJobBytes, CancellationToken ct, long minimumFreeBytes = 0, Func<long, IDisposable>? reserveWrite = null, Func<long, CancellationToken, ValueTask>? throttle = null, Func<long, Task>? report = null)
+            long maximumJobBytes, CancellationToken ct, long minimumFreeBytes = 0, Func<long, IDisposable>? reserveWrite = null, Func<long, CancellationToken, ValueTask>? throttle = null, Func<long, Task>? report = null,
+            CancellationToken finish = default)
         {
+            // A finish (a pause) ends the pass like its deadline: no new requests, the ones in flight complete and what was written is reported.
+            bool Due() => DateTimeOffset.UtcNow >= until || finish.IsCancellationRequested;
             var queue = new ConcurrentQueue<(NzbFile File, NzbSegment Segment)>(files.SelectMany(file => file.Segments.Where(segment => !finished.Contains(segment.MessageId))
                 .Select(segment => (file, segment))));
             var done = new ConcurrentBag<string>();
@@ -254,7 +257,7 @@ namespace Jularr.Integrations.Logic.Usenet
                                     if (++replaced > Reconnects) return;
                                 }
 
-                                if (DateTimeOffset.UtcNow >= until || queue.IsEmpty) return;
+                                if (Due() || queue.IsEmpty) return;
                                 try
                                 {
                                     session = await TakeAsync(server, key, stop.Token);
@@ -270,7 +273,7 @@ namespace Jularr.Integrations.Logic.Usenet
 
                             // Keep the pipeline full while the pass lasts.
                             var requests = new List<string>();
-                            while (inFlight.Count < Pipeline && DateTimeOffset.UtcNow < until && queue.TryDequeue(out var next))
+                            while (inFlight.Count < Pipeline && !Due() && queue.TryDequeue(out var next))
                             {
                                 if (next.Segment.MessageId.AsSpan().IndexOfAny('\r', '\n') >= 0)
                                 {
