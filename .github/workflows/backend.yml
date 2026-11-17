@@ -5,7 +5,7 @@ name: Backend Full
 #
 # Job graph:
 #   build  ->  smoke (startup, schema, migrations, sessions, setup gate)  ->  gate
-#          ->  shards (6 backend x 3 lanes + 6 browser x 3 lanes, each to its end)  ->
+#          ->  shards (8 backend x 3 lanes + 5 browser x 3 lanes, each to its end)  ->
 # `build` compiles everything once, runs the frontend unit tests, plans the shards and publishes the
 # build; smoke and the shards only unpack it and run beside each other. The backend shards leave out
 # what smoke runs. No job is meant to run longer than about 10 minutes.
@@ -19,7 +19,15 @@ on:
       - 'docs/**'
       - 'AGENTS.md'
       - 'README.md'
+  # Nightly: the full regression with the NIGHTLY classes of scripts/ci-select-backend-tests.py.
+  schedule:
+    - cron: '17 2 * * *'
   workflow_dispatch:
+    inputs:
+      nightly:
+        description: Also run the nightly classes
+        type: boolean
+        default: false
   workflow_call:
 
 permissions:
@@ -29,7 +37,7 @@ permissions:
 # older one (a failing or obsolete run stops using runners). A manual run on main or a tag is a release check
 # (release.yml needs a green Backend Full of the tagged commit): it has a group of its own and is never cancelled.
 concurrency:
-  group: backend-full-${{ github.event_name == 'workflow_dispatch' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')) && github.run_id || (github.event.pull_request.number || github.ref) }}
+  group: backend-full-${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/'))) && github.run_id || (github.event.pull_request.number || github.ref) }}
   cancel-in-progress: true
 
 env:
@@ -89,16 +97,25 @@ jobs:
         run: |
           dotnet build tests/Jularr.Backend.Tests --configuration Release
           dotnet build tests/Jularr.E2E.Tests --configuration Release
-      # The shard counts here equal the matrix entries of `shards`. The real-tool step runs on backend 6/6 after its
-      # lanes: --reserve 6=S plans each of its three lanes S/3 seconds lighter (S = 3 x the step's measured time, 30 s).
+      # The shard counts here equal the matrix entries of `shards`. The real-tool step runs on backend 8/8 after its
+      # lanes: --reserve 8=S plans each of its three lanes S/3 seconds lighter (S = 3 x the step's measured time, 30 s).
+      # A run that is not nightly also leaves out the nightly classes.
       - name: Plan the test shards
+        env:
+          NIGHTLY: ${{ github.event_name == 'schedule' || inputs.nightly == true }}
         run: |
           set -euo pipefail
-          python3 scripts/ci-shard-tests.py matrix --kind backend --shards 6 --lanes 3 --reserve 6=90 \
-            --exclude "$(python3 scripts/ci-select-backend-tests.py --full-exclude)" \
-            --measured "${RUNNER_TEMP}/measured" --out ci-plan/backend.json
-          python3 scripts/ci-shard-tests.py matrix --kind e2e --shards 6 --lanes 3 \
-            --measured "${RUNNER_TEMP}/measured" --out ci-plan/e2e.json
+          backend="$(python3 scripts/ci-select-backend-tests.py --full-exclude)"
+          e2e=""
+          if [[ "${NIGHTLY}" != "true" ]]; then
+            backend="${backend},$(python3 scripts/ci-select-backend-tests.py --nightly-exclude)"
+            e2e="$(python3 scripts/ci-select-backend-tests.py --nightly-e2e-exclude)"
+          fi
+          echo "Nightly classes included: ${NIGHTLY}"
+          python3 scripts/ci-shard-tests.py matrix --kind backend --shards 8 --lanes 3 --reserve 8=90 \
+            --exclude "${backend}" --measured "${RUNNER_TEMP}/measured" --out ci-plan/backend.json
+          python3 scripts/ci-shard-tests.py matrix --kind e2e --shards 5 --lanes 3 \
+            ${e2e:+--exclude "${e2e}"} --measured "${RUNNER_TEMP}/measured" --out ci-plan/e2e.json
       - uses: ./.github/actions/pack-build
 
   # The quick critical checks, beside the shards: startup, schema, migrations, sessions and the first-owner
@@ -171,19 +188,20 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { kind: backend, shard: 1/6 }
-          - { kind: backend, shard: 2/6 }
-          - { kind: backend, shard: 3/6 }
-          - { kind: backend, shard: 4/6 }
-          - { kind: backend, shard: 5/6 }
-          # Also runs the real-tool tests (FFmpeg, ffprobe, cjxl): shard 6 is planned lighter by their time.
-          - { kind: backend, shard: 6/6, tools: true }
-          - { kind: e2e, shard: 1/6 }
-          - { kind: e2e, shard: 2/6 }
-          - { kind: e2e, shard: 3/6 }
-          - { kind: e2e, shard: 4/6 }
-          - { kind: e2e, shard: 5/6 }
-          - { kind: e2e, shard: 6/6 }
+          - { kind: backend, shard: 1/8 }
+          - { kind: backend, shard: 2/8 }
+          - { kind: backend, shard: 3/8 }
+          - { kind: backend, shard: 4/8 }
+          - { kind: backend, shard: 5/8 }
+          - { kind: backend, shard: 6/8 }
+          - { kind: backend, shard: 7/8 }
+          # Also runs the real-tool tests (FFmpeg, ffprobe, cjxl): shard 8 is planned lighter by their time.
+          - { kind: backend, shard: 8/8, tools: true }
+          - { kind: e2e, shard: 1/5 }
+          - { kind: e2e, shard: 2/5 }
+          - { kind: e2e, shard: 3/5 }
+          - { kind: e2e, shard: 4/5 }
+          - { kind: e2e, shard: 5/5 }
     services:
       postgres:
         image: postgres:18
