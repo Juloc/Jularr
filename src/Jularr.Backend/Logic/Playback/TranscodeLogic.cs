@@ -116,6 +116,8 @@ namespace Jularr.Backend.Logic.Playback
                     "TranscodeAccelerationTypeId" = @TranscodeAccelerationTypeId,
                     "MaxTranscodes" = @MaxTranscodes,
                     "LadderHeights" = @LadderHeights,
+                    "BufferSeconds" = @BufferSeconds,
+                    "ReconnectSeconds" = @ReconnectSeconds,
                     "Version" = settings."Version" + 1
                 WHERE
                     settings."Id" = 1

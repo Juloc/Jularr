@@ -38,6 +38,8 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
     internal sealed class WantedAcquisition
     {
         private const int PageLimit = 100;
+        // The queries one indexer is asked at the same time; a normal search plans at most eight.
+        private const int QueriesAtOnce = 8;
         private const int MaximumCachedOffers = 2000;
         private static readonly TimeSpan OfferLifetime = TimeSpan.FromMinutes(30);
         private static readonly TimeSpan IndexerWait = TimeSpan.FromMinutes(30);
@@ -189,36 +191,36 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
 
             async Task SearchIndexersAsync()
             {
-                // Expansion tiers only run while too few releases are usable.
-                for (var tier = 0; tier <= budget.MaxTier && offers.Count < budget.MaxResults; tier++)
+                // Like Sonarr: first the planner's first round (tier 0: the ID with season and episode, else the title; SearchPlanner). Only when
+                // that brings nothing (an automatic search: nothing it can take) the other planned queries follow, all at once.
+                await AskIndexersAsync(plan => plan.Where(query => query.Tier == 0));
+                await direct;
+                await nyaaSearch;
+                selection = AcquisitionSelectionLogic.Select(profile, target, kind, scope, offers.Values, focusLanguage, automatic);
+                var enough = automatic
+                    ? selection.Ranked.Any(evaluation => evaluation.IsSelectable
+                        && (!profile.IsBook || profile.LanguageOrder.Length == 0 || UpgradePolicy.IsRequested(profile, evaluation.Candidate.Languages)))
+                    : !offers.IsEmpty;
+                if (!enough && plans.Values.Any(plan => plan.Any(query => query.Tier > 0)))
                 {
-                    var current = tier;
-                    if (!plans.Values.Any(plan => plan.Any(query => query.Tier == current)))
-                    {
-                        continue;
-                    }
-
-                    await Parallel.ForEachAsync(newznab, new ParallelOptions { MaxDegreeOfParallelism = budget.MaxConcurrentIndexers, CancellationToken = ct }, async (indexer, token) =>
-                    {
-                        var use = uses.GetOrAdd(indexer.Id, _ => new IndexerUse());
-                        if (!await SearchIndexerAsync(indexer, kind, target.PlatformIgdbId, plans[indexer.Id].Where(query => query.Tier == current), budget, offers, use, automatic, token))
-                        {
-                            use.Failed = true;
-                            Interlocked.Increment(ref failures);
-                        }
-                    });
-
-                    // The direct sources answered at the same time; their releases belong to the choice.
-                    await direct;
-                    await nyaaSearch;
-                    selection = AcquisitionSelectionLogic.Select(profile, target, kind, scope, offers.Values, focusLanguage, automatic);
-                    if (selection.Ranked.Count(evaluation => evaluation.IsSelectable
-                        && (!profile.IsBook || profile.LanguageOrder.Length == 0
-                            || UpgradePolicy.IsRequested(profile, evaluation.Candidate.Languages))) >= budget.TargetUsable)
-                    {
-                        break;
-                    }
+                    await AskIndexersAsync(plan => plan.Where(query => query.Tier > 0));
                 }
+            }
+
+            // One round over the indexers; an indexer that failed is not asked again in the same search and counts once.
+            async Task AskIndexersAsync(Func<IReadOnlyList<PlannedQuery>, IEnumerable<PlannedQuery>> pick)
+            {
+                await Parallel.ForEachAsync(newznab, new ParallelOptions { MaxDegreeOfParallelism = budget.MaxConcurrentIndexers, CancellationToken = ct }, async (indexer, token) =>
+                {
+                    var use = uses.GetOrAdd(indexer.Id, _ => new IndexerUse());
+                    var queries = pick(plans[indexer.Id]).ToArray();
+                    if (use.Failed || queries.Length == 0 || offers.Count >= budget.MaxResults) return;
+                    if (!await SearchIndexerAsync(indexer, kind, target.PlatformIgdbId, queries, budget, offers, use, automatic, token))
+                    {
+                        use.Failed = true;
+                        Interlocked.Increment(ref failures);
+                    }
+                });
             }
 
             // Join every source on cancellation before disposing their shared Anna search context.
@@ -892,19 +894,20 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             var connection = new NewznabConnection(indexer.HttpAddress, AcquisitionConnectionInput.IndexerKey(_protector, indexer.ProtectedApiKey));
             try
             {
-                foreach (var query in queries)
+                // The queries of one round go out together (an indexer answers each in about a second); the first failure stops the rest.
+                await Parallel.ForEachAsync(queries, new ParallelOptions { MaxDegreeOfParallelism = QueriesAtOnce, CancellationToken = timeout.Token }, async (query, token) =>
                 {
                     // Full pages continue up to the page budget; the result budget covers the whole search.
                     for (var page = 0; page < budget.MaxPages && offers.Count < budget.MaxResults; page++)
                     {
-                        // The daily query limit also holds within one search.
-                        if (!AcquisitionConnectionLogic.HasQueries(indexer, use.Queries))
+                        // The daily query limit also holds within one search: a query is counted before it is sent.
+                        if (!AcquisitionConnectionLogic.HasQueries(indexer, Interlocked.Increment(ref use.Queries) - 1))
                         {
-                            return true;
+                            Interlocked.Decrement(ref use.Queries);
+                            return;
                         }
 
-                        Interlocked.Increment(ref use.Queries);
-                        var items = await _newznab.SearchAsync(connection, new NewznabQuery(query.Mode, query.Text, query.Parameters, query.AnyCategory ? [] : categories, limit, page * limit), timeout.Token);
+                        var items = await _newznab.SearchAsync(connection, new NewznabQuery(query.Mode, query.Text, query.Parameters, query.AnyCategory ? [] : categories, limit, page * limit), token);
                         foreach (var item in items)
                         {
                             var offer = new ReleaseOffer(item.Title, indexer.Id, indexer.Name, indexer.Priority, item.Guid, item.DownloadUri, item.InfoUrl, item.SizeBytes, item.PublishedAt, [query.Stage])
@@ -917,7 +920,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                             break;
                         }
                     }
-                }
+                });
 
                 return true;
             }

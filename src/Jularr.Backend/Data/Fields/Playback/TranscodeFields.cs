@@ -8,6 +8,9 @@ namespace Jularr.Backend.Data.Fields.Playback
         public static readonly EnumField TranscodeAccelerationTypeId = new(typeof(TranscodeAcceleration));
         public static readonly EnumField BestTranscodeAccelerationTypeId = new(typeof(TranscodeAcceleration)) { Required = false };
         public static readonly IntField MaxTranscodes = new() { Minimum = 1, Maximum = 64 };
+        // Seconds a player loads ahead, and seconds of a standing picture before it asks after its session.
+        public static readonly IntField BufferSeconds = new() { Minimum = 30, Maximum = 600 };
+        public static readonly IntField ReconnectSeconds = new() { Minimum = 1, Maximum = 30 };
         public static readonly IntField RecommendedMaxTranscodes = new() { Minimum = 1, Maximum = 64, Required = false };
         public static readonly IntArrayField LadderHeights = new() { Minimum = 240, Maximum = 4320, MaximumLength = 6, IsSet = true };
         public static readonly LongField Version = new() { Minimum = 1 };

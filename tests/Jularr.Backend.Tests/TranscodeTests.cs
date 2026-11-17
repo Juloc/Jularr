@@ -366,12 +366,15 @@ namespace Jularr.Backend.Tests
             var settings = await ReadSettingsAsync(host);
             Assert.AreEqual((TranscodeAcceleration.Auto, 3), (settings.TranscodeAccelerationTypeId, settings.MaxTranscodes));
             CollectionAssert.AreEquivalent(new[] { 1080, 720, 480 }, settings.LadderHeights);
+            // The player loads two minutes ahead and asks after its session after three seconds of a standing picture.
+            Assert.AreEqual((120, 3), (settings.BufferSeconds, settings.ReconnectSeconds));
 
-            using var saved = await host.SendAsync(HttpMethod.Put, route, new UpdateTranscodeSettingsDataV1(TranscodeAcceleration.Software, 5, [720, 360, 720], settings.Version));
+            using var saved = await host.SendAsync(HttpMethod.Put, route, new UpdateTranscodeSettingsDataV1(TranscodeAcceleration.Software, 5, [720, 360, 720], settings.Version, 300, 5));
             Assert.AreEqual(HttpStatusCode.OK, saved.StatusCode, await saved.Content.ReadAsStringAsync());
             var changed = await ReadSettingsAsync(host);
             Assert.AreEqual((TranscodeAcceleration.Software, 5), (changed.TranscodeAccelerationTypeId, changed.MaxTranscodes));
             CollectionAssert.AreEqual(new[] { 360, 720 }, changed.LadderHeights);
+            Assert.AreEqual((300, 5), (changed.BufferSeconds, changed.ReconnectSeconds));
 
             // An old version, an unknown height and a count out of range change nothing.
             using var stale = await host.SendAsync(HttpMethod.Put, route, new UpdateTranscodeSettingsDataV1(TranscodeAcceleration.Auto, 2, [], settings.Version));
@@ -380,6 +383,10 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.BadRequest, unknown.StatusCode);
             using var range = await host.SendAsync(HttpMethod.Put, route, new UpdateTranscodeSettingsDataV1(TranscodeAcceleration.Auto, 0, [], changed.Version));
             Assert.AreEqual(HttpStatusCode.BadRequest, range.StatusCode);
+            using var shortBuffer = await host.SendAsync(HttpMethod.Put, route, new UpdateTranscodeSettingsDataV1(TranscodeAcceleration.Auto, 2, [], changed.Version, 10, 3));
+            Assert.AreEqual(HttpStatusCode.BadRequest, shortBuffer.StatusCode);
+            using var lateReconnect = await host.SendAsync(HttpMethod.Put, route, new UpdateTranscodeSettingsDataV1(TranscodeAcceleration.Auto, 2, [], changed.Version, 120, 60));
+            Assert.AreEqual(HttpStatusCode.BadRequest, lateReconnect.StatusCode);
             Assert.AreEqual(changed.Version, (await ReadSettingsAsync(host)).Version);
 
             // An empty ladder is allowed: no lower picture is offered.

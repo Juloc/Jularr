@@ -37,6 +37,9 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
         // Daily shows are released by date.
         public DateOnly? AirDate { get; init; }
+
+        // A special (season 0) is found by its own title, as Sonarr does.
+        public string? EpisodeTitle { get; init; }
         public int? Volume { get; init; }
         public decimal? Chapter { get; init; }
     }
@@ -44,14 +47,13 @@ namespace Jularr.Backend.Data.Logic.Acquisition
     // Explicit bounds of one search pass, so a slow indexer only costs its own share.
     internal sealed class SearchBudget
     {
-        public SearchBudget(int maxConcurrentIndexers, TimeSpan indexerTimeout, int maxQueryVariants, int maxPages, int maxResults, int targetUsable, int maxTier)
+        public SearchBudget(int maxConcurrentIndexers, TimeSpan indexerTimeout, int maxQueryVariants, int maxPages, int maxResults, int maxTier)
         {
             MaxConcurrentIndexers = maxConcurrentIndexers;
             IndexerTimeout = indexerTimeout;
             MaxQueryVariants = maxQueryVariants;
             MaxPages = maxPages;
             MaxResults = maxResults;
-            TargetUsable = targetUsable;
             MaxTier = maxTier;
         }
 
@@ -60,14 +62,13 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         public int MaxQueryVariants { get; }
         public int MaxPages { get; }
         public int MaxResults { get; }
-        public int TargetUsable { get; }
         public int MaxTier { get; }
 
         public static SearchBudget For(SearchDepth depth) => depth switch
         {
-            SearchDepth.Fast => new(4, TimeSpan.FromSeconds(12), 2, 1, 300, 1, 0),
-            SearchDepth.Deep => new(4, TimeSpan.FromSeconds(45), 24, 4, 1200, int.MaxValue, 2),
-            _ => new(4, TimeSpan.FromSeconds(25), 8, 2, 600, 3, 1)
+            SearchDepth.Fast => new(4, TimeSpan.FromSeconds(12), 2, 1, 300, 0),
+            SearchDepth.Deep => new(4, TimeSpan.FromSeconds(45), 24, 4, 1200, 2),
+            _ => new(4, TimeSpan.FromSeconds(25), 8, 2, 600, 1)
         };
     }
 

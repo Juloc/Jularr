@@ -8,8 +8,10 @@ namespace Jularr.Backend.Data.Logic.Playback
     // The stored choices; no maximum follows the configuration.
     internal sealed class TranscodeSettingsData : BaseData
     {
-        public TranscodeSettingsData(TranscodeAcceleration transcodeAccelerationTypeId, int? maxTranscodes, int[] ladderHeights, long version)
+        public TranscodeSettingsData(TranscodeAcceleration transcodeAccelerationTypeId, int? maxTranscodes, int[] ladderHeights, long version, int bufferSeconds = 120, int reconnectSeconds = 3)
         {
+            BufferSeconds = bufferSeconds;
+            ReconnectSeconds = reconnectSeconds;
             TranscodeAccelerationTypeId = transcodeAccelerationTypeId;
             MaxTranscodes = maxTranscodes;
             LadderHeights = ladderHeights;
@@ -27,12 +29,20 @@ namespace Jularr.Backend.Data.Logic.Playback
 
         [DataField(typeof(TranscodeFields), nameof(TranscodeFields.Version))]
         public long Version { get; }
+
+        [DataField(typeof(TranscodeFields), nameof(TranscodeFields.BufferSeconds))]
+        public int BufferSeconds { get; }
+
+        [DataField(typeof(TranscodeFields), nameof(TranscodeFields.ReconnectSeconds))]
+        public int ReconnectSeconds { get; }
     }
 
     internal sealed class TranscodeSettingsUpdateData : BaseData
     {
-        public TranscodeSettingsUpdateData(TranscodeAcceleration transcodeAccelerationTypeId, int maxTranscodes, int[] ladderHeights, long version)
+        public TranscodeSettingsUpdateData(TranscodeAcceleration transcodeAccelerationTypeId, int maxTranscodes, int[] ladderHeights, long version, int bufferSeconds, int reconnectSeconds)
         {
+            BufferSeconds = bufferSeconds;
+            ReconnectSeconds = reconnectSeconds;
             TranscodeAccelerationTypeId = transcodeAccelerationTypeId;
             MaxTranscodes = maxTranscodes;
             LadderHeights = ladderHeights;
@@ -50,13 +60,22 @@ namespace Jularr.Backend.Data.Logic.Playback
 
         [DataField(typeof(TranscodeFields), nameof(TranscodeFields.Version))]
         public long Version { get; }
+
+        [DataField(typeof(TranscodeFields), nameof(TranscodeFields.BufferSeconds))]
+        public int BufferSeconds { get; }
+
+        [DataField(typeof(TranscodeFields), nameof(TranscodeFields.ReconnectSeconds))]
+        public int ReconnectSeconds { get; }
     }
 
     // What a playback plan needs: the choices, the benchmark's best pipeline and the caller's priority.
     internal sealed class TranscodeLimitsData : BaseData
     {
-        public TranscodeLimitsData(TranscodeAcceleration transcodeAccelerationTypeId, int? maxTranscodes, int[] ladderHeights, TranscodeAcceleration? bestTranscodeAccelerationTypeId, bool transcodingPriority)
+        public TranscodeLimitsData(TranscodeAcceleration transcodeAccelerationTypeId, int? maxTranscodes, int[] ladderHeights, TranscodeAcceleration? bestTranscodeAccelerationTypeId, bool transcodingPriority,
+            int bufferSeconds = 120, int reconnectSeconds = 3)
         {
+            BufferSeconds = bufferSeconds;
+            ReconnectSeconds = reconnectSeconds;
             TranscodeAccelerationTypeId = transcodeAccelerationTypeId;
             MaxTranscodes = maxTranscodes;
             LadderHeights = ladderHeights;
@@ -78,6 +97,12 @@ namespace Jularr.Backend.Data.Logic.Playback
 
         [DataField(typeof(AccountFields), nameof(AccountFields.TranscodingPriority))]
         public bool TranscodingPriority { get; }
+
+        [DataField(typeof(TranscodeFields), nameof(TranscodeFields.BufferSeconds))]
+        public int BufferSeconds { get; }
+
+        [DataField(typeof(TranscodeFields), nameof(TranscodeFields.ReconnectSeconds))]
+        public int ReconnectSeconds { get; }
     }
 
     // The account whose conversion is planned.

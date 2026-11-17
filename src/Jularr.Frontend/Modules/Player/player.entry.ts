@@ -10,7 +10,7 @@ import type { StyledSubtitles } from "./StyledSubtitles";
 import { deviceKind, libassWanted } from "./Device";
 import { Automatic, nextQuality, recordStall, StallSeconds, troubled } from "./AutoQuality";
 import { pickSecondSubtitle, pickTranslationSource, SecondSubtitleLine, type SubtitleOption } from "./Subtitles";
-import { healed, AttemptsBeforeNotice, replanDelay, stallStep } from "./Recovery";
+import { healed, AttemptsBeforeNotice, LostProbeSeconds, replanDelay, restartPoint, sessionLost, stallStep } from "./Recovery";
 import { activeMarker, chapterIndexAt, markerKey, modeFor, parseMarkers, parseMode, shouldAutoSkip, skipPlan, skipShown, SkipShowSeconds, type Marker } from "./Skip";
 
 // Playback client: capability probe, server PlaybackPlan, transport and progress reporting.
@@ -20,10 +20,15 @@ interface PlaybackPlan {
     streamUrl: string;
     resumePositionMs: number;
     isReduced?: boolean;
+    // The Owner's choices: seconds to load ahead, seconds of a standing picture before asking after the session.
+    bufferSeconds?: number;
+    reconnectSeconds?: number;
 }
 
 const Modes = ["", "DirectPlay", "Remux", "Transcode"];
 const ReportInterval = 15_000;
+// Seconds a conversion loads ahead when the server names none.
+const DefaultBufferSeconds = 120;
 // Safari's own extension of the video element for AirPlay.
 interface AirPlayVideo extends HTMLVideoElement { webkitShowPlaybackTargetPicker?(): void; }
 
@@ -149,6 +154,9 @@ async function start(player: HTMLElement, keepView = false): Promise<void> {
     // Repairing in place did not help: the same video is planned again, a fresh session at the same place.
     let replans = 0;
     let replannedAt = 0;
+    // The last place the picture played and whether the person wants it to play, kept while a broken source is torn down.
+    let playedAt = 0;
+    let wantsPlay = false;
     let escalating = false;
     let sourceReady = false;
     let sourcePosition = 0;
@@ -252,6 +260,8 @@ async function start(player: HTMLElement, keepView = false): Promise<void> {
     // The pause before an end is no position worth saving.
     video.addEventListener("pause", () => { if (!video.ended) report(false); });
     video.addEventListener("ended", () => {
+        // A source that broke before it loaded (a lost session being planned again) ends nothing: the title is not over.
+        if (!sourceReady || escalating) return;
         report(true);
         // An album continues with the next track at once; a season's next episode follows after a countdown, and not at all when the profile turned autoplay off.
         // The mini player of an episode stops where it is; a song's bar goes on.
@@ -440,9 +450,11 @@ async function start(player: HTMLElement, keepView = false): Promise<void> {
             const { default: Hls } = await import("hls.js/light");
             // The server holds a segment until FFmpeg has it (up to two minutes) and answers a passing stall with 503: wait that long and try
             // again instead of giving up, and keep a minute ahead so a slow moment of the storage does not stop the picture.
+            const ahead = next.bufferSeconds ?? DefaultBufferSeconds;
             const instance = new Hls({
                 startPosition: position,
-                maxBufferLength: 60,
+                maxBufferLength: ahead,
+                maxMaxBufferLength: ahead * 2,
                 fragLoadPolicy: {
                     default: {
                         maxTimeToFirstByteMs: 125_000,
@@ -453,8 +465,8 @@ async function start(player: HTMLElement, keepView = false): Promise<void> {
                 }
             });
             instance.on(Hls.Events.ERROR, (_, data) => {
-                // A conversion stopped for room answers Gone: its session is over, so the video is planned again.
-                if (data.response?.code === 410) { instance.destroy(); void escalate(); return; }
+                // A session the server lost (a restart) or stopped for room never answers again: a fresh one is planned at once, where the picture stands, and plays on.
+                if (sessionLost(data.response?.code)) { instance.stopLoad(); void escalate(true); return; }
                 if (!data.fatal) return;
                 console.warn("Playback error", data.type, data.details, data.response?.code);
                 // A dropped connection or a broken segment in the middle of the film is retried in place a few times before the player gives up,
@@ -526,8 +538,9 @@ async function start(player: HTMLElement, keepView = false): Promise<void> {
         if (switching) return false;
         switching = true;
         try {
-            const position = video.currentTime;
-            const playing = !video.paused;
+            // A repair goes on where the picture played, and plays when the person wanted it to.
+            const position = escalating ? restartPoint(video.currentTime, playedAt) : video.currentTime;
+            const playing = escalating ? wantsPlay || !video.paused : !video.paused;
             const replacement = await requestPlan(streamIndex, qualityChoice);
             if (!replacement) return false;
             report(true, false);
@@ -693,7 +706,13 @@ async function start(player: HTMLElement, keepView = false): Promise<void> {
     video.addEventListener("seeking", () => showLoading());
     video.addEventListener("canplay", stopLoading);
     video.addEventListener("seeked", () => { if (video.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) stopLoading(); });
-    video.addEventListener("playing", () => { recoveries = 0; stopLoading(); });
+    video.addEventListener("playing", () => { recoveries = 0; wantsPlay = true; stopLoading(); });
+    video.addEventListener("play", () => { wantsPlay = true; });
+    // Only a pause the person chose counts: one with a picture loaded. A source that breaks or is replaced pauses the element too, and its pause arrives a moment later,
+    // when the new source has nothing loaded yet; that keeps the wish to play.
+    video.addEventListener("pause", () => {
+        if (!escalating && !switching && !video.ended && !video.error && sourceReady && video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) wantsPlay = false;
+    });
     video.addEventListener("pause", stopLoading);
     video.addEventListener("ended", stopLoading);
 
@@ -702,13 +721,21 @@ async function start(player: HTMLElement, keepView = false): Promise<void> {
     let watchedTime = -1;
     let progressAt = performance.now();
     let nudged = false;
+    let probed = false;
     window.setInterval(() => {
         const now = performance.now();
         if (video.paused || video.ended || !plan || casting || leaving || escalating || switching || Math.abs(video.currentTime - watchedTime) > 0.01) {
             watchedTime = video.currentTime;
             progressAt = now;
             nudged = false;
+            probed = false;
             return;
+        }
+        // The browser's own HLS player says nothing when the server lost the session (a restart): after a short stand still the player asks whether the session
+        // is still there, and plans a fresh one at once when it is not.
+        if (!probed && plan.playbackModeTypeId !== 1 && (now - progressAt) / 1000 >= (plan.reconnectSeconds ?? LostProbeSeconds)) {
+            probed = true;
+            void probeSession(plan.streamUrl);
         }
         const step = stallStep((now - progressAt) / 1000);
         if (step === "resume" && !nudged) {
@@ -719,7 +746,12 @@ async function start(player: HTMLElement, keepView = false): Promise<void> {
             nudged = false;
             void escalate();
         }
-    }, 2_000);
+    }, 1_000);
+
+    async function probeSession(address: string): Promise<void> {
+        const response = await fetch(address, { credentials: "same-origin", cache: "no-store" }).catch(() => null);
+        if (response && sessionLost(response.status) && plan?.streamUrl === address) void escalate(true);
+    }
 
     // Transport state.
     video.addEventListener("play", () => setPlaying(true));
@@ -727,6 +759,7 @@ async function start(player: HTMLElement, keepView = false): Promise<void> {
     video.addEventListener("timeupdate", () => {
         if (video.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) stopLoading();
         if (replans > 0 && !escalating && healed(replannedAt, video.currentTime)) replans = 0;
+        if (sourceReady && video.currentTime > 0.5) playedAt = video.currentTime;
         if (!seeking) timeline.value = String(Math.floor(video.currentTime));
         timeline.style.setProperty('--played', `${Number(timeline.value) / Math.max(1, Number(timeline.max)) * 100}%`);
         player.querySelector("[data-role=time]")!.textContent = clock(video.currentTime);
@@ -1753,10 +1786,12 @@ async function start(player: HTMLElement, keepView = false): Promise<void> {
     // The playback never ends on its own: when repairing in place fails, a new session is planned at the same position, after a growing pause
     // (at most fifteen seconds), for as long as it takes. After several tries in a row the message shows once as a note; the tries go on and a
     // session that plays again takes the message away.
-    async function escalate(): Promise<void> {
+    // A session the server lost is planned again at once; other failures wait a moment before each fresh session.
+    async function escalate(lost = false): Promise<void> {
         if (escalating || switching || casting || leaving || !plan) return;
         escalating = true;
         let told = false;
+        let first = lost;
         try {
             for (;;) {
                 if (replans >= AttemptsBeforeNotice && !told) {
@@ -1764,7 +1799,10 @@ async function start(player: HTMLElement, keepView = false): Promise<void> {
                     await failure();
                 }
                 showLoading();
-                await new Promise(resolve => window.setTimeout(resolve, replanDelay(replans++)));
+                const wait = first ? 0 : replanDelay(replans);
+                replans++;
+                first = false;
+                if (wait > 0) await new Promise(resolve => window.setTimeout(resolve, wait));
                 if (!plan || leaving || casting) return;
                 if (await replan(audioIndex, quality)) {
                     recoveries = 0;

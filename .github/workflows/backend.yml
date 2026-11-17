@@ -5,9 +5,10 @@ name: Backend Full
 #
 # Job graph:
 #   build  ->  smoke (startup, schema, migrations, sessions, setup gate)  ->  gate
-#          ->  shards (6 backend x 2 lanes + 6 browser, each to its end)  ->
+#          ->  shards (7 backend x 3 lanes + 8 browser x 2 lanes, each to its end)  ->
 # `build` compiles everything once, runs the frontend unit tests, plans the shards and publishes the
-# build; smoke and the shards only unpack it and run beside each other. The backend shards leave out
+# build. Smoke and the shards start with it, set up their tools while it compiles, wait in `Require the
+# build` and then only unpack it and run beside each other. The backend shards leave out
 # what smoke runs. No job is meant to run longer than about 10 minutes.
 # CI retry (ci-retry.yml) re-runs a run once that failed only in set-up steps; their names are listed in
 # scripts/ci-classify-failure.py: rename or add set-up steps there too.
@@ -19,7 +20,15 @@ on:
       - 'docs/**'
       - 'AGENTS.md'
       - 'README.md'
+  # Nightly: the full regression with the NIGHTLY classes of scripts/ci-select-backend-tests.py.
+  schedule:
+    - cron: '17 2 * * *'
   workflow_dispatch:
+    inputs:
+      nightly:
+        description: Also run the nightly classes
+        type: boolean
+        default: false
   workflow_call:
 
 permissions:
@@ -29,7 +38,7 @@ permissions:
 # older one (a failing or obsolete run stops using runners). A manual run on main or a tag is a release check
 # (release.yml needs a green Backend Full of the tagged commit): it has a group of its own and is never cancelled.
 concurrency:
-  group: backend-full-${{ github.event_name == 'workflow_dispatch' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')) && github.run_id || (github.event.pull_request.number || github.ref) }}
+  group: backend-full-${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/'))) && github.run_id || (github.event.pull_request.number || github.ref) }}
   cancel-in-progress: true
 
 env:
@@ -55,11 +64,14 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 10.0.403
+      # Its own key: the Backend PR cache holds only the backend test packages, so the browser test packages
+      # (Playwright) would download again on every run.
       - uses: actions/cache@v6
         with:
           path: ~/.nuget/packages
-          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', '**/*.props', '**/*.targets') }}
+          key: nuget-full-${{ runner.os }}-${{ hashFiles('**/*.csproj', '**/*.props', '**/*.targets') }}
           restore-keys: |
+            nuget-full-${{ runner.os }}-
             nuget-${{ runner.os }}-
       - uses: actions/setup-node@v7
         with:
@@ -77,37 +89,52 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
         run: python3 scripts/ci-shard-tests.py fetch --repo "${REPOSITORY}" --out "${RUNNER_TEMP}/measured"
-      - name: Compile assets for the Razor and browser tests
-        working-directory: src/Jularr.Frontend
+      # The NuGet restore runs beside the asset build; the compile below needs both.
+      - name: Compile assets for the Razor and browser tests, restore the .NET packages
         run: |
-          npm ci --no-audit --no-fund
-          npm run build
+          set -euo pipefail
+          dotnet restore Jularr.sln > "${RUNNER_TEMP}/restore.log" 2>&1 &
+          restore=$!
+          (cd src/Jularr.Frontend && npm ci --no-audit --no-fund && npm run build)
+          wait "${restore}" || { cat "${RUNNER_TEMP}/restore.log"; exit 1; }
+          cat "${RUNNER_TEMP}/restore.log"
       - name: Frontend unit tests
         working-directory: src/Jularr.Frontend
         run: npm test
+      # One build of the solution compiles both test projects side by side. The analyzers only ever warn and cost a
+      # quarter of the compile; frontend.yml still shows their warnings.
       - name: Compile the backend and browser test projects once
-        run: |
-          dotnet build tests/Jularr.Backend.Tests --configuration Release
-          dotnet build tests/Jularr.E2E.Tests --configuration Release
-      # The shard counts here equal the matrix entries of `shards`. The real-tool step runs on backend 6/6 after its
-      # lanes: --reserve 6=S plans each of its two lanes S/2 seconds lighter (S = 2 x the step's measured time, 30 s).
+        run: dotnet build Jularr.sln --configuration Release --no-restore -p:RunAnalyzers=false
+      # The shard counts here equal the matrix entries of `shards`. The real-tool step runs on backend 7/7 after its
+      # lanes: --reserve 7=S plans each of its three lanes S/3 seconds lighter (S = 3 x the step's measured time, 30 s).
+      # A run that is not nightly also leaves out the nightly classes.
       - name: Plan the test shards
+        env:
+          NIGHTLY: ${{ github.event_name == 'schedule' || inputs.nightly == true }}
         run: |
           set -euo pipefail
-          python3 scripts/ci-shard-tests.py matrix --kind backend --shards 6 --lanes 2 --reserve 6=60 \
-            --exclude "$(python3 scripts/ci-select-backend-tests.py --full-exclude)" \
-            --measured "${RUNNER_TEMP}/measured" --out ci-plan/backend.json
-          python3 scripts/ci-shard-tests.py matrix --kind e2e --shards 6 --lanes 1 \
-            --measured "${RUNNER_TEMP}/measured" --out ci-plan/e2e.json
+          backend="$(python3 scripts/ci-select-backend-tests.py --full-exclude)"
+          e2e=""
+          if [[ "${NIGHTLY}" != "true" ]]; then
+            backend="${backend},$(python3 scripts/ci-select-backend-tests.py --nightly-exclude)"
+            e2e="$(python3 scripts/ci-select-backend-tests.py --nightly-e2e-exclude)"
+          fi
+          echo "Nightly classes included: ${NIGHTLY}"
+          python3 scripts/ci-shard-tests.py matrix --kind backend --shards 7 --lanes 3 --reserve 7=90 \
+            --exclude "${backend}" --measured "${RUNNER_TEMP}/measured" --out ci-plan/backend.json
+          python3 scripts/ci-shard-tests.py matrix --kind e2e --shards 8 --lanes 2 \
+            ${e2e:+--exclude "${e2e}"} --measured "${RUNNER_TEMP}/measured" --out ci-plan/e2e.json
       - uses: ./.github/actions/pack-build
 
   # The quick critical checks, beside the shards: startup, schema, migrations, sessions and the first-owner
   # setup gate (ci-select-backend-tests.py --boot-filter). The backend shards leave these tests out.
   smoke:
     name: smoke
-    needs: build
     runs-on: ubuntu-24.04
-    timeout-minutes: 12
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      actions: read  # Require the build reads the state of the build job
     services:
       postgres:
         image: postgres:18
@@ -127,9 +154,32 @@ jobs:
         with:
           sparse-checkout: .github/actions
           persist-credentials: false
-      - uses: ./.github/actions/restore-build
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.403
       # The migration tests run the real pg_dump/pg_restore; the runner's own client is older than the test database.
       - uses: ./.github/actions/install-tools
+      # Starts without `needs: build`: the set-up above runs while the build compiles. A failed build fails here.
+      - name: Require the build
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          set -uo pipefail
+          for _ in $(seq 1 90); do
+            state="$(gh api "repos/${REPOSITORY}/actions/runs/${RUN_ID}/jobs?per_page=100" \
+              --jq '[.jobs[] | select(.name == "build" or (.name | endswith(" / build")))][0] | "\(.status) \(.conclusion)"' \
+              2>/dev/null)" || state="unknown"
+            case "${state}" in
+              "completed success") echo "The build is ready."; exit 0 ;;
+              completed*) echo "::error::The build job ended with ${state#completed }; open the build job."; exit 1 ;;
+            esac
+            sleep 10
+          done
+          echo "::error::The build was not ready after 15 minutes."
+          exit 1
+      - uses: ./.github/actions/restore-build
       - name: Critical backend tests (startup, schema, migrations, sessions, setup gate)
         run: |
           export TMPDIR="${RUNNER_TEMP}"
@@ -159,30 +209,36 @@ jobs:
 
   # The shards of the plan in ci-plan/*.json (scripts/ci-shard-tests.py): balanced by measured seconds per
   # test, a long class split by method. A failing shard does not cancel the others (fail-fast off), so one
-  # run reports every failing shard. Backend shards run two test processes (lanes) each; browser shards run one.
+  # run reports every failing shard. Backend shards run three test processes (lanes) on the runner's four cores, browser shards two (three
+  # browsers at once tip the layout-shift measurement over its limit); each test has its own database and port.
   # Change a shard count in the matrix entries of that kind (1/N .. N/N) and in `Plan the test shards` together.
   shards:
     name: ${{ matrix.kind }} (${{ matrix.shard }})
-    needs: build
     runs-on: ubuntu-24.04
-    timeout-minutes: 18
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read  # Require the build reads the state of the build job
     strategy:
       fail-fast: false
       matrix:
         include:
-          - { kind: backend, shard: 1/6 }
-          - { kind: backend, shard: 2/6 }
-          - { kind: backend, shard: 3/6 }
-          - { kind: backend, shard: 4/6 }
-          - { kind: backend, shard: 5/6 }
-          # Also runs the real-tool tests (FFmpeg, ffprobe, cjxl): shard 6 is planned lighter by their time.
-          - { kind: backend, shard: 6/6, tools: true }
-          - { kind: e2e, shard: 1/6 }
-          - { kind: e2e, shard: 2/6 }
-          - { kind: e2e, shard: 3/6 }
-          - { kind: e2e, shard: 4/6 }
-          - { kind: e2e, shard: 5/6 }
-          - { kind: e2e, shard: 6/6 }
+          - { kind: backend, shard: 1/7 }
+          - { kind: backend, shard: 2/7 }
+          - { kind: backend, shard: 3/7 }
+          - { kind: backend, shard: 4/7 }
+          - { kind: backend, shard: 5/7 }
+          - { kind: backend, shard: 6/7 }
+          # Also runs the real-tool tests (FFmpeg, ffprobe, cjxl): shard 7 is planned lighter by their time.
+          - { kind: backend, shard: 7/7, tools: true }
+          - { kind: e2e, shard: 1/8 }
+          - { kind: e2e, shard: 2/8 }
+          - { kind: e2e, shard: 3/8 }
+          - { kind: e2e, shard: 4/8 }
+          - { kind: e2e, shard: 5/8 }
+          - { kind: e2e, shard: 6/8 }
+          - { kind: e2e, shard: 7/8 }
+          - { kind: e2e, shard: 8/8 }
     services:
       postgres:
         image: postgres:18
@@ -200,12 +256,18 @@ jobs:
     env:
       SHARD: ${{ matrix.shard }}
     steps:
-      # Only the local actions are checked out; the build artifact brings the compiled workspace.
+      # Only the local actions (and the project file the browser cache key hashes) are checked out; the build
+      # artifact brings the compiled workspace.
       - uses: actions/checkout@v7
         with:
-          sparse-checkout: .github/actions
+          sparse-checkout: |
+            .github/actions
+            tests/Jularr.E2E.Tests/Jularr.E2E.Tests.csproj
+          sparse-checkout-cone-mode: false
           persist-credentials: false
-      - uses: ./.github/actions/restore-build
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.403
       - uses: ./.github/actions/install-tools
         with:
           ffmpeg: ${{ matrix.kind == 'e2e' || matrix.tools == true }}
@@ -213,9 +275,8 @@ jobs:
           djvulibre: 'true'
       # A concurrent dotnet CLI lane can fail its NuGet-Migrations named mutex
       # when a hosted runner has no /run/user/<uid>/.dotnet/shm directory.
-      # Give backend lanes a stable user-owned runtime path before launching them.
+      # Give the lanes a stable user-owned runtime path before launching them.
       - name: Prepare .NET runtime mutex directory
-        if: matrix.kind == 'backend'
         run: |
           mkdir -p "$RUNNER_TEMP/dotnet-runtime/.dotnet/shm"
           chmod 700 "$RUNNER_TEMP/dotnet-runtime"
@@ -228,6 +289,27 @@ jobs:
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('tests/Jularr.E2E.Tests/Jularr.E2E.Tests.csproj') }}
+      - name: Require the build
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          set -uo pipefail
+          for _ in $(seq 1 90); do
+            state="$(gh api "repos/${REPOSITORY}/actions/runs/${RUN_ID}/jobs?per_page=100" \
+              --jq '[.jobs[] | select(.name == "build" or (.name | endswith(" / build")))][0] | "\(.status) \(.conclusion)"' \
+              2>/dev/null)" || state="unknown"
+            case "${state}" in
+              "completed success") echo "The build is ready."; exit 0 ;;
+              completed*) echo "::error::The build job ended with ${state#completed }; open the build job."; exit 1 ;;
+            esac
+            sleep 10
+          done
+          echo "::error::The build was not ready after 15 minutes."
+          exit 1
+      - uses: ./.github/actions/restore-build
+      # Playwright's installer comes with the build.
       - name: Install Chromium
         if: matrix.kind == 'e2e'
         uses: ./.github/actions/install-chromium
@@ -260,7 +342,7 @@ jobs:
           failed=0
           for pid in "${pids[@]}"; do wait "${pid}" || failed=1; done
           if [[ "${failed}" -ne 0 ]]; then
-            echo "::error::Backend shard ${SHARD}: a test lane failed (lines are prefixed [lane1] / [lane2])."
+            echo "::error::Backend shard ${SHARD}: a test lane failed (lines are prefixed [lane1] .. [lane3])."
             exit 1
           fi
         env:
@@ -286,11 +368,27 @@ jobs:
           set -euo pipefail
           export TMPDIR="${RUNNER_TEMP}"
           findmnt -T "${TMPDIR}" -o TARGET,FSTYPE,SOURCE || true
-          filter="$(python3 scripts/ci-shard-tests.py lanes --plan ci-plan/e2e.json --shard "${SHARD}")"
-          # An empty filter would run every browser test.
-          if [[ -z "${filter}" ]]; then echo "::notice::Browser shard ${SHARD} has no planned tests."; exit 0; fi
-          dotnet test tests/Jularr.E2E.Tests --configuration Release --no-build ${DOTNET_TEST_BLAME} \
-            --filter "${filter}" --logger "trx;LogFileName=e2e-shard.trx" --results-directory TestResults/ci/e2e
+          dotnet --info >/dev/null
+          python3 scripts/ci-shard-tests.py lanes --plan ci-plan/e2e.json --shard "${SHARD}" > "${RUNNER_TEMP}/lanes.txt"
+          mapfile -t lanes < "${RUNNER_TEMP}/lanes.txt"
+          pids=()
+          for index in "${!lanes[@]}"; do
+            # An empty filter would run every browser test.
+            [[ -n "${lanes[$index]}" ]] || continue
+            lane=$((index + 1))
+            (set -o pipefail
+             dotnet test tests/Jularr.E2E.Tests --configuration Release --no-build ${DOTNET_TEST_BLAME} \
+               --filter "${lanes[$index]}" --logger "trx;LogFileName=e2e-lane${lane}.trx" \
+               --results-directory TestResults/ci/e2e 2>&1 | sed -u "s/^/[lane${lane}] /") &
+            pids+=($!)
+          done
+          if [[ "${#pids[@]}" -eq 0 ]]; then echo "::notice::Browser shard ${SHARD} has no planned tests."; exit 0; fi
+          failed=0
+          for pid in "${pids[@]}"; do wait "${pid}" || failed=1; done
+          if [[ "${failed}" -ne 0 ]]; then
+            echo "::error::Browser shard ${SHARD}: a test lane failed (lines are prefixed [lane1] / [lane2])."
+            exit 1
+          fi
         env:
           JULARR_TEST_FFMPEG: /usr/bin/ffmpeg
           JULARR_TEST_DJVULIBRE: /usr/bin
