@@ -125,8 +125,9 @@ namespace Jularr.Backend.Logic.Acquisition
         }
 
         // Sonarr's search cases. The first round (tier 0) is what Sonarr asks first: the series ID with season and episode (a daily show: the year
-        // and MM/dd), for anime also the ID and the title with the absolute number, for a special its own title. Without an ID the title takes
-        // the ID's place. Everything else only runs when the first round found nothing.
+        // and MM/dd), for anime also the ID with the absolute number, for a special its own title. Without an ID the title takes the ID's place.
+        // Everything else, also an anime's title with the absolute number (a long title is the indexer's slowest answer), only runs when the
+        // first round found nothing.
         private static void PlanEpisodic(List<PlannedQuery> rungs, SearchIntent intent, IReadOnlyList<string> titles, NewznabCapabilities caps, bool structuredText)
         {
             var season = intent.Season;
@@ -167,11 +168,6 @@ namespace Jularr.Backend.Logic.Acquisition
             if (intent.EpisodeTitle is { Length: > 0 } episodeTitle)
             {
                 Add(rungs, "title", 0, NewznabSearchMode.Search, $"{canonical} {episodeTitle}", NoParameters, "Title + episode title");
-            }
-
-            if (ids > 0 && intent.Kind == AcquisitionKind.Anime && intent.AbsoluteEpisode is > 0 and var number)
-            {
-                Add(rungs, "title", 0, NewznabSearchMode.Search, $"{canonical} {number:00}", NoParameters, $"Title + absolute {number}");
             }
 
             AddNumbered(rungs, intent, canonical, ids > 0 ? 1 : 0, structuredText && tvSearch && numbering.Count > 0 ? numbering : null, numberingText);
