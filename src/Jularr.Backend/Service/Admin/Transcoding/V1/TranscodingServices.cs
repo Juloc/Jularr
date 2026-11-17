@@ -38,14 +38,17 @@ namespace Jularr.Backend.Service.Admin.Transcoding.V1
                     settings."TranscodeAccelerationTypeId",
                     settings."MaxTranscodes"::integer AS "MaxTranscodes",
                     settings."LadderHeights",
-                    settings."Version"
+                    settings."Version",
+                    settings."BufferSeconds"::integer AS "BufferSeconds",
+                    settings."ReconnectSeconds"::integer AS "ReconnectSeconds"
                 FROM
                     "TranscodeSettings" AS settings
                 WHERE
                     settings."Id" = 1;
                 """;
             var settings = await Context.ReadSql.ReadRequiredAsync<TranscodeSettingsData>(sql, CancellationToken);
-            return new TranscodeSettingsV1(settings.TranscodeAccelerationTypeId, settings.MaxTranscodes ?? _options.MaxTranscodes, settings.LadderHeights, settings.Version);
+            return new TranscodeSettingsV1(settings.TranscodeAccelerationTypeId, settings.MaxTranscodes ?? _options.MaxTranscodes, settings.LadderHeights, settings.Version,
+                settings.BufferSeconds, settings.ReconnectSeconds);
         }
     }
 
@@ -66,7 +69,8 @@ namespace Jularr.Backend.Service.Admin.Transcoding.V1
 
         protected override async Task<IServiceOutput> OnUpdate()
         {
-            await Context.UpdateTranscodeSettingsAsync(new TranscodeSettingsUpdateData(Data.TranscodeAccelerationTypeId, Data.MaxTranscodes, Data.LadderHeights, Data.Version), CancellationToken);
+            await Context.UpdateTranscodeSettingsAsync(new TranscodeSettingsUpdateData(Data.TranscodeAccelerationTypeId, Data.MaxTranscodes, Data.LadderHeights, Data.Version,
+                Data.BufferSeconds, Data.ReconnectSeconds), CancellationToken);
             return new UpdateResult(true);
         }
 

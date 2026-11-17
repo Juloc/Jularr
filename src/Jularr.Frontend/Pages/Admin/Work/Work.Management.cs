@@ -42,6 +42,8 @@ namespace Jularr.Frontend.Pages.Admin.Work
             page.Asset("Pages/Admin/Work/Work.entry.scss");
             page.Asset("Pages/Admin/Work/Work.entry.ts");
             page.Asset("Framework/Components/LiveProgress.entry.ts");
+            // The Files tab loads its list after the page (a DeferredSection); tabs swap in place, so the script is there whichever tab came first.
+            page.Asset("Framework/Components/Deferred.entry.ts");
             var isSeries = work.MediaTypeId == MediaType.Series;
             var hasVolumes = work.MediaTypeId == MediaType.Book && work.MediaSubtypeId is not null;
             var hasGroups = work.MediaTypeId == MediaType.Game || work.MediaTypeId == MediaType.Book && work.MediaSubtypeId is null;

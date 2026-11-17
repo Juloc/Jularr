@@ -2,7 +2,7 @@ name: Backend
 
 # Always report a stable PR check (`Backend / test`); docs-only changes skip the costly jobs.
 # Job graph: prepare (build once, smoke methods, change-aware selection, shard plan) -> shards (the
-# selected tests in 1 to 6 balanced shards of two lanes, as many as their measured time needs)
+# selected tests in 1 to 6 balanced shards of three lanes, as many as their measured time needs)
 # -> test (the one required conclusion).
 # CI retry (ci-retry.yml) re-runs a run once that failed only in set-up steps; their names are listed in
 # scripts/ci-classify-failure.py: rename or add set-up steps there too.
@@ -90,8 +90,9 @@ jobs:
         if: steps.paths.outputs.backend == 'true'
         with:
           path: ~/.nuget/packages
-          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', '**/*.props', '**/*.targets') }}
+          key: nuget-backend-${{ runner.os }}-${{ hashFiles('**/*.csproj', '**/*.props', '**/*.targets') }}
           restore-keys: |
+            nuget-backend-${{ runner.os }}-
             nuget-${{ runner.os }}-
       - uses: actions/setup-node@v7
         if: steps.paths.outputs.backend == 'true'
@@ -120,7 +121,7 @@ jobs:
           npm run build
       - name: Compile the backend test project and its dependencies
         if: steps.paths.outputs.backend == 'true'
-        run: dotnet build tests/Jularr.Backend.Tests --configuration Release
+        run: dotnet build tests/Jularr.Backend.Tests --configuration Release -p:RunAnalyzers=false  # analyzers only warn; frontend.yml shows them
       - name: Select the tests for the changed areas and run the smoke methods
         id: select
         if: steps.paths.outputs.backend == 'true'
@@ -152,7 +153,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          matrix="$(python3 scripts/ci-shard-tests.py matrix --kind backend --lanes 2 --lane-limit 330 --max-shards 6 \
+          matrix="$(python3 scripts/ci-shard-tests.py matrix --kind backend --lanes 3 --lane-limit 150 --max-shards 6 \
             --classes "${CLASSES}" --exclude "$(python3 scripts/ci-select-backend-tests.py --pr-exclude)" \
             --measured "${RUNNER_TEMP}/measured" --out ci-plan/backend.json)"
           echo "matrix=${matrix}" >> "$GITHUB_OUTPUT"
@@ -244,7 +245,7 @@ jobs:
           failed=0
           for pid in "${pids[@]}"; do wait "${pid}" || failed=1; done
           if [[ "${failed}" -ne 0 ]]; then
-            echo "::error::Backend shard ${SHARD}: a test lane failed (lines are prefixed [lane1] / [lane2])."
+            echo "::error::Backend shard ${SHARD}: a test lane failed (lines are prefixed [lane1] .. [lane3])."
             exit 1
           fi
         env:

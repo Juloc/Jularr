@@ -2762,6 +2762,8 @@ namespace Jularr.Frontend.Localization
             new("admin.transcoding.proposedMaximum", "Proposed maximum"),
             new("admin.transcoding.acceleration", "Acceleration"),
             new("admin.transcoding.maxTranscodes", "Conversions at once"),
+            new("admin.transcoding.bufferSeconds", "Player buffer (seconds)"),
+            new("admin.transcoding.reconnectSeconds", "Reconnect after a stall (seconds)"),
             new("admin.transcoding.ladder", "Lower qualities offered"),
             new("admin.transcoding.acceleration.Auto", "Automatic"),
             new("admin.transcoding.acceleration.Software", "Software"),

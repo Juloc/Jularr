@@ -8,8 +8,17 @@ namespace Jularr.E2E.Tests
     {
         private static readonly ConcurrentQueue<string> Lines = new();
 
+        // Where the local instance to click through writes its log as it goes (scripts/dev-instance.sh); tests keep it in memory for a failure.
+        public static string? Mirror { get; set; }
+
         public static void Log(string line)
         {
+            if (Mirror is not null)
+            {
+                lock (Lines) File.AppendAllText(Mirror, line + Environment.NewLine);
+                return;
+            }
+
             Console.WriteLine(line);
             Lines.Enqueue(line);
         }

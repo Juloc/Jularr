@@ -2835,6 +2835,7 @@ namespace Jularr.Backend.Tests
             // A row's actions are buttons of the page's one form, each with its own address: the page carries a handful of tokens, not three for every row, and the address alone
             // (no values of its own) switches the episode off again.
             StringAssert.Contains(html, "id=\"work-actions\"");
+            StringAssert.Contains(html, "Deferred.entry", "The Files tab loads its list with this script; tabs swap in place, so every tab of the page carries it.");
             StringAssert.Contains(html, "formaction=\"/Admin/Works/" + workId + "?handler=Unit&amp;workUnitId=" + episode.Id + "&amp;isMonitored=");
             Assert.IsTrue(System.Text.RegularExpressions.Regex.Matches(html, "__RequestVerificationToken").Count < 12, "The page carries a token for every row.");
             using var viaButton = await host.SendAsync(HttpMethod.Post, "/Admin/Works/" + workId + "?handler=Unit&workUnitId=" + episode.Id + "&isMonitored=false",

@@ -37,9 +37,14 @@ pwsh tests/Jularr.E2E.Tests/bin/Release/net10.0/playwright.ps1 install chromium
 dotnet test tests/Jularr.E2E.Tests -c Release --no-build --filter "FullyQualifiedName~LayoutShiftTests"
 ```
 
+Locally, `eval "$(scripts/local-ffmpeg.sh)"` fetches CI's pinned FFmpeg (no root), so the playback tests run without CI.
+`scripts/dev-instance.sh` starts a Jularr to click through on the test server: a catalog and library in the live proportions, covers, progress and
+real files that play; it prints the address and sign-in, logs warnings to `~/.cache/jularr-dev/host.log` and is removed again on Ctrl+C.
+`scripts/test-instance.sh` keeps a local Jularr with its own database on the test server and folders in `~/.local/share/jularr-test`: the Owner enters a real indexer, download server and VPN once, `save` keeps that state and `copy` makes a fresh instance of it for every test. The states hold the entered keys and never leave the machine.
+
 Android (in `clients/android`, JDK 17, Android SDK 36): `gradle :app-tv:testDebugUnitTest :app-mobile:testDebugUnitTest`.
 
-CI runs on PRs to `main`; the label `ci/full` adds the full regression.
+CI runs on PRs to `main`; the label `ci/full` adds the full regression. The classes in `NIGHTLY` / `NIGHTLY_E2E` of `scripts/ci-select-backend-tests.py` run only nightly (or `gh workflow run backend.yml -f nightly=true`) and in PRs that touch their area.
 
 ## Migrations
 

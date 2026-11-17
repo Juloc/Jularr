@@ -144,7 +144,8 @@ namespace Jularr.Backend.Logic.Acquisition
                 Aliases = [.. target.Titles, .. target.EditionTitles], Year = target.ReleaseYear, Creator = target.Author, ExternalIds = ids, Season = kind == AcquisitionKind.Manga ? null : scope?.ParentNumber,
                 Episode = kind == AcquisitionKind.Manga ? null : scope?.UnitNumber, Volume = kind == AcquisitionKind.Manga ? scope?.UnitNumber : null,
                 AbsoluteEpisode = kind == AcquisitionKind.Anime && scope?.UnitNumber is not null ? scope.Unit.Absolute : null,
-                AirDate = kind == AcquisitionKind.Tv && scope is { UnitNumber: not null, ParentNumber: >= 1900 } ? scope.Unit.ReleasedOn : null
+                AirDate = kind == AcquisitionKind.Tv && scope is { UnitNumber: not null, ParentNumber: >= 1900 } ? scope.Unit.ReleasedOn : null,
+                EpisodeTitle = kind is AcquisitionKind.Tv or AcquisitionKind.Anime && scope is { UnitNumber: not null, ParentNumber: 0 } ? scope.Unit.Title : null
             };
         }
 
