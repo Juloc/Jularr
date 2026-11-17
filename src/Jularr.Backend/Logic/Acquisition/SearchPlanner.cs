@@ -105,8 +105,9 @@ namespace Jularr.Backend.Logic.Acquisition
                 }
             }
 
+            // Like Radarr: the ID query alone is the first round; the title follows only when it found nothing.
             var withYear = year is int y ? $"{titles[0]} {y.ToString(CultureInfo.InvariantCulture)}" : titles[0];
-            Add(rungs, "title", 0, NewznabSearchMode.Search, withYear, NoParameters, year is null ? "Title" : "Title + year");
+            Add(rungs, "title", rungs.Count > 0 ? 1 : 0, NewznabSearchMode.Search, withYear, NoParameters, year is null ? "Title" : "Title + year");
             foreach (var alias in titles.Skip(1).Take(2))
             {
                 Add(rungs, "alias", 1, NewznabSearchMode.Search, year is int a ? $"{alias} {a.ToString(CultureInfo.InvariantCulture)}" : alias, NoParameters, year is null ? "Alias" : "Alias + year");
@@ -123,6 +124,9 @@ namespace Jularr.Backend.Logic.Acquisition
             }
         }
 
+        // Sonarr's search cases. The first round (tier 0) is what Sonarr asks first: the series ID with season and episode (a daily show: the year
+        // and MM/dd), for anime also the ID and the title with the absolute number, for a special its own title. Without an ID the title takes
+        // the ID's place. Everything else only runs when the first round found nothing.
         private static void PlanEpisodic(List<PlannedQuery> rungs, SearchIntent intent, IReadOnlyList<string> titles, NewznabCapabilities caps, bool structuredText)
         {
             var season = intent.Season;
@@ -135,26 +139,42 @@ namespace Jularr.Backend.Logic.Acquisition
                 numbering.Add(new("season", season.Value.ToString(CultureInfo.InvariantCulture)));
                 if (hasEpisode && caps.Supports(NewznabSearchMode.TvSearch, "ep"))
                 {
-                    numbering.Add(new("ep", episode!.Value.ToString(CultureInfo.InvariantCulture)));
+                    numbering.Add(new("ep", intent.AirDate is { } aired ? aired.ToString("MM'/'dd", CultureInfo.InvariantCulture) : episode!.Value.ToString(CultureInfo.InvariantCulture)));
                 }
             }
 
-            // Structured IDs: the strongest evidence first; a second ID only joins in the expansion tier.
+            // Structured IDs: the strongest evidence first; a second ID only joins when the first round found nothing.
             var numberingText = hasEpisode ? $"S{season!.Value:00}E{episode!.Value:00}" : season is >= 0 ? $"S{season.Value:00}" : null;
+            var canonical = titles[0];
+            var ids = 0;
             if (tvSearch && numbering.Count > 0)
             {
-                var emitted = 0;
                 foreach (var (key, parameter) in TvIds)
                 {
                     if (intent.ExternalIds.TryGetValue(key, out var id) && caps.Supports(NewznabSearchMode.TvSearch, parameter) && NumericId(id) is { } numeric)
                     {
-                        Add(rungs, "id", emitted++ == 0 ? 0 : 1, NewznabSearchMode.TvSearch, null, [new(parameter, numeric), .. numbering], $"{key.ToUpperInvariant()}{(numberingText is null ? string.Empty : $" + {numberingText}")}");
+                        var tier = ids++ == 0 ? 0 : 1;
+                        Add(rungs, "id", tier, NewznabSearchMode.TvSearch, null, [new(parameter, numeric), .. numbering], $"{key.ToUpperInvariant()}{(numberingText is null ? string.Empty : $" + {numberingText}")}");
+                        // Anime releases carry the absolute number: Sonarr asks the ID with it in the same round.
+                        if (tier == 0 && intent.Kind == AcquisitionKind.Anime && intent.AbsoluteEpisode is > 0 and var absolute && caps.Supports(NewznabSearchMode.TvSearch, "q"))
+                        {
+                            Add(rungs, "id", 0, NewznabSearchMode.TvSearch, absolute.ToString("00", CultureInfo.InvariantCulture), [new(parameter, numeric)], $"{key.ToUpperInvariant()} + absolute {absolute}");
+                        }
                     }
                 }
             }
 
-            var canonical = titles[0];
-            AddNumbered(rungs, intent, canonical, 0, structuredText && tvSearch && numbering.Count > 0 ? numbering : null, numberingText);
+            if (intent.EpisodeTitle is { Length: > 0 } episodeTitle)
+            {
+                Add(rungs, "title", 0, NewznabSearchMode.Search, $"{canonical} {episodeTitle}", NoParameters, "Title + episode title");
+            }
+
+            if (ids > 0 && intent.Kind == AcquisitionKind.Anime && intent.AbsoluteEpisode is > 0 and var number)
+            {
+                Add(rungs, "title", 0, NewznabSearchMode.Search, $"{canonical} {number:00}", NoParameters, $"Title + absolute {number}");
+            }
+
+            AddNumbered(rungs, intent, canonical, ids > 0 ? 1 : 0, structuredText && tvSearch && numbering.Count > 0 ? numbering : null, numberingText);
 
             foreach (var alias in titles.Skip(1).Take(2))
             {
@@ -167,8 +187,6 @@ namespace Jularr.Backend.Logic.Acquisition
             }
         }
 
-        // One title with the numbering forms the target has. An episode is asked as SxxEyy first; the absolute number follows for Anime
-        // because releases of long-running series carry only that.
         private static void AddNumbered(List<PlannedQuery> rungs, SearchIntent intent, string title, int tier, IReadOnlyList<KeyValuePair<string, string>>? structured, string? numberingText)
         {
             var stage = tier == 0 ? "title" : "alias";
