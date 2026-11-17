@@ -361,8 +361,9 @@ namespace Jularr.E2E.Tests
                 Assert.IsTrue(await page.Locator("video").EvaluateAsync<bool>("video => video.error !== null"), "The video reported no error.");
                 CollectionAssert.AreEqual(Array.Empty<string>(), session.Problems.ToArray());
 
-                // The next episode opens inside the same page and fullscreen stays on.
-                await page.GotoAsync(details);
+                // The next episode opens inside the same page and fullscreen stays on. The episodes tab lists the pilot even
+                // when the earlier playback ran long enough to count it as watched (the overview shows only what is next).
+                await page.GotoAsync(details + (details.Contains('?') ? "&" : "?") + "tab=episodes");
                 await page.Locator(".episode-card", new() { HasText = "Pilot" }).Locator("a[href^='/Player/']").First.ClickAsync();
                 await page.WaitForFunctionAsync("() => document.querySelector('video')?.readyState >= 1", null, new() { Timeout = Steps.MediaTimeout });
                 await page.Locator("[data-action=fullscreen]").ClickAsync();

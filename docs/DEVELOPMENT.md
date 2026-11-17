@@ -43,7 +43,7 @@ real files that play; it prints the address and sign-in, logs warnings to `~/.ca
 
 Android (in `clients/android`, JDK 17, Android SDK 36): `gradle :app-tv:testDebugUnitTest :app-mobile:testDebugUnitTest`.
 
-CI runs on PRs to `main`; the label `ci/full` adds the full regression.
+CI runs on PRs to `main`; the label `ci/full` adds the full regression. The classes in `NIGHTLY` / `NIGHTLY_E2E` of `scripts/ci-select-backend-tests.py` run only nightly (or `gh workflow run backend.yml -f nightly=true`) and in PRs that touch their area.
 
 ## Migrations
 
