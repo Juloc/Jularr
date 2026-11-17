@@ -20,6 +20,18 @@ port() { if [[ "$1" == main ]]; then echo 8190; else echo $((8191 + $(printf '%s
 running() { [[ -f "${home}/instances/$1/pid" ]] && kill -0 "$(cat "${home}/instances/$1/pid")" 2>/dev/null; }
 valid() { [[ "$1" =~ ^[a-z0-9_]{1,40}$ ]] || { echo "Names are 1-40 characters a-z, 0-9 and _." >&2; exit 2; }; }
 
+# A tool on the PATH, else the binary of its Debian package, unpacked once into ~/.cache/jularr-tools.
+tool() {
+  local package="$1" binary="$2" found; found="$(command -v "${binary}" || true)"
+  [[ -n "${found}" ]] && { echo "${found}"; return; }
+  local root="${HOME}/.cache/jularr-tools/${package}"
+  if [[ ! -x "${root}/root/usr/bin/${binary}" ]]; then
+    rm -rf "${root}" && mkdir -p "${root}/deb"
+    (cd "${root}/deb" && apt-get download "${package}" >/dev/null && dpkg -x "${package}"_*.deb "${root}/root")
+  fi
+  echo "${root}/root/usr/bin/${binary}"
+}
+
 start() {
   local name="${1:-main}"; valid "${name}"
   local dir="${home}/instances/${name}" db; db="$(database "${name}")"
@@ -32,16 +44,10 @@ start() {
   echo "Building the frontend and the host..."
   (cd "${repo}/src/Jularr.Frontend" && npm run build >/dev/null)
   dotnet build "${repo}/src/Jularr.Frontend" -c Release -m:2 -nodeReuse:false -p:UseSharedCompilation=false -v quiet -nologo >/dev/null
-  # The tools of the live image: the pinned FFmpeg of CI, and cjxl (covers as JPEG XL) from the Debian package when it is not installed.
+  # The tools of the live image: the pinned FFmpeg of CI; cjxl (covers as JPEG XL) and par2 (download repair) from the Debian packages when
+  # they are not installed (no root needed); 7-Zip unpacks as installed.
   eval "$("${repo}/scripts/local-ffmpeg.sh")"
-  local tools="${HOME}/.cache/jularr-tools" cjxl; cjxl="$(command -v cjxl || true)"
-  if [[ -z "${cjxl}" ]]; then
-    cjxl="${tools}/jxl/root/usr/bin/cjxl"
-    if [[ ! -x "${cjxl}" ]]; then
-      rm -rf "${tools}/jxl" && mkdir -p "${tools}/jxl/deb"
-      (cd "${tools}/jxl/deb" && apt-get download libjxl-tools >/dev/null && dpkg -x libjxl-tools_*.deb "${tools}/jxl/root")
-    fi
-  fi
+  local cjxl par2; cjxl="$(tool libjxl-tools cjxl)"; par2="$(tool par2 par2)"
   local address="http://127.0.0.1:$(port "${name}")"
   echo "Jularr ${name}: ${address} (Ctrl+C stops it; the database and the folders stay)"
   echo "Downloads and the library belong under ${dir}/storage; the log is ${dir}/host.log."
@@ -49,7 +55,7 @@ start() {
   ASPNETCORE_URLS="${address}" ASPNETCORE_ENVIRONMENT=Development \
   JULARR_DB="Host=127.0.0.1;Port=15433;Username=${pg_user};Password=${PGPASSWORD};Database=${db}" \
   DataPath="${dir}/data" Storage__MountRoot="${dir}/storage" Storage__RequireMountPoint=false Storage__LocalPaths__0="${dir}/storage" \
-  Media__FfmpegPath="${JULARR_TEST_FFMPEG}" Media__FfprobePath="$(dirname "${JULARR_TEST_FFMPEG}")/ffprobe" Media__CjxlPath="${cjxl}" \
+  Media__FfmpegPath="${JULARR_TEST_FFMPEG}" Media__FfprobePath="$(dirname "${JULARR_TEST_FFMPEG}")/ffprobe" Media__CjxlPath="${cjxl}" Usenet__Par2Path="${par2}" \
     dotnet bin/Release/net10.0/Jularr.Frontend.dll > >(tee -a "${dir}/host.log" | grep --line-buffered -E "fail|crit|Now listening") 2>&1 &
   echo $! > "${dir}/pid"
   trap 'kill -TERM "$(cat "${dir}/pid")" 2>/dev/null || true' INT TERM
