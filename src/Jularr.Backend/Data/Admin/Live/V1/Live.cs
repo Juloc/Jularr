@@ -31,14 +31,16 @@ namespace Jularr.Backend.Data.Admin.Live.V1
         public BaseDataList<LiveUnitV1> Units { get; }
     }
 
-    // One unit of a Work that is searched for, downloaded or imported right now: how far it is, and how many units its season has (the season's sum says "3 of 12").
+    // One unit of a Work that is searched for, downloaded or imported right now: how far it is, how many units its season has (the season's sum says "3 of 12") and its Work.
     public sealed class LiveUnitV1 : BaseResponse
     {
-        public LiveUnitV1(long workUnitId, long? parentWorkUnitId, int seasonUnitCount, AcquisitionRequestStatusType acquisitionRequestStatusTypeId, int? progressPercent)
+        public LiveUnitV1(long workUnitId, long? parentWorkUnitId, int seasonUnitCount, long workId, int workUnitCount, AcquisitionRequestStatusType acquisitionRequestStatusTypeId, int? progressPercent)
         {
             WorkUnitId = workUnitId;
             ParentWorkUnitId = parentWorkUnitId;
             SeasonUnitCount = seasonUnitCount;
+            WorkId = workId;
+            WorkUnitCount = workUnitCount;
             AcquisitionRequestStatusTypeId = acquisitionRequestStatusTypeId;
             ProgressPercent = progressPercent;
         }
@@ -51,6 +53,13 @@ namespace Jularr.Backend.Data.Admin.Live.V1
 
         [DataField(typeof(WorkUnitFields), nameof(WorkUnitFields.EpisodeCount))]
         public int SeasonUnitCount { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.Id))]
+        public long WorkId { get; }
+
+        // How many units the whole Work has (the title's sum says "3 of 12").
+        [DataField(typeof(WorkUnitFields), nameof(WorkUnitFields.EpisodeCount))]
+        public int WorkUnitCount { get; }
 
         // Searching, Downloading or Importing.
         [DataField(typeof(AcquisitionRequestFields), nameof(AcquisitionRequestFields.AcquisitionRequestStatusTypeId))]

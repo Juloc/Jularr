@@ -348,7 +348,7 @@ function initializePicker(): void {
     });
 }
 
-// What is searched, downloaded or imported now shows in the status pill of its unit (its number is on the pill), and in the head of its season as a sum. The pill keeps
+// What is searched, downloaded or imported now shows in the status pill of its unit (its number is on the pill), and in the head of its season and of the title as a sum. The pill keeps
 // its size: its own content stays and only turns invisible, so nothing moves. When a unit stops being live it is done (or failed): the page's region is read again so
 // every status is the one the server says.
 const liveShown = new Set<string>();
@@ -385,12 +385,12 @@ function applyUnitLive(): void {
         else pill.style.setProperty('--live-percent', String(entity.percent));
     });
 
-    region.querySelectorAll<HTMLElement>('[data-season-live]').forEach(head => {
-        const entity = liveEntity('season:' + head.dataset.seasonLive);
+    region.querySelectorAll<HTMLElement>('[data-season-live], [data-title-live]').forEach(sum => {
+        const entity = liveEntity(sum.dataset.seasonLive ? 'season:' + sum.dataset.seasonLive : 'title:' + sum.dataset.titleLive);
         const text = entity?.text?.phase ?? '';
-        if (head.textContent !== text) head.textContent = text;
-        head.dataset.livePhase = entity?.phase ?? '';
-        head.hidden = text === '';
+        if (sum.textContent !== text) sum.textContent = text;
+        sum.dataset.livePhase = entity?.phase ?? '';
+        sum.hidden = text === '';
     });
 
     const done = Array.from(liveShown).some(id => !now.has(id));

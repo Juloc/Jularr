@@ -157,6 +157,7 @@ namespace Jularr.E2E.Tests
                 await Assertions.Expect(live).ToBeVisibleAsync(new() { Timeout = 30_000 });
                 await Assertions.Expect(live.Locator(".work-status__live")).ToHaveTextAsync("40 %");
                 await Assertions.Expect(page.Locator(".work-season__live").First).ToContainTextAsync("loading");
+                await Assertions.Expect(page.Locator(".work-figures__live")).ToContainTextAsync("loading");
                 await Evidence.SaveAsync(page, "work-unit-live-download");
 
                 // On a phone the episodes are strips; the pill there shows the download as well and the page does not run wider than the screen.
@@ -176,6 +177,7 @@ namespace Jularr.E2E.Tests
                 await Assertions.Expect(page.Locator(".work-status[data-live-phase]")).ToHaveCountAsync(0);
                 await Assertions.Expect(page.Locator("tr.work-row td[data-col=status] .work-status").First).ToHaveTextAsync("Missing");
                 await Assertions.Expect(page.Locator(".work-season__live").First).ToBeHiddenAsync();
+                await Assertions.Expect(page.Locator(".work-figures__live")).ToBeHiddenAsync();
 
                 // A result such as "nothing found" is the hint, never a message inside the hero.
                 Assert.AreEqual(0, await hero.Locator("[role=status]").CountAsync());

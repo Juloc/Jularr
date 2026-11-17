@@ -116,13 +116,18 @@ namespace Jularr.Frontend.Modules.Live
         }
 
         // A season's sum: how many of its units are on the way (a download counts before an import, before a search).
-        public static LiveEntity Season(UiText texts, IReadOnlyList<LiveUnitV1> units)
+        public static LiveEntity Season(UiText texts, IReadOnlyList<LiveUnitV1> units) => Sum(texts, units, units[0].SeasonUnitCount);
+
+        // The title's sum: the same over all units of the Work.
+        public static LiveEntity Title(UiText texts, IReadOnlyList<LiveUnitV1> units) => Sum(texts, units, units[0].WorkUnitCount);
+
+        private static LiveEntity Sum(UiText texts, IReadOnlyList<LiveUnitV1> units, int total)
         {
             var phase = units.Any(unit => unit.AcquisitionRequestStatusTypeId == AcquisitionRequestStatusType.Downloading) ? AcquisitionRequestStatusType.Downloading
                 : units.Any(unit => unit.AcquisitionRequestStatusTypeId == AcquisitionRequestStatusType.Importing) ? AcquisitionRequestStatusType.Importing : AcquisitionRequestStatusType.Searching;
             var count = units.Count(unit => unit.AcquisitionRequestStatusTypeId == phase);
             return new LiveEntity(LiveFacts.Marker(phase), null, null, Texts(("phase", string.Format(CultureInfo.CurrentCulture, texts["work.live.season." + phase],
-                count.ToString(CultureInfo.CurrentCulture), Math.Max(count, units[0].SeasonUnitCount).ToString(CultureInfo.CurrentCulture)))));
+                count.ToString(CultureInfo.CurrentCulture), Math.Max(count, total).ToString(CultureInfo.CurrentCulture)))));
         }
 
         // The pace of a running download; a paused one says so in the same place and style, so the column never loses its value.

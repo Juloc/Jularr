@@ -146,7 +146,17 @@ namespace Jularr.Backend.Service.Admin.Live.V1
                                 sibling."WorkId" = unit."WorkId"
                                 AND sibling."WorkUnitTypeId" = unit."WorkUnitTypeId"
                                 AND sibling."ParentWorkUnitId" IS NOT DISTINCT FROM unit."ParentWorkUnitId"
-                        ) AS "SeasonUnitCount"
+                        ) AS "SeasonUnitCount",
+                        unit."WorkId",
+                        (
+                            SELECT
+                                count(*)::integer
+                            FROM
+                                "WorkUnits" AS leaf
+                            WHERE
+                                leaf."WorkId" = unit."WorkId"
+                                AND leaf."WorkUnitTypeId" <> 1
+                        ) AS "WorkUnitCount"
                     FROM
                         "Operations" AS operation
                         JOIN "AcquisitionReleases" AS release ON release."Id" = operation."AcquisitionReleaseId"
@@ -170,7 +180,7 @@ namespace Jularr.Backend.Service.Admin.Live.V1
 
                     var phase = LivePhases.OfTarget(progress);
                     var first = unit.First();
-                    units[unit.Key] = new LiveUnitV1(unit.Key, first.ParentWorkUnitId, first.SeasonUnitCount, phase, phase == AcquisitionRequestStatusType.Downloading ? progress.ProgressPercent : null);
+                    units[unit.Key] = new LiveUnitV1(unit.Key, first.ParentWorkUnitId, first.SeasonUnitCount, first.WorkId, first.WorkUnitCount, phase, phase == AcquisitionRequestStatusType.Downloading ? progress.ProgressPercent : null);
                 }
             }
 
@@ -194,7 +204,17 @@ namespace Jularr.Backend.Service.Admin.Live.V1
                                 sibling."WorkId" = unit."WorkId"
                                 AND sibling."WorkUnitTypeId" = unit."WorkUnitTypeId"
                                 AND sibling."ParentWorkUnitId" IS NOT DISTINCT FROM unit."ParentWorkUnitId"
-                        ) AS "SeasonUnitCount"
+                        ) AS "SeasonUnitCount",
+                        unit."WorkId",
+                        (
+                            SELECT
+                                count(*)::integer
+                            FROM
+                                "WorkUnits" AS leaf
+                            WHERE
+                                leaf."WorkId" = unit."WorkId"
+                                AND leaf."WorkUnitTypeId" <> 1
+                        ) AS "WorkUnitCount"
                     FROM
                         search
                         JOIN "WantedItems" AS target ON target."Id" = search."WantedItemId"
@@ -223,7 +243,7 @@ namespace Jularr.Backend.Service.Admin.Live.V1
                     """;
                 foreach (var row in await Context.ReadSql.ReadListAsync<LiveSearchUnitRow>(sql, CancellationToken))
                 {
-                    units.TryAdd(row.WorkUnitId, new LiveUnitV1(row.WorkUnitId, row.ParentWorkUnitId, row.SeasonUnitCount, AcquisitionRequestStatusType.Searching, null));
+                    units.TryAdd(row.WorkUnitId, new LiveUnitV1(row.WorkUnitId, row.ParentWorkUnitId, row.SeasonUnitCount, row.WorkId, row.WorkUnitCount, AcquisitionRequestStatusType.Searching, null));
                 }
             }
 

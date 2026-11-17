@@ -116,6 +116,9 @@ namespace Jularr.Frontend.Pages.Admin.Work
             if (work.UpgradeWantedCount > 0) Figure("work.figure.upgrades", "work.figure.upgradeOne", work.UpgradeWantedCount, "warn");
             if (work.UnairedCount > 0) Figure("work.figure.unaired", "work.figure.unaired", work.UnairedCount);
 
+            // What is searched, downloaded or imported of the title now, as a sum: "3 of 12 loading". It is the page's own, so nothing moves while it fills.
+            if (CanAcquire) figures.Add(new Span().Class("work-figures__live").Attribute("data-title-live", work.Id.ToString(CultureInfo.InvariantCulture)).Attribute("hidden", "hidden"));
+
             var actions = new List<IUiComponent>();
             if (_wanted is { } wanted && CanAcquire)
             {
@@ -443,6 +446,7 @@ namespace Jularr.Frontend.Pages.Admin.Work
                     if (group.WantedItemId is { } wantedId && _wanted is not null && CanAcquire)
                     {
                         var id = wantedId.ToString(CultureInfo.InvariantCulture);
+                        icons.Add(new LiveProgress(LiveKeys.Wanted(wantedId)).Compact().Optional());
                         lead = new PostForm(Address(Tab, "Monitor"), csrf, [("isPaused", group.IsPaused == true ? "false" : "true"), ("wantedItemId", id)],
                             new SwitchButton(group.IsPaused != true, group.IsPaused == true ? "work.monitor.start" : "work.monitor.stop"));
                         icons.Add(new PostForm(Address(Tab, "Automatic"), csrf, [("wantedItemId", id)], IconSubmit("search", "work.search")));

@@ -347,6 +347,7 @@ namespace Jularr.Backend.Tests
             Assert.IsFalse(entities.TryGetProperty("unit:3001", out _));
             Assert.IsFalse(entities.TryGetProperty("unit:3004", out _));
             Assert.AreEqual("2 of 4 loading", entities.GetProperty("season:3100").GetProperty("text").GetProperty("phase").GetString());
+            Assert.AreEqual("2 of 4 loading", entities.GetProperty("title:30").GetProperty("text").GetProperty("phase").GetString());
 
             // A search of the whole season marks what it would take: the episodes with nothing, not the two that load.
             var searches = host.Services.GetRequiredService<ActiveSearches>();
@@ -381,6 +382,7 @@ namespace Jularr.Backend.Tests
                 if (!changed.TryGetProperty("unit:3004", out _) || changed.GetProperty("unit:3002").GetProperty("phase").GetString() != "importing") continue;
                 Assert.IsFalse(changed.GetProperty("unit:3002").TryGetProperty("percent", out _));
                 Assert.AreEqual("2 of 4 importing", changed.GetProperty("season:3100").GetProperty("text").GetProperty("phase").GetString());
+                Assert.AreEqual("2 of 4 importing", changed.GetProperty("title:30").GetProperty("text").GetProperty("phase").GetString());
                 break;
             }
 

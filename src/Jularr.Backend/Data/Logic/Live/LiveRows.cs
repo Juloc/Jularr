@@ -23,11 +23,11 @@ namespace Jularr.Backend.Data.Logic.Live
     internal sealed record LiveOperationRow(long Id, OperationType OperationTypeId, OperationStatusType OperationStatusTypeId, DownloadStateType? DownloadStateTypeId, bool IsWaiting, int? ProgressPercent, long? SizeBytes,
         long? RemainingBytes, int? EtaSeconds, string? ReasonKey, long? WantedItemId, long? WorkId, string? ReleaseTitle, string? IndexerName, string? ClientName, long? AcquisitionRequestId);
 
-    // A unit a running download brings, with the unit's season and how many units that has.
-    internal sealed record LiveDownloadUnitRow(long OperationId, long WorkUnitId, long? ParentWorkUnitId, int SeasonUnitCount);
+    // A unit a running download brings, with the unit's season and how many units that has, and its Work and how many units that has.
+    internal sealed record LiveDownloadUnitRow(long OperationId, long WorkUnitId, long? ParentWorkUnitId, int SeasonUnitCount, long WorkId, int WorkUnitCount);
 
     // A unit a running search looks for.
-    internal sealed record LiveSearchUnitRow(long WorkUnitId, long? ParentWorkUnitId, int SeasonUnitCount);
+    internal sealed record LiveSearchUnitRow(long WorkUnitId, long? ParentWorkUnitId, int SeasonUnitCount, long WorkId, int WorkUnitCount);
 
     // The Work a searched target belongs to.
     internal sealed record LiveSearchTargetRow(long WantedItemId, long WorkId);

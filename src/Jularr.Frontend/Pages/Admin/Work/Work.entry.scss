@@ -359,7 +359,8 @@ th[aria-sort="descending"] .work-sort::after { content: " ▾"; }
     }
 }
 
-.work-season__live {
+.work-season__live,
+.work-figures__live {
     display: inline-block;
     padding: 1px 8px;
     border-radius: 999px;
@@ -377,7 +378,8 @@ th[aria-sort="descending"] .work-sort::after { content: " ▾"; }
 
 @media (prefers-reduced-motion: reduce) {
     .work-status[data-live-phase],
-    .work-season__live { animation: none !important; }
+    .work-season__live,
+    .work-figures__live { animation: none !important; }
 }
 
 .work-quality-block { display: inline-flex; align-items: center; gap: 6px; }
