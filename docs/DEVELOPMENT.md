@@ -40,6 +40,7 @@ dotnet test tests/Jularr.E2E.Tests -c Release --no-build --filter "FullyQualifie
 Locally, `eval "$(scripts/local-ffmpeg.sh)"` fetches CI's pinned FFmpeg (no root), so the playback tests run without CI.
 `scripts/dev-instance.sh` starts a Jularr to click through on the test server: a catalog and library in the live proportions, covers, progress and
 real files that play; it prints the address and sign-in, logs warnings to `~/.cache/jularr-dev/host.log` and is removed again on Ctrl+C.
+`scripts/test-instance.sh` keeps a local Jularr with its own database on the test server and folders in `~/.local/share/jularr-test`: the Owner enters a real indexer, download server and VPN once, `save` keeps that state and `copy` makes a fresh instance of it for every test. The states hold the entered keys and never leave the machine.
 
 Android (in `clients/android`, JDK 17, Android SDK 36): `gradle :app-tv:testDebugUnitTest :app-mobile:testDebugUnitTest`.
 
