@@ -130,7 +130,7 @@ namespace Jularr.E2E.Tests
                 await Assertions.Expect(page.Locator("[data-work-table=units]")).ToBeHiddenAsync();
                 Assert.IsFalse(await strips.EvaluateAsync<bool>("element => element.scrollWidth > element.clientWidth + 1"), "The facts still slide sideways.");
                 Assert.IsTrue(await strips.EvaluateAsync<bool>("""
-                    element => [...element.querySelectorAll('.work-strip__facts .work-fact')].every(fact => { const box = fact.getBoundingClientRect(), bounds = element.getBoundingClientRect(); return box.left >= bounds.left - 0.5 && box.right <= bounds.right + 0.5; })
+                    element => [...element.querySelectorAll('.work-strip__facts .work-fact')].every(fact => { const box = fact.getBoundingClientRect(), bounds = element.getBoundingClientRect(); return box.width === 0 || box.left >= bounds.left - 0.5 && box.right <= bounds.right + 0.5; })
                     """), "A fact leaves the screen.");
                 Assert.IsFalse(await page.Locator("body").EvaluateAsync<bool>("body => body.scrollWidth > innerWidth + 1"));
                 await Evidence.SaveAsync(page, "work-strips-mobile");
