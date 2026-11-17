@@ -16,11 +16,11 @@ runs:
                        'linux-musl*' 'linux-bionic*' 'linux-loongarch64' 'linux-riscv64'; do
           exclude+=("--exclude=*/runtimes/${runtime}")
         done
-        tar "${exclude[@]}" -I 'gzip -1' -cf "${RUNNER_TEMP}/jularr-build.tgz" -C "${GITHUB_WORKSPACE}" .
-        ls -lh "${RUNNER_TEMP}/jularr-build.tgz"
+        tar "${exclude[@]}" -I 'zstd -T0 -3' -cf "${RUNNER_TEMP}/jularr-build.tar.zst" -C "${GITHUB_WORKSPACE}" .
+        ls -lh "${RUNNER_TEMP}/jularr-build.tar.zst"
     - uses: actions/upload-artifact@v7
       with:
         name: jularr-build
-        path: ${{ runner.temp }}/jularr-build.tgz
+        path: ${{ runner.temp }}/jularr-build.tar.zst
         compression-level: 0
         retention-days: 1

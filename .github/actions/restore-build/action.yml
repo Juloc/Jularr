@@ -18,6 +18,6 @@ runs:
     - name: Unpack the build into the workspace
       shell: bash
       run: |
-        tar -xzf "${RUNNER_TEMP}/jularr-build/jularr-build.tgz" -C "${GITHUB_WORKSPACE}"
-        rm -f "${RUNNER_TEMP}/jularr-build/jularr-build.tgz"
+        tar -I zstd -xf "${RUNNER_TEMP}/jularr-build/jularr-build.tar.zst" -C "${GITHUB_WORKSPACE}"
+        rm -f "${RUNNER_TEMP}/jularr-build/jularr-build.tar.zst"
         echo "NuGet package folder: $(ls -d ~/.nuget/packages 2>/dev/null || echo 'none (not needed)')"

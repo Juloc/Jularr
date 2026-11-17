@@ -64,7 +64,7 @@ jobs:
           npm ci --no-audit --no-fund
           npm run build
       - name: Compile E2E test host
-        run: dotnet build tests/Jularr.E2E.Tests --configuration Release
+        run: dotnet build tests/Jularr.E2E.Tests --configuration Release -p:RunAnalyzers=false  # analyzers only warn; frontend.yml shows them
       # The same key as the browser shards of Backend Full, so a PR reuses the browser main downloaded.
       - name: Cache the Playwright browser
         uses: actions/cache@v6

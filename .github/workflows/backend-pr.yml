@@ -120,7 +120,7 @@ jobs:
           npm run build
       - name: Compile the backend test project and its dependencies
         if: steps.paths.outputs.backend == 'true'
-        run: dotnet build tests/Jularr.Backend.Tests --configuration Release
+        run: dotnet build tests/Jularr.Backend.Tests --configuration Release -p:RunAnalyzers=false  # analyzers only warn; frontend.yml shows them
       - name: Select the tests for the changed areas and run the smoke methods
         id: select
         if: steps.paths.outputs.backend == 'true'
