@@ -71,6 +71,7 @@ save() {
   rm -rf "${out}.tmp" && mkdir -p "${out}.tmp"
   docker exec "${container}" pg_dump -U "${pg_user}" -Fc "$(database "${name}")" > "${out}.tmp/database.dump"
   tar -C "${home}/instances/${name}" -czf "${out}.tmp/data.tgz" data
+  find "${home}/instances/${name}/storage" -mindepth 1 -type d -printf '%P\n' > "${out}.tmp/folders.txt"
   rm -rf "${out}" && mv "${out}.tmp" "${out}"
   echo "Saved ${name} as state ${state} ($(du -sh "${out}" | cut -f1))."
 }
@@ -85,6 +86,10 @@ copy() {
   docker exec -i "${container}" pg_restore -U "${pg_user}" -d "${db}" --no-owner < "${in}/database.dump"
   rm -rf "${dir}/data" && mkdir -p "${dir}/storage"
   tar -C "${dir}" -xzf "${in}/data.tgz"
+  # Local storage connections point at the copy's own storage folder, never at the one of the saved instance; the folder layout comes along.
+  psql -h 127.0.0.1 -p 15433 -U "${pg_user}" -d "${db}" -v ON_ERROR_STOP=1 -qAt -c \
+    "UPDATE \"StorageMounts\" SET \"SharePath\" = regexp_replace(\"SharePath\", '^${home}/instances/[a-z0-9_]+/storage', '${dir}/storage') WHERE \"SharePath\" LIKE '${home}/instances/%/storage%'"
+  [[ -f "${in}/folders.txt" ]] && while read -r folder; do mkdir -p "${dir}/storage/${folder}"; done < "${in}/folders.txt"
   echo "Instance ${name} is now a copy of ${state}: scripts/test-instance.sh start ${name}"
 }
 
