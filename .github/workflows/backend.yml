@@ -7,7 +7,8 @@ name: Backend Full
 #   build  ->  smoke (startup, schema, migrations, sessions, setup gate)  ->  gate
 #          ->  shards (7 backend x 3 lanes + 8 browser x 2 lanes, each to its end)  ->
 # `build` compiles everything once, runs the frontend unit tests, plans the shards and publishes the
-# build; smoke and the shards only unpack it and run beside each other. The backend shards leave out
+# build. Smoke and the shards start with it, set up their tools while it compiles, wait in `Require the
+# build` and then only unpack it and run beside each other. The backend shards leave out
 # what smoke runs. No job is meant to run longer than about 10 minutes.
 # CI retry (ci-retry.yml) re-runs a run once that failed only in set-up steps; their names are listed in
 # scripts/ci-classify-failure.py: rename or add set-up steps there too.
@@ -129,9 +130,11 @@ jobs:
   # setup gate (ci-select-backend-tests.py --boot-filter). The backend shards leave these tests out.
   smoke:
     name: smoke
-    needs: build
     runs-on: ubuntu-24.04
-    timeout-minutes: 12
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      actions: read  # Require the build reads the state of the build job
     services:
       postgres:
         image: postgres:18
@@ -151,9 +154,32 @@ jobs:
         with:
           sparse-checkout: .github/actions
           persist-credentials: false
-      - uses: ./.github/actions/restore-build
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.403
       # The migration tests run the real pg_dump/pg_restore; the runner's own client is older than the test database.
       - uses: ./.github/actions/install-tools
+      # Starts without `needs: build`: the set-up above runs while the build compiles. A failed build fails here.
+      - name: Require the build
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          set -uo pipefail
+          for _ in $(seq 1 90); do
+            state="$(gh api "repos/${REPOSITORY}/actions/runs/${RUN_ID}/jobs?per_page=100" \
+              --jq '[.jobs[] | select(.name == "build" or (.name | endswith(" / build")))][0] | "\(.status) \(.conclusion)"' \
+              2>/dev/null)" || state="unknown"
+            case "${state}" in
+              "completed success") echo "The build is ready."; exit 0 ;;
+              completed*) echo "::error::The build job ended with ${state#completed }; open the build job."; exit 1 ;;
+            esac
+            sleep 10
+          done
+          echo "::error::The build was not ready after 15 minutes."
+          exit 1
+      - uses: ./.github/actions/restore-build
       - name: Critical backend tests (startup, schema, migrations, sessions, setup gate)
         run: |
           export TMPDIR="${RUNNER_TEMP}"
@@ -188,9 +214,11 @@ jobs:
   # Change a shard count in the matrix entries of that kind (1/N .. N/N) and in `Plan the test shards` together.
   shards:
     name: ${{ matrix.kind }} (${{ matrix.shard }})
-    needs: build
     runs-on: ubuntu-24.04
-    timeout-minutes: 18
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read  # Require the build reads the state of the build job
     strategy:
       fail-fast: false
       matrix:
@@ -228,12 +256,18 @@ jobs:
     env:
       SHARD: ${{ matrix.shard }}
     steps:
-      # Only the local actions are checked out; the build artifact brings the compiled workspace.
+      # Only the local actions (and the project file the browser cache key hashes) are checked out; the build
+      # artifact brings the compiled workspace.
       - uses: actions/checkout@v7
         with:
-          sparse-checkout: .github/actions
+          sparse-checkout: |
+            .github/actions
+            tests/Jularr.E2E.Tests/Jularr.E2E.Tests.csproj
+          sparse-checkout-cone-mode: false
           persist-credentials: false
-      - uses: ./.github/actions/restore-build
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.403
       - uses: ./.github/actions/install-tools
         with:
           ffmpeg: ${{ matrix.kind == 'e2e' || matrix.tools == true }}
@@ -255,6 +289,27 @@ jobs:
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('tests/Jularr.E2E.Tests/Jularr.E2E.Tests.csproj') }}
+      - name: Require the build
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          set -uo pipefail
+          for _ in $(seq 1 90); do
+            state="$(gh api "repos/${REPOSITORY}/actions/runs/${RUN_ID}/jobs?per_page=100" \
+              --jq '[.jobs[] | select(.name == "build" or (.name | endswith(" / build")))][0] | "\(.status) \(.conclusion)"' \
+              2>/dev/null)" || state="unknown"
+            case "${state}" in
+              "completed success") echo "The build is ready."; exit 0 ;;
+              completed*) echo "::error::The build job ended with ${state#completed }; open the build job."; exit 1 ;;
+            esac
+            sleep 10
+          done
+          echo "::error::The build was not ready after 15 minutes."
+          exit 1
+      - uses: ./.github/actions/restore-build
+      # Playwright's installer comes with the build.
       - name: Install Chromium
         if: matrix.kind == 'e2e'
         uses: ./.github/actions/install-chromium
