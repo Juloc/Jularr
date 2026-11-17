@@ -39,11 +39,12 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
-        public void Anime_AsksTheIdWithBothNumbersFirst_TheTitleWithTheAbsoluteNumberOnlyAfter()
+        public void Anime_AsksOnlyTheIdWithSeasonAndEpisodeFirst_TheAbsoluteNumberOnlyAfter()
         {
             var intent = new SearchIntent(AcquisitionKind.Anime, "Show") { ExternalIds = Ids, Season = 1, Episode = 5, AbsoluteEpisode = 17 };
-            CollectionAssert.AreEquivalent(new[] { "TvSearch||tvdbid=42&season=1&ep=5", "TvSearch|17|tvdbid=42" }, FirstRound(intent));
-            Assert.IsTrue(SearchPlanner.Plan(intent, Caps, SearchDepth.Normal).Any(query => query.Tier > 0 && query.Text == "Show 17"));
+            CollectionAssert.AreEqual(new[] { "TvSearch||tvdbid=42&season=1&ep=5" }, FirstRound(intent));
+            var fallback = SearchPlanner.Plan(intent, Caps, SearchDepth.Normal).Where(query => query.Tier > 0).ToArray();
+            Assert.IsTrue(fallback.Any(query => query.Text == "17") && fallback.Any(query => query.Text == "Show 17"));
         }
 
         [TestMethod]
