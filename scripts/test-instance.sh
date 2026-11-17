@@ -58,6 +58,9 @@ start() {
   Media__FfmpegPath="${JULARR_TEST_FFMPEG}" Media__FfprobePath="$(dirname "${JULARR_TEST_FFMPEG}")/ffprobe" Media__CjxlPath="${cjxl}" Usenet__Par2Path="${par2}" \
     dotnet bin/Release/net10.0/Jularr.Frontend.dll > >(tee -a "${dir}/host.log" | grep --line-buffered -E "fail|crit|Now listening") 2>&1 &
   echo $! > "${dir}/pid"
+  if [[ -f "${dir}/confirm-storage" ]]; then
+    (python3 "${repo}/scripts/test-instance-confirm.py" "${address}" "${dir}/owner.txt" && rm -f "${dir}/confirm-storage") &
+  fi
   trap 'kill -TERM "$(cat "${dir}/pid")" 2>/dev/null || true' INT TERM
   wait "$(cat "${dir}/pid")" || true
   rm -f "${dir}/pid"
@@ -72,6 +75,7 @@ save() {
   docker exec "${container}" pg_dump -U "${pg_user}" -Fc "$(database "${name}")" > "${out}.tmp/database.dump"
   tar -C "${home}/instances/${name}" -czf "${out}.tmp/data.tgz" data
   find "${home}/instances/${name}/storage" -mindepth 1 -type d -printf '%P\n' > "${out}.tmp/folders.txt"
+  [[ -f "${home}/instances/${name}/owner.txt" ]] && cp "${home}/instances/${name}/owner.txt" "${out}.tmp/owner.txt"
   rm -rf "${out}" && mv "${out}.tmp" "${out}"
   echo "Saved ${name} as state ${state} ($(du -sh "${out}" | cut -f1))."
 }
@@ -90,6 +94,8 @@ copy() {
   psql -h 127.0.0.1 -p 15433 -U "${pg_user}" -d "${db}" -v ON_ERROR_STOP=1 -qAt -c \
     "UPDATE \"StorageMounts\" SET \"SharePath\" = regexp_replace(\"SharePath\", '^${home}/instances/[a-z0-9_]+/storage', '${dir}/storage') WHERE \"SharePath\" LIKE '${home}/instances/%/storage%'"
   [[ -f "${in}/folders.txt" ]] && while read -r folder; do mkdir -p "${dir}/storage/${folder}"; done < "${in}/folders.txt"
+  # The copy confirms its download storage at its first start (scripts/test-instance-confirm.py): its folders are not the saved ones.
+  [[ -f "${in}/owner.txt" ]] && cp "${in}/owner.txt" "${dir}/owner.txt" && touch "${dir}/confirm-storage"
   echo "Instance ${name} is now a copy of ${state}: scripts/test-instance.sh start ${name}"
 }
 
