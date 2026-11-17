@@ -37,6 +37,10 @@ pwsh tests/Jularr.E2E.Tests/bin/Release/net10.0/playwright.ps1 install chromium
 dotnet test tests/Jularr.E2E.Tests -c Release --no-build --filter "FullyQualifiedName~LayoutShiftTests"
 ```
 
+Locally, `eval "$(scripts/local-ffmpeg.sh)"` fetches CI's pinned FFmpeg (no root), so the playback tests run without CI.
+`scripts/dev-instance.sh` starts a Jularr to click through on the test server: a catalog and library in the live proportions, covers, progress and
+real files that play; it prints the address and sign-in, logs warnings to `~/.cache/jularr-dev/host.log` and is removed again on Ctrl+C.
+
 Android (in `clients/android`, JDK 17, Android SDK 36): `gradle :app-tv:testDebugUnitTest :app-mobile:testDebugUnitTest`.
 
 CI runs on PRs to `main`; the label `ci/full` adds the full regression.
