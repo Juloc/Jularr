@@ -135,17 +135,21 @@ namespace Jularr.E2E.Tests
                 await panel.Locator("[data-panel=subtitles] [data-action=subtitle-offset-reset]").ClickAsync();
                 await page.WaitForFunctionAsync("start => Math.abs([...document.querySelector('video').textTracks].find(track => track.mode === 'showing').cues[0].startTime - start) < 0.01", cueStart);
                 await panel.GetByRole(AriaRole.Tab, new() { Name = "Audio", Exact = true }).ClickAsync();
+                await ExpectNewSourceAsync(page);
                 var delayed = await page.RunAndWaitForResponseAsync(async () =>
                 {
                     await panel.Locator("[data-panel=audio] [data-setting=audio-offset]").FillAsync("250");
                     await page.Keyboard.PressAsync("Tab");
                 }, response => response.Request.Method == "POST" && response.Request.PostData?.Contains("\"audioOffsetMs\":250", StringComparison.Ordinal) == true, new() { Timeout = Steps.MediaTimeout });
                 Assert.AreEqual(200, delayed.Status);
+                await NewSourcePlaysAsync(page);
                 var delayedAt = await page.Locator("video").EvaluateAsync<double>("video => video.currentTime");
                 await page.WaitForFunctionAsync("at => document.querySelector('video').currentTime > at + 1", delayedAt, new() { Timeout = Steps.MediaTimeout });
+                await ExpectNewSourceAsync(page);
                 var restored = await page.RunAndWaitForResponseAsync(() => panel.Locator("[data-panel=audio] [data-action=audio-offset-reset]").ClickAsync(),
                     response => response.Request.Method == "POST" && response.Request.PostData?.Contains("\"audioOffsetMs\":0", StringComparison.Ordinal) == true, new() { Timeout = Steps.MediaTimeout });
                 Assert.AreEqual(200, restored.Status);
+                await NewSourcePlaysAsync(page);
                 await page.Keyboard.PressAsync("Escape");
                 CollectionAssert.AreEqual(Array.Empty<string>(), session.Problems.ToArray());
 
@@ -225,9 +229,11 @@ namespace Jularr.E2E.Tests
                 // The audio goes back to zero for the steps below, with a conversion of its own that plays on.
                 await page.Locator("[data-action=settings]").ClickAsync();
                 await page.Locator("#player-settings").GetByRole(AriaRole.Tab, new() { Name = "Audio", Exact = true }).ClickAsync();
+                await ExpectNewSourceAsync(page);
                 var back = await page.RunAndWaitForResponseAsync(() => page.Locator("#player-settings [data-panel=audio] [data-action=audio-offset-reset]").ClickAsync(),
                     response => response.Request.Method == "POST" && response.Request.PostData?.Contains("\"audioOffsetMs\":0", StringComparison.Ordinal) == true, new() { Timeout = Steps.MediaTimeout });
                 Assert.AreEqual(200, back.Status);
+                await NewSourcePlaysAsync(page);
                 await page.Keyboard.PressAsync("Escape");
                 Assert.IsTrue(session.Problems.All(problem => problem.Contains("404", StringComparison.Ordinal) || problem.Contains("Playback error", StringComparison.Ordinal)),
                     string.Join("\n", session.Problems));
@@ -445,6 +451,15 @@ namespace Jularr.E2E.Tests
             Assert.AreEqual("episodes", await page.Locator(".player__options > .player__button:visible").First.GetAttributeAsync("data-action"));
         }
 
+        // A change of the audio plans a new conversion: once its metadata is in, the player puts the picture back where it stood and plays on.
+        // Steps that seek or play wait for that; before it, the old source is being replaced and play() fails or the jump undoes a seek.
+        private static Task ExpectNewSourceAsync(IPage page) =>
+            page.EvaluateAsync("() => { window.__switched = false; document.querySelector('video').addEventListener('loadedmetadata', () => { window.__switched = true; }, { once: true }); }");
+
+        private static Task NewSourcePlaysAsync(IPage page) =>
+            page.WaitForFunctionAsync("() => { const video = document.querySelector('video'); return window.__switched && !video.paused && video.readyState >= 3; }", null,
+                new() { Timeout = Steps.MediaTimeout });
+
         // The skip button stays visible, inside the picture and above the timeline, whichever view is open.
         private static async Task AssertSkipInEveryModeAsync(IPage page, ILocator skip)
         {
@@ -459,8 +474,10 @@ namespace Jularr.E2E.Tests
                 }
 
                 await Assertions.Expect(skip).ToBeVisibleAsync();
-                var button = (await skip.BoundingBoxAsync())!;
-                var timeline = (await page.Locator("[data-role=timeline]").BoundingBoxAsync())!;
+                var button = await skip.BoundingBoxAsync();
+                var timeline = await page.Locator("[data-role=timeline]").BoundingBoxAsync();
+                Assert.IsNotNull(button, $"{mode}: the skip button went away: {await page.EvaluateAsync<string>("() => { const video = document.querySelector('video'); return `paused ${video.paused}, time ${video.currentTime}`; }")}");
+                Assert.IsNotNull(timeline, $"{mode}: the timeline went away.");
                 var viewport = page.ViewportSize!;
                 Assert.IsTrue(button.X >= 0 && button.X + button.Width <= viewport.Width && button.Y >= 0, $"{mode}: the skip button leaves the screen.");
                 Assert.IsTrue(button.Y + button.Height <= timeline.Y, $"{mode}: the skip button covers the timeline.");

@@ -41,7 +41,8 @@ export function initializeInfiniteList(rootElement: HTMLElement, options: Infini
     let saveTimer: number | undefined;
     const keys = new Set(Array.from(target.children, child => child.getAttribute("data-list-key")).filter(key => key !== null));
     const save = () => {
-        if (!options.historyState || !root.isConnected || restoring) return;
+        // A list hidden behind the next page's skeleton keeps the position it was left at: its page scrolled up only because it was hidden.
+        if (!options.historyState || !root.isConnected || restoring || root.getClientRects().length === 0) return;
         // A direct visit may reach this setup before htmx marks its initial history entry.
         history.replaceState({ ...history.state, ...options.historyState, infinite: { address, pages, y: scrollY } satisfies Position }, "");
     };
