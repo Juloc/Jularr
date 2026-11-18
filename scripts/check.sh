@@ -44,10 +44,11 @@ finish() {
 
 # Logs and test folders on the real disk: download storage refuses tmpfs and overlay folders.
 export TMPDIR="${HOME}/.cache/jularr-tmp"
-mkdir -p "$TMPDIR"
-# Logs of red runs stay a day for reading; older ones go.
-find "$TMPDIR" -maxdepth 1 -name 'check.*' -mmin +1440 -exec rm -rf {} + 2>/dev/null
-work="$(mktemp -d "$TMPDIR/check.XXXXXX")"
+logs="${HOME}/.cache/jularr-check"
+mkdir -p "$TMPDIR" "$logs"
+# Logs of red runs stay a day for reading; older ones go. Not in TMPDIR: tests clean up there.
+find "$logs" -mindepth 1 -maxdepth 1 -mmin +1440 -exec rm -rf {} + 2>/dev/null
+work="$(mktemp -d "$logs/run.XXXXXX")"
 trap 'rm -rf "$work/TestResults"' EXIT
 
 git fetch --quiet origin main 2>/dev/null || notes+=("no fetch, compared with the local $base")
