@@ -37,6 +37,7 @@ namespace Jularr.Frontend.Pages.Account.Login
             var returnUrl = SafeReturnUrl(Request.Query["ReturnUrl"]);
             var action = Url.Page("/Account/Login/Login", new { returnUrl })!;
             var token = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
+            // Below the password field, so Tab goes from the name straight to the password.
             var forgot = new A(new Text("account.login.forgot")).Class("auth-forgot").Attribute("href", "#forgot-hint");
 
             var card = new List<IUiComponent>
@@ -48,7 +49,7 @@ namespace Jularr.Frontend.Pages.Account.Login
             card.Add(new Form<LoginDataV1>(form =>
             {
                 form.Text(x => x.Username, "account.field.userName", "username", new FieldHelp("account.login.userPlaceholder", ""));
-                form.Password(x => x.Password, "account.field.password", "current-password", new FieldHelp("", "", forgot, new PasswordReveal(assets)));
+                form.Password(x => x.Password, "account.field.password", "current-password", new FieldHelp("", "", Trailing: new PasswordReveal(assets), Note: forgot));
                 // The server checks empty fields, so its message stands in the field's line instead of the browser's bubble.
                 var submit = Styled(new Button(new Text("account.login.submit")), "auth-submit");
                 submit.Attribute("formnovalidate", "formnovalidate");
