@@ -49,7 +49,7 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
                     operation."DownloadStateTypeId",
                     operation."AttentionUrl" AS "ManualUrl",
                     operation."OperationTypeId" = 2 AND operation."OperationStatusTypeId" = 2 AND operation."AttentionKey" IS NULL
-                        AND coalesce(connection."AcquisitionConnectionTypeId" IN (2, 3, 4, 5, 6, 9), FALSE) AS "CanPause",
+                        AND coalesce(connection."AcquisitionConnectionTypeId" IN (2, 3, 4, 5, 6, 9, 11, 12), FALSE) AS "CanPause",
                     coalesce(connection."AcquisitionConnectionTypeId" = 9 AND operation."OperationStatusTypeId" IN (1, 2)
                         OR connection."AcquisitionConnectionTypeId" = 2 AND operation."OperationTypeId" = 2
                             AND operation."ExternalId" IS NOT NULL, FALSE) AS "CanBrowseFiles",

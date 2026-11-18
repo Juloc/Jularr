@@ -44,11 +44,13 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             throw new TunnelUnavailableException("vpn_unavailable");
         }
 
-        public async Task<TorrentPassResult> RunAsync(LogicContext context, string staging, DateTimeOffset deadline, CancellationToken ct)
+        public async Task<TorrentPassResult> RunAsync(LogicContext context, string staging, DateTimeOffset deadline, CancellationToken ct, Func<long, long, Task>? report = null,
+            CancellationToken finish = default)
         {
             using var lease = await AcquireRouteAsync(context, ct);
             using var trackers = new HttpClient(lease.CreateHandler()) { Timeout = TrackerTimeout };
-            return await TorrentDownloader.RunAsync(new TorrentPassRequest(staging, lease.ConnectAsync, trackers, deadline, throttle: speeds.Torrent.WaitAsync), ct);
+            return await TorrentDownloader.RunAsync(new TorrentPassRequest(staging, lease.ConnectAsync, trackers, deadline, throttle: speeds.Torrent.WaitAsync, report: report,
+                finish: finish), ct);
         }
     }
 }

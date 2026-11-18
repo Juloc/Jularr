@@ -42,7 +42,8 @@ namespace Jularr.Integrations.Logic.Usenet
         }
 
         public async Task<UsenetProgress> DownloadAsync(UsenetServer server, IReadOnlyList<NzbFile> files, string directory, IReadOnlySet<string> finished, DateTimeOffset until,
-            long maximumJobBytes, CancellationToken ct, long minimumFreeBytes = 0, Func<long, IDisposable>? reserveWrite = null, Func<long, CancellationToken, ValueTask>? throttle = null, Func<long, Task>? report = null)
+            long maximumJobBytes, CancellationToken ct, long minimumFreeBytes = 0, Func<long, IDisposable>? reserveWrite = null, Func<long, CancellationToken, ValueTask>? throttle = null, Func<long, Task>? report = null,
+            CancellationToken finish = default)
         {
             var queue = new ConcurrentQueue<(NzbFile File, NzbSegment Segment)>(files.SelectMany(file => file.Segments.Where(segment => !finished.Contains(segment.MessageId))
                 .Select(segment => (file, segment))));
@@ -84,6 +85,14 @@ namespace Jularr.Integrations.Logic.Usenet
             var reservations = new List<IDisposable?>();
             using var reserving = new SemaphoreSlim(1);
             using var stop = CancellationTokenSource.CreateLinkedTokenSource(ct);
+
+            // A finish (a pause) ends the pass like its deadline: no new requests and no more waiting for the speed limit; the ones in flight complete
+            // and what was written is reported.
+            using var ending = CancellationTokenSource.CreateLinkedTokenSource(stop.Token, finish);
+            var remaining = until - DateTimeOffset.UtcNow;
+            if (remaining <= TimeSpan.Zero) ending.Cancel();
+            else if (remaining < TimeSpan.FromDays(1)) ending.CancelAfter(remaining);
+            bool Due() => ending.IsCancellationRequested || DateTimeOffset.UtcNow >= until;
             var writes = Channel.CreateBounded<(SafeFileHandle Handle, byte[] Data, int Length, long Offset, string MessageId, bool Intact)>(WriteQueue);
             long allocated = 0;
             long reserved = 0;
@@ -237,6 +246,7 @@ namespace Jularr.Integrations.Logic.Usenet
                 async Task RunAsync(NntpConnection? session)
                 {
                     var inFlight = new Queue<(NzbFile File, NzbSegment Segment)>();
+                    ((NzbFile File, NzbSegment Segment) Item, Task Turn)? pending = null;
                     var replaced = 0;
                     var counted = session is not null;
                     try
@@ -254,7 +264,7 @@ namespace Jularr.Integrations.Logic.Usenet
                                     if (++replaced > Reconnects) return;
                                 }
 
-                                if (DateTimeOffset.UtcNow >= until || queue.IsEmpty) return;
+                                if (Due() || queue.IsEmpty) return;
                                 try
                                 {
                                     session = await TakeAsync(server, key, stop.Token);
@@ -268,18 +278,37 @@ namespace Jularr.Integrations.Logic.Usenet
                                 counted = true;
                             }
 
-                            // Keep the pipeline full while the pass lasts.
+                            // Keep the pipeline full while the pass lasts. The speed limit paces the requests, not the answers: an article is asked for
+                            // once its bytes fit the rate, and a session waits for that only when no answer is left to read. Otherwise every session would
+                            // order ahead of the limit and a pause or the end of the pass would wait behind all of it.
                             var requests = new List<string>();
-                            while (inFlight.Count < Pipeline && DateTimeOffset.UtcNow < until && queue.TryDequeue(out var next))
+                            while (inFlight.Count < Pipeline && !Due())
                             {
-                                if (next.Segment.MessageId.AsSpan().IndexOfAny('\r', '\n') >= 0)
+                                if (pending is null)
                                 {
-                                    damaged.Add(next.Segment.MessageId);
-                                    continue;
+                                    if (!queue.TryDequeue(out var next)) break;
+                                    if (next.Segment.MessageId.AsSpan().IndexOfAny('\r', '\n') >= 0)
+                                    {
+                                        damaged.Add(next.Segment.MessageId);
+                                        continue;
+                                    }
+
+                                    pending = (next, throttle is null ? Task.CompletedTask : throttle(next.Segment.Bytes, ending.Token).AsTask());
                                 }
 
-                                inFlight.Enqueue(next);
-                                requests.Add(next.Segment.MessageId);
+                                if (!pending.Value.Turn.IsCompleted && inFlight.Count > 0) break;
+                                try
+                                {
+                                    await pending.Value.Turn;
+                                }
+                                catch (OperationCanceledException) when (!stop.IsCancellationRequested)
+                                {
+                                    break;
+                                }
+
+                                inFlight.Enqueue(pending.Value.Item);
+                                requests.Add(pending.Value.Item.Segment.MessageId);
+                                pending = null;
                             }
 
                             if (requests.Count > 0)
@@ -336,12 +365,6 @@ namespace Jularr.Integrations.Logic.Usenet
                             var queued = false;
                             try
                             {
-                                // The client's speed limit holds every session back by what it read.
-                                if (throttle is not null)
-                                {
-                                    await throttle(length, stop.Token);
-                                }
-
                                 queued = await QueueAsync(item.File, item.Segment, data, offset, length, intact);
                             }
                             finally
@@ -362,6 +385,9 @@ namespace Jularr.Integrations.Logic.Usenet
                     }
                     finally
                     {
+                        // An article still waiting for its turn is left for the next pass.
+                        if (pending is { } left) queue.Enqueue(left.Item);
+
                         // A session in step with the server waits for the next pass.
                         if (session is not null)
                         {

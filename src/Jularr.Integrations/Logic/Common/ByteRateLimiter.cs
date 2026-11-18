@@ -18,7 +18,31 @@ namespace Jularr.Integrations.Logic.Common
             var delay = Reserve(bytes, DateTimeOffset.UtcNow);
             if (delay > TimeSpan.Zero)
             {
-                await Task.Delay(delay, ct);
+                try
+                {
+                    await Task.Delay(delay, ct);
+                }
+                catch (OperationCanceledException)
+                {
+                    // A block that gave up waiting hands its share back, so a pause leaves no debt for the blocks after it.
+                    Release(bytes, DateTimeOffset.UtcNow);
+                    throw;
+                }
+            }
+        }
+
+        internal void Release(long bytes, DateTimeOffset now)
+        {
+            var rate = BytesPerSecond;
+            if (rate <= 0 || bytes <= 0)
+            {
+                return;
+            }
+
+            lock (_gate)
+            {
+                var free = _free - TimeSpan.FromSeconds((double)bytes / rate);
+                _free = free > now ? free : now;
             }
         }
 

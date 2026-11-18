@@ -1014,7 +1014,8 @@ namespace Jularr.Backend.Logic.Acquisition
 
         public static async Task UpdateDownloadProgressAsync(this LogicContext ctx, DownloadProgressData data, CancellationToken ct)
         {
-            // One write per client pass; unchanged state is not rewritten.
+            // One write per client pass; unchanged state is not rewritten. Jularr's own downloaders report with KeepsPause: a pause the Owner set stays
+            // while their pass winds down (an external client reports its own paused state).
             var sql = new SqlStatement();
             sql.Statement =
                 """
@@ -1025,13 +1026,13 @@ namespace Jularr.Backend.Logic.Acquisition
                     "SizeBytes" = coalesce(item."SizeBytes", operation."SizeBytes"),
                     "RemainingBytes" = item."RemainingBytes",
                     "EtaSeconds" = item."EtaSeconds",
-                    "DownloadStateTypeId" = item."DownloadStateTypeId",
+                    "DownloadStateTypeId" = CASE WHEN item."KeepsPause" AND operation."DownloadStateTypeId" = 3 AND item."DownloadStateTypeId" = 2 THEN 3 ELSE item."DownloadStateTypeId" END,
                     "DownloadCompletedAt" = CASE WHEN item."DownloadStateTypeId" = 5 THEN coalesce(operation."DownloadCompletedAt", now()) ELSE operation."DownloadCompletedAt" END,
                     "DownloadPriorityTypeId" = coalesce(item."DownloadPriorityTypeId", operation."DownloadPriorityTypeId"),
                     "QueuePosition" = coalesce(item."QueuePosition", operation."QueuePosition")
                 FROM
                     jsonb_to_recordset(@Progress::jsonb) AS item ("OperationId" bigint, "ProgressPercent" smallint, "SizeBytes" bigint, "RemainingBytes" bigint, "EtaSeconds" integer,
-                        "DownloadStateTypeId" smallint, "DownloadPriorityTypeId" smallint, "QueuePosition" integer)
+                        "DownloadStateTypeId" smallint, "DownloadPriorityTypeId" smallint, "QueuePosition" integer, "KeepsPause" boolean)
                 WHERE
                     operation."Id" = item."OperationId"
                     AND operation."OperationTypeId" = 2
@@ -1039,7 +1040,7 @@ namespace Jularr.Backend.Logic.Acquisition
                     AND ((operation."ProgressPercent", operation."SizeBytes", operation."RemainingBytes", operation."EtaSeconds", operation."DownloadStateTypeId",
                         operation."DownloadPriorityTypeId", operation."QueuePosition")
                         IS DISTINCT FROM (coalesce(item."ProgressPercent", operation."ProgressPercent"), coalesce(item."SizeBytes", operation."SizeBytes"), item."RemainingBytes",
-                        item."EtaSeconds", item."DownloadStateTypeId", coalesce(item."DownloadPriorityTypeId", operation."DownloadPriorityTypeId"),
+                        item."EtaSeconds", CASE WHEN item."KeepsPause" AND operation."DownloadStateTypeId" = 3 AND item."DownloadStateTypeId" = 2 THEN 3 ELSE item."DownloadStateTypeId" END, coalesce(item."DownloadPriorityTypeId", operation."DownloadPriorityTypeId"),
                         coalesce(item."QueuePosition", operation."QueuePosition"))
                         OR item."DownloadStateTypeId" = 5 AND operation."DownloadCompletedAt" IS NULL);
                 """;
