@@ -22,6 +22,8 @@ Find code with `rg`; the code is the reference.
   GitHub's own squash and merge commits are the only other committer.
 - Run `node scripts/install-git-hooks.mjs` before committing. Never use `--no-verify`, never force push, never merge into `dev`.
 - Merge only with green checks and the owner's yes.
+- If main is red, nobody merges until it is green again. An e2e test that turns red on main without a code cause goes
+  into `NIGHTLY_E2E` (`scripts/ci-select-backend-tests.py`) the same day and gets its own fix PR.
 
 ## Checks
 
