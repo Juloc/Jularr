@@ -71,6 +71,8 @@ namespace Jularr.E2E.Tests
                 await page.Locator("[data-infinite-next]").ClickAsync();
                 await Assertions.Expect(cards).ToHaveCountAsync(96);
                 var address = page.Url;
+                // A slow next page hides the list behind its skeleton, and the page scrolls up: the list keeps the position it was left at.
+                await page.RouteAsync("**/Details/**", async route => { await Task.Delay(1000); await route.FallbackAsync(); });
                 await cards.Nth(70).Locator(".media-card__link").ClickAsync();
                 await page.WaitForURLAsync("**/Details/**");
                 await page.GoBackAsync();
