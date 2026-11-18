@@ -1518,7 +1518,7 @@ namespace Jularr.Backend.Tests
         }
 
         // What the Details page script asks after a title without details showed: whether its catalog gave them now.
-        private static async Task<bool> DetailsAsync(Host host, long workId)
+        internal static async Task<bool> DetailsAsync(Host host, long workId)
         {
             using var answer = await host.SendAsync(HttpMethod.Get, "/Details/" + workId + "?handler=Details");
             Assert.AreEqual(HttpStatusCode.OK, answer.StatusCode, await answer.Content.ReadAsStringAsync());
