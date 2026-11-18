@@ -9381,6 +9381,38 @@
    "Delete file",
    "Datei löschen"
   ],
+  "work.unit.deleteFiles": [
+   "Delete the files of this unit",
+   "Dateien löschen"
+  ],
+  "work.season.deleteFiles": [
+   "Delete all files of the season",
+   "Alle Dateien der Staffel löschen"
+  ],
+  "work.deleteUnit.title": [
+   "Delete files",
+   "Dateien löschen"
+  ],
+  "work.deleteUnit.one": [
+   "Delete the file of {0} ({2})? It is removed and {0} is no longer monitored, so it is not downloaded again.",
+   "Die Datei von {0} ({2}) löschen? Sie wird entfernt und {0} wird nicht mehr überwacht, damit sie nicht wieder geladen wird."
+  ],
+  "work.deleteUnit.many": [
+   "Delete the {1} files of {0} ({2})? They are removed and {0} is no longer monitored, so they are not downloaded again.",
+   "Die {1} Dateien von {0} ({2}) löschen? Sie werden entfernt und {0} wird nicht mehr überwacht, damit sie nicht wieder geladen werden."
+  ],
+  "work.deleteSeason.one": [
+   "Delete the file of {0} ({2})? It is removed and every episode of {0} is no longer monitored, so nothing is downloaded again.",
+   "Die Datei von {0} ({2}) löschen? Sie wird entfernt und alle Folgen von {0} werden nicht mehr überwacht, damit nichts wieder geladen wird."
+  ],
+  "work.deleteSeason.many": [
+   "Delete all {1} files of {0} ({2})? They are removed and every episode of {0} is no longer monitored, so nothing is downloaded again.",
+   "Alle {1} Dateien von {0} ({2}) löschen? Sie werden entfernt und alle Folgen von {0} werden nicht mehr überwacht, damit nichts wieder geladen wird."
+  ],
+  "work.files.unmonitored": [
+   "not monitored any more",
+   "wird nicht mehr überwacht"
+  ],
   "work.manage.selectAll": [
    "Select all files",
    "Alle Dateien auswählen"

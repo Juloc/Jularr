@@ -33,7 +33,7 @@ namespace Jularr.Frontend.Pages.Admin.Work
     public sealed partial class WorkModel(ReadWorkV1 read, UpdateWorkV1 update, UpdateWorkFranchiseV1 updateFranchise, RefreshWorkMetadataV1 refresh, ReadWorkUnitGroupsV1 readGroups, CreateWorkUnitGroupV1 createGroup,
         DeleteWorkUnitGroupV1 deleteGroup, SearchMetadataV1 search, RematchWorkV1 rematch, ReadWorkManagementV1 readManagement, ReadWantedItemV1 readWanted, ReadWantedItemsV1 readTargets, UpdateWantedV1 updateWanted, ReadWantedLanguagesV1 readLanguages, SaveWantedLanguagesV1 saveLanguages, StartWorkMonitoringV1 startMonitoring, UpdateWantedUnitV1 updateUnit,
         SearchWantedAutomaticallyV1 automatic, QueueWorksSearchV1 queueSearch, ReadWantedReleasesV1 readReleases, MarkWantedReleaseV1 markRelease, ReadActivityEventsV1 readEvents, ReadAcquisitionProfilesV1 profiles, ReadWantedLibrariesV1 libraries,
-        ReadAcquisitionTagsV1 tags, DeleteLibraryFilesV1 deleteFiles, DeleteDocumentTranslationV1 deleteTranslation, DeleteWorkV1 deleteWork, UpdateWorkEditionV1 updateEdition, UpdateLibraryFileFactsV1 updateFacts, ReadLibraryRenamesV1 readRenames, ApplyLibraryRenamesV1 applyRenames, FrontendAssets assets,
+        ReadAcquisitionTagsV1 tags, DeleteLibraryFilesV1 deleteFiles, DeleteWorkUnitFilesV1 deleteUnitFiles, DeleteDocumentTranslationV1 deleteTranslation, DeleteWorkV1 deleteWork, UpdateWorkEditionV1 updateEdition, UpdateLibraryFileFactsV1 updateFacts, ReadLibraryRenamesV1 readRenames, ApplyLibraryRenamesV1 applyRenames, FrontendAssets assets,
         IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         private SearchMetadataDataV1? _matchQuery;
@@ -258,6 +258,16 @@ namespace Jularr.Frontend.Pages.Admin.Work
             var result = await deleteFiles.ExecuteAsync<DeleteLibraryFilesResultV1>(new DeleteLibraryFilesParametersV1(), new DeleteLibraryFilesDataV1(storedFileIds), HttpContext.RequestAborted);
             HintText(string.Format(CultureInfo.CurrentCulture, texts["work.files.deleted"], result.DeletedCount)
                 + (result.KeptCount > 0 ? " · " + string.Format(CultureInfo.CurrentCulture, texts["work.files.kept"], result.KeptCount) : ""));
+            return LocalRedirect(Address(Tab));
+        }
+
+        // All files of one unit or one season go after the dialog's question, and the unit stays in the Work but is not monitored any more.
+        public async Task<IActionResult> OnPostDeleteUnitFilesAsync([BindRequired] long workUnitId)
+        {
+            var result = await deleteUnitFiles.ExecuteAsync<DeleteLibraryFilesResultV1>(new WorkUnitParametersV1(Id, workUnitId), default, HttpContext.RequestAborted);
+            HintText(string.Format(CultureInfo.CurrentCulture, texts["work.files.deleted"], result.DeletedCount)
+                + (result.KeptCount > 0 ? " · " + string.Format(CultureInfo.CurrentCulture, texts["work.files.kept"], result.KeptCount) : "")
+                + (result.DeletedCount > 0 ? " · " + texts["work.files.unmonitored"] : ""));
             return LocalRedirect(Address(Tab));
         }
 

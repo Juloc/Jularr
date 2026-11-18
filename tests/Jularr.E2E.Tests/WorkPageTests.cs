@@ -162,6 +162,68 @@ namespace Jularr.E2E.Tests
                 await Evidence.SaveAsync(page, "work-page-series-mobile");
                 await page.SetViewportSizeAsync(1280, 900);
 
+                // Files of the episodes (on disk and in the library) give each episode and the season a trash button; both ask first, in the page's one dialog.
+                var workId = long.Parse(System.Text.RegularExpressions.Regex.Match(new Uri(page.Url).AbsolutePath, "/Admin/Works/(\\d+)").Groups[1].Value);
+                await jularr.RunSqlAsync($"""
+                    INSERT INTO "WorkEditions" ("Id", "WorkId") VALUES (900, {workId});
+                    INSERT INTO "WorkVersions" ("Id", "WorkId", "WorkEditionId") VALUES (900, {workId}, 900);
+                    INSERT INTO "MediaAssets" ("WorkId", "WorkVersionId", "WorkUnitId", "MediaAssetTypeId")
+                    SELECT {workId}, 900, unit."Id", 1 FROM "WorkUnits" AS unit WHERE unit."WorkId" = {workId} AND unit."WorkUnitTypeId" = 2;
+                    INSERT INTO "StoredFiles" ("LibraryRootId", "RelativePath", "SizeBytes", "ModifiedAt", "MediaAssetId", "LastSeenAt")
+                    SELECT (SELECT "Id" FROM "LibraryRoots" WHERE "RelativePath" = 'Series'), 'Test/E' || unit."Number"::integer || '.mkv', 10, now(), asset."Id", now()
+                    FROM "MediaAssets" AS asset JOIN "WorkUnits" AS unit ON unit."Id" = asset."WorkUnitId" WHERE asset."WorkId" = {workId};
+                    """);
+                var episodeNumbers = (int[])(await jularr.ScalarAsync($"SELECT array_agg(unit.\"Number\"::integer) FROM \"WorkUnits\" AS unit WHERE unit.\"WorkId\" = {workId} AND unit.\"WorkUnitTypeId\" = 2"))!;
+                Directory.CreateDirectory(Path.Combine(folders.Library, "Series", "Test"));
+                foreach (var number in episodeNumbers) await File.WriteAllTextAsync(Path.Combine(folders.Library, "Series", "Test", "E" + number + ".mkv"), "x");
+                await page.ReloadAsync();
+                var question = page.Locator("#work-unit-delete");
+                await page.Locator("tr.work-row [data-delete-kind=unit]").First.ClickAsync();
+                await Assertions.Expect(question).ToBeVisibleAsync();
+                await Assertions.Expect(question).ToContainTextAsync("Delete the file of");
+                await Assertions.Expect(question).ToContainTextAsync("no longer monitored");
+                await Evidence.SaveAsync(page, "work-unit-delete-dialog");
+                await question.GetByRole(AriaRole.Button, new() { Name = "Cancel" }).ClickAsync();
+                await Assertions.Expect(question).ToBeHiddenAsync();
+                Assert.AreEqual(episodeNumbers.Length, Directory.EnumerateFiles(Path.Combine(folders.Library, "Series", "Test")).Count(), "Cancel deleted a file.");
+
+                // On a phone and a tablet the strips carry the same button, the dialog fits the screen and nothing runs wider than it.
+                foreach (var (name, width, height) in new[] { ("mobile", 375, 812), ("tablet", 768, 1024) })
+                {
+                    await page.SetViewportSizeAsync(width, height);
+                    // The season head keeps its icons in one row with the delete button among them.
+                    var seasonHead = page.Locator(".work-season__head").First;
+                    await Assertions.Expect(seasonHead.Locator("[data-delete-kind=season]")).ToBeVisibleAsync();
+                    await Evidence.SaveAsync(page, "work-season-head-" + name);
+                    var button = page.Locator("[data-delete-kind=unit]:visible").First;
+                    await Assertions.Expect(button).ToBeVisibleAsync();
+                    // It is as big as the row's other icons (a phone's tap targets of the whole page are a task of their own).
+                    var box = (await button.BoundingBoxAsync())!;
+                    var previous = button.Locator("xpath=preceding-sibling::*[1]");
+                    var neighbour = await previous.CountAsync() > 0 ? (await previous.BoundingBoxAsync())! : box;
+                    Assert.IsTrue(Math.Abs(box.Width - neighbour.Width) <= 1 && Math.Abs(box.Height - neighbour.Height) <= 1, "The delete button of " + name + " differs in size from its neighbour: " + box.Width + " x " + box.Height);
+                    await button.ClickAsync();
+                    await Assertions.Expect(question).ToBeVisibleAsync();
+                    Assert.IsFalse(await page.Locator("body").EvaluateAsync<bool>("body => body.scrollWidth > innerWidth + 1"), "The page runs wider than the " + name + ".");
+                    await Evidence.SaveAsync(page, "work-unit-delete-dialog-" + name);
+                    await question.GetByRole(AriaRole.Button, new() { Name = "Cancel" }).ClickAsync();
+                    await Assertions.Expect(question).ToBeHiddenAsync();
+                }
+
+                await page.SetViewportSizeAsync(1280, 900);
+
+                // The season takes the files of all its episodes and every episode of it is not monitored any more; the episodes stay in the list.
+                await page.Locator(".work-season__head [data-delete-kind=season]").First.ClickAsync();
+                await Assertions.Expect(question).ToContainTextAsync("every episode of");
+                await Evidence.SaveAsync(page, "work-season-delete-dialog");
+                await Steps.FollowAsync(page, question.GetByRole(AriaRole.Button, new() { Name = "Delete files", Exact = true }));
+                await Assertions.Expect(page.Locator("[data-action-toast]")).ToContainTextAsync(episodeNumbers.Length + " deleted");
+                await Assertions.Expect(page.Locator("[data-action-toast]")).ToContainTextAsync("not monitored any more");
+                Assert.AreEqual(0, Directory.EnumerateFiles(Path.Combine(folders.Library, "Series", "Test")).Count(), "A file of the season is still there.");
+                Assert.AreEqual(0L, await jularr.ScalarAsync($"SELECT count(*) FROM \"WorkUnits\" WHERE \"WorkId\" = {workId} AND \"WorkUnitTypeId\" = 2 AND \"IsMonitored\""));
+                Assert.AreEqual(episodeNumbers.Length, await page.Locator("tr.work-row").CountAsync());
+                Assert.AreEqual(0, await page.Locator("[data-delete-unit]").CountAsync());
+
                 // Deleting the title with an exclusion: it leaves the list and the exclusion is listed until it is removed.
                 await page.GetByRole(AriaRole.Button, new() { Name = "Delete", Exact = true }).ClickAsync();
                 var deletion = page.Locator("#work-delete");

@@ -291,6 +291,28 @@ function initializeFileEdit(): void {
     });
 }
 
+// The one dialog that asks before all the files of a unit or a season go: a button names the unit, the number of files and their size, and the dialog writes the question and the
+// unit's address into its own button (a button of the page's one form).
+function initializeUnitDelete(): void {
+    const dialog = document.getElementById('work-unit-delete') as HTMLDialogElement | null;
+    const text = dialog?.querySelector<HTMLElement>('[data-delete-text]');
+    const confirm = dialog?.querySelector<HTMLButtonElement>('[data-delete-confirm]');
+    if (!dialog || !text || !confirm) return;
+    const base = confirm.dataset.base ??= confirm.getAttribute('formaction') ?? '';
+    document.querySelectorAll<HTMLElement>('[data-delete-unit]').forEach(button => {
+        if (button.dataset.workReady) return;
+        button.dataset.workReady = 'true';
+        button.addEventListener('click', () => {
+            const kind = button.dataset.deleteKind === 'season' ? 'season' : 'unit';
+            const count = Number(button.dataset.deleteCount ?? '0');
+            const template = text.dataset[`text${kind === 'season' ? 'Season' : 'Unit'}${count === 1 ? 'One' : 'Many'}`] ?? '';
+            text.textContent = template.replace(/\{(\d)\}/g, (_, index: string) => [button.dataset.deleteName ?? '', String(count), button.dataset.deleteSize ?? ''][Number(index)] ?? '');
+            confirm.setAttribute('formaction', `${base}&workUnitId=${encodeURIComponent(button.dataset.deleteUnit ?? '')}`);
+            dialog.showModal();
+        });
+    });
+}
+
 function initializeSelection(): void {
     document.querySelectorAll<HTMLInputElement>('[data-select-all]').forEach(all => {
         if (all.dataset.workReady) return;
@@ -337,6 +359,7 @@ onPage(import.meta.url, () => {
     initializeVersions();
     initializeSelection();
     initializeFileEdit();
+    initializeUnitDelete();
     initializeNumbering();
     initializeHeroMenu();
     document.querySelectorAll<HTMLElement>('[data-work-table]').forEach(initializeTable);
