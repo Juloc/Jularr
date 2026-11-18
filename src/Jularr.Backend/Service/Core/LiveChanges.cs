@@ -115,6 +115,25 @@ namespace Jularr.Backend.Service.Core
             done.TrySetResult();
         }
 
+        // Something the database does not show changed (a search began or ended): the open streams read again. Nothing is kept while nobody watches.
+        public void Notify()
+        {
+            TaskCompletionSource done;
+            lock (_gate)
+            {
+                if (_subscribers == 0)
+                {
+                    return;
+                }
+
+                _sequence++;
+                done = _changed;
+                _changed = NewSignal();
+            }
+
+            done.TrySetResult();
+        }
+
         // The sequence after the one already seen, or the same one when nothing changed within the time.
         public async Task<long> WaitForChangeAsync(long seen, TimeSpan timeout, CancellationToken cancellationToken)
         {

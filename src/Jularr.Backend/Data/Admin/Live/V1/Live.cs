@@ -15,16 +15,58 @@ namespace Jularr.Backend.Data.Admin.Live.V1
     // What an administrator watches: every running or just finished operation, the targets they download for and the requests that wait for them.
     public sealed class LiveAdminV1 : BaseResponse
     {
-        public LiveAdminV1(BaseDataList<LiveAdminRequestV1> requests, BaseDataList<LiveOperationV1> operations, BaseDataList<LiveWantedV1> wanted)
+        public LiveAdminV1(BaseDataList<LiveAdminRequestV1> requests, BaseDataList<LiveOperationV1> operations, BaseDataList<LiveWantedV1> wanted, BaseDataList<LiveUnitV1> units)
         {
             Requests = requests;
             Operations = operations;
             Wanted = wanted;
+            Units = units;
         }
 
         public BaseDataList<LiveAdminRequestV1> Requests { get; }
         public BaseDataList<LiveOperationV1> Operations { get; }
         public BaseDataList<LiveWantedV1> Wanted { get; }
+
+        // The units (episodes, volumes, tracks) that are searched or downloaded now; none while nothing runs.
+        public BaseDataList<LiveUnitV1> Units { get; }
+    }
+
+    // One unit of a Work that is searched for, downloaded or imported right now: how far it is, how many units its season has (the season's sum says "3 of 12") and its Work.
+    public sealed class LiveUnitV1 : BaseResponse
+    {
+        public LiveUnitV1(long workUnitId, long? parentWorkUnitId, int seasonUnitCount, long workId, int workUnitCount, AcquisitionRequestStatusType acquisitionRequestStatusTypeId, int? progressPercent)
+        {
+            WorkUnitId = workUnitId;
+            ParentWorkUnitId = parentWorkUnitId;
+            SeasonUnitCount = seasonUnitCount;
+            WorkId = workId;
+            WorkUnitCount = workUnitCount;
+            AcquisitionRequestStatusTypeId = acquisitionRequestStatusTypeId;
+            ProgressPercent = progressPercent;
+        }
+
+        [DataField(typeof(WorkUnitFields), nameof(WorkUnitFields.Id))]
+        public long WorkUnitId { get; }
+
+        [DataField(typeof(WorkUnitFields), nameof(WorkUnitFields.Id), false)]
+        public long? ParentWorkUnitId { get; }
+
+        [DataField(typeof(WorkUnitFields), nameof(WorkUnitFields.EpisodeCount))]
+        public int SeasonUnitCount { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.Id))]
+        public long WorkId { get; }
+
+        // How many units the whole Work has (the title's sum says "3 of 12").
+        [DataField(typeof(WorkUnitFields), nameof(WorkUnitFields.EpisodeCount))]
+        public int WorkUnitCount { get; }
+
+        // Searching, Downloading or Importing.
+        [DataField(typeof(AcquisitionRequestFields), nameof(AcquisitionRequestFields.AcquisitionRequestStatusTypeId))]
+        public AcquisitionRequestStatusType AcquisitionRequestStatusTypeId { get; }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.ProgressPercent))]
+        public int? ProgressPercent { get; }
     }
 
     // A request of any profile with its phase and, while it downloads, speed, time left, release, indexer, client and the reason it waits or failed.

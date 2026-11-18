@@ -118,6 +118,9 @@ namespace Jularr.Frontend.Pages.Admin.Work
             if (work.UpgradeWantedCount > 0) Figure("work.figure.upgrades", "work.figure.upgradeOne", work.UpgradeWantedCount, "warn");
             if (work.UnairedCount > 0) Figure("work.figure.unaired", "work.figure.unaired", work.UnairedCount);
 
+            // What is searched, downloaded or imported of the title now, as a sum: "3 of 12 loading". It is the page's own, so nothing moves while it fills.
+            if (CanAcquire) figures.Add(new Span().Class("work-figures__live").Attribute("data-title-live", work.Id.ToString(CultureInfo.InvariantCulture)).Attribute("hidden", "hidden"));
+
             // Wide: all actions in a row. Phone: the search is the one big button and the rest sits in the more menu (the row's copies hide, the menu's show); the menu items are buttons
             // of the page's one form, so they carry no token of their own.
             var actions = new List<IUiComponent>();
@@ -238,7 +241,8 @@ namespace Jularr.Frontend.Pages.Admin.Work
                                 .Class("work-coverage__bar" + (missing > 0 ? " work-coverage__bar--partial" : "")), new Span(new ValueText(string.Join(" · ", info)))).Class("work-coverage")).Class("work-season__lead"),
                         new Button(Icon("chevron-down", 22)).Class("work-season__toggle").Attribute("type", "button").Attribute("data-season-toggle", panelId).Attribute("aria-expanded", open ? "true" : "false")
                             .Attribute("aria-controls", panelId).TextAttribute("aria-label", "work.toggleSeason"),
-                        new Div(SeasonActions(season, work, seasonNumbers, csrf, name, seasonFiles)).Class("work-season__actions")).Class("work-season__head"),
+                        new Div(new Span().Class("work-season__live").Attribute("data-season-live", season.Id.ToString(CultureInfo.InvariantCulture)).Attribute("hidden", "hidden"),
+                            SeasonActions(season, work, seasonNumbers, csrf, name, seasonFiles)).Class("work-season__actions")).Class("work-season__head"),
                     new Div(UnitTable(episodes, work, seasonNumbers, csrf)).Class("work-season__panel").Attribute("id", panelId).Attribute("data-open", open ? "true" : "false")).Class("work-season"));
             }
 
@@ -485,6 +489,7 @@ namespace Jularr.Frontend.Pages.Admin.Work
                     if (group.WantedItemId is { } wantedId && _wanted is not null && CanAcquire)
                     {
                         var id = wantedId.ToString(CultureInfo.InvariantCulture);
+                        icons.Add(new LiveProgress(LiveKeys.Wanted(wantedId)).Compact().Optional());
                         lead = new PostForm(Address(Tab, "Monitor"), csrf, [("isPaused", group.IsPaused == true ? "false" : "true"), ("wantedItemId", id)],
                             new SwitchButton(group.IsPaused != true, group.IsPaused == true ? "work.monitor.start" : "work.monitor.stop"));
                         icons.Add(new PostForm(Address(Tab, "Automatic"), csrf, [("wantedItemId", id)], IconSubmit("search", "work.search")));
@@ -613,7 +618,10 @@ namespace Jularr.Frontend.Pages.Admin.Work
 
         private static FileQualityGrade Rank(FileQualityGrade grade) => grade switch { FileQualityGrade.Met => (FileQualityGrade)0, FileQualityGrade.Upgrade => (FileQualityGrade)1, FileQualityGrade.Unknown => (FileQualityGrade)2, _ => (FileQualityGrade)3 };
 
-        private IUiComponent StatusPill(WorkManagementUnitV1 unit, DateOnly today)
+        // The pill carries its unit's number: while the live stream knows that unit (searched, downloading, importing) a script shows that instead, and the page again once it is done.
+        private IUiComponent StatusPill(WorkManagementUnitV1 unit, DateOnly today) => StatusPillOf(unit, today).Attribute("data-unit-live", unit.Id.ToString(CultureInfo.InvariantCulture));
+
+        private HtmlElement StatusPillOf(WorkManagementUnitV1 unit, DateOnly today)
         {
             var (key, tone) = unit.WorkUnitStatusId switch
             {

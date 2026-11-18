@@ -16,6 +16,11 @@ namespace Jularr.Frontend.Framework
         public static string Operation(long id) => "operation:" + id.ToString(CultureInfo.InvariantCulture);
         public static string Wanted(long id) => "wanted:" + id.ToString(CultureInfo.InvariantCulture);
 
+        // One unit (an episode, a volume, a track) of a Work while it is searched or downloaded, and the season and the title that sum its units up.
+        public static string Unit(long id) => "unit:" + id.ToString(CultureInfo.InvariantCulture);
+        public static string Season(long id) => "season:" + id.ToString(CultureInfo.InvariantCulture);
+        public static string Title(long workId) => "title:" + workId.ToString(CultureInfo.InvariantCulture);
+
         // The numbers of the queue's tiles.
         public const string Queue = "queue";
 

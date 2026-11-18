@@ -119,6 +119,9 @@ namespace Jularr.Frontend.Modules.Live
                 foreach (var request in all.Requests) entities[LiveKeys.AdminRequest(request.Id)] = LiveEntities.AdminRequest(texts, request);
                 foreach (var operation in all.Operations) entities[LiveKeys.Operation(operation.Id)] = LiveEntities.Operation(texts, operation);
                 foreach (var wanted in all.Wanted) entities[LiveKeys.Wanted(wanted.Id)] = LiveEntities.Wanted(texts, wanted);
+                foreach (var unit in all.Units) entities[LiveKeys.Unit(unit.WorkUnitId)] = LiveEntities.Unit(texts, unit);
+                foreach (var season in all.Units.Where(unit => unit.ParentWorkUnitId is not null).GroupBy(unit => unit.ParentWorkUnitId!.Value)) entities[LiveKeys.Season(season.Key)] = LiveEntities.Season(texts, [.. season]);
+                foreach (var title in all.Units.GroupBy(unit => unit.WorkId)) entities[LiveKeys.Title(title.Key)] = LiveEntities.Title(texts, [.. title]);
                 var summary = await queue.ExecuteAsync<ActivitySummaryV1>(new ReadActivitySummaryParametersV1(), cancellationToken);
                 entities[LiveKeys.Queue] = LiveEntities.Queue(summary);
 

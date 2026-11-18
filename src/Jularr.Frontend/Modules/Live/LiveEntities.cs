@@ -105,6 +105,31 @@ namespace Jularr.Frontend.Modules.Live
                 ("release", wanted.ReleaseTitle), ("source", LiveFacts.Join(wanted.IndexerName, wanted.ClientName))));
         }
 
+        // A unit while it is searched, downloaded or imported: its phase, and for a download how far it is. A finished one has no entity, which is how a page knows it is done.
+        // The pill is small: a download says its percent over a bar, the other phases say their word; the full sentence is the pill's tooltip.
+        public static LiveEntity Unit(UiText texts, LiveUnitV1 unit)
+        {
+            var phase = unit.AcquisitionRequestStatusTypeId;
+            var full = LiveFacts.Phase(texts, phase, unit.ProgressPercent, admin: true);
+            return new LiveEntity(LiveFacts.Marker(phase), null, unit.ProgressPercent,
+                Texts(("phase", phase == AcquisitionRequestStatusType.Downloading && unit.ProgressPercent is { } percent ? percent.ToString(CultureInfo.CurrentCulture) + " %" : texts["request.status." + phase]), ("title", full)));
+        }
+
+        // A season's sum: how many of its units are on the way (a download counts before an import, before a search).
+        public static LiveEntity Season(UiText texts, IReadOnlyList<LiveUnitV1> units) => Sum(texts, units, units[0].SeasonUnitCount);
+
+        // The title's sum: the same over all units of the Work.
+        public static LiveEntity Title(UiText texts, IReadOnlyList<LiveUnitV1> units) => Sum(texts, units, units[0].WorkUnitCount);
+
+        private static LiveEntity Sum(UiText texts, IReadOnlyList<LiveUnitV1> units, int total)
+        {
+            var phase = units.Any(unit => unit.AcquisitionRequestStatusTypeId == AcquisitionRequestStatusType.Downloading) ? AcquisitionRequestStatusType.Downloading
+                : units.Any(unit => unit.AcquisitionRequestStatusTypeId == AcquisitionRequestStatusType.Importing) ? AcquisitionRequestStatusType.Importing : AcquisitionRequestStatusType.Searching;
+            var count = units.Count(unit => unit.AcquisitionRequestStatusTypeId == phase);
+            return new LiveEntity(LiveFacts.Marker(phase), null, null, Texts(("phase", string.Format(CultureInfo.CurrentCulture, texts["work.live.season." + phase],
+                count.ToString(CultureInfo.CurrentCulture), Math.Max(count, total).ToString(CultureInfo.CurrentCulture)))));
+        }
+
         // The pace of a running download; a paused one says so in the same place and style, so the column never loses its value.
         public static string OperationSpeed(UiText texts, OperationStatusType status, DownloadStateType? state, long? bytesPerSecond) =>
             status is OperationStatusType.Queued or OperationStatusType.Running && state == DownloadStateType.Paused ? texts["activity.state.Paused"] : LiveFacts.Speed(bytesPerSecond);

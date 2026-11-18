@@ -1,4 +1,5 @@
-import { onPage } from '../../../Modules/Navigation/PageSwap';
+import { liveEntity, onLiveChange } from '../../../Modules/Live/Live';
+import { onPage, refreshRegion } from '../../../Modules/Navigation/PageSwap';
 import { compareValues, listTemplates, moveItem, normalizeColumns, type ColumnState } from './Work';
 
 const storagePrefix = 'jularr.work.columns.';
@@ -353,6 +354,74 @@ function initializePicker(): void {
     });
 }
 
+// What is searched, downloaded or imported now shows in the status pill of its unit (its number is on the pill), and in the head of its season and of the title as a sum. The pill keeps
+// its size: its own content stays and only turns invisible, so nothing moves. When a unit stops being live it is done (or failed): the page's region is read again so
+// every status is the one the server says.
+const liveShown = new Set<string>();
+let liveRefresh: ReturnType<typeof setTimeout> | undefined;
+
+function applyUnitLive(): void {
+    const region = document.getElementById('work-page');
+    if (!region) return;
+    const now = new Set<string>();
+    region.querySelectorAll<HTMLElement>('[data-unit-live]').forEach(pill => {
+        const id = pill.dataset.unitLive!;
+        const entity = liveEntity('unit:' + id);
+        let label = pill.querySelector<HTMLElement>(':scope > .work-status__live');
+        if (!entity) {
+            label?.remove();
+            pill.removeAttribute('title');
+            delete pill.dataset.livePhase;
+            pill.style.removeProperty('--live-percent');
+            return;
+        }
+
+        now.add(id);
+        if (!label) {
+            label = document.createElement('span');
+            label.className = 'work-status__live';
+            pill.appendChild(label);
+        }
+
+        const text = entity.text?.phase ?? '';
+        if (label.textContent !== text) label.textContent = text;
+        pill.dataset.livePhase = entity.phase ?? '';
+        pill.title = entity.text?.title ?? '';
+        if (entity.percent === undefined || entity.percent === null) pill.style.removeProperty('--live-percent');
+        else pill.style.setProperty('--live-percent', String(entity.percent));
+    });
+
+    region.querySelectorAll<HTMLElement>('[data-season-live], [data-title-live]').forEach(sum => {
+        const entity = liveEntity(sum.dataset.seasonLive ? 'season:' + sum.dataset.seasonLive : 'title:' + sum.dataset.titleLive);
+        const text = entity?.text?.phase ?? '';
+        if (sum.textContent !== text) sum.textContent = text;
+        sum.dataset.livePhase = entity?.phase ?? '';
+        sum.hidden = text === '';
+    });
+
+    const done = Array.from(liveShown).some(id => !now.has(id));
+    liveShown.clear();
+    now.forEach(id => liveShown.add(id));
+    if (done) scheduleLiveRefresh();
+}
+
+// A moment later, and not while the person is in a dialog or an action is on its way.
+function scheduleLiveRefresh(): void {
+    clearTimeout(liveRefresh);
+    liveRefresh = setTimeout(async () => {
+        if (!document.getElementById('work-page')) return;
+        if (document.querySelector('dialog[open], [data-pending]')) {
+            scheduleLiveRefresh();
+            return;
+        }
+
+        try {
+            await refreshRegion('work-page');
+        } catch { /* the next change reads it again */ }
+    }, 800);
+}
+
+let liveReady = false;
 let pickerReady = false;
 onPage(import.meta.url, () => {
     initializeSeasons();
@@ -363,5 +432,7 @@ onPage(import.meta.url, () => {
     initializeNumbering();
     initializeHeroMenu();
     document.querySelectorAll<HTMLElement>('[data-work-table]').forEach(initializeTable);
+    if (!liveReady) { liveReady = true; onLiveChange(applyUnitLive); }
+    applyUnitLive();
     if (!pickerReady) { pickerReady = true; initializePicker(); }
 }, { partial: true });

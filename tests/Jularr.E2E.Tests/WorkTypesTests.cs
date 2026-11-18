@@ -114,6 +114,19 @@ namespace Jularr.E2E.Tests
                 await Assertions.Expect(page.Locator("dialog[open].modal")).ToBeVisibleAsync();
                 await page.Keyboard.PressAsync("Escape");
                 await Evidence.SaveAsync(page, "work-game-platforms");
+
+                // A download of one platform shows in that platform's own head (and only there), live and without a reload.
+                await jularr.RunSqlAsync("""
+                    INSERT INTO "AcquisitionConnections" ("Name", "AcquisitionConnectionTypeId", "BaseUrl", "ProtectedApiKey") VALUES ('Client One', 2, 'https://client.example.test/', decode('00', 'hex'));
+                    INSERT INTO "AcquisitionReleases" ("WantedItemId", "ReleaseIdentity", "Title", "AcquisitionReleaseStatusTypeId")
+                    SELECT wanted."Id", 'e2e-game-live', 'Test.Game.Switch', 1 FROM "WantedItems" AS wanted WHERE wanted."GamePlatformId" = 710;
+                    INSERT INTO "Operations" ("OperationTypeId", "OperationStatusTypeId", "AcquisitionReleaseId", "AcquisitionConnectionId", "ProgressPercent", "SizeBytes", "RemainingBytes", "EtaSeconds", "DownloadStateTypeId", "StartedAt")
+                    SELECT 2, 2, release."Id", (SELECT "Id" FROM "AcquisitionConnections" WHERE "Name" = 'Client One'), 40, 1000, 600, 60, 2, now() FROM "AcquisitionReleases" AS release WHERE release."ReleaseIdentity" = 'e2e-game-live';
+                    """);
+                await Assertions.Expect(platforms.Filter(new() { HasText = "Switch" }).Locator(".work-season__actions [data-live]")).ToBeVisibleAsync(new() { Timeout = 30_000 });
+                await Assertions.Expect(platforms.Filter(new() { HasText = "Switch" }).Locator(".work-season__actions [data-live]")).ToContainTextAsync("40");
+                await Assertions.Expect(platforms.Filter(new() { HasText = "PC" }).Locator("[data-live]:visible")).ToHaveCountAsync(0);
+                await Evidence.SaveAsync(page, "work-game-platform-live");
                 CollectionAssert.AreEqual(Array.Empty<string>(), browser.Problems.ToArray());
             }
             catch (Exception exception) when (exception is not AssertInconclusiveException)

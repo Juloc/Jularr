@@ -73,6 +73,11 @@ let delay = FirstDelay;
 let latest: LiveEntities | undefined;
 const listeners = new Set<() => void>();
 
+// What the stream knows for one key right now (a page that shows more than its marked elements can say), nothing before the first snapshot.
+export function liveEntity(key: string): LiveEntity | undefined {
+    return latest?.[key];
+}
+
 // Pages with changing list membership refresh their authorized HTML after a new snapshot, using the existing stream.
 export function onLiveChange(listener: () => void): void {
     listeners.add(listener);
