@@ -42,6 +42,7 @@ namespace Jularr.Frontend.Pages.Admin.Work
             page.Asset("Pages/Admin/Work/Work.entry.scss");
             page.Asset("Pages/Admin/Work/Work.entry.ts");
             page.Asset("Framework/Components/LiveProgress.entry.ts");
+            page.Asset("Framework/Components/SelectLinkMenu.entry.ts");
             // The Files tab loads its list after the page (a DeferredSection); tabs swap in place, so the script is there whichever tab came first.
             page.Asset("Framework/Components/Deferred.entry.ts");
             var isSeries = work.MediaTypeId == MediaType.Series;
@@ -58,7 +59,7 @@ namespace Jularr.Frontend.Pages.Admin.Work
             if (hasUnits && texts.CanManageMedia()) tabs.Add(new("work.tab.manage", Address(WorkTab.Files), Tab == WorkTab.Files));
             if (isSeries && texts.CanEditMarkers()) tabs.Add(new("work.tab.markers", Home + "/Markers", false));
             tabs.Add(new("work.tab.metadata", Address(WorkTab.Metadata), Tab == WorkTab.Metadata));
-            page.Content.Add(new NavigationTabs([.. tabs], "work.tabs"));
+            page.Content.Add(new NavigationTabs([.. tabs], "work.tabs", "wrap"));
             if (FormError is not null && _choice is null && _deleteInput is null && Tab == WorkTab.Units) page.Content.Add(new P(ErrorText.Of(FormError)).Attribute("role", "alert"));
             switch (Tab)
             {
@@ -116,35 +117,68 @@ namespace Jularr.Frontend.Pages.Admin.Work
             if (work.UpgradeWantedCount > 0) Figure("work.figure.upgrades", "work.figure.upgradeOne", work.UpgradeWantedCount, "warn");
             if (work.UnairedCount > 0) Figure("work.figure.unaired", "work.figure.unaired", work.UnairedCount);
 
+            // Wide: all actions in a row. Phone: the search is the one big button and the rest sits in the more menu (the row's copies hide, the menu's show); the menu items are buttons
+            // of the page's one form, so they carry no token of their own.
             var actions = new List<IUiComponent>();
+            var menu = new List<IUiComponent>();
+            IUiComponent Aside(IUiComponent action) => new Div(action).Class("work-action work-action--aside");
+            HtmlElement Item(string iconName, string labelKey) => new IconLabel(Icon(iconName, 18), new Text(labelKey)).Class("action-menu__item");
             if (_wanted is { } wanted && CanAcquire)
             {
-                if (work.MediaTypeId != MediaType.Game) actions.Add(new Form<UpdateWantedDataV1>(form =>
+                if (work.MediaTypeId != MediaType.Game)
                 {
-                    form.Hidden(data => data.IsPaused);
-                    form.Content(new SwitchButton(!wanted.IsPaused, wanted.IsPaused ? "work.monitor.start" : "work.monitor.stop", "work.monitored"));
-                }, Address(Tab, "Monitor"), csrf, new UpdateWantedDataV1(!wanted.IsPaused, wanted.Version, wanted.AcquisitionProfileId, wanted.LibraryRootId)));
-                if (work.MediaTypeId != MediaType.Game) actions.Add(new Form<SearchWantedDataV1>(form =>
+                    actions.Add(Aside(new Form<UpdateWantedDataV1>(form =>
+                    {
+                        form.Hidden(data => data.IsPaused);
+                        form.Content(new SwitchButton(!wanted.IsPaused, wanted.IsPaused ? "work.monitor.start" : "work.monitor.stop", "work.monitored"));
+                    }, Address(Tab, "Monitor"), csrf, new UpdateWantedDataV1(!wanted.IsPaused, wanted.Version, wanted.AcquisitionProfileId, wanted.LibraryRootId))));
+                    menu.Add(Acts(Item(wanted.IsPaused ? "play" : "pause", wanted.IsPaused ? "work.monitor.start" : "work.monitor.stop").Attribute("type", "submit"), Address(Tab, "Monitor") + "&isPaused=" + (wanted.IsPaused ? "false" : "true")));
+                    actions.Add(new Div(new Form<SearchWantedDataV1>(form =>
+                    {
+                        form.Hidden(data => data.ParentUnitNumber);
+                        form.Hidden(data => data.UnitNumber);
+                        form.Submit(Labeled("search", work.MediaTypeId == MediaType.Series ? "work.searchMonitored" : "work.search").Primary());
+                    }, Address(Tab, "Automatic"), csrf, new SearchWantedDataV1())).Class("work-action work-action--main"));
+                }
+
+                if (work.MediaTypeId is not (MediaType.Series or MediaType.Game))
                 {
-                    form.Hidden(data => data.ParentUnitNumber);
-                    form.Hidden(data => data.UnitNumber);
-                    form.Submit(Labeled("search", work.MediaTypeId == MediaType.Series ? "work.searchMonitored" : "work.search").Primary());
-                }, Address(Tab, "Automatic"), csrf, new SearchWantedDataV1()));
-                if (work.MediaTypeId is not (MediaType.Series or MediaType.Game)) actions.Add(new A(Icon("user"), new Text("work.interactive")).Class("button").Attribute("href", WantedStatus.Search(wanted.Id)).Attribute("data-search-dialog", ""));
-                actions.Add(new Form<WorkParametersV1>(form => form.Submit(Labeled("sync", "work.refresh")), Address(Tab, "Refresh"), csrf, new WorkParametersV1(work.Id)));
-                if (work.MediaTypeId != MediaType.Game) actions.Add(new Button(Icon("pencil"), new Text("work.edit")).Attribute("data-dialog-open", "work-edit").Attribute("type", "button"));
+                    actions.Add(Aside(new A(Icon("user"), new Text("work.interactive")).Class("button").Attribute("href", WantedStatus.Search(wanted.Id)).Attribute("data-search-dialog", "")));
+                    menu.Add(new A(Icon("user", 18), new Text("work.interactive")).Class("action-menu__item").Attribute("href", WantedStatus.Search(wanted.Id)).Attribute("data-search-dialog", ""));
+                }
+
+                actions.Add(Aside(new Form<WorkParametersV1>(form => form.Submit(Labeled("sync", "work.refresh")), Address(Tab, "Refresh"), csrf, new WorkParametersV1(work.Id))));
+                menu.Add(Acts(Item("sync", "work.refresh").Attribute("type", "submit"), Address(Tab, "Refresh")));
+                if (work.MediaTypeId != MediaType.Game)
+                {
+                    actions.Add(Aside(new Button(Icon("pencil"), new Text("work.edit")).Attribute("data-dialog-open", "work-edit").Attribute("type", "button")));
+                    menu.Add(Item("pencil", "work.edit").Attribute("data-dialog-open", "work-edit").Attribute("type", "button"));
+                }
             }
 
             // A title nobody requested has no target yet: Monitor starts one, as in Radarr, and Refresh needs none.
             if (_wanted is null && CanAcquire && texts.CanManageWanted() && work.MediaTypeId != MediaType.Game)
             {
-                actions.Add(new Form<WorkParametersV1>(form => form.Content(new SwitchButton(false, "work.monitor.start", "work.monitored")), Address(Tab, "StartMonitor"), csrf, new WorkParametersV1(work.Id)));
-                actions.Add(new Form<WorkParametersV1>(form => form.Submit(Labeled("sync", "work.refresh")), Address(Tab, "Refresh"), csrf, new WorkParametersV1(work.Id)));
+                actions.Add(Aside(new Form<WorkParametersV1>(form => form.Content(new SwitchButton(false, "work.monitor.start", "work.monitored")), Address(Tab, "StartMonitor"), csrf, new WorkParametersV1(work.Id))));
+                menu.Add(Acts(Item("play", "work.monitor.start").Attribute("type", "submit"), Address(Tab, "StartMonitor")));
+                actions.Add(Aside(new Form<WorkParametersV1>(form => form.Submit(Labeled("sync", "work.refresh")), Address(Tab, "Refresh"), csrf, new WorkParametersV1(work.Id))));
+                menu.Add(Acts(Item("sync", "work.refresh").Attribute("type", "submit"), Address(Tab, "Refresh")));
             }
 
             // A manga volume from the administrator's own device.
-            if (work.MediaSubtypeId == MediaSubtype.Manga && texts.CanUploadVolumes()) actions.Add(new A(Icon("document"), new Text("work.upload")).Class("button").Attribute("href", Home + "/Upload"));
-            if (texts.CanManageMedia()) actions.Add(new Button(Icon("trash"), new Text("work.delete")).Attribute("data-dialog-open", "work-delete").Attribute("type", "button").Class("button work-delete"));
+            if (work.MediaSubtypeId == MediaSubtype.Manga && texts.CanUploadVolumes())
+            {
+                actions.Add(Aside(new A(Icon("document"), new Text("work.upload")).Class("button").Attribute("href", Home + "/Upload")));
+                menu.Add(new A(Icon("document", 18), new Text("work.upload")).Class("action-menu__item").Attribute("href", Home + "/Upload"));
+            }
+
+            if (texts.CanManageMedia())
+            {
+                actions.Add(Aside(new Button(Icon("trash"), new Text("work.delete")).Attribute("data-dialog-open", "work-delete").Attribute("type", "button").Class("button work-delete")));
+                menu.Add(Item("trash", "work.delete").Attribute("data-dialog-open", "work-delete").Attribute("type", "button").Class("action-menu__item action-menu__item--danger"));
+            }
+
+            if (menu.Count > 0) actions.Add(new Div(new ActionMenu(Icon("dots", 20), menu, "button button--icon", "details.more")).Class("work-action work-action--more"));
 
             var status = new List<IUiComponent>();
 
@@ -392,7 +426,7 @@ namespace Jularr.Frontend.Pages.Admin.Work
 
         // The facts of the second line in the order of the columns; one that has nothing to say is left out.
         private IUiComponent StripFacts(Dictionary<string, Fact> facts, string[] columns) =>
-            new Div([new Span(new Icon("grip", assets, 14)).Class("work-strip__handle").Attribute("aria-hidden", "true"), .. columns.Where(column => facts.TryGetValue(column, out var fact) && !fact.Empty).Select(column =>
+            new Div([.. columns.Where(column => facts.TryGetValue(column, out var fact) && !fact.Empty).Select(column =>
                 (IUiComponent)new Span(new Span(new Text("work.col." + column)).Class("work-fact__label"), facts[column].Content).Class("work-fact").Attribute("data-col", column))]).Class("work-strip__facts");
 
         private IUiComponent FileTable(WorkManagementV1 work, string? csrf) => FileTable(work.Files.Where(file => !file.IsMissing), FileColumns, csrf);
@@ -877,5 +911,7 @@ namespace Jularr.Frontend.Pages.Admin.Work
         private sealed class Legend(params IUiComponent[] children) : HtmlElement("legend", children);
 
         private sealed class IconButton(params IUiComponent[] children) : HtmlElement("button", children);
+
+        private sealed class IconLabel(params IUiComponent[] children) : HtmlElement("button", children);
     }
 }
