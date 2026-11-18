@@ -109,10 +109,16 @@ namespace Jularr.E2E.Tests
                     await page.EvaluateAsync(Measure);
                     const string firstRow = "() => Math.round(document.querySelector('#discover-results :is(.media-shelf, .media-shelf-waiting)').getBoundingClientRect().top)";
                     var before = await page.EvaluateAsync<int>(firstRow);
+                    // Measured as the new mode arrives: its provider rows are held back until then, since the offline providers of the tests
+                    // would put their notice above the rows at a moment of their own.
+                    var measured = new TaskCompletionSource();
+                    await page.RouteAsync("**/*handler=Recommendations*", async route => { await measured.Task; await route.FallbackAsync(); });
                     await page.Locator(".mode-tabs__tab[href='/?mode=animanga']").ClickAsync();
                     await Assertions.Expect(page.Locator(".mode-tabs__tab.is-active[href='/?mode=animanga']")).ToBeVisibleAsync();
                     Assert.AreEqual(0, await page.Locator("#main-content > .page-skeleton").CountAsync(), $"{width}px: a switch of the mode shows the page skeleton.");
                     var after = await page.EvaluateAsync<int>(firstRow);
+                    measured.SetResult();
+                    await page.UnrouteAllAsync(new() { Behavior = UnrouteBehavior.Wait });
                     if (Math.Abs(after - before) > 4) shifts.Add($"{width}px mode switch: the first row moved from {before} to {after}");
                     await page.GotoAsync("/?mode=watch");
 
