@@ -12,8 +12,14 @@ namespace Jularr.Integrations.Data.Torrent
 
     // One pass of a job: its folder holds job.torrent or job.magnet, the fetched metadata, the verified pieces and the data.
     internal sealed class TorrentPassRequest(string jobDirectory, TorrentConnector connect, HttpClient trackers, DateTimeOffset deadline, int maximumPeers = 50,
-        Func<long, CancellationToken, ValueTask>? throttle = null)
+        Func<long, CancellationToken, ValueTask>? throttle = null, Func<long, long, Task>? report = null, CancellationToken finish = default)
     {
+        // The verified bytes and the size, told every few seconds while the pass runs.
+        public Func<long, long, Task>? Report { get; } = report;
+
+        // A finish (a pause, a removal) ends the pass like its deadline.
+        public CancellationToken Finish { get; } = finish;
+
         // The downloader's speed limit: every block waits for its turn before it is taken.
         public Func<long, CancellationToken, ValueTask>? Throttle { get; } = throttle;
 

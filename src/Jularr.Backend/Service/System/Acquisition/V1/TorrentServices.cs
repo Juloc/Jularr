@@ -127,11 +127,13 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
         private async Task<bool> RunAsync(DownloadData download, DownloadStoragePaths paths, string staging)
         {
             TorrentPassResult pass;
+            using var reporter = new PassProgress(Context, download.OperationId, CancellationToken);
             try
             {
                 pass = paths.IsComplete(download.OperationId, download.MediaTypeId, download.MediaSubtypeId)
                     ? new TorrentPassResult(TorrentPassState.Completed, 100, 0, 0, 0, 0, false, outputPath: paths.Complete(download.OperationId, download.MediaTypeId, download.MediaSubtypeId))
-                    : await _jobs.RunAsync(Context, staging, _time.GetUtcNow() + PassLength, CancellationToken);
+                    : await _jobs.RunAsync(Context, staging, _time.GetUtcNow() + PassLength, CancellationToken,
+                        (done, size) => reporter.ReportAsync(DownloadStateType.Downloading, done, size), reporter.Finish);
             }
             catch (TunnelUnavailableException)
             {
@@ -160,7 +162,8 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                     {
                         new
                         {
-                            download.OperationId, pass.ProgressPercent, pass.SizeBytes, pass.RemainingBytes, EtaSeconds = (int?)null, DownloadStateTypeId = (byte)DownloadStateType.Downloading
+                            download.OperationId, pass.ProgressPercent, pass.SizeBytes, pass.RemainingBytes, EtaSeconds = (int?)null, DownloadStateTypeId = (byte)DownloadStateType.Downloading,
+                            KeepsPause = true
                         }
                     };
                     await Context.ExecuteBatchAsync(async (ctx, ct) =>

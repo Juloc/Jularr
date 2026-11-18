@@ -71,6 +71,13 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(TimeSpan.FromSeconds(0.5), limiter.Reserve(1000, Start.AddSeconds(0.5)));
             Assert.AreEqual(TimeSpan.Zero, limiter.Reserve(1000, Start.AddMinutes(1)), "An idle downloader starts at once.");
 
+            // A block that gave up waiting (a pause) hands its share back, never to before now.
+            Assert.AreEqual(TimeSpan.FromSeconds(1), limiter.Reserve(1000, Start.AddMinutes(1)));
+            limiter.Release(1000, Start.AddMinutes(1));
+            Assert.AreEqual(TimeSpan.FromSeconds(1), limiter.Reserve(1000, Start.AddMinutes(1)));
+            limiter.Release(5000, Start.AddMinutes(1));
+            Assert.AreEqual(TimeSpan.Zero, limiter.Reserve(1000, Start.AddMinutes(1)));
+
             limiter.BytesPerSecond = 0;
             Assert.AreEqual(TimeSpan.Zero, limiter.Reserve(1_000_000, Start.AddMinutes(1)));
         }

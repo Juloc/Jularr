@@ -53,6 +53,39 @@ namespace Jularr.Backend.Tests
             foreach (var peer in new[] { partial, asker, full }) AssertDownloadOnly(peer.Received);
         }
 
+        // A pass tells its progress as it goes, and a finish (a pause, a removal) ends it at once like its deadline; the verified pieces are kept for the next pass.
+        [TestMethod]
+        public async Task Torrent_ReportsProgressAndAFinishEndsThePass_TheNextPassContinues()
+        {
+            var job = NewJob();
+            var payload = RandomNumberGenerator.GetBytes(13 * PieceLength - 5000);
+            var (torrent, info) = Torrent(payload, "http://tracker.example.test/announce");
+            await File.WriteAllBytesAsync(Path.Combine(job, TorrentDownloader.TorrentName), torrent);
+            var hash = SHA1.HashData(info);
+            await using var full = new Peer(hash, payload, info, _ => true);
+            using var tracker = Tracker([full.EndPoint]);
+            var limit = new Jularr.Integrations.Logic.Common.ByteRateLimiter { BytesPerSecond = 40 * 1024 };
+            using var finish = new CancellationTokenSource();
+            var reports = new ConcurrentQueue<(long Done, long Size)>();
+            var running = TorrentDownloader.RunAsync(new TorrentPassRequest(job, Connect, tracker, DateTimeOffset.UtcNow.AddSeconds(60), throttle: limit.WaitAsync,
+                report: (done, size) => { reports.Enqueue((done, size)); return Task.CompletedTask; }, finish: finish.Token), CancellationToken.None);
+
+            while (!reports.Any(report => report.Done > 0)) await Task.Delay(100);
+            await finish.CancelAsync();
+            var stopping = System.Diagnostics.Stopwatch.StartNew();
+            var first = await running;
+            Assert.IsTrue(stopping.Elapsed < TimeSpan.FromSeconds(3), $"The pass ran on {stopping.Elapsed} after the finish.");
+            Assert.AreEqual(TorrentPassState.Downloading, first.State, first.ReasonKey);
+            Assert.IsTrue(first.Progressed && first.RemainingBytes > 0);
+            Assert.IsTrue(reports.All(report => report.Size == payload.Length));
+
+            limit.BytesPerSecond = 0;
+            var second = await TorrentDownloader.RunAsync(new TorrentPassRequest(job, Connect, tracker, DateTimeOffset.UtcNow.AddSeconds(20)), CancellationToken.None);
+            Assert.AreEqual(TorrentPassState.Completed, second.State, second.ReasonKey);
+            Assert.AreEqual(first.RemainingBytes, second.ReceivedBytes, "The second pass fetches only what the first left.");
+            CollectionAssert.AreEqual(payload, Join(job, "release", "a.bin", "b.bin"));
+        }
+
         [TestMethod]
         public async Task Magnet_FetchesVerifiedMetadataThenFiles_AndOnlyRequestsMetadata()
         {
