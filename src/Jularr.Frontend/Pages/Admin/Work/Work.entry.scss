@@ -246,7 +246,8 @@
 
 // Tables
 
-.work-table-wrap { overflow-x: auto; }
+// The wrap holds its absolute children (the gear's hidden label), so they scroll with the table and never widen the page.
+.work-table-wrap { position: relative; overflow-x: auto; }
 
 .work-table {
     width: 100%;

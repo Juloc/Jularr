@@ -46,7 +46,7 @@ html:not([data-skin="original"]) body:has(.login-card) {
     .auth-symbol { width: 48px; height: 48px; }
     .auth-brand-name { font-size: 24px; font-weight: 850; letter-spacing: -1.3px; }
 
-    // One column of fields, the label above its field, the eye and the forgot link inside the field's row.
+    // One column of fields, the label above its field, the eye inside the field's row and the forgot link right under the password.
     .ui-form { display: flex; flex-direction: column; align-items: stretch; gap: 14px; }
     .ui-field { gap: 0; }
     .ui-field__top { flex-wrap: nowrap; align-items: center; justify-content: space-between; gap: 6px; max-width: none; margin: 0 0 6px var(--field-label-inset); line-height: normal; }
@@ -96,7 +96,7 @@ html:not([data-skin="original"]) body:has(.login-card) {
     .ui-form > .field-error { bottom: calc(var(--auth-submit-height) + 5px); }
 }
 
-.auth-forgot { color: var(--muted); font-size: 11px; font-weight: 650; text-decoration: none; white-space: nowrap; &:hover { color: var(--accent); } }
+.auth-forgot { justify-self: end; margin: 6px var(--field-label-inset) 0 0; color: var(--muted); font-size: 11px; font-weight: 650; text-decoration: none; white-space: nowrap; &:hover { color: var(--accent); } }
 
 // The one filled action: an accent pill in a soft gradient. The same look serves a link (back to sign in).
 .auth-main { --auth-submit-height: 42px; }
