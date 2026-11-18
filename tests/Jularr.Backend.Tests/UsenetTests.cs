@@ -253,6 +253,35 @@ namespace Jularr.Backend.Tests
             CollectionAssert.AreEqual(bytes, File.ReadAllBytes(Directory.EnumerateFiles(storage.Path, "*.mkv", SearchOption.AllDirectories).Single()));
         }
 
+        // A download taken out during a pass ends that pass at once instead of filling deleted folders until its deadline.
+        [TestMethod]
+        public async Task Usenet_RemovedDuringAPass_EndsThePass()
+        {
+            using var storage = new TemporaryDirectory();
+            using var staging = new TemporaryDirectory();
+            await using var news = new FakeNewsServer("reader", "news-secret");
+            news.Publish(Feature + ".mkv", new byte[400_000], 200);
+            await using var host = await CreateHostAsync(storage.Path, staging.Path, new FakeIndexer(news.Nzb(Feature + ".mkv")), news.Port);
+            await CreateWantedMovieAsync(host);
+            await RunAsync<SearchDueWantedV1>(host);
+            var operationId = await host.ScalarAsync("SELECT \"Id\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2");
+            await host.Fixture.RunSqlAsync("UPDATE \"DownloadStorageSettings\" SET \"MaxBytesPerSecond\" = 20000 WHERE \"DownloadStorageAreaId\" = 1");
+
+            var pass = RunAsync<DownloadUsenetV1>(host);
+            while (news.Bodies < 20) await Task.Delay(50);
+            using (var removed = await host.SendAsync(HttpMethod.Post, $"/api/v1/admin/activity/{operationId}/remove", new RemoveActivityDownloadDataV1(false)))
+            {
+                Assert.AreEqual(HttpStatusCode.OK, removed.StatusCode, await removed.Content.ReadAsStringAsync());
+            }
+
+            var stopping = System.Diagnostics.Stopwatch.StartNew();
+            await pass;
+            Assert.IsTrue(stopping.Elapsed < TimeSpan.FromSeconds(5), $"The pass ran on {stopping.Elapsed} after the removal.");
+            Assert.IsTrue(news.Bodies < 100, $"{news.Bodies} of 200 articles were asked for despite the removal.");
+            Assert.AreEqual(("download_removed", (object)DBNull.Value), ((string)(await host.ScalarAsync("SELECT \"ErrorKey\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"))!,
+                await host.ScalarAsync("SELECT \"AttentionKey\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2")));
+        }
+
         [TestMethod]
         public async Task Usenet_UnsetJobLimitAllowsReleasesAnnouncingMoreThanTwentyGiB()
         {

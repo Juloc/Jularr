@@ -460,31 +460,12 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
         {
             var staging = paths.Incomplete(download.OperationId, download.MediaTypeId, download.MediaSubtypeId);
             UsenetPassResult pass;
-            // A pause ends the pass at the next progress report like its deadline: the finished articles are kept and the resume continues from them.
-            using var paused = CancellationTokenSource.CreateLinkedTokenSource(CancellationToken);
-            var elapsed = global::System.Diagnostics.Stopwatch.StartNew();
-            long? firstDone = null;
-            async Task ReportAsync(DownloadStateType stage, long done, long size)
-            {
-                firstDone ??= done;
-                var remaining = Math.Max(0, size - done);
-                var speed = (done - firstDone.Value) / Math.Max(0.001, elapsed.Elapsed.TotalSeconds);
-                var progress = new[] { new { download.OperationId, SizeBytes = (long?)size, RemainingBytes = (long?)remaining,
-                    ProgressPercent = stage == DownloadStateType.Downloading && size > 0 ? (int?)Math.Clamp(done * 100 / size, 0, 99) : null,
-                    EtaSeconds = stage == DownloadStateType.Downloading && speed > 0 && remaining > 0
-                        ? (int?)Math.Min(int.MaxValue, Math.Ceiling(remaining / speed)) : null, DownloadStateTypeId = (byte)stage, KeepsPause = true } };
-                var isPaused = await Context.ExecuteBatchAsync(async (ctx, ct) =>
-                {
-                    await ctx.UpdateDownloadProgressAsync(new DownloadProgressData(JsonSerializer.Serialize(progress)), ct);
-                    return (await ctx.ReadActiveDownloadsAsync(ct, download.OperationId)).FirstOrDefault()?.IsPaused == true;
-                }, CancellationToken);
-                if (isPaused) await paused.CancelAsync();
-            }
+            using var reporter = new PassProgress(Context, download.OperationId, CancellationToken);
             try
             {
                 pass = paths.IsComplete(download.OperationId, download.MediaTypeId, download.MediaSubtypeId)
                     ? new UsenetPassResult(UsenetPassState.Completed, 100, 0, 0, outputPath: paths.Complete(download.OperationId, download.MediaTypeId, download.MediaSubtypeId))
-                    : await _jobs.RunAsync(connection, staging, _time.GetUtcNow() + PassLength, CancellationToken, paths, download.OperationId, ReportAsync, paused.Token);
+                    : await _jobs.RunAsync(connection, staging, _time.GetUtcNow() + PassLength, CancellationToken, paths, download.OperationId, reporter.ReportAsync, reporter.Finish);
             }
             catch (UsenetException exception) when (exception.Failure is UsenetFailure.Unauthorized or UsenetFailure.ConnectionLimit)
             {

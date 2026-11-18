@@ -21,6 +21,7 @@ namespace Jularr.Integrations.Logic.Torrent
         private static readonly TimeSpan ConnectTimeout = TimeSpan.FromSeconds(10);
         private static readonly TimeSpan IdleTimeout = TimeSpan.FromSeconds(45);
         private static readonly TimeSpan AnnounceTimeout = TimeSpan.FromSeconds(15);
+        private static readonly TimeSpan ReportInterval = TimeSpan.FromSeconds(2);
         private static long _receivedBytes;
         private static int _peers;
 
@@ -70,10 +71,11 @@ namespace Jularr.Integrations.Logic.Torrent
                 : Result(meta, storage!, 0, 0, false, TorrentPassState.Downloading, null, "torrent_no_peers");
 
             // Up to the peer limit at once until the deadline, the end of the candidates or the end of the job.
-            using var pass = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            using var pass = CancellationTokenSource.CreateLinkedTokenSource(ct, request.Finish);
             var left = request.Deadline - DateTimeOffset.UtcNow;
             pass.CancelAfter(left > TimeSpan.Zero ? left : TimeSpan.Zero);
             swarm.Finished = pass;
+            var reporting = meta is not null && request.Report is { } report ? ReportAsync(meta, storage!, report, pass.Token) : Task.CompletedTask;
             var running = new List<Task<bool>>();
             var connected = 0;
             while (!pass.IsCancellationRequested && (candidates.Count > 0 || running.Count > 0))
@@ -96,9 +98,26 @@ namespace Jularr.Integrations.Logic.Torrent
             }
 
             await storage!.SaveStateAsync(Path.Combine(directory, StateName), ct);
+            await reporting;
             var reason = swarm.Received > 0 ? null : swarm.TunnelFailed ? "vpn_unavailable" : connected == 0 ? "torrent_no_peers" : null;
             return Result(meta, storage, swarm.Received, connected, swarm.Received > 0, storage.IsComplete ? TorrentPassState.Completed : TorrentPassState.Downloading,
                 storage.IsComplete ? data : null, reason);
+        }
+
+        // The progress while the pass runs.
+        private static async Task ReportAsync(TorrentMetainfo meta, TorrentStorage storage, Func<long, long, Task> report, CancellationToken ct)
+        {
+            try
+            {
+                while (true)
+                {
+                    await Task.Delay(ReportInterval, ct);
+                    await report(meta.TotalLength - storage.RemainingBytes, meta.TotalLength);
+                }
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+            }
         }
 
         private static TorrentPassResult Result(TorrentMetainfo meta, TorrentStorage storage, long received, int peers, bool progressed, TorrentPassState state, string? output,
