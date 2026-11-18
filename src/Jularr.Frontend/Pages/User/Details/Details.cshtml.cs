@@ -52,7 +52,6 @@ namespace Jularr.Frontend.Pages.User.Details
         private BaseDataList<GamePlatformV1>? _platforms;
         private BaseDataList<RequestProfileOptionV1>? _requestProfiles;
         private CreateRequestDataV1? _requestInput;
-        private bool _detailsUnavailable;
         private string _csrf = "";
 
         [BindProperty(SupportsGet = true)]
@@ -112,8 +111,14 @@ namespace Jularr.Frontend.Pages.User.Details
                 // A refused action of the page that no form of it shows (a relation added twice) says why above the page.
                 if (FormError is { } refused && _requestInput is null && _relationSearch is null) page.Content.Add(new P(ErrorText.Of(refused)).Class("ui-page-error").Attribute("role", "alert"));
 
-                // A title whose catalog could not give its details now shows its catalog row and says so; the next open asks again.
-                if (_detailsUnavailable) page.Content.Add(new P(new Text("details.unavailable")).Class("ui-page-error").Attribute("role", "alert"));
+                // A catalog title opened for the first time shows its catalog row at once; its page script then asks the catalog (OnGetDetailsAsync) and shows the details,
+                // or reveals that the catalog cannot give them now (the next open asks again).
+                if (work.AwaitsDetails)
+                {
+                    page.Asset("Pages/User/Details/Details.entry.ts");
+                    page.Content.Add(new P(new Text("details.unavailable")).Class("ui-page-error").Attribute("role", "alert").Attribute("hidden", "hidden")
+                        .Attribute("data-details-pending", "/Details/" + Id.ToString(CultureInfo.InvariantCulture) + "?handler=Details"));
+                }
                 page.Content.Add(Hero(work, page));
                 page.Content.Add(new Div(new NavigationTabs([new NavigationTab("details.tab.overview", Address(query => query["tab"] = null), shown is null),
                     .. blocks.Select(block => new NavigationTab(block.LabelKey, Address(query => query["tab"] = block.TabKey), block == shown, false, block.Count))], "details.tabs")).Class("details-tabs"));
@@ -143,11 +148,19 @@ namespace Jularr.Frontend.Pages.User.Details
 
         public async Task<IActionResult> OnGetAsync()
         {
-            // Opening the page brings a catalog title's details first, so everything below reads them locally.
-            _detailsUnavailable = (await open.ExecuteAsync<OpenedWorkV1>(new WorkParametersV1(Id), default(NoData), HttpContext.RequestAborted)).AreDetailsUnavailable;
+            // The page answers from what is here: a title counts as viewed now, or, while it awaits its details, when its page asks for them (OnGetDetailsAsync).
             await LoadDataAsync();
+            if (!_work!.AwaitsDetails) await open.ExecuteAsync<OpenedWorkV1>(new WorkParametersV1(Id), default(NoData), HttpContext.RequestAborted);
             PreparePage();
             return Page();
+        }
+
+        // Opens the title, so a catalog title takes its details from its catalog entry, and says whether it has them now; the page script then shows the page again.
+        public async Task<IActionResult> OnGetDetailsAsync()
+        {
+            var opened = await open.ExecuteAsync<OpenedWorkV1>(new WorkParametersV1(Id), default(NoData), HttpContext.RequestAborted);
+            Response.Headers.CacheControl = "no-store";
+            return new JsonResult(new { available = !opened.AreDetailsUnavailable });
         }
 
         public async Task<IActionResult> OnPostAddToCollectionAsync([BindRequired] long collectionId)
@@ -281,7 +294,8 @@ namespace Jularr.Frontend.Pages.User.Details
             var creditsTask = readCredits.ExecuteAsync<BaseDataList<WorkCreditV1>>(new WorkParametersV1(Id), token);
             var relationsTask = ReadWhenAsync(texts.CanSeeRelations(), () => readRelations.ExecuteAsync<BaseDataList<WorkRelationV1>>(new WorkParametersV1(Id), token));
             var collectionsTask = ReadWhenAsync(texts.CanCollect(), () => readCollections.ExecuteAsync<BaseDataList<WorkCollectionV1>>(new WorkParametersV1(Id), token));
-            var recommendationsTask = ReadRecommendationsAsync(token);
+            // A title awaiting its details shows no suggestions yet: they would ask its provider before the page answers.
+            var recommendationsTask = Task.FromResult<IReadOnlyList<DiscoverItemV1>>([]);
             var localesTask = ReadWhenAsync(texts.CanRequest(), () => locales.ExecuteAsync<BaseDataList<UiLocaleDetailsV1>>(cancellationToken: token));
             var requestProfilesTask = ReadWhenAsync(texts.CanRequest(), () => readRequestProfiles.ExecuteAsync<BaseDataList<RequestProfileOptionV1>>(new CreateRequestParametersV1(Id), token));
             // A person requests in their first content language unless they choose another.
@@ -290,10 +304,15 @@ namespace Jularr.Frontend.Pages.User.Details
                 var signedIn = await authentication.ExecuteAsync<AuthenticationResultV1>(cancellationToken: token);
                 return signedIn.ProfileId is { } profileId ? (await readProfile.ExecuteAsync<ReadProfileResultV1>(new ReadProfileParametersV1(profileId), token)).FirstContentLanguage ?? "" : "";
             });
-            Task[] reads = [workTask, availabilityTask, editionsTask, creditsTask, relationsTask, collectionsTask, recommendationsTask, localesTask, requestProfilesTask, contentLanguageTask];
+            List<Task> reads = [workTask, availabilityTask, editionsTask, creditsTask, relationsTask, collectionsTask, localesTask, requestProfilesTask, contentLanguageTask];
             try
             {
                 _work = await workTask;
+                if (!_work.AwaitsDetails)
+                {
+                    recommendationsTask = ReadRecommendationsAsync(token);
+                    reads.Add(recommendationsTask);
+                }
                 Task<BaseDataList<GamePlatformV1>>? platformsTask = null;
 
                 // Where the profile stands on its AniList list, for the titles that list knows.

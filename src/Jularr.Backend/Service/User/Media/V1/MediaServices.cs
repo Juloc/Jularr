@@ -11,6 +11,7 @@ using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Media;
 using Jularr.Backend.Service.Core;
 using Jularr.Backend.Service.User.Library.V1;
+using AdminMedia = Jularr.Backend.Service.Admin.Media.V1;
 
 namespace Jularr.Backend.Service.User.Media.V1
 {
@@ -170,7 +171,17 @@ namespace Jularr.Backend.Service.User.Media.V1
                     work."OriginalTitle",
                     work."ReleasedOn",
                     work."OriginalLanguage",
-                    CASE WHEN franchise."Id" IS NOT NULL THEN work."FranchisePosition" END AS "FranchisePosition"
+                    CASE WHEN franchise."Id" IS NOT NULL THEN work."FranchisePosition" END AS "FranchisePosition",
+                    -- A catalog title without details yet that a catalog entry can give them to.
+                    work."DetailedAt" IS NULL AND EXISTS (
+                        SELECT
+                            1
+                        FROM
+                            "WorkExternalIdentities" AS identity
+                        WHERE
+                            identity."WorkId" = work."Id"
+                            AND {{AdminMedia.WorkMetadataQueries.ProviderIdentityCondition}}
+                    ) AS "AwaitsDetails"
                 FROM
                     "ProfileWorks" AS visible
                     JOIN "Works" AS work ON work."Id" = visible."WorkId"

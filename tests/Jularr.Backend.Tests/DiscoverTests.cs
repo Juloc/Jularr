@@ -1024,7 +1024,8 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(1, System.Text.RegularExpressions.Regex.Matches(browseHtml, "navigation-tabs--chips").Count);
             StringAssert.Contains(browseHtml, "href=\"/?type=series&amp;view=Top\" class=\"navigation-tabs__link navigation-tabs__link--active\"");
 
-            // The title's page is the Work's; its first open brings the details from the catalog, and it requests the title as any Work.
+            // The title's page is the Work's; its page asks the catalog for the details after its first open, and it requests the title as any Work.
+            Assert.IsTrue(await DetailsAsync(host, workId));
             using var title = await host.SendAsync(HttpMethod.Get, "/Details/" + workId);
             html = await title.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, title.StatusCode, html);
@@ -1292,7 +1293,7 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
-        public async Task Details_FirstOpen_ImportsOnceIntoTheSameWork_ProviderDownShowsTheCatalogRow_AndStaleDetailsRefreshLater()
+        public async Task Details_FirstOpen_ShowsTheCatalogRowAtOnce_ThenImportsOnceIntoTheSameWork_ProviderDownSaysSo_AndStaleDetailsRefreshLater()
         {
             var tmdb = new FakeTmdb();
             await using var host = await CreateHostAsync(razor: true, fake: tmdb);
@@ -1302,30 +1303,35 @@ namespace Jularr.Backend.Tests
                 """);
             int Imports() => tmdb.Requests.Count(request => request.AbsolutePath == "/3/movie/603");
 
-            // While the catalog cannot answer the page shows the catalog row and says so; nothing is stored and nothing is retried.
+            // The first open answers at once from the catalog row without asking a provider; its page script then asks for the details.
+            var first = WebUtility.HtmlDecode(await PageAsync(host, "/Details/960"));
+            StringAssert.Contains(first, "Catalog text.");
+            StringAssert.Contains(first, "data-details-pending=\"/Details/960?handler=Details\"");
+            Assert.AreEqual(0, tmdb.Requests.Count);
+
+            // While the catalog cannot answer the page says so and keeps the catalog row; nothing is stored and nothing is retried.
             tmdb.IsUnavailable = true;
-            var offline = WebUtility.HtmlDecode(await PageAsync(host, "/Details/960"));
-            StringAssert.Contains(offline, "Details can't be loaded right now");
-            StringAssert.Contains(offline, "Catalog text.");
+            Assert.IsFalse(await DetailsAsync(host, 960));
             Assert.AreEqual(1, Imports());
             Assert.AreEqual(DBNull.Value, await host.ScalarAsync("SELECT \"DetailedAt\" FROM \"Works\" WHERE \"Id\" = 960"));
 
-            // The next open takes the details into the same Work and renders them from the database.
+            // The next ask takes the details into the same Work, and the page renders them from the database.
             tmdb.IsUnavailable = false;
+            Assert.IsTrue(await DetailsAsync(host, 960));
             var opened = WebUtility.HtmlDecode(await PageAsync(host, "/Details/960"));
-            Assert.IsFalse(opened.Contains("Details can't be loaded right now", StringComparison.Ordinal));
+            Assert.IsFalse(opened.Contains("data-details-pending", StringComparison.Ordinal));
             StringAssert.Contains(opened, "Keanu Reeves");
             Assert.AreEqual(2, Imports());
             Assert.AreEqual(true, await host.ScalarAsync("SELECT \"DetailedAt\" IS NOT NULL AND \"ViewedAt\" IS NOT NULL FROM \"Works\" WHERE \"Id\" = 960"));
             Assert.AreEqual(960L, await host.ScalarAsync("SELECT \"WorkId\" FROM \"WorkExternalIdentities\" WHERE \"Namespace\" = 'imdb' AND \"Value\" = 'tt0133093'"));
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"Works\" WHERE \"CanonicalTitle\" = 'The Matrix'"));
 
-            // A second open asks no provider; two opens at once of a title without details import it once.
+            // A second open asks no provider; two asks at once for a title without details import it once.
             var asked = tmdb.Requests.Count;
             await PageAsync(host, "/Details/960");
             Assert.AreEqual(asked, tmdb.Requests.Count);
             await host.Fixture.RunSqlAsync("UPDATE \"Works\" SET \"DetailedAt\" = NULL WHERE \"Id\" = 960");
-            await Task.WhenAll(PageAsync(host, "/Details/960"), PageAsync(host, "/Details/960"));
+            await Task.WhenAll(DetailsAsync(host, 960), DetailsAsync(host, 960));
             Assert.AreEqual(3, Imports());
 
             // Details older than a day are shown at once without a provider; the metadata job reads them again.
@@ -1509,6 +1515,14 @@ namespace Jularr.Backend.Tests
             var empty = await PageAsync(host, "/?type=movies&feed=continue");
             StringAssert.Contains(empty, "class=\"hero-carousel__slide hero-carousel__slide--empty\" data-hero-empty=\"\"><");
             Assert.IsFalse(empty.Contains("data-hero-slide", StringComparison.Ordinal), empty);
+        }
+
+        // What the Details page script asks after a title without details showed: whether its catalog gave them now.
+        private static async Task<bool> DetailsAsync(Host host, long workId)
+        {
+            using var answer = await host.SendAsync(HttpMethod.Get, "/Details/" + workId + "?handler=Details");
+            Assert.AreEqual(HttpStatusCode.OK, answer.StatusCode, await answer.Content.ReadAsStringAsync());
+            return (await answer.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("available").GetBoolean();
         }
 
         private static async Task<string> PageAsync(Host host, string path)

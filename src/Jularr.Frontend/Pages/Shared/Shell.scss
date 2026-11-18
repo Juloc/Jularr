@@ -39,6 +39,12 @@
     min-width: clamp(0px, 100% - 400px, 480px);
     container: crumbs / inline-size;
 }
+// Beside the mode tabs the trail takes only the room the row has left, so the header never spills past the page (its fixed minimum did);
+// the search still narrows to its 220px first, then the trail ends in an ellipsis.
+.mode-tabs ~ .app-header-location { flex: 1 1 240px; min-width: 0; }
+@media (min-width: 1101px) {
+    .mode-tabs ~ .app-search { flex-shrink: 8; }
+}
 .breadcrumb {
     display: flex;
     align-items: center;

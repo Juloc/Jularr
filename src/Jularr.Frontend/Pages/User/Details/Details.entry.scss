@@ -116,6 +116,8 @@
 
 .details-person {
     display: grid;
+    // One column as wide as the card: a long role ends in its ellipsis instead of widening the card past its track and the page.
+    grid-template-columns: minmax(0, 1fr);
     align-content: start;
     gap: 2px;
     min-width: 0;
@@ -233,7 +235,7 @@ td .details-chips { flex-wrap: nowrap; }
 .details-volumes { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 14px; }
 
 // A volume's cover and its read button under it.
-.details-volume-item { display: grid; gap: 8px; align-content: start; min-width: 0; }
+.details-volume-item { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; align-content: start; min-width: 0; }
 .details-volume-item > .button { justify-content: center; text-align: center; }
 
 .details-volume {
