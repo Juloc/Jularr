@@ -165,6 +165,7 @@ namespace Jularr.E2E.Tests
                 foreach (var (name, width, height) in new[] { ("phone", 375, 812), ("tablet", 768, 1024) })
                 {
                     await page.SetViewportSizeAsync(width, height);
+                    await page.ReloadAsync();
                     await Assertions.Expect(page.Locator("tr.work-row .work-status[data-live-phase=downloading]:visible, [data-work-strips] .work-status[data-live-phase=downloading]:visible").First).ToBeVisibleAsync();
                     Assert.IsTrue(await page.EvaluateAsync<bool>("() => document.documentElement.scrollWidth <= document.documentElement.clientWidth"), "The live status makes the page wider than the " + name + ".");
                     await Evidence.SaveAsync(page, "work-unit-live-download-" + name);

@@ -576,7 +576,10 @@ th[aria-sort="descending"] .work-sort::after { content: " ▾"; }
     // The season: name and figures, then the actions and the round button, all in one row.
     .work-season__head { grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; padding: 10px 12px; }
     .work-season__lead { grid-column: 1; }
-    .work-season__actions { grid-column: 2; grid-row: 1; justify-self: end; }
+    // The live sum takes its own line under the figures, so it never covers them; the icons stay in the first row.
+    .work-season__actions { display: contents; }
+    .work-season__actions > .work-icons { grid-column: 2; grid-row: 1; justify-self: end; }
+    .work-season__live { grid-column: 1 / -1; grid-row: 2; justify-self: start; }
     .work-season__toggle { grid-column: 3; grid-row: 1; }
 
     // Name, bar and figures one below the other between the switch and the actions.
