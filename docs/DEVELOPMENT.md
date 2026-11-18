@@ -29,6 +29,9 @@ export JULARR_TEST_DB='Host=127.0.0.1;Port=15433;Username=jularr_test;Password=i
 dotnet test tests/Jularr.Backend.Tests --filter "FullyQualifiedName~StorageTests"
 ```
 
+`scripts/check.sh` runs what CI would run for the changes against `origin/main` (commits and working tree): the selected backend tests,
+the frontend check and the browser smoke, each only when its files changed; it ends with `check: green` or `check: red (...)`.
+
 Browser tests need `npm run build` in the frontend first:
 
 ```bash

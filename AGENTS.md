@@ -28,3 +28,4 @@ Find code with `rg`; the code is the reference.
 ## Checks
 
 - Run only the affected builds and tests.
+- Run `scripts/check.sh` before every push; push only when it is green.
