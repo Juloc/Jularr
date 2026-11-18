@@ -225,9 +225,13 @@ namespace Jularr.E2E.Tests
                 // The audio goes back to zero for the steps below, with a conversion of its own that plays on.
                 await page.Locator("[data-action=settings]").ClickAsync();
                 await page.Locator("#player-settings").GetByRole(AriaRole.Tab, new() { Name = "Audio", Exact = true }).ClickAsync();
+                // The new conversion puts the picture back where it stood and plays once its metadata is in: the steps below start only after that.
+                await page.EvaluateAsync("() => { window.__switched = false; document.querySelector('video').addEventListener('loadedmetadata', () => { window.__switched = true; }, { once: true }); }");
                 var back = await page.RunAndWaitForResponseAsync(() => page.Locator("#player-settings [data-panel=audio] [data-action=audio-offset-reset]").ClickAsync(),
                     response => response.Request.Method == "POST" && response.Request.PostData?.Contains("\"audioOffsetMs\":0", StringComparison.Ordinal) == true, new() { Timeout = Steps.MediaTimeout });
                 Assert.AreEqual(200, back.Status);
+                await page.WaitForFunctionAsync("() => { const video = document.querySelector('video'); return window.__switched && !video.paused && video.readyState >= 3; }", null,
+                    new() { Timeout = Steps.MediaTimeout });
                 await page.Keyboard.PressAsync("Escape");
                 Assert.IsTrue(session.Problems.All(problem => problem.Contains("404", StringComparison.Ordinal) || problem.Contains("Playback error", StringComparison.Ordinal)),
                     string.Join("\n", session.Problems));
@@ -459,8 +463,10 @@ namespace Jularr.E2E.Tests
                 }
 
                 await Assertions.Expect(skip).ToBeVisibleAsync();
-                var button = (await skip.BoundingBoxAsync())!;
-                var timeline = (await page.Locator("[data-role=timeline]").BoundingBoxAsync())!;
+                var button = await skip.BoundingBoxAsync();
+                var timeline = await page.Locator("[data-role=timeline]").BoundingBoxAsync();
+                Assert.IsNotNull(button, $"{mode}: the skip button went away: {await page.EvaluateAsync<string>("() => { const video = document.querySelector('video'); return `paused ${video.paused}, time ${video.currentTime}`; }")}");
+                Assert.IsNotNull(timeline, $"{mode}: the timeline went away.");
                 var viewport = page.ViewportSize!;
                 Assert.IsTrue(button.X >= 0 && button.X + button.Width <= viewport.Width && button.Y >= 0, $"{mode}: the skip button leaves the screen.");
                 Assert.IsTrue(button.Y + button.Height <= timeline.Y, $"{mode}: the skip button covers the timeline.");
