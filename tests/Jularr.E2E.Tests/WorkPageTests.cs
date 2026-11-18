@@ -188,9 +188,13 @@ namespace Jularr.E2E.Tests
                 Assert.AreEqual(episodeNumbers.Length, Directory.EnumerateFiles(Path.Combine(folders.Library, "Series", "Test")).Count(), "Cancel deleted a file.");
 
                 // On a phone and a tablet the strips carry the same button, the dialog fits the screen and nothing runs wider than it.
-                foreach (var (name, width, height) in new[] { ("mobile", 390, 844), ("tablet", 768, 1024) })
+                foreach (var (name, width, height) in new[] { ("mobile", 375, 812), ("tablet", 768, 1024) })
                 {
                     await page.SetViewportSizeAsync(width, height);
+                    // The season head keeps its icons in one row with the delete button among them.
+                    var seasonHead = page.Locator(".work-season__head").First;
+                    await Assertions.Expect(seasonHead.Locator("[data-delete-kind=season]")).ToBeVisibleAsync();
+                    await Evidence.SaveAsync(page, "work-season-head-" + name);
                     var button = page.Locator("[data-delete-kind=unit]:visible").First;
                     await Assertions.Expect(button).ToBeVisibleAsync();
                     // It is as big as the row's other icons (a phone's tap targets of the whole page are a task of their own).
