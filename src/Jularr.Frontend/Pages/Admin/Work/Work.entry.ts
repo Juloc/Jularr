@@ -243,7 +243,6 @@ function initializeTable(table: Columned): void {
     }
 }
 
-// A mouse drags the strips sideways as a finger does; touch scrolls them natively, and they all slide together because a season is one scroller.
 // Anime numbers its episodes in two ways; the choice stays in this browser and only changes what the numbers show.
 function initializeNumbering(): void {
     const buttons = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-numbering-set]'));
@@ -264,30 +263,6 @@ function initializeNumbering(): void {
             apply(mode);
         });
     }
-}
-
-function initializeStrips(): void {
-    document.querySelectorAll<HTMLElement>('.work-strips').forEach(scroller => {
-        if (scroller.dataset.workReady) return;
-        scroller.dataset.workReady = 'true';
-        scroller.addEventListener('pointerdown', event => {
-            if (event.pointerType !== 'mouse' || event.button !== 0 || (event.target as HTMLElement).closest('button, a, input, select, label')) return;
-            const startX = event.clientX;
-            const startScroll = scroller.scrollLeft;
-            scroller.setPointerCapture(event.pointerId);
-            scroller.classList.add('work-strips--dragging');
-            const move = (moveEvent: PointerEvent): void => { scroller.scrollLeft = startScroll - (moveEvent.clientX - startX); };
-            const end = (): void => {
-                scroller.classList.remove('work-strips--dragging');
-                scroller.removeEventListener('pointermove', move);
-                scroller.removeEventListener('pointerup', end);
-                scroller.removeEventListener('pointercancel', end);
-            };
-            scroller.addEventListener('pointermove', move);
-            scroller.addEventListener('pointerup', end);
-            scroller.addEventListener('pointercancel', end);
-        });
-    });
 }
 
 // The files an edit applies to are written into the dialog when it opens: the one of a row, or the ticked boxes.
@@ -334,6 +309,15 @@ function initializeSelection(): void {
             all.checked = items.length > 0 && checked.length === items.length;
             all.indeterminate = !all.checked && checked.length > 0;
         });
+    });
+}
+
+// The hero's more menu closes once an item was chosen (an item that opens a dialog would leave the menu open behind it).
+function initializeHeroMenu(): void {
+    document.querySelectorAll<HTMLElement>('.work-hero .action-menu__item').forEach(item => {
+        if (item.dataset.workReady) return;
+        item.dataset.workReady = 'true';
+        item.addEventListener('click', () => setTimeout(() => item.closest('details')?.removeAttribute('open'), 0));
     });
 }
 
@@ -422,8 +406,8 @@ onPage(import.meta.url, () => {
     initializeVersions();
     initializeSelection();
     initializeFileEdit();
-    initializeStrips();
     initializeNumbering();
+    initializeHeroMenu();
     document.querySelectorAll<HTMLElement>('[data-work-table]').forEach(initializeTable);
     if (!liveReady) { liveReady = true; onLiveChange(applyUnitLive); }
     applyUnitLive();
