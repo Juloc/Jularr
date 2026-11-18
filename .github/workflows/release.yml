@@ -189,7 +189,7 @@ jobs:
     needs: [guard, image]
     if: needs.guard.outputs.dry_run != 'true' && needs.guard.outputs.prerelease == 'false'
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 15
     permissions: {}
     steps:
       - name: Tell Dockhand to deploy
@@ -203,8 +203,35 @@ jobs:
           fi
           body='{"ref":"refs/heads/main","repository":{"full_name":"Juloc/docker"}}'
           signature="sha256=$(printf '%s' "${body}" | openssl dgst -sha256 -hmac "${SECRET}" -hex | sed 's/^.* //')"
-          curl -fsS --retry 3 --retry-delay 5 --max-time 60 -X POST "${URL}" -H "Content-Type: application/json" -H "X-GitHub-Event: push" \
-            -H "X-Hub-Signature-256: ${signature}" -d "${body}" -o /dev/null -w "Dockhand answered %{http_code}\n"
+          # Dockhand answers only after it pulled the new image (a few minutes), so wait up to 10 minutes.
+          # The webhook is sent once: a retry happens only when no byte was sent (DNS or connect failed).
+          for attempt in 1 2 3; do
+            rc=0
+            result="$(curl -sS --connect-timeout 20 --max-time 600 -X POST "${URL}" -H "Content-Type: application/json" -H "X-GitHub-Event: push" \
+              -H "X-Hub-Signature-256: ${signature}" -d "${body}" -o /dev/null -w '%{http_code} %{size_upload}')" || rc=$?
+            code="${result%% *}"
+            sent="${result##* }"
+            if [[ "${rc}" == "0" ]]; then
+              if [[ "${code}" == 2* ]]; then
+                echo "Dockhand answered ${code}: the new image is deployed."
+                exit 0
+              fi
+              echo "::error::Dockhand answered ${code}: the deploy failed. Check Dockhand."
+              exit 1
+            fi
+            if [[ "${sent:-0}" != "0" ]]; then
+              if [[ "${rc}" == "28" ]]; then
+                echo "::notice::Webhook sent, but Dockhand did not answer within 10 minutes. The deploy runs on the server; check Dockhand."
+                exit 0
+              fi
+              echo "::error::Webhook sent, but the connection broke (curl ${rc}). Not sent again; check Dockhand."
+              exit 1
+            fi
+            echo "Attempt ${attempt}: Dockhand not reachable (curl ${rc}), nothing was sent."
+            [[ "${attempt}" == "3" ]] || sleep 10
+          done
+          echo "::error::Dockhand was not reachable after 3 attempts: nothing was sent, deploy by hand in Dockhand."
+          exit 1
 
   release:
     needs: [guard, image]
