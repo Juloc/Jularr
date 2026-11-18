@@ -20,6 +20,18 @@ port() { if [[ "$1" == main ]]; then echo 8190; else echo $((8191 + $(printf '%s
 running() { [[ -f "${home}/instances/$1/pid" ]] && kill -0 "$(cat "${home}/instances/$1/pid")" 2>/dev/null; }
 valid() { [[ "$1" =~ ^[a-z0-9_]{1,40}$ ]] || { echo "Names are 1-40 characters a-z, 0-9 and _." >&2; exit 2; }; }
 
+# A tool on the PATH, else the binary of its Debian package, unpacked once into ~/.cache/jularr-tools.
+tool() {
+  local package="$1" binary="$2" found; found="$(command -v "${binary}" || true)"
+  [[ -n "${found}" ]] && { echo "${found}"; return; }
+  local root="${HOME}/.cache/jularr-tools/${package}"
+  if [[ ! -x "${root}/root/usr/bin/${binary}" ]]; then
+    rm -rf "${root}" && mkdir -p "${root}/deb"
+    (cd "${root}/deb" && apt-get download "${package}" >/dev/null && dpkg -x "${package}"_*.deb "${root}/root")
+  fi
+  echo "${root}/root/usr/bin/${binary}"
+}
+
 start() {
   local name="${1:-main}"; valid "${name}"
   local dir="${home}/instances/${name}" db; db="$(database "${name}")"
@@ -32,16 +44,10 @@ start() {
   echo "Building the frontend and the host..."
   (cd "${repo}/src/Jularr.Frontend" && npm run build >/dev/null)
   dotnet build "${repo}/src/Jularr.Frontend" -c Release -m:2 -nodeReuse:false -p:UseSharedCompilation=false -v quiet -nologo >/dev/null
-  # The tools of the live image: the pinned FFmpeg of CI, and cjxl (covers as JPEG XL) from the Debian package when it is not installed.
+  # The tools of the live image: the pinned FFmpeg of CI; cjxl (covers as JPEG XL) and par2 (download repair) from the Debian packages when
+  # they are not installed (no root needed); 7-Zip unpacks as installed.
   eval "$("${repo}/scripts/local-ffmpeg.sh")"
-  local tools="${HOME}/.cache/jularr-tools" cjxl; cjxl="$(command -v cjxl || true)"
-  if [[ -z "${cjxl}" ]]; then
-    cjxl="${tools}/jxl/root/usr/bin/cjxl"
-    if [[ ! -x "${cjxl}" ]]; then
-      rm -rf "${tools}/jxl" && mkdir -p "${tools}/jxl/deb"
-      (cd "${tools}/jxl/deb" && apt-get download libjxl-tools >/dev/null && dpkg -x libjxl-tools_*.deb "${tools}/jxl/root")
-    fi
-  fi
+  local cjxl par2; cjxl="$(tool libjxl-tools cjxl)"; par2="$(tool par2 par2)"
   local address="http://127.0.0.1:$(port "${name}")"
   echo "Jularr ${name}: ${address} (Ctrl+C stops it; the database and the folders stay)"
   echo "Downloads and the library belong under ${dir}/storage; the log is ${dir}/host.log."
@@ -49,9 +55,12 @@ start() {
   ASPNETCORE_URLS="${address}" ASPNETCORE_ENVIRONMENT=Development \
   JULARR_DB="Host=127.0.0.1;Port=15433;Username=${pg_user};Password=${PGPASSWORD};Database=${db}" \
   DataPath="${dir}/data" Storage__MountRoot="${dir}/storage" Storage__RequireMountPoint=false Storage__LocalPaths__0="${dir}/storage" \
-  Media__FfmpegPath="${JULARR_TEST_FFMPEG}" Media__FfprobePath="$(dirname "${JULARR_TEST_FFMPEG}")/ffprobe" Media__CjxlPath="${cjxl}" \
+  Media__FfmpegPath="${JULARR_TEST_FFMPEG}" Media__FfprobePath="$(dirname "${JULARR_TEST_FFMPEG}")/ffprobe" Media__CjxlPath="${cjxl}" Usenet__Par2Path="${par2}" \
     dotnet bin/Release/net10.0/Jularr.Frontend.dll > >(tee -a "${dir}/host.log" | grep --line-buffered -E "fail|crit|Now listening") 2>&1 &
   echo $! > "${dir}/pid"
+  if [[ -f "${dir}/confirm-storage" ]]; then
+    (python3 "${repo}/scripts/test-instance-confirm.py" "${address}" "${dir}/owner.txt" && rm -f "${dir}/confirm-storage") &
+  fi
   trap 'kill -TERM "$(cat "${dir}/pid")" 2>/dev/null || true' INT TERM
   wait "$(cat "${dir}/pid")" || true
   rm -f "${dir}/pid"
@@ -65,6 +74,8 @@ save() {
   rm -rf "${out}.tmp" && mkdir -p "${out}.tmp"
   docker exec "${container}" pg_dump -U "${pg_user}" -Fc "$(database "${name}")" > "${out}.tmp/database.dump"
   tar -C "${home}/instances/${name}" -czf "${out}.tmp/data.tgz" data
+  find "${home}/instances/${name}/storage" -mindepth 1 -type d -printf '%P\n' > "${out}.tmp/folders.txt"
+  [[ -f "${home}/instances/${name}/owner.txt" ]] && cp "${home}/instances/${name}/owner.txt" "${out}.tmp/owner.txt"
   rm -rf "${out}" && mv "${out}.tmp" "${out}"
   echo "Saved ${name} as state ${state} ($(du -sh "${out}" | cut -f1))."
 }
@@ -79,6 +90,12 @@ copy() {
   docker exec -i "${container}" pg_restore -U "${pg_user}" -d "${db}" --no-owner < "${in}/database.dump"
   rm -rf "${dir}/data" && mkdir -p "${dir}/storage"
   tar -C "${dir}" -xzf "${in}/data.tgz"
+  # Local storage connections point at the copy's own storage folder, never at the one of the saved instance; the folder layout comes along.
+  psql -h 127.0.0.1 -p 15433 -U "${pg_user}" -d "${db}" -v ON_ERROR_STOP=1 -qAt -c \
+    "UPDATE \"StorageMounts\" SET \"SharePath\" = regexp_replace(\"SharePath\", '^${home}/instances/[a-z0-9_]+/storage', '${dir}/storage') WHERE \"SharePath\" LIKE '${home}/instances/%/storage%'"
+  [[ -f "${in}/folders.txt" ]] && while read -r folder; do mkdir -p "${dir}/storage/${folder}"; done < "${in}/folders.txt"
+  # The copy confirms its download storage at its first start (scripts/test-instance-confirm.py): its folders are not the saved ones.
+  [[ -f "${in}/owner.txt" ]] && cp "${in}/owner.txt" "${dir}/owner.txt" && touch "${dir}/confirm-storage"
   echo "Instance ${name} is now a copy of ${state}: scripts/test-instance.sh start ${name}"
 }
 
