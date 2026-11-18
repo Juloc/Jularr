@@ -209,7 +209,10 @@ namespace Jularr.E2E.Tests
                 fakes.Offer(LowerFilm with { File = video });
                 await panel.Locator("details.activity-confirm summary", new() { HasText = "Remove and block" }).ClickAsync();
                 await Steps.SubmitAsync(page, panel.Locator("form").Filter(new() { Has = page.GetByRole(AriaRole.Button, new() { Name = "Remove, delete its partial files and block this release" }) }));
-                CollectionAssert.AreEqual(new[] { "queue:delete:SABnzbd_nzo_bunny", "history:delete:SABnzbd_nzo_bunny" }, fakes.Commands.ToArray());
+                // The removal deletes the job from SABnzbd's queue and history; the next release may already be grabbed, imported and cleared after it.
+                var commands = fakes.Commands.ToArray();
+                CollectionAssert.AreEqual(new[] { "queue:delete:SABnzbd_nzo_bunny", "history:delete:SABnzbd_nzo_bunny" }, commands.Take(2).ToArray(), string.Join(", ", commands));
+                Assert.IsFalse(commands.Skip(2).Any(command => command.EndsWith(":SABnzbd_nzo_bunny", StringComparison.Ordinal)), string.Join(", ", commands));
 
                 // The blocked release is never taken again; the next one is searched at once and imports.
                 waited.Restart();
