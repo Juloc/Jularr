@@ -17,7 +17,8 @@ Find code with `rg`; the code is the reference.
 
 ## Git
 
-- One branch from `origin/main`, one PR.
+- One branch from `origin/main`, one PR, one result: aim under about 500 changed lines, split anything bigger.
+  A PR stays open at most one day; if main moved, merge `origin/main` in instead of rebasing.
 - Author and committer are exactly `Juloc <juli.hiresch@gmail.com>`, with no AI attribution or co-author lines.
   GitHub's own squash and merge commits are the only other committer.
 - Run `node scripts/install-git-hooks.mjs` before committing. Never use `--no-verify`, never force push, never merge into `dev`.
