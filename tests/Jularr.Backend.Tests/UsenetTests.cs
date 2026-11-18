@@ -191,6 +191,68 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(true, await host.ScalarAsync("SELECT \"LastOutcomeKey\" = 'search_failed' AND \"NextSearchAt\" > now() + interval '29 minutes' FROM \"WantedItems\""));
         }
 
+        // A pause of Jularr's own downloader holds at once, even with many connections behind a speed limit: the limit paces the requests, so the running pass
+        // ends at its next report instead of behind everything already asked for. The state stays paused, the finished articles are kept and the resume
+        // continues from them.
+        [TestMethod]
+        public async Task Usenet_PauseDuringAPass_EndsThePassAndTheResumeContinuesFromTheKeptArticles()
+        {
+            using var storage = new TemporaryDirectory();
+            using var staging = new TemporaryDirectory();
+            await using var news = new FakeNewsServer("reader", "news-secret");
+            var bytes = Enumerable.Range(0, 400_000).Select(index => (byte)(index * 7 % 256)).ToArray();
+            news.Publish(Feature + ".mkv", bytes, 200);
+            await using var host = await CreateHostAsync(storage.Path, staging.Path, new FakeIndexer(news.Nzb(Feature + ".mkv")), news.Port);
+            await CreateWantedMovieAsync(host);
+            await RunAsync<SearchDueWantedV1>(host);
+            var operationId = await host.ScalarAsync("SELECT \"Id\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2");
+            await host.Fixture.RunSqlAsync("""
+                UPDATE "AcquisitionConnections" SET "MaxConnections" = 50 WHERE "AcquisitionConnectionTypeId" = 6;
+                UPDATE "DownloadStorageSettings" SET "MaxBytesPerSecond" = 20000 WHERE "DownloadStorageAreaId" = 1;
+                """);
+
+            // The paced download shows its progress as it goes, not only once the line is full.
+            var pass = RunAsync<DownloadUsenetV1>(host);
+            var showing = System.Diagnostics.Stopwatch.StartNew();
+            while (!(bool)(await host.ScalarAsync("SELECT coalesce(\"ProgressPercent\" >= 2, FALSE) FROM \"Operations\" WHERE \"OperationTypeId\" = 2"))!)
+            {
+                Assert.IsTrue(showing.Elapsed < TimeSpan.FromSeconds(4), "The paced download showed no progress.");
+                await Task.Delay(100);
+            }
+
+            using (var paused = await host.SendAsync(HttpMethod.Post, $"/api/v1/admin/activity/{operationId}/pause", new PauseActivityDownloadDataV1(true)))
+            {
+                Assert.AreEqual(HttpStatusCode.OK, paused.StatusCode, await paused.Content.ReadAsStringAsync());
+            }
+
+            var stopping = System.Diagnostics.Stopwatch.StartNew();
+            await pass;
+            Assert.IsTrue(stopping.Elapsed < TimeSpan.FromSeconds(5), $"The pass ran on {stopping.Elapsed} after the pause.");
+            var asked = news.Bodies;
+            Assert.IsTrue(asked < 100, $"{asked} of 200 articles were asked for despite the pause.");
+            var held = await host.ScalarAsync("SELECT \"ProgressPercent\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2");
+            Assert.AreEqual((short)3, await host.ScalarAsync("SELECT \"DownloadStateTypeId\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"));
+
+            // While paused no pass runs and the progress holds.
+            Assert.IsFalse(await RunAsync<DownloadUsenetV1>(host));
+            Assert.AreEqual((asked, held), (news.Bodies, await host.ScalarAsync("SELECT \"ProgressPercent\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2")));
+
+            // The resume asks only for the articles still open and imports the whole feature.
+            using (var resumed = await host.SendAsync(HttpMethod.Post, $"/api/v1/admin/activity/{operationId}/pause", new PauseActivityDownloadDataV1(false)))
+            {
+                Assert.AreEqual(HttpStatusCode.OK, resumed.StatusCode, await resumed.Content.ReadAsStringAsync());
+            }
+
+            await host.Fixture.RunSqlAsync("UPDATE \"DownloadStorageSettings\" SET \"MaxBytesPerSecond\" = NULL WHERE \"DownloadStorageAreaId\" = 1");
+            for (var round = 0; round < 5 && await RunAsync<DownloadUsenetV1>(host); round++)
+            {
+            }
+
+            Assert.AreEqual((short)3, await host.ScalarAsync("SELECT \"OperationStatusTypeId\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"));
+            Assert.IsTrue(news.Bodies <= 200 + 50, $"{news.Bodies} articles were asked for in all; the resume started over.");
+            CollectionAssert.AreEqual(bytes, File.ReadAllBytes(Directory.EnumerateFiles(storage.Path, "*.mkv", SearchOption.AllDirectories).Single()));
+        }
+
         [TestMethod]
         public async Task Usenet_UnsetJobLimitAllowsReleasesAnnouncingMoreThanTwentyGiB()
         {
@@ -602,6 +664,7 @@ namespace Jularr.Backend.Tests
             public int Port => ((IPEndPoint)_listener.LocalEndpoint).Port;
             public List<string> Logins { get; } = [];
             public bool ConnectionLimit { get; set; }
+            public int Bodies;
 
             public void Publish(string name, byte[] data, int parts)
             {
@@ -708,6 +771,7 @@ namespace Jularr.Backend.Tests
                                 await Write(stream, "111 20261013120000\r\n");
                                 break;
                             case "BODY" when _articles.TryGetValue(parts[1].Trim('<', '>'), out var article):
+                                Interlocked.Increment(ref Bodies);
                                 var stuffed = string.Join("\r\n", article.Split("\r\n").Select(text => text.StartsWith('.') ? "." + text : text));
                                 await Write(stream, "222 0 body\r\n" + stuffed + (stuffed.EndsWith("\r\n", StringComparison.Ordinal) ? "" : "\r\n") + ".\r\n");
                                 break;
