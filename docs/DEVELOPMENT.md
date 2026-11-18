@@ -102,3 +102,17 @@ The owner's local preview (`scripts/run-main-preview.ps1`) runs only `origin/mai
 - Admin lists use the shared list kit, 25 rows per page (Next only when the page is full) and the floating action dock. User lists scroll endlessly.
 - Every row of a list looks alike; nothing moves while content loads.
 - On phones every tap target is at least 44x44px. Truncated text shows its full value on hover, focus and tap.
+
+## Traps
+
+A trap seen twice becomes a line here; remove lines that no longer apply.
+
+- A change to a list's default, bar, tab or label: search `tests/Jularr.E2E.Tests` for it and fix the test in the same PR; main went red this way (#1918, #1929, #1947).
+- E2E checks only its own downloads, commands and rows: the background search or the next release may already have acted (#1872, #1876, #2041).
+- E2E tests switch the keyless catalogs off; otherwise a health check or a live catalog races them (#1866, #1918, #1929).
+- Tests count library titles, not Discover catalog titles; the catalog fills itself (#1674, #1708).
+- Test folders live on disk (`TMPDIR`), not in a RAM-backed `/tmp`: download storage refuses tmpfs (#1748, #1840).
+- Layers use the `--z-*` tokens of `Theme.scss`, never a bare number; menus slid under tabs and off the phone screen (#1823, #1891).
+- Phone taps use `HitArea.phone-hit-area`, and an absolute child (tap area, hidden label) needs a positioned parent inside its overflow wrapper,
+  or it escapes its pane or widens the page (#1853, #1871, #2043).
+- After merging main, build and run `UiLocalizationTests`: merges dropped keys and allowlist entries and broke main (#1503).
