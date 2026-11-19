@@ -22,8 +22,8 @@ namespace Jularr.Frontend.Framework
         private bool _pending;
         private bool _titleKnown;
 
-        // The title's details follow: its facts and summary, and its name unless that is known, hold their places with placeholders. The name and summary
-        // it has so far lie unseen beneath theirs, so each is as high as what comes.
+        // The title's details follow: its facts and summary, and its name unless that is known, hold their places with placeholders; what is known, such as its
+        // rating, shows. The name and summary it has so far lie unseen beneath theirs, so each is as high as what comes.
         public MediaHero Pending(bool titleKnown)
         {
             _pending = true;
@@ -109,8 +109,9 @@ namespace Jularr.Frontend.Framework
             if (_chips.Length > 0) body.Add(new Div(_chips).Class("media-hero__chips"));
             if (_pending)
             {
-                body.Add(new Div(new Span().Class("skeleton-block media-hero__pending")).Class("media-hero__meta")
-                    .Attribute("aria-hidden", "true"));
+                // A rating the title has already shows beside the place of its facts.
+                body.Add(new Div(_rating is null ? [new Span().Class("skeleton-block media-hero__pending").Attribute("aria-hidden", "true")]
+                    : [new Span().Class("skeleton-block media-hero__pending").Attribute("aria-hidden", "true"), _rating]).Class("media-hero__meta"));
                 body.Add(overview is null
                     ? new Div(new Span().Class("skeleton-block media-hero__pending media-hero__pending--overview")).Class("media-hero__overview").Attribute("aria-hidden", "true")
                     : new P(new Truncated(overview)).Class("media-hero__overview media-hero__masked").Attribute("aria-hidden", "true"));
