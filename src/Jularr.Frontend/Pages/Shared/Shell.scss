@@ -85,6 +85,8 @@
         }
     }
 }
+// The place of a name that follows (Page.PendingTitle).
+.breadcrumb__pending { width: 9rem; height: 1.1em; }
 // A part with sub-pages is a link on a wide header and a menu of those pages on a narrow one.
 .breadcrumb__item--menu .link-menu { display: none; }
 .breadcrumb__item .link-menu__summary { min-height: 40px; color: var(--muted); font-weight: 400; }

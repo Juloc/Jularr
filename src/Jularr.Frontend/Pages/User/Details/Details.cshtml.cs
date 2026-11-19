@@ -83,7 +83,10 @@ namespace Jularr.Frontend.Pages.User.Details
 
         protected override void Define(Page page)
         {
-            page.Title("details.title", _work?.CanonicalTitle);
+            // A name that may still give way to the one in the profile's language is not shown until it is certain.
+            var titlePending = _detailsPending && _work is { IsTitleLocalized: false };
+            page.Title("details.title", titlePending ? null : _work?.CanonicalTitle);
+            if (titlePending) page.PendingTitle();
             // A title the library has nothing of yet was found through Discover.
             if (_work?.AvailabilityStateId is MediaAvailabilityState.Missing or MediaAvailabilityState.Requested or MediaAvailabilityState.Searching or MediaAvailabilityState.Downloading or MediaAvailabilityState.Paused)
             {
@@ -111,18 +114,22 @@ namespace Jularr.Frontend.Pages.User.Details
                 // A refused action of the page that no form of it shows (a relation added twice) says why above the page.
                 if (FormError is { } refused && _requestInput is null && _relationSearch is null) page.Content.Add(new P(ErrorText.Of(refused)).Class("ui-page-error").Attribute("role", "alert"));
 
-                // A catalog title opened for the first time shows its catalog row at once; its page script then asks the catalog (OnGetDetailsAsync) and shows the details,
-                // or reveals that the catalog cannot give them now (the next open asks again).
-                if (work.AwaitsDetails)
+                // A catalog title opened for the first time answers at once with placeholders for what its details bring; its page script then asks the catalog
+                // (OnGetDetailsAsync) and shows the page with them, or with its catalog row and the word that the catalog cannot give them now (the next open asks again).
+                if (_detailsUnavailable) page.Content.Add(new P(new Text("details.unavailable")).Class("ui-page-error").Attribute("role", "alert"));
+                if (_detailsPending)
                 {
                     page.Asset("Pages/User/Details/Details.entry.ts");
-                    page.Content.Add(new P(new Text("details.unavailable")).Class("ui-page-error").Attribute("role", "alert").Attribute("hidden", "hidden")
-                        .Attribute("data-details-pending", "/Details/" + Id.ToString(CultureInfo.InvariantCulture) + "?handler=Details"));
+                    var address = Address();
+                    page.Content.Add(new Div().Attribute("hidden", "hidden").Attribute("data-details-pending", address + (address.Contains('?') ? "&" : "?") + "handler=Details"));
                 }
+
+                NavigationTab Tab(Block block) => new(block.LabelKey, Address(query => query["tab"] = block.TabKey), block == shown, false, block.Count);
+                var parts = _detailsPending ? PendingParts(work, blocks) : blocks.Select(block => (block.TabKey, (Block?)block)).ToList();
                 page.Content.Add(Hero(work, page));
                 page.Content.Add(new Div(new NavigationTabs([new NavigationTab("details.tab.overview", Address(query => query["tab"] = null), shown is null),
-                    .. blocks.Select(block => new NavigationTab(block.LabelKey, Address(query => query["tab"] = block.TabKey), block == shown, false, block.Count))], "details.tabs")).Class("details-tabs"));
-                page.Content.Add(new Div(shown is null ? [.. blocks.Select(Preview)] : [shown.Render(false)]).Class("details-panel"));
+                    .. parts.Select(part => PendingTab(part, Tab))], "details.tabs")).Class("details-tabs"));
+                page.Content.Add(new Div(shown is null ? [.. parts.Select(PendingPreview)] : [shown.Render(false)]).Class("details-panel"));
                 if (texts.CanManageRelations()) page.Content.Add(RelationDialog());
             }
             else if (FormError is not null) page.Content.Add(new P(new Text(FormError.ResourceKey)).Attribute("role", "alert"));
@@ -150,17 +157,21 @@ namespace Jularr.Frontend.Pages.User.Details
         {
             // The page answers from what is here: a title counts as viewed now, or, while it awaits its details, when its page asks for them (OnGetDetailsAsync).
             await LoadDataAsync();
-            if (!_work!.AwaitsDetails) await open.ExecuteAsync<OpenedWorkV1>(new WorkParametersV1(Id), default(NoData), HttpContext.RequestAborted);
+            if (_work!.AwaitsDetails) _detailsPending = true;
+            else await open.ExecuteAsync<OpenedWorkV1>(new WorkParametersV1(Id), default(NoData), HttpContext.RequestAborted);
             PreparePage();
             return Page();
         }
 
-        // Opens the title, so a catalog title takes its details from its catalog entry, and says whether it has them now; the page script then shows the page again.
+        // The page again once the title took its details from its catalog entry, or with its catalog row and the word that the catalog cannot give them now.
+        // Asked by the page script, which shows it in place of the page with placeholders.
         public async Task<IActionResult> OnGetDetailsAsync()
         {
-            var opened = await open.ExecuteAsync<OpenedWorkV1>(new WorkParametersV1(Id), default(NoData), HttpContext.RequestAborted);
+            _detailsUnavailable = (await open.ExecuteAsync<OpenedWorkV1>(new WorkParametersV1(Id), default(NoData), HttpContext.RequestAborted)).AreDetailsUnavailable;
+            await LoadDataAsync();
             Response.Headers.CacheControl = "no-store";
-            return new JsonResult(new { available = !opened.AreDetailsUnavailable });
+            PreparePage();
+            return Page();
         }
 
         public async Task<IActionResult> OnPostAddToCollectionAsync([BindRequired] long collectionId)

@@ -111,3 +111,6 @@
         &__link { @include HitArea.hit-area(8px, 14px); }
     }
 }
+
+// The place of a tab that follows with data still loading.
+.navigation-tabs__placeholder { width: 6.5rem; pointer-events: none; }

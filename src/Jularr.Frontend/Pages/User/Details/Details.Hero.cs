@@ -37,6 +37,7 @@ namespace Jularr.Frontend.Pages.User.Details
                 .Poster(work.PosterUrl, new Icon(TypeIcon(kind, work), assets, 48)).Square(kind == WorkKind.Music)
                 .Chips([.. chips])
                 .Actions([.. Actions(work, kind, variants, selected, playable, plex, page)]);
+            if (_detailsPending) hero.Pending(work.IsTitleLocalized);
             if (work.Rating is { } rating)
             {
                 hero.Rating(new Span(new Icon("star", assets, 13), new ValueText(rating.ToString("0.0", CultureInfo.CurrentCulture)),
@@ -136,6 +137,11 @@ namespace Jularr.Frontend.Pages.User.Details
             {
                 actions.Add(new A(new Icon("trailer", assets, 16), new Span(new Text("details.trailer"))).Class("button").Attribute("href", "https://www.youtube.com/watch?v=" + trailer)
                     .Attribute("target", "_blank").Attribute("rel", "noopener noreferrer"));
+            }
+            else if (_detailsPending && kind is WorkKind.Film or WorkKind.Series or WorkKind.Anime)
+            {
+                // A film's or series' trailer usually comes with its details: its button holds its place.
+                actions.Add(new Span().Class("button skeleton-block details-pending--trailer").Attribute("aria-hidden", "true"));
             }
 
             actions.Add(new MediaBookmark(assets, work.Id, work.IsWatchlisted, Request.Path + Request.QueryString, _csrf));

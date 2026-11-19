@@ -1303,9 +1303,10 @@ namespace Jularr.Backend.Tests
                 """);
             int Imports() => tmdb.Requests.Count(request => request.AbsolutePath == "/3/movie/603");
 
-            // The first open answers at once from the catalog row without asking a provider; its page script then asks for the details.
+            // The first open answers at once without asking a provider: the catalog's name and summary lie unseen under placeholders, and its page script then asks for the details.
             var first = WebUtility.HtmlDecode(await PageAsync(host, "/Details/960"));
-            StringAssert.Contains(first, "Catalog text.");
+            StringAssert.Contains(first, "media-hero__overview media-hero__masked");
+            StringAssert.Contains(first, "breadcrumb__pending");
             StringAssert.Contains(first, "data-details-pending=\"/Details/960?handler=Details\"");
             Assert.AreEqual(0, tmdb.Requests.Count);
 
@@ -1517,12 +1518,15 @@ namespace Jularr.Backend.Tests
             Assert.IsFalse(empty.Contains("data-hero-slide", StringComparison.Ordinal), empty);
         }
 
-        // What the Details page script asks after a title without details showed: whether its catalog gave them now.
+        // What the Details page script asks after a title without details showed with placeholders: the page with them, or with the catalog row and the word that
+        // the catalog cannot give them now; whether it has them.
         internal static async Task<bool> DetailsAsync(Host host, long workId)
         {
             using var answer = await host.SendAsync(HttpMethod.Get, "/Details/" + workId + "?handler=Details");
-            Assert.AreEqual(HttpStatusCode.OK, answer.StatusCode, await answer.Content.ReadAsStringAsync());
-            return (await answer.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("available").GetBoolean();
+            var html = WebUtility.HtmlDecode(await answer.Content.ReadAsStringAsync());
+            Assert.AreEqual(HttpStatusCode.OK, answer.StatusCode, html);
+            Assert.IsFalse(html.Contains("data-details-pending", StringComparison.Ordinal));
+            return !html.Contains("Details can't be loaded right now", StringComparison.Ordinal);
         }
 
         private static async Task<string> PageAsync(Host host, string path)

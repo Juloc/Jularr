@@ -373,3 +373,13 @@ td .details-chips { flex-wrap: nowrap; }
 .details-files, .details-file-items, .details-file-group { display: grid; gap: 12px; }
 
 .details-file-group > h3 { margin: 6px 0 0; }
+
+// Placeholders of what a catalog title's details bring (Details.Pending.cs), about the size of what comes, so the page does not jump when it arrives.
+.details-pending { display: block; height: 1.15em; }
+.details-pending--line { width: 80%; margin-top: 4px; }
+.details-pending--short { width: 55%; }
+.details-pending--trailer { width: 6rem; }
+.details-pending--unseen { visibility: hidden; }
+.details-pending--card { display: grid; gap: 2px; width: 100%; max-width: 150px; }
+.details-pending--cover { aspect-ratio: 2 / 3; border-radius: var(--radius-tile); }
+.details-pending--facts { height: 10.5rem; border-radius: var(--radius-inner); }

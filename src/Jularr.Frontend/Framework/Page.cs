@@ -208,6 +208,10 @@ namespace Jularr.Frontend.Framework
             TitleKey = key;
             DocumentTitle = documentTitle;
         }
+
+        // The item's name is not certain yet (it follows with the item's details): the breadcrumb holds its place with a placeholder.
+        public bool IsTitlePending { get; private set; }
+        public void PendingTitle() => IsTitlePending = true;
         // A page below another names it in the breadcrumb; the document title then names the page itself.
         // The shell adds the area (Admin) and the sidebar group by itself; a page names only what lies between.
         public void Parent(string key, string href) => Parents.Add(new Crumb(key, href));
@@ -229,6 +233,7 @@ namespace Jularr.Frontend.Framework
             IsReader = definition.IsReader;
             TitleKey = definition.TitleKey;
             DocumentTitle = definition.DocumentTitle;
+            IsTitlePending = definition.IsTitlePending;
             NavigationKey = definition.NavigationKey;
             Parents.AddRange(definition.Parents);
             Content.AddRange(definition.Content);

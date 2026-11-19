@@ -181,7 +181,16 @@ namespace Jularr.Backend.Service.User.Media.V1
                         WHERE
                             identity."WorkId" = work."Id"
                             AND {{AdminMedia.WorkMetadataQueries.ProviderIdentityCondition}}
-                    ) AS "AwaitsDetails"
+                    ) AS "AwaitsDetails",
+                    EXISTS (
+                        SELECT
+                            1
+                        FROM
+                            "WorkTitles" AS title
+                            JOIN "Profiles" AS profile ON profile."Id" = @ProfileId AND profile."UiLocaleId" = title."UiLocaleId"
+                        WHERE
+                            title."WorkId" = work."Id"
+                    ) AS "IsTitleLocalized"
                 FROM
                     "ProfileWorks" AS visible
                     JOIN "Works" AS work ON work."Id" = visible."WorkId"

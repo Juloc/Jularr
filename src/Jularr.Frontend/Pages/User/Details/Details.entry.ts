@@ -1,23 +1,19 @@
-import { onPage, refresh } from '../../../Modules/Navigation/PageSwap';
+import { onPage, showContent } from '../../../Modules/Navigation/PageSwap';
 
-// A catalog title opened for the first time showed its catalog row at once: its details come from its catalog now, and the page is then shown again in place.
-// A title asks once while its details arrive, so one its catalog does not describe does not ask again and again; when the catalog cannot answer, the notice says so.
+// A catalog title opened for the first time answered at once with placeholders for what its details bring: the page with them (or with its catalog row and the
+// word that its catalog cannot give them now) comes from the address in data-details-pending and takes the placeholders' place, while this page is still shown.
+// A title asks once while its page is shown, so a page that holds placeholders again never asks again and again.
 const asked = new Set<string>();
 
 onPage(import.meta.url, () => {
-    const notice = document.querySelector<HTMLElement>('[data-details-pending]');
-    const address = notice?.dataset.detailsPending;
-    if (!notice || !address || asked.has(address)) return;
+    const marker = document.querySelector<HTMLElement>('[data-details-pending]');
+    const address = marker?.dataset.detailsPending;
+    if (!marker || !address || asked.has(address)) return;
     asked.add(address);
-    const unavailable = () => {
-        asked.delete(address);
-        if (notice.isConnected) notice.hidden = false;
-    };
     fetch(address, { credentials: 'same-origin' })
-        .then((response): Promise<{ available?: boolean }> | { available?: boolean } => response.ok ? response.json() : {})
-        .then(result => {
-            if (!result.available) return unavailable();
-            if (notice.isConnected) return refresh();
+        .then(response => response.ok ? response.text() : Promise.reject(new Error(String(response.status))))
+        .then(html => {
+            if (marker.isConnected) showContent(html);
         })
-        .catch(unavailable);
+        .catch(() => asked.delete(address));
 });

@@ -64,6 +64,8 @@ namespace Jularr.E2E.Tests
 
             // The Overview: a plain cover, a standalone availability chip, and actions aligned with progress.
             await page.GotoAsync("/Details/7001");
+
+            await DetailsShownAsync(page);
             var hero = page.Locator(".media-hero--poster");
             await Assertions.Expect(hero.Locator(".media-hero__poster")).ToBeVisibleAsync();
             await Assertions.Expect(hero.Locator(".media-hero__poster .media-image")).ToHaveAttributeAsync("loading", "lazy");
@@ -104,9 +106,13 @@ namespace Jularr.E2E.Tests
             await page.Locator(".media-hero__actions .action-menu__button.button--icon").ClickAsync();
             await AssertInsideViewportAsync(page, ".media-hero__actions .action-menu[open] .action-menu__panel");
             await page.GotoAsync("/Details/7001?tab=episodes");
+
+            await DetailsShownAsync(page);
             await page.Locator(".details-toolbar .select-link-menu__button").Last.ClickAsync();
             await AssertInsideViewportAsync(page, ".details-toolbar .select-link-menu[open] .select-link-menu__list");
             await page.GotoAsync("/Details/7001");
+
+            await DetailsShownAsync(page);
             await page.SetViewportSizeAsync(1440, 900);
             await Assertions.Expect(hero.Locator(".media-hero__progress-bar")).ToHaveAttributeAsync("value", new Regex("^(1[0-9]|2[0-9])$"));
             await Assertions.Expect(hero.Locator(".media-hero__title")).ToHaveTextAsync("Tabbed Show");
@@ -121,12 +127,14 @@ namespace Jularr.E2E.Tests
             // A tab is its own address: only its block shows, in full.
             await page.Locator(".details-block__all").First.ClickAsync();
             await Assertions.Expect(page).ToHaveURLAsync(new Regex(@"tab=episodes"));
+            await DetailsShownAsync(page);
             await Assertions.Expect(page.Locator(".details-block__heading")).ToHaveCountAsync(0);
             await Assertions.Expect(page.Locator(".details-panel .episode-card")).ToHaveCountAsync(8);
             await Assertions.Expect(page.Locator(".details-toolbar")).ToBeVisibleAsync();
             await Assertions.Expect(page.Locator(".details-person")).ToHaveCountAsync(0);
             await page.Locator(".details-tabs .navigation-tabs__link", new() { HasText = "People" }).ClickAsync();
             await Assertions.Expect(page).ToHaveURLAsync(new Regex(@"tab=people"));
+            await DetailsShownAsync(page);
             await Assertions.Expect(page.Locator(".details-person")).ToHaveCountAsync(10);
 
             // Without script the same links and addresses work.
@@ -144,6 +152,9 @@ namespace Jularr.E2E.Tests
             await Assertions.Expect(page.Locator(".media-hero__chips .media-availability-badge--inline")).ToContainTextAsync("Unavailable");
             await Assertions.Expect(page.Locator(".details-tabs .navigation-tabs__link")).ToHaveTextAsync(new[] { new Regex("Overview"), new Regex("Details") });
         }
+
+        // A catalog title without details answers with placeholders first; its page with the details (here: the catalog row, the catalog is off) follows in place.
+        private static Task DetailsShownAsync(IPage page) => Assertions.Expect(page.Locator("[data-details-pending]")).ToHaveCountAsync(0);
 
         private static async Task AssertInsideViewportAsync(IPage page, string selector)
         {

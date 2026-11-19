@@ -165,10 +165,11 @@
         .state-chip--success { background: color-mix(in srgb, var(--success) 20%, transparent); color: var(--artwork-foreground); }
     }
 
+    // One line at every width: long facts end in an ellipsis before the rating, so the row is as high before and after a title's details arrive.
     &--poster &__meta {
         display: flex;
         align-items: center;
-        flex-wrap: wrap;
+        flex-wrap: nowrap;
         gap: .5rem .875rem;
         min-width: 0;
         margin: 0;
@@ -375,3 +376,23 @@ html[data-skin="original"] .media-hero--placeholder {
         }
     }
 }
+
+// The places of a title's name, facts and summary while its details follow (MediaHero.Pending): a name or summary it has so far lies unseen beneath its
+// placeholder and gives it its height; the facts are one line.
+.media-hero__pending { width: min(85%, 32rem); height: 1.5em; background: color-mix(in srgb, var(--artwork-foreground) 16%, transparent); }
+.media-hero__pending--overview { width: 100%; height: 7.5em; }
+.media-hero .media-hero__masked {
+    position: relative;
+    color: transparent;
+    * { color: transparent; }
+    &::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        border-radius: var(--radius-small);
+        background: color-mix(in srgb, var(--artwork-foreground) 16%, transparent);
+        animation: skeleton-pulse 1.4s ease-in-out infinite;
+    }
+}
+span.media-hero__masked { display: inline-block; max-width: 100%; }
+@media (prefers-reduced-motion: reduce) { .media-hero__masked::after { animation: none; } }
