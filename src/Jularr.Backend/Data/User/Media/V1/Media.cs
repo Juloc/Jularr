@@ -140,7 +140,7 @@ namespace Jularr.Backend.Data.User.Media.V1
         public WorkDetailsV1(long id, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string canonicalTitle, bool isWatchlisted, int? releaseYear, string? overview, string? posterUrl, string? backdropUrl,
             string? plexUrl, string[] platforms, long? franchiseId, string? franchiseName, bool isRequestable, long? requestId, AcquisitionRequestStatusType? requestStatusTypeId,
             int? runtimeMinutes, string? genres, string? trailerKey, string? studio, MediaAvailabilityState availabilityStateId, int availableUnits, int monitoredUnits, ProgressStateType progressStateId,
-            int progressPercent, decimal? rating, string? ratingSource, string? originalTitle, DateOnly? releasedOn, string? originalLanguage, decimal? franchisePosition = null)
+            int progressPercent, decimal? rating, string? ratingSource, string? originalTitle, DateOnly? releasedOn, string? originalLanguage, decimal? franchisePosition = null, bool awaitsDetails = false, bool isTitleLocalized = false)
         {
             AvailabilityStateId = availabilityStateId;
             AvailableUnits = availableUnits;
@@ -153,6 +153,8 @@ namespace Jularr.Backend.Data.User.Media.V1
             ReleasedOn = releasedOn;
             OriginalLanguage = originalLanguage;
             FranchisePosition = franchisePosition;
+            AwaitsDetails = awaitsDetails;
+            IsTitleLocalized = isTitleLocalized;
             RuntimeMinutes = runtimeMinutes;
             Genres = genres;
             TrailerKey = trailerKey;
@@ -221,6 +223,14 @@ namespace Jularr.Backend.Data.User.Media.V1
         // Its place in the series, where known.
         [DataField(typeof(FranchiseFields), nameof(FranchiseFields.Position), false)]
         public decimal? FranchisePosition { get; }
+
+        // True for a catalog title that has not taken its details from its catalog entry yet: until then it shows its catalog row.
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.IsDetailed))]
+        public bool AwaitsDetails { get; }
+
+        // True when the title is named in the profile's language already; a catalog title's own name may still give way to that one with its details.
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.IsDetailed))]
+        public bool IsTitleLocalized { get; }
 
         // A Work with media and without episodes or volumes to come, or with an open request of the profile, needs no request.
         [DataField(typeof(WorkFields), nameof(WorkFields.IsRequestable))]

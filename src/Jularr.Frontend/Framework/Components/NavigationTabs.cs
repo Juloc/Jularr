@@ -5,7 +5,8 @@ namespace Jularr.Frontend.Framework
 {
     // The label is a UI resource key, or a value of the data (a season, an edition) when IsValue is set; a count follows it in muted type, an icon leads it (the state a filter chip stands for).
     // A divider is the thin line that sets the chips after it apart from the ones before (the page's own filters after its sibling pages).
-    public sealed record NavigationTab(string LabelKey, string Href, bool Selected, bool IsValue = false, int? Count = null, IUiComponent? Icon = null, bool Divider = false)
+    public sealed record NavigationTab(string LabelKey, string Href, bool Selected, bool IsValue = false, int? Count = null, IUiComponent? Icon = null, bool Divider = false,
+        bool Placeholder = false)
     {
         public IUiComponent Label() => IsValue ? new ValueText(LabelKey) : new Text(LabelKey);
     }
@@ -19,6 +20,8 @@ namespace Jularr.Frontend.Framework
 
             var links = tabs.SelectMany(tab =>
             {
+                // A tab that follows with data still loading holds its place.
+                if (tab.Placeholder) return new IUiComponent[] { new Span().Class("navigation-tabs__link navigation-tabs__placeholder skeleton-block").Attribute("aria-hidden", "true") };
                 var parts = new List<IUiComponent>();
                 if (tab.Icon is not null) parts.Add(new Span(tab.Icon).Class("navigation-tabs__icon"));
                 parts.Add(tab.Label());

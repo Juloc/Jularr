@@ -8,7 +8,7 @@ namespace Jularr.Frontend.Pages.Shared
     // Shared application shell: header with the page's breadcrumb, and a sidebar in user or admin mode (icon-only on a tablet,
     // off-canvas on a phone, as in the mockups).
     public sealed class Shell(string pageTitleKey, string currentPath, ShellNavigation navigation, FrontendAssets assets, string? searchQuery = null, string? searchType = null,
-        IReadOnlyList<Crumb>? parents = null, string? currentLabel = null, AdminCounts? counts = null, IQueryCollection? query = null) : IUiComponent
+        IReadOnlyList<Crumb>? parents = null, string? currentLabel = null, AdminCounts? counts = null, IQueryCollection? query = null, bool titlePending = false) : IUiComponent
     {
         private const string AdminPrefix = "/Admin";
 
@@ -205,8 +205,8 @@ namespace Jularr.Frontend.Pages.Shared
                 Add(parent.IsKey ? new Text(parent.Text) : new ValueText(parent.Text), parent.Href, entry is null ? null : PageItems(entry, null));
             }
 
-            // The last part is a Truncated: a narrow header cuts a long title with an ellipsis (CSS) and keeps the whole title in its tip.
-            Add(new Truncated(title), null);
+            // The last part is a Truncated: a narrow header cuts a long title with an ellipsis (CSS) and keeps the whole title in its tip. A name that follows later holds its place.
+            Add(titlePending ? new Span().Class("skeleton-block breadcrumb__pending").Attribute("aria-hidden", "true") : new Truncated(title), null);
             return new Nav(new Ol([.. trail]).Class("breadcrumb")).Class("app-header-location").Attribute("aria-label", texts["nav.breadcrumb"]);
         }
 

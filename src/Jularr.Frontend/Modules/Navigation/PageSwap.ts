@@ -154,6 +154,24 @@ export function inserted(element: Element): void {
     htmx.process(element);
 }
 
+// The page's content again from a page that a page script fetched itself (one that answered with placeholders first): the content is replaced
+// where it is, without scrolling, and the page's setups run over it. HTML of a new release loads the page anew instead.
+export function showContent(html: string): void {
+    const content = document.getElementById(Content);
+    const parsed = new DOMParser().parseFromString(html, "text/html");
+    const next = parsed.getElementById(Content);
+    if (!content || !next) return;
+    if (hasNewBuild(document.documentElement.dataset.build, html)) {
+        location.reload();
+        return;
+    }
+    const adopted = document.importNode(next, true);
+    content.replaceWith(adopted);
+    document.title = parsed.title;
+    htmx.process(adopted);
+    pageChanged();
+}
+
 export async function visit(address: string): Promise<void> {
     await htmx.ajax("GET", address, { target: "#" + Content, select: "#" + Content, swap: "outerHTML", push: "true" });
 }

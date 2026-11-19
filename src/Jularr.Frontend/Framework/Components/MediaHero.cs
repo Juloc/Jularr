@@ -19,6 +19,17 @@ namespace Jularr.Frontend.Framework
         private IUiComponent? _rating;
         private (int Percent, string Label, string? Value)? _progress;
         private IUiComponent? _sync;
+        private bool _pending;
+        private bool _titleKnown;
+
+        // The title's details follow: its facts and summary, and its name unless that is known, hold their places with placeholders. The name and summary
+        // it has so far lie unseen beneath theirs, so each is as high as what comes.
+        public MediaHero Pending(bool titleKnown)
+        {
+            _pending = true;
+            _titleKnown = titleKnown;
+            return this;
+        }
 
         // A plain cover; a title without art shows the type icon.
         public MediaHero Poster(string? posterUrl, IUiComponent? placeholder = null)
@@ -92,9 +103,19 @@ namespace Jularr.Frontend.Framework
             actions.AddRange(_actions);
 
             var body = new List<IUiComponent>();
-            body.Add(new H2(new ValueText(title)).Class(titleInBreadcrumb ? "media-hero__title visually-hidden" : "media-hero__title"));
+            body.Add(_pending && !_titleKnown
+                ? new H2(new Span(new ValueText(title)).Class("media-hero__masked")).Class("media-hero__title").Attribute("aria-hidden", "true")
+                : new H2(new ValueText(title)).Class(titleInBreadcrumb ? "media-hero__title visually-hidden" : "media-hero__title"));
             if (_chips.Length > 0) body.Add(new Div(_chips).Class("media-hero__chips"));
-            if (meta is not null || _rating is not null)
+            if (_pending)
+            {
+                body.Add(new Div(new Span().Class("skeleton-block media-hero__pending")).Class("media-hero__meta")
+                    .Attribute("aria-hidden", "true"));
+                body.Add(overview is null
+                    ? new Div(new Span().Class("skeleton-block media-hero__pending media-hero__pending--overview")).Class("media-hero__overview").Attribute("aria-hidden", "true")
+                    : new P(new Truncated(overview)).Class("media-hero__overview media-hero__masked").Attribute("aria-hidden", "true"));
+            }
+            else if (meta is not null || _rating is not null)
             {
                 var facts = new List<IUiComponent>();
                 if (meta is not null) facts.Add(_hasPoster ? new Span(new Truncated(meta)).Class("media-hero__facts") : new ValueText(meta));
@@ -102,7 +123,7 @@ namespace Jularr.Frontend.Framework
                 body.Add(_hasPoster ? new Div([.. facts]).Class("media-hero__meta") : new P([.. facts]).Class("media-hero__meta"));
             }
 
-            if (overview is not null)
+            if (overview is not null && !_pending)
             {
                 body.Add(_hasPoster
                     ? new P(new Truncated(overview)).Class("media-hero__overview").Attribute("data-hero-summary", "true").Attribute("role", "button").Attribute("tabindex", "0").Attribute("aria-expanded", "false")
@@ -150,7 +171,8 @@ namespace Jularr.Frontend.Framework
             }
 
             parts.Add(new Div([.. layout]).Class("media-hero__layout"));
-            new Section([.. parts]).Class(_square ? "media-hero media-hero--poster media-hero--square" : "media-hero media-hero--poster").WriteTo(writer, encoder, texts);
+            var hero = new Section([.. parts]).Class(_square ? "media-hero media-hero--poster media-hero--square" : "media-hero media-hero--poster");
+            (_pending ? hero.Attribute("aria-busy", "true") : hero).WriteTo(writer, encoder, texts);
         }
     }
 }
