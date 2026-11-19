@@ -34,7 +34,11 @@ namespace Jularr.Frontend.Framework
             var cookie = CookieName(profile);
             if (named is not null)
             {
-                context.Response.Cookies.Append(cookie, named.Key, new CookieOptions { Expires = DateTimeOffset.UtcNow.AddYears(1), HttpOnly = true, IsEssential = true, SameSite = SameSiteMode.Lax, Secure = context.Request.IsHttps });
+                // A page's own parts (?handler=) never change the kept mode: one still loading after a switch would take the person back.
+                if (context.Request.Query["handler"].Count == 0)
+                {
+                    context.Response.Cookies.Append(cookie, named.Key, new CookieOptions { Expires = DateTimeOffset.UtcNow.AddYears(1), HttpOnly = true, IsEssential = true, SameSite = SameSiteMode.Lax, Secure = context.Request.IsHttps });
+                }
                 return named;
             }
 
