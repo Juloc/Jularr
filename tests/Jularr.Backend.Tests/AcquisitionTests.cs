@@ -4173,6 +4173,49 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public void Newznab_ReadsWhatAFreeSearchShows()
+        {
+            // Every category, grabs, files and, for a torrent, seeders and peers, as extended attributes name them.
+            var item = NewznabClient.ParseItems("https://indexer.example.test", XDocument.Parse("""
+                <rss xmlns:newznab="http://www.newznab.com/DTD/2010/feeds/attributes/"><channel>
+                  <item><title>A.Release</title><guid>a</guid><enclosure url="/getnzb/a" length="10" />
+                    <newznab:attr name="category" value="5000" /><newznab:attr name="category" value="5070" /><newznab:attr name="grabs" value="312" />
+                    <newznab:attr name="files" value="41" /><newznab:attr name="seeders" value="12" /><newznab:attr name="peers" value="15" />
+                    <newznab:attr name="tvmazeid" value="44" /><newznab:attr name="grabs" value="-1" /></item>
+                </channel></rss>
+                """))[0];
+            CollectionAssert.AreEqual(new[] { 5000, 5070 }, item.Categories.ToArray());
+            Assert.AreEqual((312, 41, 12, 15, "44"), (item.Grabs, item.Files, item.Seeders, item.Peers, item.TvMazeId));
+        }
+
+        [TestMethod]
+        public void IndexerSearchQuery_SendsTheTokensAnIndexerTakes_AndWordsForTheRest()
+        {
+            var query = IndexerSearchQuery.Parse(IndexerSearchType.Tv, " Frieren {Season:1} {Episode:05} {ImdbId:tt0111161} {Author:Nobody} ");
+            Assert.AreEqual("Frieren", query.Text);
+            Assert.AreEqual("0111161", query.Parameters["imdbid"]);
+            Assert.IsFalse(query.Parameters.ContainsKey("author"), "A token of another type is dropped.");
+
+            // An indexer with its TV search gets season and episode as parameters; one without it the words, never an id.
+            var tv = new NewznabCapabilities(DateTimeOffset.UnixEpoch, new Dictionary<NewznabSearchMode, string[]>
+                { [NewznabSearchMode.Search] = ["q"], [NewznabSearchMode.TvSearch] = ["q", "season", "ep"] });
+            var (mode, text, parameters) = query.For(tv);
+            Assert.AreEqual(NewznabSearchMode.TvSearch, mode);
+            Assert.AreEqual("Frieren", text);
+            CollectionAssert.AreEquivalent(new[] { "season=1", "ep=5" }, parameters.Select(pair => pair.Key + "=" + pair.Value).ToArray());
+            (mode, text, parameters) = query.For(NewznabCapabilities.TextOnly(DateTimeOffset.UnixEpoch));
+            Assert.AreEqual(NewznabSearchMode.Search, mode);
+            Assert.AreEqual("Frieren S01E05", text);
+            Assert.AreEqual(0, parameters.Count);
+
+            // A film's year; a game's tokens only add words; a free search has no tokens.
+            Assert.AreEqual("year=1999", string.Join(',', IndexerSearchQuery.Parse(IndexerSearchType.Movie, "Matrix {Year:1999}").Parameters.Select(pair => pair.Key + "=" + pair.Value)));
+            Assert.AreEqual("GTA 6 PS5 2026", IndexerSearchQuery.Parse(IndexerSearchType.Game, "GTA 6 {Platform:PS5} {Year:2026}").For(tv).Text);
+            Assert.AreEqual("x", IndexerSearchQuery.Parse(IndexerSearchType.Search, "x {Season:1}").Words());
+            Assert.IsTrue(IndexerSearchQuery.Parse(IndexerSearchType.Movie, "{ImdbId:nope}").IsEmpty);
+        }
+
+        [TestMethod]
         public void Sabnzbd_FailuresOnlyBlameTheReleaseForReleaseFaults()
         {
             var history = SabnzbdClient.ParseHistoryResponse("""
