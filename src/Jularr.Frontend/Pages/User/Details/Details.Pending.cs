@@ -48,7 +48,7 @@ namespace Jularr.Frontend.Pages.User.Details
         // A part of the Overview or the placeholder of one, under the heading it will have.
         private IUiComponent PendingPreview((string TabKey, Block? Block) part)
         {
-            if (part.Block is { TabKey: not "details" } block) return Preview(block);
+            if (part.Block is { } block && !(_detailsPending && block.TabKey == "details")) return Preview(block);
 
             var (label, body) = part.TabKey switch
             {
