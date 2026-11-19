@@ -99,6 +99,24 @@ namespace Jularr.Backend.Data.Fields.Acquisition
         public static readonly BoolField IsPrioritized = new();
     }
 
+    // The free search across the indexers: what is asked, and what each release and each indexer answered.
+    public static class IndexerSearchFields
+    {
+        public static readonly StringField Query = new() { MaximumLength = 500, Required = false, Trim = true, Format = StringFormat.SingleLine };
+        public static readonly EnumField IndexerSearchTypeId = new(typeof(IndexerSearchType));
+        public static readonly LongArrayField IndexerIds = new() { Minimum = 1, MaximumLength = 100, IsSet = true };
+        public static readonly IntArrayField Categories = new() { Minimum = 1, Maximum = 999_999, MaximumLength = 200 };
+        public static readonly IntField Limit = new() { Minimum = 1, Maximum = 100 };
+        public static readonly IntField Offset = new() { Minimum = 0, Maximum = 10_000 };
+        public static readonly StringField ReleaseId = new() { MaximumLength = 64, AllowBlank = false, Format = StringFormat.SingleLine };
+        public static readonly IntField Count = new() { Minimum = 0, Required = false };
+        public static readonly IntField ElapsedMilliseconds = new() { Minimum = 0 };
+        public static readonly StringField ExternalId = new() { MaximumLength = 32, Required = false };
+        public static readonly StringField InfoUrl = new() { MaximumLength = 2048, Required = false };
+        public static readonly StringField Platform = new() { MaximumLength = 64, Required = false };
+        public static readonly StringField ErrorKey = new() { MaximumLength = 64, Required = false };
+    }
+
     public static class AcquisitionProfileFields
     {
         public static readonly LongField Id = new() { Minimum = 1 };

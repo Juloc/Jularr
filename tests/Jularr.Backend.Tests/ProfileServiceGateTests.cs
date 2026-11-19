@@ -225,7 +225,7 @@ namespace Jularr.Backend.Tests
                 await gate.RequireAccessAsync(caller, new ServicePermission(permission), default);
             }
 
-            foreach (var permission in new[] { "accounts.update", "storage.update", "providers.update", "localization.update", "rules.update", "acquisition.manage" })
+            foreach (var permission in new[] { "accounts.update", "storage.update", "providers.update", "localization.update", "rules.update", "acquisition.manage", "indexers.search" })
             {
                 if (role == AccountRoleType.Owner) await gate.RequireAccessAsync(caller, new ServicePermission(permission), default);
                 else await Assert.ThrowsExactlyAsync<SecurityException>(() => gate.RequireAccessAsync(caller, new ServicePermission(permission), default));
