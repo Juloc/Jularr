@@ -159,7 +159,14 @@ namespace Jularr.Integrations.Logic.Newznab
                     Category = attributes.TryGetValue("category", out var category) ? PositiveInt(category) : null,
                     TvdbId = Id(attributes, "tvdbid"),
                     TmdbId = Id(attributes, "tmdbid"),
-                    ImdbId = Id(attributes, "imdbid") ?? Id(attributes, "imdb")
+                    ImdbId = Id(attributes, "imdbid") ?? Id(attributes, "imdb"),
+                    TvMazeId = Id(attributes, "tvmazeid"),
+                    Categories = item.Elements().Where(element => element.Name.LocalName == "attr" && string.Equals(element.Attribute("name")?.Value, "category", StringComparison.OrdinalIgnoreCase))
+                        .Select(element => PositiveInt(element.Attribute("value")?.Value)).OfType<int>().Distinct().ToArray(),
+                    Grabs = attributes.TryGetValue("grabs", out var grabs) ? Count(grabs) : null,
+                    Files = attributes.TryGetValue("files", out var files) ? Count(files) : null,
+                    Seeders = attributes.TryGetValue("seeders", out var seeders) ? Count(seeders) : null,
+                    Peers = attributes.TryGetValue("peers", out var peers) ? Count(peers) : null
                 });
             }
 
@@ -167,13 +174,38 @@ namespace Jularr.Integrations.Logic.Newznab
         }
 
         // The release's own link carries the indexer's access; Jularr keeps the NZB for its own downloader.
-        public async Task DownloadNzbAsync(Uri nzb, string destination, CancellationToken ct, Func<long, IDisposable>? reserveWrite = null)
+        public Task DownloadNzbAsync(Uri nzb, string destination, CancellationToken ct, Func<long, IDisposable>? reserveWrite = null) =>
+            FetchAsync(nzb, response => DirectDownload.SaveAsync(response, destination, NzbReader.MaximumBytes, ct, reserveWrite), ct);
+
+        // The .nzb or .torrent of a release in memory, for a person to save it.
+        public async Task<byte[]> ReadFileAsync(Uri file, CancellationToken ct)
         {
-            var host = NewznabGate.HostKey(nzb);
+            byte[] bytes = [];
+            await FetchAsync(file, async response =>
+            {
+                if (response.Content.Headers.ContentLength > NzbReader.MaximumBytes) throw new DirectDownloadException(DirectDownloadFailure.TooLarge, "The file is too large.");
+                await using var source = await response.Content.ReadAsStreamAsync(ct);
+                using var target = new MemoryStream();
+                var buffer = new byte[81920];
+                int read;
+                while ((read = await source.ReadAsync(buffer, ct)) > 0)
+                {
+                    if (target.Length + read > NzbReader.MaximumBytes) throw new DirectDownloadException(DirectDownloadFailure.TooLarge, "The file is too large.");
+                    target.Write(buffer, 0, read);
+                }
+
+                bytes = target.ToArray();
+            }, ct);
+            return bytes;
+        }
+
+        private async Task FetchAsync(Uri address, Func<HttpResponseMessage, Task> take, CancellationToken ct)
+        {
+            var host = NewznabGate.HostKey(address);
             await gate.WaitAsync(host, ct);
             try
             {
-                using var response = await httpClient.GetAsync(nzb, HttpCompletionOption.ResponseHeadersRead, ct);
+                using var response = await httpClient.GetAsync(address, HttpCompletionOption.ResponseHeadersRead, ct);
                 if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
                 {
                     throw new NewznabException(NewznabFailure.AuthenticationFailed, "The indexer refused the NZB.") { StatusCode = response.StatusCode };
@@ -195,7 +227,7 @@ namespace Jularr.Integrations.Logic.Newznab
                     throw new NewznabException(NewznabFailure.Unavailable, "The indexer did not deliver the NZB.") { StatusCode = response.StatusCode };
                 }
 
-                await DirectDownload.SaveAsync(response, destination, NzbReader.MaximumBytes, ct, reserveWrite);
+                await take(response);
             }
             catch (DirectDownloadException exception)
             {
@@ -297,6 +329,8 @@ namespace Jularr.Integrations.Logic.Newznab
         private static string? Text(XElement item, string name) => Child(item, name)?.Value.Trim() is { Length: > 0 } value ? value : null;
 
         // An id of 0 means the indexer does not know it.
+        private static int? Count(string value) => int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var number) && number >= 0 ? number : null;
+
         private static string? Id(Dictionary<string, string> attributes, string name) =>
             attributes.TryGetValue(name, out var value) && value.Trim() is { Length: > 0 } id && id.Trim('0') is { Length: > 0 } ? id : null;
 

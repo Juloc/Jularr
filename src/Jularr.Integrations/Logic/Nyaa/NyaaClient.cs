@@ -79,7 +79,11 @@ namespace Jularr.Integrations.Logic.Nyaa
                     Bytes(Named(item, "size")),
                     Number(Named(item, "seeders")),
                     Date(item.Element("pubDate")?.Value),
-                    ReadDownloadLink(item.Element("link")?.Value)));
+                    ReadDownloadLink(item.Element("link")?.Value))
+                {
+                    Leechers = Number(Named(item, "leechers")),
+                    Downloads = Number(Named(item, "downloads"))
+                });
             }
 
             return found;

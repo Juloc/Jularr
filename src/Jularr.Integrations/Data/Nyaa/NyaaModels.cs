@@ -37,5 +37,9 @@ namespace Jularr.Integrations.Data.Nyaa
         public int Seeders { get; }
         public DateTimeOffset Published { get; }
         public string? DownloadUri { get; }
+
+        // The peers still loading and how often the file was fetched.
+        public int Leechers { get; init; }
+        public int Downloads { get; init; }
     }
 }

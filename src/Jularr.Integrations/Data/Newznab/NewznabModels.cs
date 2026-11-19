@@ -108,6 +108,14 @@ namespace Jularr.Integrations.Data.Newznab
         public string? TvdbId { get; init; }
         public string? TmdbId { get; init; }
         public string? ImdbId { get; init; }
+        public string? TvMazeId { get; init; }
+
+        // What a free search shows of an item (Prowlarr's columns): every category, grabs, files and, for a torrent, its peers.
+        public IReadOnlyList<int> Categories { get; init; } = [];
+        public int? Grabs { get; init; }
+        public int? Files { get; init; }
+        public int? Seeders { get; init; }
+        public int? Peers { get; init; }
     }
 
     internal enum NewznabFailure : byte
