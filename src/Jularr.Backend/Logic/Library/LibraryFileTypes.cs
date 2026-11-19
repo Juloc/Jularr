@@ -51,7 +51,8 @@ namespace Jularr.Backend.Logic.Library
         };
 
         // A game release is imported whole; installers and data files belong to it.
-        public static IReadOnlySet<string>? GetImportExtensions(MediaType mediaType, MediaSubtype? subtype) => mediaType == MediaType.Game ? null : GetScanExtensions(mediaType, subtype);
+        // Every file of a game, and of a download without a work, which a person imports by hand.
+        public static IReadOnlySet<string>? GetImportExtensions(MediaType? mediaType, MediaSubtype? subtype) => mediaType is not { } type || type == MediaType.Game ? null : GetScanExtensions(type, subtype);
 
         public static bool IsSubtitle(string relativePath) => Subtitle.Contains(Path.GetExtension(relativePath).ToLowerInvariant());
 

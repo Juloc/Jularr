@@ -2534,6 +2534,7 @@ namespace Jularr.Frontend.Localization
             new("acquisition.outcome.import_wrong_title", "The file names another film"),
             new("acquisition.outcome.import_wrong_episode", "The files name other episodes than the ones wanted"),
             new("acquisition.outcome.import_ambiguous_title", "The file's title does not clearly match the film"),
+            new("acquisition.outcome.download_not_imported", "Finished, not imported: downloaded without a work, its files wait in the download folder"),
             new("acquisition.outcome.import_unreadable_names", "The file names do not say which episode they are"),
             new("acquisition.outcome.import_quality_not_allowed", "The quality of the files is not one the profile allows"),
             new("acquisition.outcome.import_path_unmapped", "Download folder is not mapped to storage"),

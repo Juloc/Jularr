@@ -590,52 +590,57 @@ namespace Jularr.Backend.Logic.Acquisition
 
         public static async Task<long> ReserveDownloadAsync(this LogicContext ctx, AcquisitionGrabData data, CancellationToken ct)
         {
-            // The target row serializes concurrent grabs.
-            var sql = new SqlStatement();
-            sql.Statement =
-                """
-                SELECT
-                    wanted."Id" AS "WantedItemId"
-                FROM
-                    "WantedItems" AS wanted
-                WHERE
-                    wanted."Id" = @WantedItemId
-                    AND (NOT @RequiresActiveMonitoring OR NOT wanted."IsPaused")
-                FOR UPDATE;
-                """;
-            sql.Parameters.Add(data);
-            if (await ctx.ReadOptionalAsync<WantedItemParameters>(sql, ct) is null)
+            // A download without a work (no WantedItemId) has no target to serialize or to overlap; each one is a release of its own.
+            SqlStatement sql;
+            if (data.WantedItemId is not null)
             {
-                throw new ServiceUnavailableException("acquisition_paused");
-            }
+                // The target row serializes concurrent grabs.
+                sql = new SqlStatement();
+                sql.Statement =
+                    """
+                    SELECT
+                        wanted."Id" AS "WantedItemId"
+                    FROM
+                        "WantedItems" AS wanted
+                    WHERE
+                        wanted."Id" = @WantedItemId
+                        AND (NOT @RequiresActiveMonitoring OR NOT wanted."IsPaused")
+                    FOR UPDATE;
+                    """;
+                sql.Parameters.Add(data);
+                if (await ctx.ReadOptionalAsync<WantedItemParameters>(sql, ct) is null)
+                {
+                    throw new ServiceUnavailableException("acquisition_paused");
+                }
 
-            // A whole Work downloads once; episode and volume downloads must not overlap.
-            sql = new SqlStatement();
-            sql.Statement =
-                """
-                SELECT
-                    wanted."Id" AS "WantedItemId"
-                FROM
-                    "WantedItems" AS wanted
-                    JOIN "Works" AS work ON work."Id" = wanted."WorkId"
-                    JOIN "AcquisitionReleases" AS release ON release."WantedItemId" = wanted."Id"
-                    JOIN "Operations" AS operation ON operation."AcquisitionReleaseId" = release."Id"
-                WHERE
-                    wanted."Id" = @WantedItemId
-                    AND operation."OperationStatusTypeId" IN (1, 2)
-                    AND (
-                        work."MediaTypeId" <> 2 AND work."MediaSubtypeId" IS DISTINCT FROM 2
-                        OR release."ParentUnitNumber" IS NULL AND release."UnitStart" IS NULL
-                        OR @ParentUnitNumber::integer IS NULL AND @UnitStart::integer IS NULL
-                        OR release."ParentUnitNumber" IS NOT DISTINCT FROM @ParentUnitNumber::integer
-                        AND (release."UnitStart" IS NULL OR @UnitStart::integer IS NULL OR release."UnitStart" <= @UnitEnd AND @UnitStart <= release."UnitEnd")
-                    )
-                LIMIT 1;
-                """;
-            sql.Parameters.Add(data);
-            if (await ctx.ReadOptionalAsync<WantedItemParameters>(sql, ct) is not null)
-            {
-                throw new DataValidationException("CandidateId", "in_use");
+                // A whole Work downloads once; episode and volume downloads must not overlap.
+                sql = new SqlStatement();
+                sql.Statement =
+                    """
+                    SELECT
+                        wanted."Id" AS "WantedItemId"
+                    FROM
+                        "WantedItems" AS wanted
+                        JOIN "Works" AS work ON work."Id" = wanted."WorkId"
+                        JOIN "AcquisitionReleases" AS release ON release."WantedItemId" = wanted."Id"
+                        JOIN "Operations" AS operation ON operation."AcquisitionReleaseId" = release."Id"
+                    WHERE
+                        wanted."Id" = @WantedItemId
+                        AND operation."OperationStatusTypeId" IN (1, 2)
+                        AND (
+                            work."MediaTypeId" <> 2 AND work."MediaSubtypeId" IS DISTINCT FROM 2
+                            OR release."ParentUnitNumber" IS NULL AND release."UnitStart" IS NULL
+                            OR @ParentUnitNumber::integer IS NULL AND @UnitStart::integer IS NULL
+                            OR release."ParentUnitNumber" IS NOT DISTINCT FROM @ParentUnitNumber::integer
+                            AND (release."UnitStart" IS NULL OR @UnitStart::integer IS NULL OR release."UnitStart" <= @UnitEnd AND @UnitStart <= release."UnitEnd")
+                        )
+                    LIMIT 1;
+                    """;
+                sql.Parameters.Add(data);
+                if (await ctx.ReadOptionalAsync<WantedItemParameters>(sql, ct) is not null)
+                {
+                    throw new DataValidationException("CandidateId", "in_use");
+                }
             }
 
             // A retried release reuses its history row and finished download operation.
@@ -920,16 +925,17 @@ namespace Jularr.Backend.Logic.Acquisition
         public static Task<IReadOnlyList<DownloadData>> ReadActiveDownloadsAsync(this LogicContext ctx, CancellationToken ct, long? operationId = null)
         {
             // Grouped by client for one queue and history read each; a source that waits for a person or for its own countdown is not asked again.
+            // A download without a work (the search across the indexers) has no target: no wanted item, work or media type, and the release's own title.
             var sql = new SqlStatement();
             sql.Statement =
                 """
                 SELECT
                     operation."Id" AS "OperationId",
-                    release."WantedItemId",
-                    work."Id" AS "WorkId",
+                    coalesce(release."WantedItemId", 0) AS "WantedItemId",
+                    coalesce(work."Id", 0) AS "WorkId",
                     work."MediaTypeId",
                     work."MediaSubtypeId",
-                    work."CanonicalTitle",
+                    coalesce(work."CanonicalTitle", release."Title") AS "CanonicalTitle",
                     work."ReleaseYear"::integer AS "ReleaseYear",
                     operation."AcquisitionConnectionId",
                     operation."ExternalId",
@@ -967,8 +973,8 @@ namespace Jularr.Backend.Logic.Acquisition
                 FROM
                     "Operations" AS operation
                     JOIN "AcquisitionReleases" AS release ON release."Id" = operation."AcquisitionReleaseId"
-                    JOIN "WantedItems" AS wanted ON wanted."Id" = release."WantedItemId"
-                    JOIN "Works" AS work ON work."Id" = wanted."WorkId"
+                    LEFT JOIN "WantedItems" AS wanted ON wanted."Id" = release."WantedItemId"
+                    LEFT JOIN "Works" AS work ON work."Id" = wanted."WorkId"
                     LEFT JOIN "GamePlatforms" AS platform ON platform."Id" = wanted."GamePlatformId"
                 WHERE
                     operation."OperationTypeId" = 2
