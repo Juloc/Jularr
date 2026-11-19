@@ -4232,6 +4232,76 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual("/downloads/d", history.Jobs[3].StoragePath);
         }
 
+        [TestMethod]
+        public async Task IndexerSearch_AsksEveryIndexer_NamesEachAnswer_AndSavesTheFileWithoutTheLink()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            var usenet = new FakeUsenet();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, usenet);
+            using (var created = await host.SendAsync(HttpMethod.Post, Connections,
+                new SaveAcquisitionConnectionDataV1("Broken", AcquisitionConnectionType.Newznab, "https://broken.example.test/", FakeUsenet.IndexerKey, true, 20, [], null, null, null)))
+            {
+                Assert.AreEqual(HttpStatusCode.OK, created.StatusCode, await created.Content.ReadAsStringAsync());
+            }
+
+            // The indexer's links carry its key, as real ones do; its extended attributes name category, grabs, files and peers.
+            usenet.Results = $"""
+                <rss xmlns:newznab="http://www.newznab.com/DTD/2010/feeds/attributes/"><channel>
+                  <item><title>Example.Movie.1999.German.DL.1080p.WEB-DL.H264-GRP</title><guid>new</guid><pubDate>Tue, 06 Oct 2026 10:00:00 +0000</pubDate>
+                    <enclosure url="https://indexer.example.test/getnzb/new?apikey={FakeUsenet.IndexerKey}" length="2000000000" />
+                    <newznab:attr name="category" value="2000" /><newznab:attr name="category" value="2040" /><newznab:attr name="grabs" value="312" />
+                    <newznab:attr name="files" value="41" /><newznab:attr name="imdb" value="0133093" /></item>
+                  <item><title>Example.Movie.1999.2160p.BluRay.x265-GRP</title><guid>torrent</guid><pubDate>Mon, 05 Oct 2026 10:00:00 +0000</pubDate>
+                    <enclosure url="https://indexer.example.test/download/torrent.torrent?apikey={FakeUsenet.IndexerKey}" length="9000000000" />
+                    <newznab:attr name="seeders" value="12" /><newznab:attr name="peers" value="15" /></item>
+                </channel></rss>
+                """;
+            var capabilities = System.Text.Json.JsonSerializer.Serialize(NewznabClient.ParseCapabilities(XDocument.Parse(FakeUsenet.Capabilities), DateTimeOffset.UnixEpoch));
+            await host.Fixture.RunSqlAsync("UPDATE \"AcquisitionConnections\" SET \"Capabilities\" = '" + capabilities + "'::jsonb WHERE \"Name\" = 'Indexer'");
+            using var sources = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/indexer-search/indexers");
+            var indexers = (await sources.Content.ReadFromJsonAsync<BaseDataList<IndexerSearchSourceV1>>())!;
+            CollectionAssert.AreEqual(new[] { "Broken", "Indexer" }, indexers.Select(indexer => indexer.Name).Order().ToArray());
+            CollectionAssert.AreEqual(new[] { 2000, 2040 }, indexers.Single(indexer => indexer.Name == "Indexer").Categories);
+
+            // Every indexer answers on its own: the one with releases, the broken one with its reason; the releases come newest first.
+            using var searched = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/indexer-search", new IndexerSearchDataV1("Example {ImdbId:tt0133093}", IndexerSearchType.Movie));
+            var json = await searched.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, searched.StatusCode, json);
+            Assert.IsFalse(json.Contains(FakeUsenet.IndexerKey, StringComparison.Ordinal) || json.Contains("getnzb", StringComparison.Ordinal), "No release link reaches the browser.");
+            var result = (await searched.Content.ReadFromJsonAsync<IndexerSearchResultV1>())!;
+            Assert.AreEqual(2, result.Releases.Count);
+            var (nzb, torrent) = (result.Releases[0], result.Releases[1]);
+            Assert.IsTrue(result.Releases.All(release => release.IndexerName == "Indexer" && release.ReleaseId.Length == 32));
+            Assert.AreEqual(ReleaseProtocol.Usenet, nzb.ReleaseProtocolId);
+            CollectionAssert.AreEqual(new[] { 2000, 2040 }, nzb.Categories);
+            Assert.AreEqual((312, 41, "tt0133093"), (nzb.Grabs, nzb.Files, nzb.ImdbId));
+            Assert.IsNull(nzb.Seeders);
+            CollectionAssert.Contains(nzb.Languages, "de");
+            Assert.IsNotNull(nzb.QualityKey);
+            Assert.AreEqual((ReleaseProtocol.Torrent, 12, 3), (torrent.ReleaseProtocolId, torrent.Seeders, torrent.Leechers));
+            var broken = result.Indexers.Single(indexer => indexer.Name == "Broken");
+            Assert.AreEqual("acquisition_unavailable", broken.ErrorKey);
+            Assert.IsNull(broken.Count);
+            Assert.AreEqual(2, result.Indexers.Single(indexer => indexer.Name == "Indexer").Count);
+            var sent = usenet.IndexerHosts.Count;
+
+            // Chosen indexers only, and a category none of them offers asks nobody.
+            using var chosen = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/indexer-search", new IndexerSearchDataV1("Example", indexerIds: [broken.Id]));
+            Assert.AreEqual(1, (await chosen.Content.ReadFromJsonAsync<IndexerSearchResultV1>())!.Indexers.Count);
+            using var other = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/indexer-search", new IndexerSearchDataV1("Example", categories: [5000], indexerIds: [result.Indexers.Single(indexer => indexer.Name == "Indexer").Id]));
+            Assert.AreEqual("category_not_offered", (await other.Content.ReadFromJsonAsync<IndexerSearchResultV1>())!.Indexers.Single().ErrorKey);
+            Assert.AreEqual(sent + 1, usenet.IndexerHosts.Count);
+
+            // The NZB is fetched by Jularr and handed over as a file; an unknown release is refused.
+            using var file = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/indexer-search/releases/" + nzb.ReleaseId + "/file");
+            Assert.AreEqual(HttpStatusCode.OK, file.StatusCode, await file.Content.ReadAsStringAsync());
+            var saved = file.Content.Headers.ContentDisposition;
+            Assert.AreEqual("Example.Movie.1999.German.DL.1080p.WEB-DL.H264-GRP.nzb", saved?.FileNameStar ?? saved?.FileName?.Trim('"'), saved?.ToString());
+            using var unknown = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/indexer-search/releases/" + new string('0', 32) + "/file");
+            Assert.AreEqual(HttpStatusCode.BadRequest, unknown.StatusCode);
+        }
+
         private static ReleaseOffer Offer(string title, string guid) =>
             new(title, 1, "Indexer", 25, guid, new Uri("https://indexer.example.test/" + guid), null, 2_000_000_000, DateTimeOffset.UtcNow, ["title"]);
 
