@@ -83,10 +83,9 @@ namespace Jularr.Frontend.Pages.User.Details
 
         protected override void Define(Page page)
         {
-            // A name that may still give way to the one in the profile's language is not shown until it is certain.
-            var titlePending = _detailsPending && _work is { IsTitleLocalized: false };
-            page.Title("details.title", titlePending ? null : _work?.CanonicalTitle);
-            if (titlePending) page.PendingTitle();
+            // The browser tab names the title as it is known now; the page shows a name that may still give way to the one in the profile's language only once it is certain.
+            page.Title("details.title", _work?.CanonicalTitle);
+            if (_detailsPending && _work is { IsTitleLocalized: false }) page.PendingTitle();
             // A title the library has nothing of yet was found through Discover.
             if (_work?.AvailabilityStateId is MediaAvailabilityState.Missing or MediaAvailabilityState.Requested or MediaAvailabilityState.Searching or MediaAvailabilityState.Downloading or MediaAvailabilityState.Paused)
             {
