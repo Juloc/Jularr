@@ -159,6 +159,7 @@ async function start(player: HTMLElement, keepView = false): Promise<void> {
     let wantsPlay = false;
     let escalating = false;
     let sourceReady = false;
+    let attachments = 0;
     let sourcePosition = 0;
     let lastSubtitle: { key: string; language: string | undefined } | undefined;
     let styledSubtitles: StyledSubtitles | undefined;
@@ -433,6 +434,10 @@ async function start(player: HTMLElement, keepView = false): Promise<void> {
         if (autoplay) showLoading();
         else stopLoading();
         sourceReady = false;
+        // The page says which conversion is in and how far it is (data-source: loading, ready or playing), so a test can wait for it.
+        const attached = ++attachments;
+        player.dataset.sourceSession = next.playbackSessionId;
+        player.dataset.source = "loading";
         sourcePosition = position;
         const rate = video.playbackRate;
         hls?.destroy();
@@ -493,6 +498,8 @@ async function start(player: HTMLElement, keepView = false): Promise<void> {
 
         // A new source resets the speed; the chosen one stays.
         video.addEventListener("loadedmetadata", () => {
+            // A source replaced before its metadata came leaves its listener behind: only the newest one sets the position and plays.
+            if (attached !== attachments) return;
             timeline.max = String(Math.floor(video.duration));
             player.querySelector("[data-role=duration]")!.textContent = clock(video.duration);
             if (position > 0 && position < video.duration) video.currentTime = position;
@@ -500,8 +507,13 @@ async function start(player: HTMLElement, keepView = false): Promise<void> {
             sourceReady = true;
             player.querySelector('[data-role=resolution]')!.textContent = video.videoWidth > 0 ? `${video.videoWidth} × ${video.videoHeight}` : '';
             placeMarks();
-            if (autoplay) void video.play().catch(() => stopLoading());
-            else video.pause();
+            if (autoplay) {
+                video.addEventListener("playing", () => { if (attached === attachments) player.dataset.source = "playing"; }, { once: true });
+                void video.play().catch(() => stopLoading());
+            } else {
+                video.pause();
+                player.dataset.source = "ready";
+            }
         }, { once: true });
     }
 

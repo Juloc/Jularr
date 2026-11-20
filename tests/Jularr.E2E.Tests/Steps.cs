@@ -23,7 +23,8 @@ namespace Jularr.E2E.Tests
                 // A cover that its provider does not deliver (these tests have no real catalogs) is no fault of the page.
                 if (message.Type == "error" && !(message.Text.StartsWith("Failed to load resource", StringComparison.Ordinal) && message.Location.Contains("/api/v1/covers/", StringComparison.Ordinal)))
                 {
-                    problems.Enqueue(page.Url + ": " + message.Text);
+                    // A resource the browser could not load names its address, so a test can tell which one it was.
+                    problems.Enqueue(page.Url + ": " + message.Text + (message.Text.StartsWith("Failed to load resource", StringComparison.Ordinal) ? " " + message.Location : ""));
                 }
             };
             page.PageError += (_, error) => problems.Enqueue(page.Url + ": " + error);

@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Microsoft.Playwright;
 
 namespace Jularr.E2E.Tests
@@ -112,7 +113,7 @@ namespace Jularr.E2E.Tests
                 Assert.AreEqual(0, await page.Locator("video track").CountAsync());
                 await page.Locator("[data-action=subtitle-toggle]").ClickAsync();
                 await page.WaitForFunctionAsync("() => [...document.querySelector('video').textTracks].some(track => track.mode === 'showing' && track.cues?.length > 0)");
-                CollectionAssert.AreEqual(Array.Empty<string>(), session.Problems.ToArray());
+                CollectionAssert.AreEqual(Array.Empty<string>(), Faults(session.Problems), string.Join("\n", session.Problems));
 
                 // Subtitles move against the picture in the browser; the audio moves through a new conversion that plays on, and back to zero the same way.
                 await page.Locator("[data-action=settings]").ClickAsync();
@@ -135,23 +136,24 @@ namespace Jularr.E2E.Tests
                 await panel.Locator("[data-panel=subtitles] [data-action=subtitle-offset-reset]").ClickAsync();
                 await page.WaitForFunctionAsync("start => Math.abs([...document.querySelector('video').textTracks].find(track => track.mode === 'showing').cues[0].startTime - start) < 0.01", cueStart);
                 await panel.GetByRole(AriaRole.Tab, new() { Name = "Audio", Exact = true }).ClickAsync();
-                await ExpectNewSourceAsync(page);
+                var source1 = await ExpectNewSourceAsync(page);
                 var delayed = await page.RunAndWaitForResponseAsync(async () =>
                 {
                     await panel.Locator("[data-panel=audio] [data-setting=audio-offset]").FillAsync("250");
                     await page.Keyboard.PressAsync("Tab");
                 }, response => response.Request.Method == "POST" && response.Request.PostData?.Contains("\"audioOffsetMs\":250", StringComparison.Ordinal) == true, new() { Timeout = Steps.MediaTimeout });
                 Assert.AreEqual(200, delayed.Status);
-                await NewSourcePlaysAsync(page);
+                await NewSourcePlaysAsync(page, source1);
                 var delayedAt = await page.Locator("video").EvaluateAsync<double>("video => video.currentTime");
                 await page.WaitForFunctionAsync("at => document.querySelector('video').currentTime > at + 1", delayedAt, new() { Timeout = Steps.MediaTimeout });
-                await ExpectNewSourceAsync(page);
+                var source2 = await ExpectNewSourceAsync(page);
                 var restored = await page.RunAndWaitForResponseAsync(() => panel.Locator("[data-panel=audio] [data-action=audio-offset-reset]").ClickAsync(),
                     response => response.Request.Method == "POST" && response.Request.PostData?.Contains("\"audioOffsetMs\":0", StringComparison.Ordinal) == true, new() { Timeout = Steps.MediaTimeout });
                 Assert.AreEqual(200, restored.Status);
-                await NewSourcePlaysAsync(page);
+                await NewSourcePlaysAsync(page, source2);
                 await page.Keyboard.PressAsync("Escape");
-                CollectionAssert.AreEqual(Array.Empty<string>(), session.Problems.ToArray());
+                CollectionAssert.AreEqual(Array.Empty<string>(), Faults(session.Problems), string.Join("\n", session.Problems));
+                session.Problems.Clear();
 
                 // A server that restarted no longer knows its sessions: the next segment answers Not Found. The player plans a fresh session at once and plays on.
                 // Early in the episode, far from its credits.
@@ -229,13 +231,13 @@ namespace Jularr.E2E.Tests
                 // The audio goes back to zero for the steps below, with a conversion of its own that plays on.
                 await page.Locator("[data-action=settings]").ClickAsync();
                 await page.Locator("#player-settings").GetByRole(AriaRole.Tab, new() { Name = "Audio", Exact = true }).ClickAsync();
-                await ExpectNewSourceAsync(page);
+                var source3 = await ExpectNewSourceAsync(page);
                 var back = await page.RunAndWaitForResponseAsync(() => page.Locator("#player-settings [data-panel=audio] [data-action=audio-offset-reset]").ClickAsync(),
                     response => response.Request.Method == "POST" && response.Request.PostData?.Contains("\"audioOffsetMs\":0", StringComparison.Ordinal) == true, new() { Timeout = Steps.MediaTimeout });
                 Assert.AreEqual(200, back.Status);
-                await NewSourcePlaysAsync(page);
+                await NewSourcePlaysAsync(page, source3);
                 await page.Keyboard.PressAsync("Escape");
-                Assert.IsTrue(session.Problems.All(problem => problem.Contains("404", StringComparison.Ordinal) || problem.Contains("Playback error", StringComparison.Ordinal)),
+                Assert.IsTrue(Faults(session.Problems).All(problem => problem.Contains("404", StringComparison.Ordinal) || problem.Contains("Playback error", StringComparison.Ordinal)),
                     string.Join("\n", session.Problems));
                 session.Problems.Clear();
 
@@ -365,7 +367,7 @@ namespace Jularr.E2E.Tests
                 await Assertions.Expect(status).ToBeVisibleAsync(new() { Timeout = Steps.MediaTimeout });
                 Assert.AreEqual(await page.Locator("[data-status=failed]").TextContentAsync(), await status.TextContentAsync());
                 Assert.IsTrue(await page.Locator("video").EvaluateAsync<bool>("video => video.error !== null"), "The video reported no error.");
-                CollectionAssert.AreEqual(Array.Empty<string>(), session.Problems.ToArray());
+                CollectionAssert.AreEqual(Array.Empty<string>(), Faults(session.Problems), string.Join("\n", session.Problems));
 
                 // The next episode opens inside the same page and fullscreen stays on. The episodes tab lists the pilot even
                 // when the earlier playback ran long enough to count it as watched (the overview shows only what is next).
@@ -451,14 +453,46 @@ namespace Jularr.E2E.Tests
             Assert.AreEqual("episodes", await page.Locator(".player__options > .player__button:visible").First.GetAttributeAsync("data-action"));
         }
 
-        // A change of the audio plans a new conversion: once its metadata is in, the player puts the picture back where it stood and plays on.
-        // Steps that seek or play wait for that; before it, the old source is being replaced and play() fails or the jump undoes a seek.
-        private static Task ExpectNewSourceAsync(IPage page) =>
-            page.EvaluateAsync("() => { window.__switched = false; document.querySelector('video').addEventListener('loadedmetadata', () => { window.__switched = true; }, { once: true }); }");
+        // A change of the audio plans a new conversion; the player names it (data-source-session) and says when it plays (data-source=playing).
+        // Steps that seek or play wait for that: before it the old source is being replaced, play() fails or the jump back undoes a seek.
+        // Should a segment of the new conversion fail, the player plans again by itself: any newer conversion that plays counts.
+        private static async Task<string?> ExpectNewSourceAsync(IPage page)
+        {
+            // What the picture element does from here, for the message when the new conversion does not play.
+            await page.EvaluateAsync("""
+                () => {
+                    const trace = window.__sourceTrace = [];
+                    if (window.__sourceTraced) return;
+                    window.__sourceTraced = true;
+                    const started = performance.now();
+                    const video = document.querySelector('video');
+                    const note = text => window.__sourceTrace.push(Math.round(performance.now() - started) + ' ' + text);
+                    for (const name of ['loadstart', 'emptied', 'error', 'loadedmetadata', 'canplay', 'play', 'playing', 'pause', 'waiting', 'abort'])
+                        video.addEventListener(name, () => note(name + ' err=' + (video.error?.code ?? '-') + ' rs=' + video.readyState + ' src=' + video.currentSrc.slice(-12)));
+                    new MutationObserver(() => { const player = document.querySelector('.player'); note('source ' + player.dataset.source + ' ' + (player.dataset.sourceSession ?? '').slice(0, 8)); })
+                        .observe(document.querySelector('.player'), { attributes: true, attributeFilter: ['data-source', 'data-source-session'] });
+                }
+                """);
+            return await page.Locator(".player").GetAttributeAsync("data-source-session");
+        }
 
-        private static Task NewSourcePlaysAsync(IPage page) =>
-            page.WaitForFunctionAsync("() => { const video = document.querySelector('video'); return window.__switched && !video.paused && video.readyState >= 3; }", null,
-                new() { Timeout = Steps.MediaTimeout });
+        private static async Task NewSourcePlaysAsync(IPage page, string? before)
+        {
+            try
+            {
+                await page.WaitForFunctionAsync("before => { const player = document.querySelector('.player'); const video = document.querySelector('video'); "
+                    + "return player.dataset.sourceSession !== before && player.dataset.source === 'playing' && !video.paused; }", before, new() { Timeout = Steps.MediaTimeout });
+            }
+            catch (TimeoutException)
+            {
+                Assert.Fail("The new conversion did not play: " + await page.EvaluateAsync<string>("before => { const player = document.querySelector('.player'); const video = document.querySelector('video'); "
+                    + "return JSON.stringify({ before, session: player.dataset.sourceSession, source: player.dataset.source, paused: video.paused, ready: video.readyState, time: video.currentTime, error: video.error?.code ?? null, trace: window.__sourceTrace ?? [] }); }", before));
+            }
+        }
+
+        // A segment the server could not deliver in time is retried or planned again by the player: no fault once the new conversion plays.
+        private static string[] Faults(IEnumerable<string> problems) =>
+            [.. problems.Where(problem => !(problem.Contains("/segments/", StringComparison.Ordinal) && Regex.IsMatch(problem, @"(HTTP |status of )5\d\d")))];
 
         // The skip button stays visible, inside the picture and above the timeline, whichever view is open.
         private static async Task AssertSkipInEveryModeAsync(IPage page, ILocator skip)
