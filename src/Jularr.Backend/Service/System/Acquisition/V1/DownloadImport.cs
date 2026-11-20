@@ -38,6 +38,9 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
         public const string UnmatchedFilesKey = "import_unmatched_files";
         public const string NothingPlaceableKey = "import_nothing_placeable";
 
+        // A download without a work (the search across the indexers) is never imported by itself: its files wait where they are for a person.
+        public const string NotImportedKey = "download_not_imported";
+
         public async Task PlaceAsync(LogicContext context, DownloadData download, StorageFiles source, ImportSourceRef sourceRef, IReadOnlyList<StorageFile> files, bool isComplete, CancellationToken ct,
             IReadOnlyList<StorageFile>? allSourceFiles = null)
         {
@@ -47,6 +50,12 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                 return true;
             }, ct);
             var sourceDirectory = sourceRef.Directory;
+            if (download.MediaTypeId is not { } mediaType)
+            {
+                await AttentionAsync(context, download.OperationId, NotImportedKey, null, ct, ImportProposal.Write(sourceRef, null));
+                return;
+            }
+
             if (!isComplete)
             {
                 await AttentionAsync(context, download.OperationId, "import_source_unavailable", null, ct);
@@ -74,7 +83,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
             // A clear film or episode imports by itself, one of no use is excluded and searched again at once, a doubt waits for a person with its reason.
             // A download with nothing a person could assign (an empty folder, or only archives and release files) is of no use either.
             var verdict = files.Count == 0 ? new ImportVerdict(ImportVerdictKind.Discard, ImportJudgement.NoFile)
-                : ImportJudgement.Judge(download.MediaTypeId, download.MediaSubtypeId, [download.CanonicalTitle, .. target.Titles], download.ReleaseYear, download.Title, download.ExpectedParentUnitNumber,
+                : ImportJudgement.Judge(mediaType, download.MediaSubtypeId, [download.CanonicalTitle, .. target.Titles], download.ReleaseYear, download.Title, download.ExpectedParentUnitNumber,
                     download.ExpectedUnitStart, download.ExpectedUnitEnd, files, known, target.Definition is null ? null : AcquisitionSelectionLogic.ReadProfile(target));
             if (verdict.Kind == ImportVerdictKind.Discard)
             {
@@ -127,7 +136,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                     candidates.Add(file);
                 }
 
-                placements = ImportPlacementLogic.Plan(download.MediaTypeId, download.MediaSubtypeId, download.CanonicalTitle, download.ReleaseYear, download.QualityKey,
+                placements = ImportPlacementLogic.Plan(mediaType, download.MediaSubtypeId, download.CanonicalTitle, download.ReleaseYear, download.QualityKey,
                     candidates, patterns, facts, download.Author, download.TrackCount, download.PlatformName, known, tags, ImportPlacementLogic.KnownValues(target), unplaced, chapters);
             }
             catch (Exception exception) when (exception is NasMountException or IOException or UnauthorizedAccessException)
@@ -199,7 +208,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
 
             var commit = await CommitAsync(context, new ImportCommitRequest(root, download.WorkId, download.GamePlatformId, placements, source, sourceDirectory, files,
                 path => download.MediaTypeId == MediaType.Game ? new ReleaseFact(TextLimit.Cut(Path.GetFileName(path), 500)!, facts.ReleaseGroup, facts.QualityKey, facts.Edition, facts.Revision) : facts,
-                download.OperationId, null, download.MediaTypeId, acquisitionProfile, FinishesDownload: !unmatched), ct);
+                download.OperationId, null, mediaType, acquisitionProfile, FinishesDownload: !unmatched), ct);
             // A storage that comes back heals by itself on the next pass; a name conflict or a refused assignment waits for a person, who can import the files by hand from the queue.
             if (commit.FailureKey is { } failure)
             {

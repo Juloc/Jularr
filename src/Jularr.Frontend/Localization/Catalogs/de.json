@@ -5965,6 +5965,10 @@
    "The file's title does not clearly match the film",
    "Der Titel der Datei passt nicht eindeutig zum Film"
   ],
+  "acquisition.outcome.download_not_imported": [
+   "Finished, not imported: downloaded without a work, its files wait in the download folder",
+   "Fertig, nicht importiert: ohne Werk geladen, die Dateien liegen im Download-Ordner"
+  ],
   "acquisition.outcome.import_unreadable_names": [
    "The file names do not say which episode they are",
    "Die Dateinamen sagen nicht, welche Folge sie sind"

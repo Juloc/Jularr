@@ -1417,6 +1417,23 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task DownloadsWithoutWorkMigration_LetsAReleaseNameNoWantedItem_AndKeepsTheReleases()
+        {
+            using var folder = new LibraryTests.TemporaryDirectory();
+            var cs = TestPostgres.ResolveConnectionString(nameof(DownloadsWithoutWorkMigration_LetsAReleaseNameNoWantedItem_AndKeepsTheReleases));
+            var options = Backup(folder.Path, out _);
+            await new DatabaseBaseline(cs, migrations: []).StartAsync(CancellationToken.None);
+            await InsertWorkAsync(cs);
+            await ExecuteAsync(cs, "INSERT INTO \"WantedItems\" (\"Id\", \"WorkId\") VALUES (601, 501); INSERT INTO \"AcquisitionReleases\" (\"WantedItemId\", \"ReleaseIdentity\", \"Title\", \"AcquisitionReleaseStatusTypeId\") VALUES (601, '1:a', 'A.Release', 1);");
+
+            var sql = await File.ReadAllTextAsync(Path.Combine(RepositoryRoot(), "database", "migrations", "0067_downloads_without_work.sql"));
+            await new DatabaseBaseline(cs, options, Tools(cs, FakeDump(folder.Path, true), null), [Probe(2, sql)]).StartAsync(CancellationToken.None);
+            await ExecuteAsync(cs, "INSERT INTO \"AcquisitionReleases\" (\"WantedItemId\", \"ReleaseIdentity\", \"Title\", \"AcquisitionReleaseStatusTypeId\") VALUES (NULL, '1:a', 'A.Release', 1), (NULL, '1:a', 'A.Release', 1);");
+            Assert.AreEqual(1L, await ScalarAsync(cs, "SELECT count(*) FROM \"AcquisitionReleases\" WHERE \"WantedItemId\" = 601;"));
+            Assert.AreEqual(2L, await ScalarAsync(cs, "SELECT count(*) FROM \"AcquisitionReleases\" WHERE \"WantedItemId\" IS NULL;"));
+        }
+
+        [TestMethod]
         public async Task LegacyBaselineDatabase_WithAPendingMigration_BacksUpThenMarksVersionOneAndMigrates()
         {
             using var folder = new LibraryTests.TemporaryDirectory();

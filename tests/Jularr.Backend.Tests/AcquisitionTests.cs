@@ -267,6 +267,56 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(2, usenet.Grabbed.Count);
         }
 
+        // A release of the search across the indexers downloads without a work (Prowlarr's download): it is never imported and waits in the queue for a person.
+        [TestMethod]
+        public async Task DownloadWithoutWork_DownloadsLikeAnyOther_AndWaitsNotImported()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            var usenet = new FakeUsenet();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, usenet, razor: true);
+            usenet.Results = """
+                <rss><channel><item><title>Some.Concert.2020.1080p.BluRay.x264-GRP</title><guid>loose</guid><enclosure url="https://indexer.example.test/getnzb/loose" length="4096" /></item></channel></rss>
+                """;
+            using var searched = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/indexer-search", new IndexerSearchDataV1("Some Concert"));
+            var release = (await searched.Content.ReadFromJsonAsync<IndexerSearchResultV1>())!.Releases.Single();
+            using (var sent = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/indexer-search/releases/" + release.ReleaseId + "/download"))
+            {
+                Assert.AreEqual(HttpStatusCode.OK, sent.StatusCode, await sent.Content.ReadAsStringAsync());
+            }
+
+            // SABnzbd has it; its release names no wanted item, and the same release can be sent again.
+            Assert.AreEqual("https://indexer.example.test/getnzb/loose", usenet.Grabbed.Single());
+            Assert.AreEqual(true, await host.ScalarAsync("SELECT \"WantedItemId\" IS NULL FROM \"AcquisitionReleases\""));
+            using (var queue = await host.SendAsync(HttpMethod.Get, "/Admin/Queue"))
+            {
+                var html = await queue.Content.ReadAsStringAsync();
+                Assert.AreEqual(HttpStatusCode.OK, queue.StatusCode, html);
+                StringAssert.Contains(html, "Some.Concert.2020.1080p.BluRay.x264-GRP");
+            }
+
+            // Finished, it is not imported: it waits with its folder, and nothing reaches the library.
+            var completed = Path.Combine(downloads.Path, "movies", "Some.Concert");
+            Directory.CreateDirectory(completed);
+            File.WriteAllBytes(Path.Combine(completed, "concert.mkv"), new byte[4096]);
+            usenet.Queue = FakeUsenet.EmptyQueue;
+            usenet.History = """{"history":{"slots":[{"nzo_id":"SABnzbd_nzo_1","name":"Some.Concert","status":"Completed","storage":"/downloads/movies/Some.Concert"}]}}""";
+            await RunAsync<MonitorDownloadsV1>(host);
+            Assert.AreEqual(((short)2, "download_not_imported"), ((short)(await host.ScalarAsync("SELECT \"OperationStatusTypeId\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"))!,
+                (string)(await host.ScalarAsync("SELECT \"AttentionKey\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"))!));
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"StoredFiles\" WHERE \"MediaAssetId\" IS NOT NULL"));
+            Assert.IsTrue(File.Exists(Path.Combine(completed, "concert.mkv")));
+            foreach (var page in new[] { "/Admin/Queue", "/Admin/Queue/History", "/Admin/Dashboard", "/Admin/Downloads" })
+            {
+                using var shown = await host.SendAsync(HttpMethod.Get, page);
+                var html = await shown.Content.ReadAsStringAsync();
+                Assert.AreEqual(HttpStatusCode.OK, shown.StatusCode, page + ": " + html);
+            }
+
+            using var live = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/live");
+            Assert.AreNotEqual(HttpStatusCode.InternalServerError, live.StatusCode, await live.Content.ReadAsStringAsync());
+        }
+
         // A doubt waits for a person with what the files say and is not read again until the person decides.
         [TestMethod]
         public async Task CompletedSabImport_AnUnclearTitle_WaitsWithItsProposalAndIsNotReadAgain()

@@ -203,6 +203,33 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
         }
     }
 
+    // Prowlarr's download: the release to the best download client of its kind, without a work. It downloads like any other and waits in the queue, not imported, for a person.
+    [ServiceEndpoint("POST", "/api/v1/admin/indexer-search/releases/{releaseId}/download")]
+    public sealed class DownloadIndexerReleaseV1 : AdminService<IndexerReleaseParametersV1, NoData>
+    {
+        private readonly IndexerSearchOffers _offers;
+        private readonly WantedAcquisition _acquisition;
+
+        internal DownloadIndexerReleaseV1(IndexerSearchOffers offers, WantedAcquisition acquisition)
+        {
+            _offers = offers;
+            _acquisition = acquisition;
+        }
+
+        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
+        protected override ModuleRequirement GetInstanceModules(IndexerReleaseParametersV1 parameters) => ModuleRequirement.All("Acquisition");
+        protected override ServicePermission GetPermission(IndexerReleaseParametersV1 parameters, Type resultType) => new(IndexerSearch.Permission);
+
+        protected override async Task<IServiceOutput> OnExecute()
+        {
+            var offer = _offers.Find(Parameters.ReleaseId) ?? throw new DataValidationException(nameof(IndexerReleaseParametersV1.ReleaseId), "outdated_version");
+            var clients = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadEnabledConnectionsAsync(AcquisitionConnectionRole.Download, ct), CancellationToken);
+            await _acquisition.DownloadAsync(Context, offer, clients, Auth.AccountId, CancellationToken);
+            return new UpdateResult(true);
+        }
+    }
+
     // The releases of the last free searches by their ReleaseId, for an hour; the grab and the download take them from here, never from the browser.
     internal sealed class IndexerSearchOffers(IMemoryCache cache)
     {
