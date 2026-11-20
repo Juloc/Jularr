@@ -16,7 +16,7 @@ namespace Jularr.Frontend.Pages.Admin.Search
     // table (cards on a phone) that is sorted, filtered and chosen from in the browser. The page answers at once; the releases follow into a skeleton of their place.
     // Without script the form asks for the releases in the page itself (inline=true).
     public sealed partial class SearchModel(ReadIndexerSearchSourcesV1 readSources, SearchIndexersV1 search, ReadIndexerReleaseFileV1 readFile, DownloadIndexerReleaseV1 download,
-        RecognizeIndexerReleaseV1 recognize, GrabIndexerReleaseV1 grab, FindManualImportWorksV1 findWorks, IAntiforgery antiforgery, UiText texts, FrontendAssets assets) : JularrPage
+        RecognizeIndexerReleaseV1 recognize, ReadAcquisitionProfilesV1 readProfiles, GrabIndexerReleaseV1 grab, FindManualImportWorksV1 findWorks, IAntiforgery antiforgery, UiText texts, FrontendAssets assets) : JularrPage
     {
         private const int PageSize = 100;
         private IReadOnlyList<IndexerSearchSourceV1> _sources = [];
@@ -49,6 +49,7 @@ namespace Jularr.Frontend.Pages.Admin.Search
             page.Navigation("nav.admin");
             page.Asset("Pages/Admin/Search/Search.entry.ts");
             page.Asset("Pages/Admin/Search/Search.entry.scss");
+            page.Asset("Framework/Components/SelectLinkMenu.entry.ts");
             page.NoPageRow();
             if (_sources.Count == 0)
             {
@@ -69,6 +70,7 @@ namespace Jularr.Frontend.Pages.Admin.Search
         public async Task<IActionResult> OnGetAsync()
         {
             await LoadDataAsync();
+            if (_sources.Count > 0) _profiles = await readProfiles.ExecuteAsync<BaseDataList<AcquisitionProfileDetailsV1>>(new ReadAcquisitionProfilesParametersV1(), HttpContext.RequestAborted);
             if (Searched && Inline && _sources.Count > 0) _result = await SearchAsync();
             if (Pick is { Length: > 0 } && _sources.Count > 0) _pickDialog = await PickDialogAsync(antiforgery.GetAndStoreTokens(HttpContext).RequestToken, false);
             PreparePage();

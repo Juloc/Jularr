@@ -330,11 +330,16 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
             StringAssert.Contains(html, "data-search-results=\"/Admin/Search?handler=Results&amp;q=Example&amp;type=Movie\"");
             Assert.AreEqual(0, usenet.IndexerHosts.Count, "The page itself asks no indexer.");
+            // Sprache/Qualität filters in the browser by the profiles' qualities and languages; its fields are kept out of the search form.
+            StringAssert.Contains(html, "data-filter-resolution=\"1080\"");
+            StringAssert.Contains(html, "data-filter-profile=\"\"");
+            StringAssert.Contains(html, "data-qualities=\"");
 
             using var part = await host.SendAsync(HttpMethod.Get, "/Admin/Search?handler=Results&q=Example&type=Movie");
             var rows = await part.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, part.StatusCode, rows);
             StringAssert.Contains(rows, "Example.Movie.1999.1080p.WEB-DL.H264-GRP");
+            StringAssert.Contains(rows, "data-quality=\"WEBDL-1080p\"");
             Assert.IsFalse(rows.Contains(FakeUsenet.IndexerKey, StringComparison.Ordinal) || rows.Contains("getnzb", StringComparison.Ordinal), "No release link reaches the page.");
             var releaseId = System.Text.RegularExpressions.Regex.Match(rows, "data-key=\"([0-9a-f]{32})\"").Groups[1].Value;
 
