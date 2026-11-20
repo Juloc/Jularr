@@ -58,7 +58,7 @@ NIGHTLY_E2E = ("ReaderCodexTests", "SetupFlowTests", "DownloadPagesTests", "Manu
                "WorkRelationsTests", "StackingTests", "MatchesTests", "DiscoverFeedTests", "PhoneLayoutTests",
                "StartupStatusPageTests",
                # Quarantine (AGENTS.md): red on main without a code cause; each gets its own fix PR.
-               "LayoutShiftTests", "TracksTests")
+               "LayoutShiftTests")
 
 # A path may belong to several areas (e.g. downloads + storage). The mappings
 # are deliberately plain to make changes auditable in code review. Keep them
