@@ -93,6 +93,8 @@ function apply(page: HTMLElement): void {
     if (message && !message.hasAttribute("data-empty")) message.hidden = all.length === 0 || all.some(row => !row.hidden);
     results.querySelectorAll<HTMLInputElement>("[data-select]").forEach(box => { box.checked = chosen.has(box.dataset.select ?? ""); });
     results.querySelectorAll<HTMLElement>("[data-key]").forEach(element => element.classList.toggle("is-chosen", chosen.has(element.dataset.key ?? "")));
+    const bulk = page.querySelector<HTMLButtonElement>("[data-search-bulk]");
+    if (bulk && !bulk.hasAttribute("aria-busy")) bulk.disabled = chosen.size === 0;
     const count = page.querySelector<HTMLElement>("[data-search-count]");
     if (count) {
         count.textContent = chosen.size > 0 ? fill(count.dataset.chosen, chosen.size, all.length)
@@ -300,6 +302,16 @@ document.addEventListener("submit", event => {
         } catch { /* the failed text */ }
         const mark = Object.assign(document.createElement("span"), { className: answer.ok ? "search-sent" : "search-sent search-sent--failed", textContent: answer.message || form.dataset.failed || "" });
         mark.setAttribute("role", "status");
+        const dialog = form.closest("dialog");
+        if (dialog && answer.ok) {
+            // The grab of the dialog marks its release's row and card, like the download does.
+            const key = (form.querySelector<HTMLInputElement>("input[name=releaseId]")?.value ?? "");
+            markRelease(pageOf(form), key, answer.message);
+            dialog.close();
+            dialog.remove();
+            return;
+        }
+
         if (answer.ok) {
             form.replaceWith(mark);
         } else {
@@ -309,6 +321,88 @@ document.addEventListener("submit", event => {
         }
     })();
 }, true);
+
+// A release's actions give way to what became of it, in its row and its card.
+function markRelease(page: HTMLElement, key: string, message: string): void {
+    page.querySelectorAll<HTMLElement>(`[data-key="${CSS.escape(key)}"] .search-actions`).forEach(actions => {
+        const mark = Object.assign(document.createElement("span"), { className: "search-sent", textContent: message });
+        mark.setAttribute("role", "status");
+        actions.replaceChildren(mark);
+    });
+}
+
+// Holen + importieren opens the dialog of its release: the recognised work chosen, the search for another below it.
+async function openPick(page: HTMLElement, address: string): Promise<void> {
+    const url = new URL(address, location.href);
+    url.searchParams.set("handler", "Pick");
+    url.searchParams.set("releaseId", url.searchParams.get("pick") ?? "");
+    const dialog = (await fragment(url.pathname + url.search)).querySelector<HTMLDialogElement>("dialog");
+    if (!dialog) throw new Error("no dialog");
+    page.querySelector("#search-pick")?.remove();
+    page.append(dialog);
+    inserted(dialog);
+    dialog.showModal();
+}
+
+document.addEventListener("click", event => {
+    const link = event.target instanceof Element ? event.target.closest<HTMLAnchorElement>("a[data-search-pick]") : null;
+    if (!link) return;
+    event.preventDefault();
+    void openPick(pageOf(link), link.href).catch(() => location.assign(link.href));
+});
+
+// The search for another work stays in the dialog.
+document.addEventListener("submit", event => {
+    const form = event.target;
+    if (!(form instanceof HTMLFormElement) || !form.matches("[data-search-pick-find]")) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const url = new URL(form.action, location.href);
+    new FormData(form).forEach((value, name) => url.searchParams.set(name, String(value)));
+    void openPick(pageOf(form), url.pathname + url.search);
+}, true);
+
+// Ausgewählte holen: each chosen release goes to the work its name fits; one without a clear work opens its dialog, one after the other.
+async function grabChosen(page: HTMLElement, button: HTMLButtonElement): Promise<void> {
+    const current = stateOf(page);
+    const form = page.querySelector<HTMLFormElement>("form[data-search-send]");
+    const token = form?.querySelector<HTMLInputElement>("input[name=__RequestVerificationToken]")?.value ?? "";
+    const post = async (handler: string, fields: Record<string, string>) => {
+        const body = new URLSearchParams({ __RequestVerificationToken: token, ...fields });
+        const response = await fetch(`/Admin/Search?handler=${handler}`, { method: "POST", body, headers: { Accept: "application/json" }, credentials: "same-origin" });
+        return await response.json() as { ok?: boolean; message?: string; wantedItemId?: number | null };
+    };
+    button.disabled = true;
+    const unclear: string[] = [];
+    for (const key of Array.from(current.chosen)) {
+        try {
+            const work = await post("Work", { releaseId: key });
+            if (!work.wantedItemId) { unclear.push(key); continue; }
+            const answer = await post("Grab", { releaseId: key, wantedItemId: String(work.wantedItemId) });
+            markRelease(page, key, answer.message ?? "");
+            if (answer.ok) current.chosen.delete(key);
+        } catch {
+            unclear.push(key);
+        }
+    }
+
+    apply(page);
+    button.disabled = current.chosen.size === 0;
+    for (const key of unclear) {
+        const link = page.querySelector<HTMLAnchorElement>(`tr[data-key="${CSS.escape(key)}"] a[data-search-pick]`);
+        if (!link) continue;
+        await openPick(page, link.href);
+        const dialog = page.querySelector<HTMLDialogElement>("#search-pick");
+        if (dialog) await new Promise(resolve => dialog.addEventListener("close", resolve, { once: true }));
+        current.chosen.delete(key);
+        apply(page);
+    }
+}
+
+document.addEventListener("click", event => {
+    const button = event.target instanceof Element ? event.target.closest<HTMLButtonElement>("[data-search-bulk]") : null;
+    if (button) void grabChosen(pageOf(button), button);
+});
 
 onPage(import.meta.url, () => {
     const page = document.getElementById("app-content") ?? document.body;

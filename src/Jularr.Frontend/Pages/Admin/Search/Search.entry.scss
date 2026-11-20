@@ -269,3 +269,40 @@ a.search-row__title:hover { color: var(--accent-text); text-decoration: underlin
     .search-tools__columns, .search-tools__text { display: none; }
     .search-actions--card .button, .search-footer .button, .search-tools .button, .search-tools__select { min-height: 44px; }
 }
+
+// The dialog of Holen + importieren: the release, the work to choose and the search for another.
+.search-pick__release { margin: 0 0 10px; font-weight: var(--weight-control); overflow-wrap: anywhere; }
+.search-pick__note { margin: 0 0 10px; color: var(--muted); }
+.search-pick__search { display: flex; gap: 8px; margin-bottom: 10px; }
+
+.search-pick__query {
+    flex: 1 1 auto;
+    min-width: 0;
+    height: var(--field-height);
+    padding: 0 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-control);
+    background: var(--field);
+    color: var(--text);
+    font: inherit;
+}
+
+.search-pick__works { display: grid; gap: 6px; max-height: 50vh; overflow-y: auto; }
+
+.search-pick__work {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 44px;
+    padding: 8px 10px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-inner);
+    cursor: pointer;
+
+    &:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+    > span { display: grid; min-width: 0; }
+}
+
+.search-pick__title { font-weight: var(--weight-control); overflow-wrap: anywhere; }
+.search-pick__meta { color: var(--muted); font-size: var(--text-small); }
+.search-pick__actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }

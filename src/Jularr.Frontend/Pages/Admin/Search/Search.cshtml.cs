@@ -4,6 +4,7 @@ using Jularr.Backend.Data.Admin.Acquisition.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Service.Admin.Acquisition.V1;
+using Jularr.Backend.Service.Admin.Activity.V1;
 using Jularr.Backend.Service.Core;
 using Jularr.Frontend.Framework;
 using Microsoft.AspNetCore.Antiforgery;
@@ -15,7 +16,7 @@ namespace Jularr.Frontend.Pages.Admin.Search
     // table (cards on a phone) that is sorted, filtered and chosen from in the browser. The page answers at once; the releases follow into a skeleton of their place.
     // Without script the form asks for the releases in the page itself (inline=true).
     public sealed partial class SearchModel(ReadIndexerSearchSourcesV1 readSources, SearchIndexersV1 search, ReadIndexerReleaseFileV1 readFile, DownloadIndexerReleaseV1 download,
-        IAntiforgery antiforgery, UiText texts, FrontendAssets assets) : JularrPage
+        RecognizeIndexerReleaseV1 recognize, GrabIndexerReleaseV1 grab, FindManualImportWorksV1 findWorks, IAntiforgery antiforgery, UiText texts, FrontendAssets assets) : JularrPage
     {
         private const int PageSize = 100;
         private IReadOnlyList<IndexerSearchSourceV1> _sources = [];
@@ -62,12 +63,14 @@ namespace Jularr.Frontend.Pages.Admin.Search
             page.Content.Add(Toolbar());
             page.Content.Add(_result is { } result ? Results(result, csrf) : Skeleton());
             page.Content.Add(Footer());
+            if (_pickDialog is not null) page.Content.Add(_pickDialog);
         }
 
         public async Task<IActionResult> OnGetAsync()
         {
             await LoadDataAsync();
             if (Searched && Inline && _sources.Count > 0) _result = await SearchAsync();
+            if (Pick is { Length: > 0 } && _sources.Count > 0) _pickDialog = await PickDialogAsync(antiforgery.GetAndStoreTokens(HttpContext).RequestToken, false);
             PreparePage();
             return Page();
         }

@@ -349,6 +349,40 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(await inline.Content.ReadAsStringAsync(), "Example.Movie.1999.1080p.WEB-DL.H264-GRP");
         }
 
+        // Holen + importieren: the release is recognised as the wanted film its name fits and grabbed for it, so it downloads and is imported like any grab; a name no title fits is left to a person.
+        [TestMethod]
+        public async Task SearchGrab_RecognisesTheWantedTitle_AndGrabsForIt()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            var usenet = new FakeUsenet();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, usenet);
+            var wantedId = await CreateWantedMovieAsync(host);
+            using var searched = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/indexer-search", new IndexerSearchDataV1("Example"));
+            var releases = (await searched.Content.ReadFromJsonAsync<IndexerSearchResultV1>())!.Releases;
+            var feature = releases.Single(release => release.Title == Feature);
+            var other = releases.Single(release => release.Title == "Other.Movie.2020.1080p.WEB-DL.H264-GRP");
+
+            using var recognised = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/indexer-search/releases/" + feature.ReleaseId + "/work");
+            var work = (await recognised.Content.ReadFromJsonAsync<IndexerReleaseWorkV1>())!;
+            Assert.AreEqual(wantedId, work.WantedItemId, await recognised.Content.ReadAsStringAsync());
+            using var unknown = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/indexer-search/releases/" + other.ReleaseId + "/work");
+            var none = (await unknown.Content.ReadFromJsonAsync<IndexerReleaseWorkV1>())!;
+            Assert.AreEqual((null, "work_unknown"), (none.WantedItemId, none.ProblemKey));
+
+            using (var grabbed = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/indexer-search/releases/" + feature.ReleaseId + "/grab", new GrabIndexerReleaseDataV1(wantedId)))
+            {
+                Assert.AreEqual(HttpStatusCode.OK, grabbed.StatusCode, await grabbed.Content.ReadAsStringAsync());
+            }
+
+            Assert.AreEqual(1, usenet.Grabbed.Count);
+            Assert.AreEqual(wantedId, await host.ScalarAsync("SELECT \"WantedItemId\" FROM \"AcquisitionReleases\""));
+
+            // A second grab while the film downloads is refused, as on the wanted page.
+            using var again = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/indexer-search/releases/" + feature.ReleaseId + "/grab", new GrabIndexerReleaseDataV1(wantedId));
+            Assert.AreEqual(HttpStatusCode.BadRequest, again.StatusCode);
+        }
+
         // A doubt waits for a person with what the files say and is not read again until the person decides.
         [TestMethod]
         public async Task CompletedSabImport_AnUnclearTitle_WaitsWithItsProposalAndIsNotReadAgain()
