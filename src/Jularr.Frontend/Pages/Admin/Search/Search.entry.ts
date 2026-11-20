@@ -51,6 +51,45 @@ function readFilter(page: HTMLElement): Filter {
         minSeeders: number("minSeeders"), minPeers: number("minPeers") };
 }
 
+// Sprache/Qualität (Jularr+): the chosen languages (any of them), the least resolution (or only 2160p), or a profile's allowed qualities and languages.
+type LanguageFilter = { languages: string[]; resolution: string; qualities: string[]; profileLanguages: string[]; profile: boolean };
+
+function readLanguageFilter(page: HTMLElement): LanguageFilter {
+    const languages = Array.from(page.querySelectorAll<HTMLInputElement>("input[data-filter-language]:checked")).map(box => box.dataset.filterLanguage ?? "");
+    const resolution = page.querySelector<HTMLInputElement>("input[data-filter-resolution]:checked")?.dataset.filterResolution ?? "";
+    const profile = page.querySelector<HTMLInputElement>("input[data-filter-profile]:checked");
+    const chosen = Boolean(profile?.dataset.filterProfile);
+    return { languages, resolution, profile: chosen, qualities: chosen ? (profile?.dataset.qualities ?? "").split("|").filter(Boolean) : [],
+        profileLanguages: chosen ? (profile?.dataset.languages ?? "").split(" ").filter(Boolean) : [] };
+}
+
+function fitsLanguage(element: HTMLElement, filter: LanguageFilter): boolean {
+    const languages = (element.dataset.languages ?? "").split(" ").filter(Boolean);
+    const quality = element.dataset.quality ?? "";
+    if (filter.profile) {
+        return (filter.qualities.length === 0 || filter.qualities.includes(quality))
+            && (filter.profileLanguages.length === 0 || languages.some(language => filter.profileLanguages.includes(language)));
+    }
+
+    if (filter.languages.length > 0 && !languages.some(language => filter.languages.includes(language))) return false;
+    if (!filter.resolution) return true;
+    const resolution = Number(/(\d{3,4})p/i.exec(quality)?.[1] ?? NaN);
+    return filter.resolution === "2160" ? resolution === 2160 : resolution >= Number(filter.resolution);
+}
+
+// The field names what filters: the profile, else the languages and the resolution.
+function labelLanguageFilter(page: HTMLElement): void {
+    const form = page.querySelector<HTMLFormElement>(".search-bar");
+    const value = form?.querySelector<HTMLElement>('[data-picker-value="language"]');
+    if (!form || !value) return;
+    const profile = page.querySelector<HTMLInputElement>("input[data-filter-profile]:checked");
+    if (profile?.dataset.filterProfile) { value.textContent = profile.closest("label")?.textContent?.trim() ?? ""; return; }
+    const filter = readLanguageFilter(page);
+    const names = Array.from(page.querySelectorAll<HTMLInputElement>("input[data-filter-language]:checked")).map(box => box.closest("label")?.textContent?.trim() ?? "");
+    const resolution = filter.resolution ? fill(form.getAttribute(filter.resolution === "2160" ? "data-language-only" : "data-language-from"), `${filter.resolution}p`) : "";
+    value.textContent = [...names, resolution].filter(Boolean).join(" · ") || (form.getAttribute("data-language-all") ?? "");
+}
+
 function passes(item: Facts, filter: Filter): boolean {
     if (filter.preset === "usenet") return item.protocol === "usenet";
     if (filter.preset === "torrent") return item.protocol === "torrent";
@@ -81,10 +120,11 @@ function apply(page: HTMLElement): void {
     if (!results) return;
     const { sort, ascending, chosen } = stateOf(page);
     const filter = readFilter(page);
+    const language = readLanguageFilter(page);
     for (const list of [rows(results), cards(results)]) {
         const parent = list[0]?.parentElement;
         list.map(element => ({ element, item: facts(element) })).sort((a, b) => compare(a.item, b.item, sort, ascending))
-            .forEach(({ element, item }) => { element.hidden = !passes(item, filter); parent?.append(element); });
+            .forEach(({ element, item }) => { element.hidden = !passes(item, filter) || !fitsLanguage(element, language); parent?.append(element); });
     }
 
     results.querySelectorAll<HTMLElement>("th[data-col]").forEach(head => head.setAttribute("aria-sort", head.dataset.col === sort ? (ascending ? "ascending" : "descending") : "none"));
@@ -260,6 +300,24 @@ document.addEventListener("change", event => {
         form.querySelectorAll<HTMLElement>("[data-token]").forEach(token => token.classList.toggle("is-hidden", token.dataset.for !== target.value));
         const label = form.querySelector<HTMLElement>("[data-type-label]");
         if (label) label.textContent = target.closest("label")?.textContent?.trim() ?? "";
+        return;
+    }
+
+    if (target instanceof HTMLInputElement && target.matches("[data-filter-language], [data-filter-resolution], [data-filter-profile]")) {
+        // A profile stands for its own languages and qualities: choosing it clears the others, choosing one of them clears the profile.
+        if (target.matches("[data-filter-profile]")) {
+            if (target.dataset.filterProfile) {
+                page.querySelectorAll<HTMLInputElement>("input[data-filter-language]").forEach(box => { box.checked = false; });
+                const all = page.querySelector<HTMLInputElement>('input[data-filter-resolution=""]');
+                if (all) all.checked = true;
+            }
+        } else {
+            const none = page.querySelector<HTMLInputElement>('input[data-filter-profile=""]');
+            if (none) none.checked = true;
+        }
+
+        labelLanguageFilter(page);
+        apply(page);
         return;
     }
 

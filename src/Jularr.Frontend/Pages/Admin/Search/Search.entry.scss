@@ -1,3 +1,5 @@
+@use "../../../Framework/Components/ActionMenu";
+
 // The search across all indexers: the bar on top, the chips of the indexers, the tools, then one table (a card per release under 760 px)
 // and the footer with the count. Rows keep one height while the releases replace their skeleton.
 .search-empty {
@@ -10,7 +12,7 @@
 
 .search-bar {
     display: grid;
-    grid-template-columns: minmax(240px, 2fr) minmax(150px, 1fr) minmax(150px, 1fr) auto;
+    grid-template-columns: minmax(240px, 2fr) minmax(140px, 1fr) minmax(140px, 1fr) minmax(160px, 1fr) auto;
     gap: 8px;
     align-items: center;
     padding: 10px;
@@ -120,7 +122,9 @@
     span { color: var(--muted); font-size: var(--text-small); }
 }
 
+// The language and quality filter needs script; without it the other fields share its room.
 @media (scripting: none) {
+    .search-bar .action-menu:has(.search-bar__filter) { display: none; }
     .search-tools, .search-footer, .search-menu__hint, .search-menu__tokens { display: none; }
 }
 
@@ -262,12 +266,15 @@ a.search-row__title:hover { color: var(--accent-text); text-decoration: underlin
 
 @media (max-width: 759px) {
     .search-bar { grid-template-columns: 1fr 1fr; }
-    .search-bar__query, .search-bar > .button { grid-column: 1 / -1; }
+    .search-bar__query, .search-bar > .button, .search-bar > .action-menu:has(.search-bar__filter) { grid-column: 1 / -1; }
     .search-bar .action-menu__panel { position: fixed; inset: auto 12px 12px; min-width: 0; max-height: 70vh; }
     .search-table-wrap { display: none; }
     .search-cards { display: grid; }
     .search-tools__columns, .search-tools__text { display: none; }
     .search-actions--card .button, .search-footer .button, .search-tools .button, .search-tools__select { min-height: 44px; }
+    .search-footer { flex-wrap: wrap; }
+    .search-footer__count { flex-basis: 100%; }
+    .search-footer .button { flex: 1 1 0; justify-content: center; }
 }
 
 // The dialog of Holen + importieren: the release, the work to choose and the search for another.
@@ -306,3 +313,16 @@ a.search-row__title:hover { color: var(--accent-text); text-decoration: underlin
 .search-pick__title { font-weight: var(--weight-control); overflow-wrap: anywhere; }
 .search-pick__meta { color: var(--muted); font-size: var(--text-small); }
 .search-pick__actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+
+.search-menu__filter { display: grid; gap: 2px; }
+
+// The last field opens its list towards the page, not past its edge.
+@media (min-width: 760px) {
+    .search-bar .action-menu:has(.search-bar__filter) .action-menu__panel { inset-inline: auto 0; }
+}
+
+// A tablet puts the query on a line of its own and the fields with the button below it.
+@media (min-width: 760px) and (max-width: 1199px) {
+    .search-bar { grid-template-columns: repeat(3, minmax(0, 1fr)) auto; }
+    .search-bar__query { grid-column: 1 / -1; }
+}

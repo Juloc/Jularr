@@ -42,12 +42,14 @@ namespace Jularr.Frontend.Pages.Admin.Search
                 new Div(query, typeMenu).Class("search-bar__query"),
                 Picker("search.indexers", chosen.Count == 0 ? texts["search.indexers.all"] : Counted("search.indexers.some", chosen.Count), [.. indexers], "indexers"),
                 Picker("search.categories", Categories.Length == 0 ? texts["search.categories.all"] : Counted("search.categories.some", Categories.Length), CategoryTree(), "categories"),
+                LanguageFilter(),
                 new NoScript(new Input().Attribute("type", "hidden").Attribute("name", "inline").Attribute("value", "true")),
                 new Button(new Icon("search", assets, 16), new Span(new Text("search.start"))).Primary().Submit())
                 .Class("search-bar").Attribute("method", "get").Attribute("action", "/Admin/Search").Attribute("role", "search").Attribute("hx-boost", "false")
                 .TextAttribute("data-indexers-all", "search.indexers.all").TextAttribute("data-indexers-some", "search.indexers.some").TextAttribute("data-indexers-one", "search.indexers.some.one")
                 .TextAttribute("data-categories-all", "search.categories.all").TextAttribute("data-categories-some", "search.categories.some")
-                .TextAttribute("data-categories-one", "search.categories.some.one");
+                .TextAttribute("data-categories-one", "search.categories.some.one").TextAttribute("data-language-all", "search.language.all")
+                .TextAttribute("data-language-from", "search.language.from").TextAttribute("data-language-only", "search.language.only");
         }
 
         private static IUiComponent Box(string name, string value, bool isChecked)
@@ -190,7 +192,8 @@ namespace Jularr.Frontend.Pages.Admin.Search
             .Attribute("data-size", release.SizeBytes is { } size ? Number(size) : "").Attribute("data-files", release.Files is { } files ? Number(files) : "")
             .Attribute("data-grabs", release.Grabs is { } grabs ? Number(grabs) : "").Attribute("data-seeders", release.Seeders is { } seeders ? Number(seeders) : "")
             .Attribute("data-peers", release.Seeders is { } s && release.Leechers is { } l ? Number(s + l) : "")
-            .Attribute("data-category", release.Categories.Length > 0 ? Number(release.Categories[0]) : "");
+            .Attribute("data-category", release.Categories.Length > 0 ? Number(release.Categories[0]) : "")
+            .Attribute("data-languages", string.Join(' ', release.Languages)).Attribute("data-quality", release.QualityKey ?? "");
 
         // What Jularr reads from the name (Jularr+): platform, languages and quality.
         private static IUiComponent Badges(IndexerSearchReleaseV1 release)
