@@ -36,13 +36,13 @@ namespace Jularr.Backend.Logic.Storage
 
         // External downloaders may use another OS or container. Join their path using
         // that client's separator, never Path.Combine() from Jularr's own host.
-        public static string ExternalJobDirectory(string clientRoot, long operationId, MediaType mediaType, MediaSubtype? subtype)
+        public static string ExternalJobDirectory(string clientRoot, long operationId, MediaType? mediaType, MediaSubtype? subtype)
         {
             if (string.IsNullOrWhiteSpace(clientRoot)) throw new ArgumentException("A client save root is required.", nameof(clientRoot));
             var root = clientRoot.TrimEnd('/', '\\');
             if (root.Length == 0) throw new ArgumentException("A client save root cannot be the filesystem root.", nameof(clientRoot));
             var separator = clientRoot.Contains('\\') && !clientRoot.Contains('/') ? "\\" : "/";
-            return root + separator + Category(mediaType, subtype) + separator + JobName(operationId);
+            return root + separator + (mediaType is { } type ? Category(type, subtype) + separator : "") + JobName(operationId);
         }
 
         // Only explicitly named job directories are eligible for native cleanup.

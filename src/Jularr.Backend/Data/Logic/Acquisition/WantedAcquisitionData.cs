@@ -325,7 +325,7 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.TargetLanguage), false)]
         public string? TargetLanguage { get; init; }
 
-        public AcquisitionGrabData(long wantedItemId, long? indexerConnectionId, string releaseIdentity, string title, string? qualityKey, long downloadConnectionId, int? parentUnitNumber,
+        public AcquisitionGrabData(long? wantedItemId, long? indexerConnectionId, string releaseIdentity, string title, string? qualityKey, long downloadConnectionId, int? parentUnitNumber,
             int? unitStart, int? unitEnd, string? sourceUrl = null, long? requestedByAccountId = null)
         {
             RequestedByAccountId = requestedByAccountId;
@@ -341,8 +341,9 @@ namespace Jularr.Backend.Data.Logic.Acquisition
             DownloadConnectionId = downloadConnectionId;
         }
 
-        [DataField(typeof(WantedItemFields), nameof(WantedItemFields.Id))]
-        public long WantedItemId { get; }
+        // None for a download without a work (the search across the indexers).
+        [DataField(typeof(WantedItemFields), nameof(WantedItemFields.Id), false)]
+        public long? WantedItemId { get; }
 
         // None for a download a person added by hand.
         [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.Id), false)]
@@ -428,7 +429,7 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
     internal sealed class DownloadData : BaseData
     {
-        public DownloadData(long operationId, long wantedItemId, long workId, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string canonicalTitle, int? releaseYear, long acquisitionConnectionId,
+        public DownloadData(long operationId, long wantedItemId, long workId, MediaType? mediaTypeId, MediaSubtype? mediaSubtypeId, string canonicalTitle, int? releaseYear, long acquisitionConnectionId,
             string? externalId, string title, DateTime startedAt, string? qualityKey, string? author, string? sourceUrl,
             string? sourceLinkUrl, int trackCount, long? gamePlatformId, string? platformName, DateTime? downloadWaitUntil, int? expectedParentUnitNumber = null, int? expectedUnitStart = null, int? expectedUnitEnd = null,
             bool isPaused = false, long? indexerConnectionId = null, byte[]? protectedDownloadUrl = null)
@@ -469,8 +470,11 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         [DataField(typeof(WorkFields), nameof(WorkFields.Id))]
         public long WorkId { get; }
 
-        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId))]
-        public MediaType MediaTypeId { get; }
+        // None for a download without a work (taken from the search across the indexers): it is never imported by itself and keeps a folder named by its operation alone.
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId), false)]
+        public MediaType? MediaTypeId { get; }
+
+        public bool IsLoose => WantedItemId == 0;
 
         [DataField(typeof(WorkFields), nameof(WorkFields.MediaSubtypeId))]
         public MediaSubtype? MediaSubtypeId { get; }

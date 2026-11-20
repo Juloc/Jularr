@@ -498,6 +498,27 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                 return startsNow && await PrioritizeAsync(context, reserved, ct);
             }
 
+            // The episodes or volumes the release covers, so concurrent grabs of the same ones cannot start a second download.
+            var kind = AcquisitionSelectionLogic.GetKind(target.MediaTypeId, target.MediaSubtypeId);
+            var episodes = kind is AcquisitionKind.Tv or AcquisitionKind.Anime
+                ? EpisodeNumbering.Episodes(await context.ExecuteBatchAsync((ctx, token) => ctx.ReadUnitStatesAsync(target.WantedItemId, token), ct))
+                : [];
+            var (parent, start, end) = AcquisitionSelectionLogic.ReadCoverage(kind, offer.Title, episodes);
+            var grab = new AcquisitionGrabData(target.WantedItemId, offer.ConnectionId <= 0 ? null : offer.ConnectionId, Limit(offer.Identity, 600), Limit(offer.Title, 1000), qualityKey, 0, parent, start, end,
+                requestedByAccountId: accountId) { IndexerFlags = [.. offer.IndexerFlags], RequiresActiveMonitoring = automatic, TargetLanguage = targetLanguage };
+            return await SendAsync(context, grab, offer, clients, target.MediaTypeId, target.MediaSubtypeId, ct, startsNow);
+        }
+
+        // A release of the search across the indexers sent to the downloader without a work (Prowlarr's download): it downloads like any other and waits in the queue,
+        // not imported, for a person.
+        public Task<bool> DownloadAsync(LogicContext context, ReleaseOffer offer, IReadOnlyList<AcquisitionConnectionData> clients, long? accountId, CancellationToken ct) =>
+            SendAsync(context, new AcquisitionGrabData(null, offer.ConnectionId <= 0 ? null : offer.ConnectionId, Limit(offer.Identity, 600), Limit(offer.Title, 1000), null, 0, null, null, null,
+                requestedByAccountId: accountId) { IndexerFlags = [.. offer.IndexerFlags] }, offer, clients, null, null, ct);
+
+        // The release to the best client of its kind: reserved first, so concurrent grabs cannot start a second download, then handed over.
+        private async Task<bool> SendAsync(LogicContext context, AcquisitionGrabData reservation, ReleaseOffer offer, IReadOnlyList<AcquisitionConnectionData> clients, MediaType? mediaType,
+            MediaSubtype? subtype, CancellationToken ct, bool startsNow = false)
+        {
             // Select a downloader only after filtering by offer transport and media coverage.
             var isTorrent = offer.Transport == DownloadTransport.Torrent
                 || offer.DownloadUri?.Scheme.Equals("magnet", StringComparison.OrdinalIgnoreCase) == true
@@ -507,7 +528,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                 : (await context.ExecuteBatchAsync((ctx, token) => ctx.ReadModuleStatesAsync(new InstanceModuleParameters(["Torrent"]), token), ct, SqlAccessMode.ReadOnly)).Any(module => module.IsEnabled)
                     ? new[] { AcquisitionConnectionType.Qbittorrent, AcquisitionConnectionType.Torrent }
                     : new[] { AcquisitionConnectionType.Qbittorrent };
-            var client = DownloadClientSelectionLogic.Select(clients, target.MediaTypeId, _time.GetUtcNow().UtcDateTime, compatibleTypes);
+            var client = DownloadClientSelectionLogic.Select(clients, mediaType, _time.GetUtcNow().UtcDateTime, compatibleTypes);
             if (client is null)
             {
                 throw new ServiceUnavailableException("acquisition_no_download_client");
@@ -518,8 +539,8 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                 throw new DataValidationException("CandidateId", "invalid_transition");
             }
 
-            // SABnzbd owns the download folder. Do not send a release that Jularr cannot import.
-            if (client.AcquisitionConnectionTypeId is AcquisitionConnectionType.Sabnzbd or AcquisitionConnectionType.Qbittorrent)
+            // SABnzbd owns the download folder. Do not send a release that Jularr cannot import; one without a work is not imported by Jularr.
+            if (reservation.WantedItemId is not null && client.AcquisitionConnectionTypeId is AcquisitionConnectionType.Sabnzbd or AcquisitionConnectionType.Qbittorrent)
             {
                 await RequireClientImportSourceAsync(context, client, ct);
             }
@@ -531,15 +552,10 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                 nativePaths = await _downloads.OpenAsync(context, client.AcquisitionConnectionTypeId == AcquisitionConnectionType.Usenet ? DownloadStorageArea.Usenet : DownloadStorageArea.Torrent, ct);
             }
 
-            // Reserve first so concurrent grabs cannot start a second download.
             var manual = offer.ConnectionId <= 0;
-            var kind = AcquisitionSelectionLogic.GetKind(target.MediaTypeId, target.MediaSubtypeId);
-            var episodes = kind is AcquisitionKind.Tv or AcquisitionKind.Anime
-                ? EpisodeNumbering.Episodes(await context.ExecuteBatchAsync((ctx, token) => ctx.ReadUnitStatesAsync(target.WantedItemId, token), ct))
-                : [];
-            var (parent, start, end) = AcquisitionSelectionLogic.ReadCoverage(kind, offer.Title, episodes);
-            var grab = new AcquisitionGrabData(target.WantedItemId, manual ? null : offer.ConnectionId, Limit(offer.Identity, 600), Limit(offer.Title, 1000), qualityKey, client.Id, parent, start, end,
-                requestedByAccountId: accountId) { IndexerFlags = [.. offer.IndexerFlags], RequiresActiveMonitoring = automatic, TargetLanguage = targetLanguage };
+            var grab = new AcquisitionGrabData(reservation.WantedItemId, reservation.IndexerConnectionId, reservation.ReleaseIdentity, reservation.Title, reservation.QualityKey, client.Id,
+                reservation.ParentUnitNumber, reservation.UnitStart, reservation.UnitEnd, reservation.SourceUrl, reservation.RequestedByAccountId)
+                { IndexerFlags = reservation.IndexerFlags, RequiresActiveMonitoring = reservation.RequiresActiveMonitoring, TargetLanguage = reservation.TargetLanguage };
             var operationId = await context.ExecuteBatchAsync(async (ctx, token) =>
             {
                 if (nativePaths is not null) await ctx.RequireDownloadStorageSettingsAsync(nativePaths.Settings, token);
@@ -560,7 +576,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             if (client.AcquisitionConnectionTypeId is AcquisitionConnectionType.Usenet or AcquisitionConnectionType.Torrent)
             {
                 (externalId, failure, rateLimited) = await FetchReleaseFileAsync(context, client.AcquisitionConnectionTypeId, nativePaths!, operationId, offer.DownloadUri, offer.ConnectionId,
-                    target.MediaTypeId, target.MediaSubtypeId, ct);
+                    mediaType, subtype, ct);
             }
             else if (client.AcquisitionConnectionTypeId == AcquisitionConnectionType.Qbittorrent)
             {
@@ -569,7 +585,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                 var connection = new QbittorrentConnection(client.HttpAddress, client.Username, AcquisitionConnectionInput.Unprotect(_protector, client.ProtectedPassword));
                 try
                 {
-                    var savePath = DownloadWorkspaceLayout.ExternalJobDirectory(client.RemotePath!, operationId, target.MediaTypeId, target.MediaSubtypeId);
+                    var savePath = DownloadWorkspaceLayout.ExternalJobDirectory(client.RemotePath!, operationId, mediaType, subtype);
                     var result = await _qbittorrent.GrabAsync(connection,
                         new QbittorrentGrabRequest(offer.DownloadUri, savePath, offer.Title), ct);
                     if (result.Success && result.Hash is { } hash)
@@ -647,7 +663,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
 
         // The NZB or the torrent of a release into the staging folder of a job of Jularr's own Usenet or torrent downloader; a limit of the indexer comes back on its own.
         private async Task<(string? ExternalId, string? Failure, NewznabException? RateLimited)> FetchReleaseFileAsync(LogicContext context, AcquisitionConnectionType clientType,
-            DownloadStoragePaths nativePaths, long operationId, Uri downloadUri, long indexerId, MediaType mediaType, MediaSubtype? subtype, CancellationToken ct)
+            DownloadStoragePaths nativePaths, long operationId, Uri downloadUri, long indexerId, MediaType? mediaType, MediaSubtype? subtype, CancellationToken ct)
         {
             string? failure = null;
             string? externalId = null;
