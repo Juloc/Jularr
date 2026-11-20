@@ -1,7 +1,9 @@
 using System.Text.Json.Serialization;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
+using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Fields.Acquisition;
+using Jularr.Backend.Data.Fields.Media;
 
 namespace Jularr.Backend.Data.Admin.Acquisition.V1
 {
@@ -231,5 +233,45 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
 
         [JsonIgnore]
         public string ContentType { get; }
+    }
+
+    // The work a release is for: the wanted title its name fits, else none, and why (no title fits, or several).
+    public sealed class IndexerReleaseWorkV1 : BaseResponse
+    {
+        public IndexerReleaseWorkV1(long? wantedItemId, string? title, int? releaseYear, MediaType? mediaTypeId, string? problemKey)
+        {
+            WantedItemId = wantedItemId;
+            Title = title;
+            ReleaseYear = releaseYear;
+            MediaTypeId = mediaTypeId;
+            ProblemKey = problemKey;
+        }
+
+        [DataField(typeof(WantedItemFields), nameof(WantedItemFields.Id), false)]
+        public long? WantedItemId { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.CanonicalTitle), false)]
+        public string? Title { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.ReleaseYear), false)]
+        public int? ReleaseYear { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId), false)]
+        public MediaType? MediaTypeId { get; }
+
+        [DataField(typeof(IndexerSearchFields), nameof(IndexerSearchFields.ErrorKey))]
+        public string? ProblemKey { get; }
+    }
+
+    // The wanted title a release is grabbed and imported for.
+    public sealed class GrabIndexerReleaseDataV1 : BaseData
+    {
+        public GrabIndexerReleaseDataV1(long wantedItemId)
+        {
+            WantedItemId = wantedItemId;
+        }
+
+        [DataField(typeof(WantedItemFields), nameof(WantedItemFields.Id))]
+        public long WantedItemId { get; }
     }
 }

@@ -248,7 +248,7 @@ namespace Jularr.Frontend.Pages.Admin.Search
             if (release.TvMazeId is { } tvmaze) links.Add(Link("TVmaze", "https://www.tvmaze.com/shows/" + Uri.EscapeDataString(tvmaze)));
             IUiComponent menu = links.Count == 0 ? new Span().Class("search-action search-action--none")
                 : new ActionMenu(new Icon("link", assets, 16), links, "button button--compact button--soft button--icon", "search.links");
-            return new Div(download, save, menu).Class(card ? "search-actions search-actions--card" : "search-actions");
+            return new Div(PickLink(release), download, save, menu).Class(card ? "search-actions search-actions--card" : "search-actions");
         }
 
         private static IUiComponent Link(string name, string href) =>
@@ -258,7 +258,9 @@ namespace Jularr.Frontend.Pages.Admin.Search
         private IUiComponent Footer() => new Div(
             new Span().Class("search-footer__count").Attribute("data-search-count", "").Attribute("aria-live", "polite")
                 .TextAttribute("data-found", "search.found").TextAttribute("data-found-one", "search.found.one").TextAttribute("data-chosen", "search.chosen"),
-            new Button(new Icon("plus", assets, 16), new Span(new Text("search.more"))).Soft().Attribute("type", "button").Attribute("data-search-more-button", "").Attribute("disabled", "disabled"))
+            new Button(new Icon("plus", assets, 16), new Span(new Text("search.more"))).Soft().Attribute("type", "button").Attribute("data-search-more-button", "").Attribute("disabled", "disabled"),
+            new Button(new Icon("download", assets, 16), new Span(new Text("search.grabChosen"))).Primary().Attribute("type", "button").Attribute("data-search-bulk", "").Attribute("disabled", "disabled")
+                .TextAttribute("data-done", "search.grabChosen.done"))
             .Class("search-footer").TextAttribute("aria-label", "search.footer");
 
         private string Format(string key, params object[] values) => string.Format(CultureInfo.CurrentCulture, texts[key], values);

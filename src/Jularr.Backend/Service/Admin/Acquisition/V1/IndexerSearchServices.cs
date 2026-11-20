@@ -6,6 +6,8 @@ using Jularr.Backend.Data.Admin.Acquisition.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Enums.Service;
+using Jularr.Backend.Service.Admin.Activity.V1;
+using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Logic.Acquisition;
 using Jularr.Backend.Logic.Acquisition;
 using Jularr.Backend.Service.Admin.Wanted.V1;
@@ -231,6 +233,74 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
             var offer = _offers.Find(Parameters.ReleaseId) ?? throw new DataValidationException(nameof(IndexerReleaseParametersV1.ReleaseId), "outdated_version");
             var clients = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadEnabledConnectionsAsync(AcquisitionConnectionRole.Download, ct), CancellationToken);
             await _acquisition.DownloadAsync(Context, offer, clients, Auth.AccountId, CancellationToken);
+            return new UpdateResult(true);
+        }
+    }
+
+    // The work a release is for, recognised as the manual import recognises a file: the one wanted title its name fits (a video, else a book); otherwise a person picks.
+    [ServiceEndpoint("POST", "/api/v1/admin/indexer-search/releases/{releaseId}/work")]
+    public sealed class RecognizeIndexerReleaseV1 : AdminService<IndexerReleaseParametersV1, NoData>
+    {
+        private readonly IndexerSearchOffers _offers;
+
+        internal RecognizeIndexerReleaseV1(IndexerSearchOffers offers)
+        {
+            _offers = offers;
+        }
+
+        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<IndexerReleaseWorkV1>()];
+        protected override ModuleRequirement GetInstanceModules(IndexerReleaseParametersV1 parameters) => ModuleRequirement.All("Acquisition", "Requests");
+        protected override ServicePermission GetPermission(IndexerReleaseParametersV1 parameters, Type resultType) => new(IndexerSearch.Permission);
+
+        protected override async Task<IServiceOutput> OnExecute()
+        {
+            var offer = _offers.Find(Parameters.ReleaseId) ?? throw new DataValidationException(nameof(IndexerReleaseParametersV1.ReleaseId), "outdated_version");
+            ManualImportRecognition? recognised = null;
+            foreach (var (extension, document) in new[] { (".mkv", false), (".epub", true) })
+            {
+                var words = ManualImportLogic.SearchWords([(offer.Title, document)]);
+                var candidates = words.Count == 0 ? [] : await ManualImport.ReadCandidatesAsync(Context, words, CancellationToken);
+                recognised = ManualImportLogic.Recognise(offer.Title + extension, [offer.Title], candidates);
+                if (recognised.Candidate is not null || recognised.ProblemKey == ManualImportLogic.WorkAmbiguous) break;
+            }
+
+            return recognised?.Candidate is { } work
+                ? new IndexerReleaseWorkV1(work.WantedItemId, work.Titles[0], work.Year, work.MediaTypeId, null)
+                : new IndexerReleaseWorkV1(null, null, null, null, recognised?.ProblemKey ?? ManualImportLogic.WorkUnknown);
+        }
+    }
+
+    // Holen + importieren: the release taken for a wanted title through the normal grab, so it downloads and is imported like a release its search found.
+    [ServiceEndpoint("POST", "/api/v1/admin/indexer-search/releases/{releaseId}/grab")]
+    public sealed class GrabIndexerReleaseV1 : AdminService<IndexerReleaseParametersV1, GrabIndexerReleaseDataV1>
+    {
+        private readonly IndexerSearchOffers _offers;
+        private readonly WantedAcquisition _acquisition;
+
+        internal GrabIndexerReleaseV1(IndexerSearchOffers offers, WantedAcquisition acquisition)
+        {
+            _offers = offers;
+            _acquisition = acquisition;
+        }
+
+        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
+        protected override ModuleRequirement GetInstanceModules(IndexerReleaseParametersV1 parameters) => ModuleRequirement.All("Acquisition", "Requests");
+        protected override ServicePermission GetPermission(IndexerReleaseParametersV1 parameters, Type resultType) => new(IndexerSearch.Permission);
+
+        protected override async Task<IServiceOutput> OnExecute()
+        {
+            var offer = _offers.Find(Parameters.ReleaseId) ?? throw new DataValidationException(nameof(IndexerReleaseParametersV1.ReleaseId), "outdated_version");
+            var (target, clients) = await Context.ExecuteBatchAsync(async (ctx, ct) =>
+                (await ctx.ReadWantedTargetAsync(Data.WantedItemId, ct), await ctx.ReadEnabledConnectionsAsync(AcquisitionConnectionRole.Download, ct)), CancellationToken);
+            if (target.IsDownloading && target.MediaTypeId != MediaType.Series)
+            {
+                throw new DataValidationException(nameof(GrabIndexerReleaseDataV1.WantedItemId), "in_use");
+            }
+
+            var quality = AcquisitionSelectionLogic.QualityKey(AcquisitionSelectionLogic.GetKind(target.MediaTypeId, target.MediaSubtypeId), offer.Title, target.PlatformIgdbId);
+            await _acquisition.GrabAsync(Context, target, offer, quality, clients, CancellationToken, Auth.AccountId);
             return new UpdateResult(true);
         }
     }

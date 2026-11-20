@@ -176,7 +176,7 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
         private static string? BookLanguages(string path) => ReleaseWords.ReadLanguages(Path.GetFileNameWithoutExtension(path), "") is { Length: > 0 } languages ? string.Join('+', languages) : null;
 
         // The films, series and books of the library one of whose titles contains a searched word; Recognise decides which of them a file is.
-        private static async Task<IReadOnlyList<ManualImportCandidate>> ReadCandidatesAsync(LogicContext context, IReadOnlyList<string> words, CancellationToken ct)
+        internal static async Task<IReadOnlyList<ManualImportCandidate>> ReadCandidatesAsync(LogicContext context, IReadOnlyList<string> words, CancellationToken ct)
         {
             var patterns = words.Take(400).Select(word => "%" + word.Replace("\\", "\\\\").Replace("%", "\\%").Replace("_", "\\_") + "%").ToArray();
             var rows = await context.ExecuteBatchAsync((ctx, token) =>
