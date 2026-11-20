@@ -1,0 +1,271 @@
+// The search across all indexers: the bar on top, the chips of the indexers, the tools, then one table (a card per release under 760 px)
+// and the footer with the count. Rows keep one height while the releases replace their skeleton.
+.search-empty {
+    display: grid;
+    justify-items: start;
+    gap: 12px;
+
+    p { margin: 0; color: var(--muted); }
+}
+
+.search-bar {
+    display: grid;
+    grid-template-columns: minmax(240px, 2fr) minmax(150px, 1fr) minmax(150px, 1fr) auto;
+    gap: 8px;
+    align-items: center;
+    padding: 10px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-panel);
+    background: var(--surface);
+
+    .action-menu { position: relative; min-width: 0; }
+    .action-menu__panel { min-width: 260px; max-height: 60vh; overflow-y: auto; z-index: var(--z-menu); }
+}
+
+.search-bar__query {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    height: var(--field-height);
+    padding: 0 6px 0 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-control);
+    background: var(--field);
+
+    &:focus-within { border-color: var(--accent); }
+}
+
+.search-bar__input {
+    flex: 1 1 auto;
+    min-width: 0;
+    height: 100%;
+    border: 0;
+    outline: 0;
+    background: none;
+    color: var(--text);
+    font: inherit;
+}
+
+.search-bar__picker {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    height: var(--field-height);
+    padding: 0 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-control);
+    background: var(--field);
+    cursor: pointer;
+    list-style: none;
+
+    &::-webkit-details-marker { display: none; }
+    > span { display: flex; gap: 8px; min-width: 0; }
+}
+
+.search-bar__label { flex: none; color: var(--muted); font-size: var(--text-small); }
+.search-bar__value { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.search-bar > .button { height: var(--field-height); }
+
+.search-menu__list, .search-menu__group { display: grid; gap: 2px; }
+.search-menu__hint { margin: 10px 4px 6px; color: var(--muted); font-size: var(--text-small); }
+.search-menu__tokens { display: flex; flex-wrap: wrap; gap: 6px; }
+.search-token { font-family: ui-monospace, monospace; }
+.search-token.is-hidden { display: none; }
+
+.search-menu__option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 36px;
+    padding: 4px 8px;
+    border-radius: var(--radius-small);
+    cursor: pointer;
+
+    &:hover { background: var(--surface-hover); }
+    &[hidden] { display: none; }
+    > span:nth-child(2) { flex: 1 1 auto; min-width: 0; }
+}
+
+.search-menu__option--child { padding-inline-start: 30px; }
+.search-menu__id { color: var(--muted); font-size: var(--text-small); }
+
+.search-status {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    min-height: 28px;
+    margin: 12px 0;
+}
+
+.search-tools {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin: 12px 0 0;
+
+    .action-menu { position: relative; }
+    .action-menu__panel { min-width: 240px; z-index: var(--z-menu); }
+}
+
+.search-tools__spacer { flex: 1 1 auto; }
+.search-tools__select { height: var(--control-height-compact); }
+
+.search-filter__field {
+    display: grid;
+    gap: 4px;
+    margin-bottom: 8px;
+
+    span { color: var(--muted); font-size: var(--text-small); }
+}
+
+@media (scripting: none) {
+    .search-tools, .search-footer, .search-menu__hint, .search-menu__tokens { display: none; }
+}
+
+.search-table-wrap {
+    position: relative;
+    overflow-x: auto;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-panel);
+    background: var(--surface);
+}
+
+.search-table {
+    width: 100%;
+    border-collapse: collapse;
+
+    th, td { padding: 8px 6px; border-bottom: 1px solid var(--line); text-align: start; white-space: nowrap; vertical-align: middle; }
+    th { color: var(--muted); font-size: var(--text-small); font-weight: var(--weight-control); }
+    tr:last-child td { border-bottom: 0; }
+    tr.is-chosen td { background: var(--accent-soft); }
+    tr[hidden] { display: none; }
+
+    @each $column in protocol, age, title, indexer, size, files, grabs, peers, category, flags {
+        &[data-hide~="#{$column}"] [data-col="#{$column}"] { display: none; }
+    }
+}
+
+.search-table__select { width: 36px; }
+
+.search-sort {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+}
+
+th[aria-sort="ascending"], th[aria-sort="descending"] { color: var(--accent-text); }
+th[aria-sort="ascending"] .search-sort::after { content: " \25B2"; }
+th[aria-sort="descending"] .search-sort::after { content: " \25BC"; }
+
+.search-table td.search-row__release { min-width: 220px; white-space: normal; }
+.search-row__title { color: var(--text); font-weight: var(--weight-control); overflow-wrap: anywhere; text-decoration: none; }
+a.search-row__title:hover { color: var(--accent-text); text-decoration: underline; }
+.search-row__dim { color: var(--muted); }
+.search-row--skeleton td { height: 52px; }
+.search-skeleton { height: 18px; }
+.search-skeleton--card { height: 112px; }
+
+.search-badges { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.search-badges:empty { display: none; }
+
+.search-badge {
+    padding: 1px 6px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-small);
+    color: var(--muted);
+    font-size: var(--text-small);
+}
+
+.search-badge--language { color: var(--warning); }
+.search-badge--quality { color: var(--info); }
+.search-badge--platform { color: var(--success); }
+
+.search-protocol {
+    padding: 2px 8px;
+    border-radius: var(--radius-control);
+    font-size: var(--text-small);
+    font-weight: var(--weight-heading);
+}
+
+.search-protocol--usenet { background: var(--info-soft); color: var(--info); }
+.search-protocol--torrent { background: var(--success-soft); color: var(--success); }
+.search-peers { color: var(--success); }
+.search-peers--low { color: var(--danger); }
+.search-category { color: var(--muted); }
+
+.search-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+
+    .action-menu { position: relative; }
+    .action-menu__panel { inset-inline: auto 0; z-index: var(--z-menu); }
+}
+
+.search-action--none { display: inline-block; width: var(--control-height-compact); }
+.search-actions:not(.search-actions--card) .search-action__text { display: none; }
+.search-sent { color: var(--success); font-size: var(--text-small); }
+.search-sent--failed { color: var(--danger); }
+
+.search-results__state { margin: 18px 0; color: var(--muted); }
+.search-results__state[hidden] { display: none; }
+
+.search-cards { display: none; gap: 8px; }
+
+.search-card {
+    display: grid;
+    gap: 8px;
+    min-width: 0;
+    padding: 12px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-inner);
+    background: var(--surface);
+
+    &.is-chosen { border-color: var(--accent); }
+    &[hidden] { display: none; }
+}
+
+.search-card__head { display: flex; align-items: flex-start; gap: 10px; }
+.search-card__title { min-width: 0; font-weight: var(--weight-control); overflow-wrap: anywhere; }
+.search-card__meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; color: var(--muted); font-size: var(--text-small); }
+.search-actions--card { flex-wrap: wrap; }
+
+.search-footer {
+    position: sticky;
+    bottom: 0;
+    z-index: var(--z-sticky);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 14px;
+    padding: 10px 0;
+    border-top: 1px solid var(--line);
+    background: var(--background);
+}
+
+.search-footer__count { flex: 1 1 auto; min-height: 20px; color: var(--muted); }
+
+// A tablet keeps the actions in view: the columns of least use step aside.
+@media (max-width: 1499px) {
+    .search-table :is([data-col="flags"]) { display: none; }
+    .search-actions:not(.search-actions--card) .search-download__text { display: none; }
+}
+
+@media (min-width: 760px) and (max-width: 1199px) {
+    .search-table :is([data-col="protocol"], [data-col="grabs"], [data-col="peers"], [data-col="category"]) { display: none; }
+}
+
+@media (max-width: 759px) {
+    .search-bar { grid-template-columns: 1fr 1fr; }
+    .search-bar__query, .search-bar > .button { grid-column: 1 / -1; }
+    .search-bar .action-menu__panel { position: fixed; inset: auto 12px 12px; min-width: 0; max-height: 70vh; }
+    .search-table-wrap { display: none; }
+    .search-cards { display: grid; }
+    .search-tools__columns, .search-tools__text { display: none; }
+    .search-actions--card .button, .search-footer .button, .search-tools .button, .search-tools__select { min-height: 44px; }
+}

@@ -763,9 +763,10 @@ namespace Jularr.Backend.Tests
                 return await _client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
             }
 
-            public async Task<HttpResponseMessage> SendAsync(HttpMethod method, string path, object? data = null)
+            public async Task<HttpResponseMessage> SendAsync(HttpMethod method, string path, object? data = null, string? accept = null)
             {
                 using var request = new HttpRequestMessage(method, path);
+                if (accept is not null) request.Headers.Accept.ParseAdd(accept);
                 if (data is not null)
                 {
                     request.Content = data switch { HttpContent content => content, IReadOnlyDictionary<string, string> form => new FormUrlEncodedContent(form), _ => JsonContent.Create(data) };

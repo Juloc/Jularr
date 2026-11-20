@@ -303,7 +303,8 @@ namespace Jularr.Integrations.Logic.Newznab
                 throw code switch
                 {
                     >= 100 and < 200 => new NewznabException(NewznabFailure.AuthenticationFailed, "The indexer rejected the account."),
-                    >= 200 and <= 203 => new NewznabException(NewznabFailure.ParametersRejected, "The indexer refused the request shape (t=" + function + ")."),
+                    >= 200 and <= 203 => new NewznabException(NewznabFailure.ParametersRejected, "The indexer refused the request shape (t=" + function + ", error "
+                        + code.ToString(CultureInfo.InvariantCulture) + ": " + (document.Root.Attribute("description")?.Value is { Length: > 0 and <= 200 } description ? description : "") + ")."),
                     429 or 500 => RateLimited(host, "The indexer reached its request limit.", null, status),
                     _ => new NewznabException(NewznabFailure.Unavailable, "The indexer reported error " + code.ToString(CultureInfo.InvariantCulture) + ".")
                 };

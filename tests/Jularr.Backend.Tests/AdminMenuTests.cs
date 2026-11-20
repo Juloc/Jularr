@@ -18,12 +18,12 @@ namespace Jularr.Backend.Tests
             var html = await GetAsync(host, "/Admin/Dashboard");
             var entries = Entries(html);
             foreach (var address in new[] { "/Admin/Dashboard", "/Admin/Queue", "/Admin/Wanted", "/Admin/Jobs/Tasks", "/Admin/Works", "/Admin/Library", "/Admin/Downloads", "/Admin/Downloads/Servers", "/Admin/Downloads/Speed",
-                "/Admin/Downloads/Clients", "/Admin/Acquisition", "/Admin/Acquisition/Profiles?tab=profiles", "/Admin/Acquisition/Sources", "/Admin/Providers", "/Admin/Storage", "/Admin/Accounts", "/Admin/Instance", "/Admin/Localization", "/Admin/System", "/Admin/Backup", "/Admin/Ai" })
+                "/Admin/Downloads/Clients", "/Admin/Search", "/Admin/Acquisition", "/Admin/Acquisition/Profiles?tab=profiles", "/Admin/Acquisition/Sources", "/Admin/Providers", "/Admin/Storage", "/Admin/Accounts", "/Admin/Instance", "/Admin/Localization", "/Admin/System", "/Admin/Backup", "/Admin/Ai" })
             {
                 CollectionAssert.Contains(entries, address);
             }
 
-            Assert.AreEqual(21, entries.Count);
+            Assert.AreEqual(22, entries.Count);
             Assert.AreEqual(7, Regex.Matches(html, "<section class=\"menu-group").Count);
             StringAssert.Contains(html, "class=\"menu-entry is-active\" href=\"/Admin/Dashboard\"");
 

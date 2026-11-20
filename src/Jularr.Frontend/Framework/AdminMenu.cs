@@ -92,6 +92,8 @@ namespace Jularr.Frontend.Framework
                     new("admin.blocked.title", "/Admin/Queue/Blocked", Right("wanted.update"), ["Requests"])
                 ], AdminCounter.OpenDownloads),
                 new("wanted", "admin.wanted.title", "bookmark", [new("admin.wanted.title", "/Admin/Wanted", Right("wanted.update"), ["Requests"])]),
+                // As Prowlarr's Search: every indexer asked at once, the releases taken with import or only downloaded.
+                new("search", "admin.search.title", "scan", [new("admin.search.title", "/Admin/Search", Right("indexers.search"), ["Acquisition"])]),
                 new("acquisition", "acquisition.role.Search", "search",
                 [
                     new("acquisition.role.Search", "/Admin/Acquisition", Acquisition, ["Acquisition"]),

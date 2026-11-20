@@ -317,6 +317,38 @@ namespace Jularr.Backend.Tests
             Assert.AreNotEqual(HttpStatusCode.InternalServerError, live.StatusCode, await live.Content.ReadAsStringAsync());
         }
 
+        // The admin page "Suche": the bar answers at once, the releases follow as their own part, "Herunterladen" answers the script with JSON; without script the page searches itself.
+        [TestMethod]
+        public async Task SearchPage_ShowsTheBarAtOnce_LoadsTheReleases_AndDownloads()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            var usenet = new FakeUsenet();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, usenet, razor: true);
+            using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Search?q=Example&type=Movie");
+            var html = await page.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
+            StringAssert.Contains(html, "data-search-results=\"/Admin/Search?handler=Results&amp;q=Example&amp;type=Movie\"");
+            Assert.AreEqual(0, usenet.IndexerHosts.Count, "The page itself asks no indexer.");
+
+            using var part = await host.SendAsync(HttpMethod.Get, "/Admin/Search?handler=Results&q=Example&type=Movie");
+            var rows = await part.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, part.StatusCode, rows);
+            StringAssert.Contains(rows, "Example.Movie.1999.1080p.WEB-DL.H264-GRP");
+            Assert.IsFalse(rows.Contains(FakeUsenet.IndexerKey, StringComparison.Ordinal) || rows.Contains("getnzb", StringComparison.Ordinal), "No release link reaches the page.");
+            var releaseId = System.Text.RegularExpressions.Regex.Match(rows, "data-key=\"([0-9a-f]{32})\"").Groups[1].Value;
+
+            using var sent = await host.SendAsync(HttpMethod.Post, "/Admin/Search?handler=Download", new Dictionary<string, string>
+                { ["__RequestVerificationToken"] = LibraryTests.Token(html), ["releaseId"] = releaseId }, accept: "application/json");
+            var answer = await sent.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, sent.StatusCode, answer);
+            StringAssert.Contains(answer, "\"ok\":true");
+            Assert.AreEqual(1, usenet.Grabbed.Count);
+
+            using var inline = await host.SendAsync(HttpMethod.Get, "/Admin/Search?q=Example&type=Movie&inline=true");
+            StringAssert.Contains(await inline.Content.ReadAsStringAsync(), "Example.Movie.1999.1080p.WEB-DL.H264-GRP");
+        }
+
         // A doubt waits for a person with what the files say and is not read again until the person decides.
         [TestMethod]
         public async Task CompletedSabImport_AnUnclearTitle_WaitsWithItsProposalAndIsNotReadAgain()
