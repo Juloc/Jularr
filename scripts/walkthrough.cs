@@ -124,6 +124,14 @@ foreach (var size in sizes)
     await Visit("admin-work", () => Find("work", "a[href^='/Admin/Works/']:not([href*='Matches'])", "/Admin/Works"));
     await Visit("admin-queue", () => Go("/Admin/Queue"));
     await Visit("admin-downloads", () => Go("/Admin/Downloads"));
+    await Visit("admin-search", () => Go("/Admin/Search"));
+    // The search across the indexers answers after the page: the picture waits for the releases (or their failure).
+    await Visit("admin-search-results", async () =>
+    {
+        var path = await Go("/Admin/Search?q=" + Uri.EscapeDataString(Environment.GetEnvironmentVariable("WALKTHROUGH_INDEXER_SEARCH") ?? "Frieren S01E05") + "&type=Search");
+        try { await page.Locator("[data-search-results][data-loaded], [data-search-results] .search-results__state").First.WaitForAsync(new() { Timeout = 30_000 }); } catch (TimeoutException) { }
+        return path;
+    });
     await Visit("admin-system", () => Go("/Admin/System"));
 }
 

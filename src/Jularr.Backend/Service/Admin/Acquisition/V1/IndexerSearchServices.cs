@@ -16,6 +16,7 @@ using Jularr.Integrations.Logic.Newznab;
 using Jularr.Integrations.Logic.Nyaa;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Logging;
 
 namespace Jularr.Backend.Service.Admin.Acquisition.V1
 {
@@ -45,9 +46,11 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
         private readonly IndexerSearchOffers _offers;
         private readonly IDataProtector _protector;
         private readonly TimeProvider _time;
+        private readonly ILogger<SearchIndexersV1> _logger;
 
-        internal SearchIndexersV1(NewznabClient newznab, NyaaClient nyaa, IndexerSearchOffers offers, IDataProtectionProvider protection, TimeProvider time)
+        internal SearchIndexersV1(NewznabClient newznab, NyaaClient nyaa, IndexerSearchOffers offers, IDataProtectionProvider protection, TimeProvider time, ILogger<SearchIndexersV1> logger)
         {
+            _logger = logger;
             _newznab = newznab;
             _nyaa = nyaa;
             _offers = offers;
@@ -85,6 +88,8 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                     }
                     catch (NewznabException exception)
                     {
+                        // The message never holds the key or the link; it names what the indexer answered.
+                        _logger.LogWarning("Indexer search of {IndexerId} failed: {Failure}, HTTP {StatusCode}: {Reason}", source.Id, exception.Failure, (int?)exception.StatusCode, exception.Message);
                         answer = (null, AcquisitionConnectionInput.ErrorKey(exception.Failure));
                     }
                     catch (Exception exception) when (exception is NyaaException or HttpRequestException)
